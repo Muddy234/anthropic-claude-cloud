@@ -28,6 +28,7 @@ const Debug = {
 ║                                                              ║
 ║ EQUIPMENT                                                    ║
 ║   debug.give(id)            - Add item to inventory          ║
+║   debug.giveAll()           - Add ALL equipment & items      ║
 ║   debug.equip(id)           - Equip item directly            ║
 ║   debug.listItems(filter)   - List equipment IDs             ║
 ║   debug.clearInventory()    - Remove all items               ║
@@ -170,9 +171,51 @@ const Debug = {
         if (!id) { console.log('Usage: debug.give("item_id")'); return; }
         const data = typeof EQUIPMENT_DATA !== 'undefined' ? EQUIPMENT_DATA[id] : null;
         if (!data) { console.error(`Unknown item: ${id}`); return; }
-        
+
         game.player.inventory.push({ name: id, count: 1, type: data.slot ? 'equipment' : 'item', ...data });
         console.log(`Added ${id} to inventory`);
+    },
+
+    giveAll() {
+        let count = 0;
+
+        // Add all equipment (weapons and armor)
+        if (typeof EQUIPMENT_DATA !== 'undefined') {
+            Object.keys(EQUIPMENT_DATA).forEach(id => {
+                const data = EQUIPMENT_DATA[id];
+                game.player.inventory.push({
+                    name: id,
+                    count: 1,
+                    type: 'weapon',
+                    ...data
+                });
+                count++;
+            });
+            console.log(`Added ${count} pieces of equipment`);
+        } else {
+            console.warn('EQUIPMENT_DATA not loaded');
+        }
+
+        // Add all consumables, materials, and quest items
+        if (typeof ITEMS_DATA !== 'undefined') {
+            const itemCount = count;
+            Object.keys(ITEMS_DATA).forEach(id => {
+                const data = ITEMS_DATA[id];
+                game.player.inventory.push({
+                    name: id,
+                    count: data.stackable ? (data.maxStack || 10) : 1,
+                    type: data.type || 'item',
+                    ...data
+                });
+                count++;
+            });
+            console.log(`Added ${count - itemCount} consumables/materials/quest items`);
+        } else {
+            console.warn('ITEMS_DATA not loaded');
+        }
+
+        console.log(`✅ Total items added to inventory: ${count}`);
+        console.log('Use inventory tabs (1-4) to browse: 1=Weapons, 2=Armor, 3=Consumables, 4=Materials');
     },
 
     equip(id) {
