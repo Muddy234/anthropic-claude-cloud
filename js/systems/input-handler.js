@@ -450,9 +450,9 @@ const setupCanvasHandlers = () => {
     canvas.addEventListener('click', (e) => {
         if (game.state !== 'playing') return;
 
-        // Close context menu if open
-        if (contextMenu.visible) {
-            contextMenu.visible = false;
+        // If context menu is visible, let right-click-init.js handle the click
+        // Don't close it here - that would prevent the menu action from being processed
+        if (window.contextMenu?.visible) {
             return;
         }
 
