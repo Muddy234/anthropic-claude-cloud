@@ -199,13 +199,30 @@ function applyDamage(entity, damage, source) {
         return;
     }
 
+    // Validate damage is a valid number
+    if (typeof damage !== 'number' || isNaN(damage)) {
+        console.warn('[Combat] Invalid damage value:', damage, '- defaulting to 1');
+        damage = 1;
+    }
+
     // Apply damage reduction from status effects
     if (typeof StatusEffectSystem !== 'undefined') {
         const damageTakenMod = StatusEffectSystem.getStatModifier(entity, 'damageTaken');
-        damage = Math.floor(damage * (1 + damageTakenMod));
+        if (typeof damageTakenMod === 'number' && !isNaN(damageTakenMod)) {
+            damage = Math.floor(damage * (1 + damageTakenMod));
+        }
     }
 
+    // Ensure damage is still valid after modifications
+    if (isNaN(damage)) damage = 1;
+
     entity.hp -= damage;
+
+    // Fix NaN HP (defensive)
+    if (isNaN(entity.hp)) {
+        console.warn('[Combat] HP became NaN for', entity.name, '- resetting to 0');
+        entity.hp = 0;
+    }
 
     // Interrupt shout if enemy is shouting
     if (entity !== game.player && entity.ai?.currentState === 'shouting') {
