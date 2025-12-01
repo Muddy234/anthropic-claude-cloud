@@ -129,7 +129,7 @@ class EnemyAI {
         
         const aggroRange = this.enemy.perception?.sightRange || 6;
         const deaggroRange = aggroRange * 1.5;
-        const atkRange = this.enemy.stats?.range || 1;
+        const atkRange = this.enemy.combat?.attackRange || 1;
         
         this._stateTransitions(canSee, dist, shouldFlee, hpPct, aggroRange, deaggroRange, atkRange);
     }
@@ -295,10 +295,19 @@ class EnemyAI {
     
     _chase(dt, game) {
         if (!this.target) return;
+
+        const distToTarget = this._dist(this.target.gridX, this.target.gridY);
+        const atkRange = this.enemy.combat?.attackRange || 1;
+
+        // If already within attack range, just face target (state will transition to COMBAT)
+        if (distToTarget <= atkRange) {
+            this._face(this.target.gridX, this.target.gridY);
+            return;
+        }
+
         if (this.enemy.behavior?.type === 'territorial') {
-            const dTarget = this._dist(this.target.gridX, this.target.gridY);
             const dSpawn = this._dist(this.spawnPosition.x, this.spawnPosition.y);
-            if (dSpawn >= this.territorySize - 1 && dTarget > 2) {
+            if (dSpawn >= this.territorySize - 1 && distToTarget > 2) {
                 this._face(this.target.gridX, this.target.gridY);
                 return;
             }
