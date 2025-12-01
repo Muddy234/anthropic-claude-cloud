@@ -540,21 +540,45 @@ class EnemyAI {
         const d = this._dist(this.target.gridX, this.target.gridY);
         const range = this.enemy.stats?.range || 1;
         if (d > range) return;
-        
+
         if (this.enemy.special && this.specialCooldown <= 0 && Math.random() < 0.2) {
             this._specialAttack(game);
             return;
         }
-        
+
         const room = this._getCurrentRoom(game);
-        const damage = DamageCalculator.calculateDamage(this.enemy, this.target, room);
-        applyDamage(this.target, damage, this.enemy);
+        const result = DamageCalculator.calculateDamage(this.enemy, this.target, room);
+
+        // Handle miss
+        if (!result.isHit) {
+            if (typeof showDamageNumber === 'function') {
+                showDamageNumber(this.target, 0, '#888888');
+            }
+            this.attackCooldown = 700 / (this.enemy.stats?.speed || 1);
+            if (this.debugLog) console.log(`[AI] ${this.enemy.name} missed!`);
+            return;
+        }
+
+        applyDamage(this.target, result.finalDamage, this.enemy);
         NoiseSystem.makeNoise(this.enemy, 50);
-        
+
+        // Show damage number
+        if (typeof showDamageNumber === 'function') {
+            const color = result.isCrit ? '#ffff00' : '#ff4444';
+            showDamageNumber(this.target, result.finalDamage, color);
+        }
+
         this.attackCooldown = 700 / (this.enemy.stats?.speed || 1);
         if (!this.enemy.combat?.isInCombat) engageCombat(this.enemy, this.target);
-        
-        if (this.debugLog) console.log(`[AI] ${this.enemy.name} attacks for ${damage}`);
+
+        // Check for target death
+        if (this.target.hp <= 0) {
+            if (typeof handleDeath === 'function') {
+                handleDeath(this.target, this.enemy);
+            }
+        }
+
+        if (this.debugLog) console.log(`[AI] ${this.enemy.name} attacks for ${result.finalDamage}${result.isCrit ? ' (CRIT!)' : ''}`);
     }
     
     _specialAttack(game) {
