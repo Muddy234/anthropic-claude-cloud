@@ -32,7 +32,10 @@ const CHAMBER_CONFIG = {
  * @param {Object} room - Room to generate chambers in
  */
 function generateChambers(room) {
-    if (!room) return;
+    if (!room) {
+        console.error('[ChamberGen] Room is undefined');
+        return;
+    }
 
     // Skip entrance rooms - keep them open for safe spawning
     if (room.type === 'entrance') {
@@ -46,18 +49,48 @@ function generateChambers(room) {
     const height = room.floorHeight;
 
     if (CHAMBER_CONFIG.debugLogging) {
-        console.log(`[ChamberGen] Generating chambers for ${room.type} room (${width}x${height})`);
+        console.log(`[ChamberGen] ========================================`);
+        console.log(`[ChamberGen] Generating chambers for ${room.type} room`);
+        console.log(`[ChamberGen] Room pos: (${room.x}, ${room.y}), Floor: (${room.floorX}, ${room.floorY})`);
+        console.log(`[ChamberGen] Floor size: ${width}x${height}`);
+        console.log(`[ChamberGen] Doorways on room: ${room.doorways ? room.doorways.length : 0}`);
     }
 
     // Find doorway positions relative to room floor
     const doorwayTiles = findDoorwayTiles(room);
 
+    if (CHAMBER_CONFIG.debugLogging) {
+        console.log(`[ChamberGen] Doorway tiles found: ${doorwayTiles.length}`);
+    }
+
     // Initialize chamber grid
     let grid = initializeChamberGrid(width, height, doorwayTiles);
+
+    // Count initial walls
+    let initialWalls = 0;
+    for (let y = 0; y < height; y++) {
+        for (let x = 0; x < width; x++) {
+            if (grid[y][x] === 1) initialWalls++;
+        }
+    }
+    if (CHAMBER_CONFIG.debugLogging) {
+        console.log(`[ChamberGen] Initial walls: ${initialWalls} / ${width * height} (${(initialWalls / (width * height) * 100).toFixed(1)}%)`);
+    }
 
     // Run cellular automata smoothing
     for (let i = 0; i < CHAMBER_CONFIG.smoothingPasses; i++) {
         grid = smoothChamberGrid(grid, width, height, doorwayTiles);
+    }
+
+    // Count walls after smoothing
+    let smoothedWalls = 0;
+    for (let y = 0; y < height; y++) {
+        for (let x = 0; x < width; x++) {
+            if (grid[y][x] === 1) smoothedWalls++;
+        }
+    }
+    if (CHAMBER_CONFIG.debugLogging) {
+        console.log(`[ChamberGen] After smoothing: ${smoothedWalls} walls (${(smoothedWalls / (width * height) * 100).toFixed(1)}%)`);
     }
 
     // Ensure doorway connectivity
@@ -69,6 +102,17 @@ function generateChambers(room) {
     // Connect isolated chambers
     connectIsolatedChambers(grid, width, height, chambers, doorwayTiles);
 
+    // Count final walls
+    let finalWalls = 0;
+    for (let y = 0; y < height; y++) {
+        for (let x = 0; x < width; x++) {
+            if (grid[y][x] === 1) finalWalls++;
+        }
+    }
+    if (CHAMBER_CONFIG.debugLogging) {
+        console.log(`[ChamberGen] Final walls: ${finalWalls} (${(finalWalls / (width * height) * 100).toFixed(1)}%)`);
+    }
+
     // Apply grid to game map
     applyChamberGridToRoom(grid, room);
 
@@ -78,6 +122,7 @@ function generateChambers(room) {
 
     if (CHAMBER_CONFIG.debugLogging) {
         console.log(`[ChamberGen] Created ${chambers.length} chambers`);
+        console.log(`[ChamberGen] ========================================`);
     }
 }
 
@@ -117,65 +162,89 @@ function initializeChamberGrid(width, height, doorwayTiles) {
 }
 
 /**
- * Find tiles that are part of doorways (relative to room floor)
+ * Find floor tiles that connect to doorways (relative to room floor)
+ * Doorways are on walls, so we find the floor tiles adjacent to them
  */
 function findDoorwayTiles(room) {
     const tiles = [];
+    const tileSet = new Set();
 
-    if (!room.doorways) return tiles;
+    if (!room.doorways || room.doorways.length === 0) {
+        if (CHAMBER_CONFIG.debugLogging) {
+            console.log(`[ChamberGen] No doorways found for room at (${room.x}, ${room.y})`);
+        }
+        return tiles;
+    }
+
+    const addTile = (localX, localY) => {
+        // Ensure within floor bounds
+        if (localX < 0 || localX >= room.floorWidth ||
+            localY < 0 || localY >= room.floorHeight) {
+            return;
+        }
+        const key = `${localX},${localY}`;
+        if (!tileSet.has(key)) {
+            tileSet.add(key);
+            tiles.push({
+                x: localX,
+                y: localY,
+                worldX: room.floorX + localX,
+                worldY: room.floorY + localY
+            });
+        }
+    };
 
     for (const doorway of room.doorways) {
-        // Convert doorway world coords to room-relative coords
-        for (let dy = 0; dy < doorway.height; dy++) {
-            for (let dx = 0; dx < doorway.width; dx++) {
-                const worldX = doorway.x + dx;
-                const worldY = doorway.y + dy;
+        // Doorways are on walls - find where they connect to floor
+        // Based on doorway side, calculate floor entry point
+        const side = doorway.side;
 
-                // Check if this doorway tile is within room floor
-                if (worldX >= room.floorX && worldX < room.floorX + room.floorWidth &&
-                    worldY >= room.floorY && worldY < room.floorY + room.floorHeight) {
-                    tiles.push({
-                        x: worldX - room.floorX,
-                        y: worldY - room.floorY,
-                        worldX: worldX,
-                        worldY: worldY
-                    });
-                }
-            }
+        if (CHAMBER_CONFIG.debugLogging) {
+            console.log(`[ChamberGen] Processing ${side} doorway at (${doorway.x}, ${doorway.y}), size: ${doorway.width}x${doorway.height}`);
         }
 
-        // Also mark the cells adjacent to doorways (ensure access path)
-        const adjacentOffsets = [
-            { dx: 0, dy: -1 }, { dx: 0, dy: 1 },
-            { dx: -1, dy: 0 }, { dx: 1, dy: 0 },
-            { dx: 0, dy: -2 }, { dx: 0, dy: 2 },
-            { dx: -2, dy: 0 }, { dx: 2, dy: 0 }
-        ];
+        // Calculate floor entry tiles based on doorway side
+        for (let i = 0; i < (doorway.orientation === 'horizontal' ? doorway.width : doorway.height); i++) {
+            let entryX, entryY;
 
-        for (let dy = 0; dy < doorway.height; dy++) {
-            for (let dx = 0; dx < doorway.width; dx++) {
-                const baseX = doorway.x + dx - room.floorX;
-                const baseY = doorway.y + dy - room.floorY;
-
-                for (const offset of adjacentOffsets) {
-                    const adjX = baseX + offset.dx;
-                    const adjY = baseY + offset.dy;
-
-                    if (adjX >= 0 && adjX < room.floorWidth &&
-                        adjY >= 0 && adjY < room.floorHeight) {
-                        // Check not already in tiles
-                        if (!tiles.some(t => t.x === adjX && t.y === adjY)) {
-                            tiles.push({
-                                x: adjX,
-                                y: adjY,
-                                worldX: room.floorX + adjX,
-                                worldY: room.floorY + adjY
-                            });
-                        }
-                    }
-                }
+            if (side === 'north') {
+                // Doorway on north wall, entry is at top of floor (y=0)
+                entryX = doorway.x + i - room.floorX;
+                entryY = 0;
+            } else if (side === 'south') {
+                // Doorway on south wall, entry is at bottom of floor
+                entryX = doorway.x + i - room.floorX;
+                entryY = room.floorHeight - 1;
+            } else if (side === 'west') {
+                // Doorway on west wall, entry is at left of floor (x=0)
+                entryX = 0;
+                entryY = doorway.y + i - room.floorY;
+            } else if (side === 'east') {
+                // Doorway on east wall, entry is at right of floor
+                entryX = room.floorWidth - 1;
+                entryY = doorway.y + i - room.floorY;
             }
+
+            // Add entry tile and surrounding tiles to ensure path
+            addTile(entryX, entryY);
+            addTile(entryX + 1, entryY);
+            addTile(entryX - 1, entryY);
+            addTile(entryX, entryY + 1);
+            addTile(entryX, entryY - 1);
+            addTile(entryX + 1, entryY + 1);
+            addTile(entryX - 1, entryY - 1);
+            addTile(entryX + 1, entryY - 1);
+            addTile(entryX - 1, entryY + 1);
+            // Extended path into room
+            addTile(entryX + 2, entryY);
+            addTile(entryX - 2, entryY);
+            addTile(entryX, entryY + 2);
+            addTile(entryX, entryY - 2);
         }
+    }
+
+    if (CHAMBER_CONFIG.debugLogging) {
+        console.log(`[ChamberGen] Found ${tiles.length} doorway entry tiles`);
     }
 
     return tiles;
@@ -447,12 +516,18 @@ function connectIsolatedChambers(grid, width, height, chambers, doorwayTiles) {
  * Apply chamber grid to game map
  */
 function applyChamberGridToRoom(grid, room) {
+    let wallsPlaced = 0;
+    let skipped = 0;
+
     for (let y = 0; y < room.floorHeight; y++) {
         for (let x = 0; x < room.floorWidth; x++) {
             const worldX = room.floorX + x;
             const worldY = room.floorY + y;
 
-            if (!game.map[worldY] || !game.map[worldY][worldX]) continue;
+            if (!game.map[worldY] || !game.map[worldY][worldX]) {
+                skipped++;
+                continue;
+            }
 
             if (grid[y][x] === 1) {
                 // Interior wall
@@ -462,9 +537,14 @@ function applyChamberGridToRoom(grid, room) {
                     element: room.element,
                     blocked: true
                 };
+                wallsPlaced++;
             }
             // Floor tiles were already placed by placeRoomFloorTiles()
         }
+    }
+
+    if (CHAMBER_CONFIG.debugLogging) {
+        console.log(`[ChamberGen] Applied ${wallsPlaced} interior walls to map (${skipped} tiles skipped)`);
     }
 }
 
