@@ -265,30 +265,99 @@ function handleMerchantInput(e) {
  * Handle inventory screen input
  */
 function handleInventoryInput(e) {
-    // ESC to close inventory
-    if (e.key === 'Escape') {
+    // ESC or 'i'/'I' to close inventory
+    if (e.key === 'Escape' || e.key === 'i' || e.key === 'I' || e.key === 'e' || e.key === 'E') {
         game.state = 'playing';
         return;
     }
 
-    // Tab switching
+    // Tab switching (now 5 tabs instead of 6)
     if (e.key === 'ArrowLeft') {
-        game.inventoryTab = (game.inventoryTab - 1 + 6) % 6;
+        game.inventoryTab = (game.inventoryTab - 1 + 5) % 5;
+        game.selectedItemIndex = 0; // Reset selection when changing tabs
     }
     if (e.key === 'ArrowRight') {
-        game.inventoryTab = (game.inventoryTab + 1) % 6;
+        game.inventoryTab = (game.inventoryTab + 1) % 5;
+        game.selectedItemIndex = 0; // Reset selection when changing tabs
     }
 
-    // Inspect tab navigation
-    if (game.inventoryTab === 5) {
+    // Item navigation for Weapons, Armor, Consumables, Items tabs
+    if (game.inventoryTab < 4) {
+        const types = ['weapon', 'armor', 'consumable', 'material'];
+        const targetType = types[game.inventoryTab];
+        const filteredItems = game.player.inventory.filter(i => i.type === targetType);
+
         if (e.key === 'ArrowUp') {
-            game.inspectIndex = Math.max(0, (game.inspectIndex || 0) - 1);
+            game.selectedItemIndex = Math.max(0, (game.selectedItemIndex || 0) - 1);
         }
         if (e.key === 'ArrowDown') {
-            game.inspectIndex = Math.min(
-                game.player.inventory.length - 1,
-                (game.inspectIndex || 0) + 1
+            game.selectedItemIndex = Math.min(
+                filteredItems.length - 1,
+                (game.selectedItemIndex || 0) + 1
             );
+        }
+
+        // Space to equip/use selected item
+        if (e.key === ' ') {
+            if (filteredItems.length > 0 && game.selectedItemIndex >= 0 && game.selectedItemIndex < filteredItems.length) {
+                const selectedItem = filteredItems[game.selectedItemIndex];
+                const itemData = EQUIPMENT_DATA[selectedItem.name] || selectedItem;
+
+                if (selectedItem.type === 'weapon' || selectedItem.type === 'armor') {
+                    // Equip item
+                    const slot = itemData.slot || 'MAIN';
+
+                    // Unequip current item if any
+                    if (game.player.equipped[slot]) {
+                        const currentItem = game.player.equipped[slot];
+                        game.player.inventory.push({ ...currentItem, count: 1 });
+                    }
+
+                    // Equip new item
+                    game.player.equipped[slot] = { ...selectedItem };
+
+                    // Remove from inventory
+                    const invIndex = game.player.inventory.indexOf(selectedItem);
+                    if (invIndex !== -1) {
+                        if (selectedItem.count > 1) {
+                            selectedItem.count--;
+                        } else {
+                            game.player.inventory.splice(invIndex, 1);
+                            game.selectedItemIndex = Math.max(0, game.selectedItemIndex - 1);
+                        }
+                    }
+
+                    // Recalculate stats
+                    if (typeof recalculatePlayerStats === 'function') {
+                        recalculatePlayerStats(game.player);
+                    }
+
+                    // Update action hotkeys if weapon changed
+                    if (slot === 'MAIN' && typeof updateActionHotkeys === 'function') {
+                        updateActionHotkeys(game.player);
+                    }
+
+                    addMessage(`Equipped ${selectedItem.name}`);
+                } else if (selectedItem.type === 'consumable') {
+                    // Use consumable
+                    if (selectedItem.name === 'Health Potion') {
+                        const healAmount = 50;
+                        game.player.hp = Math.min(game.player.maxHp, game.player.hp + healAmount);
+                        addMessage(`Used Health Potion. Restored ${healAmount} HP.`);
+
+                        // Decrease count or remove
+                        if (selectedItem.count > 1) {
+                            selectedItem.count--;
+                        } else {
+                            const invIndex = game.player.inventory.indexOf(selectedItem);
+                            if (invIndex !== -1) {
+                                game.player.inventory.splice(invIndex, 1);
+                                game.selectedItemIndex = Math.max(0, game.selectedItemIndex - 1);
+                            }
+                        }
+                    }
+                }
+            }
         }
     }
 
@@ -301,35 +370,27 @@ function handleInventoryInput(e) {
 
             if (game.player.equipped[slot]) {
                 const item = game.player.equipped[slot];
-                game.player.inventory.push({ ...item, count: 1 });
-                game.player.equipped[slot] = null;
-                addMessage(`Unequipped ${item.name}`);
-            }
-        }
-    }
 
-    // Other tabs - use/equip items
-    if (game.inventoryTab < 4) {
-        if (['1', '2', '3', '4', '5', '6', '7', '8', '9'].includes(e.key)) {
-            const index = parseInt(e.key) - 1;
-            const types = ['weapon', 'armor', 'consumable', 'material'];
-            const targetType = types[game.inventoryTab];
-            const filteredItems = game.player.inventory.filter(i => i.type === targetType);
-
-            if (index >= 0 && index < filteredItems.length) {
-                const item = filteredItems[index];
-
-                if (item.type === 'weapon' || item.type === 'armor') {
-                    // Equip item
-                    if (typeof equipItem === 'function') {
-                        equipItem(item);
-                    }
-                } else if (item.type === 'consumable') {
-                    // Use item
-                    if (typeof useItem === 'function') {
-                        useItem(index);
-                    }
+                // Determine item type
+                let itemType = 'weapon';
+                if (['HEAD', 'CHEST', 'LEGS', 'FEET', 'OFF'].includes(slot)) {
+                    itemType = 'armor';
                 }
+
+                game.player.inventory.push({ ...item, count: 1, type: itemType });
+                game.player.equipped[slot] = null;
+
+                // Recalculate stats
+                if (typeof recalculatePlayerStats === 'function') {
+                    recalculatePlayerStats(game.player);
+                }
+
+                // Update action hotkeys if weapon changed
+                if (slot === 'MAIN' && typeof updateActionHotkeys === 'function') {
+                    updateActionHotkeys(game.player);
+                }
+
+                addMessage(`Unequipped ${item.name}`);
             }
         }
     }
