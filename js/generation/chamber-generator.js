@@ -37,14 +37,6 @@ function generateChambers(room) {
         return;
     }
 
-    // Skip entrance rooms - keep them open for safe spawning
-    if (room.type === 'entrance') {
-        if (CHAMBER_CONFIG.debugLogging) {
-            console.log('[ChamberGen] Skipping entrance room');
-        }
-        return;
-    }
-
     const width = room.floorWidth;
     const height = room.floorHeight;
 
@@ -120,10 +112,54 @@ function generateChambers(room) {
     room.chambers = chambers;
     room.chamberGrid = grid;
 
+    // Mark safe chamber (furthest from doorways) - used for player spawn in entrance
+    if (chambers.length > 0) {
+        const safeChamber = findSafestChamber(chambers, doorwayTiles, room);
+        room.safeChamber = safeChamber;
+        if (safeChamber) {
+            safeChamber.isSafe = true;
+        }
+        if (CHAMBER_CONFIG.debugLogging && room.type === 'entrance') {
+            console.log(`[ChamberGen] Safe chamber marked: ID ${safeChamber?.id}, ${safeChamber?.tiles?.length} tiles`);
+        }
+    }
+
     if (CHAMBER_CONFIG.debugLogging) {
         console.log(`[ChamberGen] Created ${chambers.length} chambers`);
         console.log(`[ChamberGen] ========================================`);
     }
+}
+
+/**
+ * Find the chamber furthest from all doorways (safest for player spawn)
+ */
+function findSafestChamber(chambers, doorwayTiles, room) {
+    if (!chambers || chambers.length === 0) return null;
+    if (!doorwayTiles || doorwayTiles.length === 0) return chambers[0];
+
+    let safestChamber = null;
+    let maxMinDistance = -1;
+
+    for (const chamber of chambers) {
+        // Find minimum distance from this chamber's center to any doorway
+        let minDistToDoor = Infinity;
+
+        for (const doorTile of doorwayTiles) {
+            const dist = Math.abs(chamber.center.x - doorTile.x) +
+                        Math.abs(chamber.center.y - doorTile.y);
+            if (dist < minDistToDoor) {
+                minDistToDoor = dist;
+            }
+        }
+
+        // Chamber with the largest minimum distance is safest
+        if (minDistToDoor > maxMinDistance) {
+            maxMinDistance = minDistToDoor;
+            safestChamber = chamber;
+        }
+    }
+
+    return safestChamber;
 }
 
 // ============================================================================
@@ -553,49 +589,49 @@ function applyChamberGridToRoom(grid, room) {
 // ============================================================================
 
 /**
- * Get a safe spawn position within a room (furthest from doorways)
+ * Get a safe spawn position within a room (uses pre-marked safe chamber)
+ * @param {Object} room - Room to get safe spawn in
+ * @returns {Object} {x, y} world coordinates
  */
 function getSafeSpawnChamber(room) {
-    if (!room.chambers || room.chambers.length === 0) {
-        // No chambers, return room center
+    // Use the pre-marked safe chamber if available
+    if (room.safeChamber && room.safeChamber.center) {
         return {
-            x: room.floorX + Math.floor(room.floorWidth / 2),
-            y: room.floorY + Math.floor(room.floorHeight / 2)
+            x: room.floorX + room.safeChamber.center.x,
+            y: room.floorY + room.safeChamber.center.y
         };
     }
 
-    // Find chamber furthest from all doorways
-    let bestChamber = room.chambers[0];
-    let maxMinDist = 0;
-
-    for (const chamber of room.chambers) {
-        let minDistToDoor = Infinity;
-
-        for (const doorway of room.doorways || []) {
-            const doorCenter = {
-                x: doorway.x + doorway.width / 2 - room.floorX,
-                y: doorway.y + doorway.height / 2 - room.floorY
-            };
-
-            const dist = Math.abs(chamber.center.x - doorCenter.x) +
-                        Math.abs(chamber.center.y - doorCenter.y);
-
-            if (dist < minDistToDoor) {
-                minDistToDoor = dist;
-            }
-        }
-
-        if (minDistToDoor > maxMinDist) {
-            maxMinDist = minDistToDoor;
-            bestChamber = chamber;
-        }
+    // Fallback: first chamber or room center
+    if (room.chambers && room.chambers.length > 0) {
+        const chamber = room.chambers[0];
+        return {
+            x: room.floorX + chamber.center.x,
+            y: room.floorY + chamber.center.y
+        };
     }
 
-    // Return world coordinates of safe chamber center
+    // No chambers, return room center
     return {
-        x: room.floorX + bestChamber.center.x,
-        y: room.floorY + bestChamber.center.y
+        x: room.floorX + Math.floor(room.floorWidth / 2),
+        y: room.floorY + Math.floor(room.floorHeight / 2)
     };
+}
+
+/**
+ * Check if a position is within the safe chamber
+ * @param {Object} room - Room to check
+ * @param {number} x - World X coordinate
+ * @param {number} y - World Y coordinate
+ * @returns {boolean} True if in safe chamber
+ */
+function isInSafeChamber(room, x, y) {
+    if (!room.safeChamber || !room.safeChamber.tiles) return false;
+
+    const localX = x - room.floorX;
+    const localY = y - room.floorY;
+
+    return room.safeChamber.tiles.some(t => t.x === localX && t.y === localY);
 }
 
 // ============================================================================
@@ -606,6 +642,8 @@ if (typeof window !== 'undefined') {
     window.CHAMBER_CONFIG = CHAMBER_CONFIG;
     window.generateChambers = generateChambers;
     window.getSafeSpawnChamber = getSafeSpawnChamber;
+    window.isInSafeChamber = isInSafeChamber;
+    window.findSafestChamber = findSafestChamber;
 }
 
 console.log('✅ Chamber generator loaded (cellular automata)');

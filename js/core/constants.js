@@ -6,8 +6,8 @@
 // GRID & DISPLAY
 // ============================================================================
 
-const GRID_WIDTH = 80;
-const GRID_HEIGHT = 60;
+const GRID_WIDTH = 200;
+const GRID_HEIGHT = 200;
 const TILE_SIZE = 16;
 const ZOOM_LEVEL = 2;
 const TRACKER_WIDTH = 350;
