@@ -354,9 +354,9 @@ const camY = game.camera.y;
                     continue;
                 }
 
-                // FOG OF WAR: Skip unexplored tiles (render as black/void)
+                // FOG OF WAR: Render unexplored tiles as dark gray
                 if (!tile.explored) {
-                    ctx.fillStyle = '#000';
+                    ctx.fillStyle = '#2a2a2a';
                     ctx.fillRect(screenX, screenY, effectiveTileSize, effectiveTileSize);
                     continue;
                 }
@@ -389,10 +389,13 @@ const camY = game.camera.y;
                     ctx.fillStyle = 'rgba(0, 0, 0, 0.65)';
                     ctx.fillRect(screenX, screenY, effectiveTileSize, effectiveTileSize);
                 }
-                // FOG OF WAR: Apply smooth falloff for visible tiles at edge of vision
+                // FOG OF WAR: Apply smooth falloff for visible tiles in the fade zone
+                // visibility: 1.0 = full light, 0.0 = edge of vision (nearly dark gray)
                 else if (tile.visible && tile.visibility < 1) {
-                    const darkness = 1 - tile.visibility;
-                    ctx.fillStyle = `rgba(0, 0, 0, ${darkness * 0.5})`;
+                    // Smooth fade: darkness increases as visibility decreases
+                    // At visibility 0, we want ~80% darkness to nearly match unexplored gray
+                    const darkness = (1 - tile.visibility) * 0.8;
+                    ctx.fillStyle = `rgba(0, 0, 0, ${darkness})`;
                     ctx.fillRect(screenX, screenY, effectiveTileSize, effectiveTileSize);
                 }
             }

@@ -10,10 +10,9 @@ const VisionSystem = {
 
     // Configuration
     config: {
-        basePlayerVision: 3,      // Player base vision range (without torch)
+        basePlayerVision: 4,      // Player base vision range (full visibility)
+        fadeDistance: 2,          // Additional tiles where vision fades to darkness
         updateEveryFrame: true,   // Recalculate visibility every frame
-        smoothFalloff: true,      // Gradual dimming at vision edges
-        falloffStart: 0.7,        // Start dimming at 70% of max range
         debugLogging: false
     },
 
@@ -53,13 +52,14 @@ const VisionSystem = {
         this.clearVisibility();
 
         // Calculate player vision range (base + equipment bonuses)
-        const visionRange = this.getPlayerVisionRange();
+        const fullVisionRange = this.getPlayerVisionRange();
+        const totalRange = fullVisionRange + this.config.fadeDistance;
 
         // Run shadowcasting from player position
         const playerX = Math.floor(game.player.gridX);
         const playerY = Math.floor(game.player.gridY);
 
-        this.computeFOV(playerX, playerY, visionRange);
+        this.computeFOV(playerX, playerY, fullVisionRange, totalRange);
 
         // Update enemy visibility flags
         this.updateEnemyVisibility();
@@ -199,14 +199,18 @@ const VisionSystem = {
     /**
      * Compute field of view using recursive shadowcasting
      * Based on the algorithm described by Bjorn Bergstrom
+     * @param {number} originX - Player X position
+     * @param {number} originY - Player Y position
+     * @param {number} fullVisionRange - Range of full visibility (no fade)
+     * @param {number} totalRange - Total range including fade zone
      */
-    computeFOV(originX, originY, radius) {
+    computeFOV(originX, originY, fullVisionRange, totalRange) {
         // Mark origin as visible
         this.setVisible(originX, originY, 1);
 
         // Process all 8 octants
         for (let octant = 0; octant < 8; octant++) {
-            this.scanOctant(originX, originY, radius, 1, 1.0, 0.0, octant);
+            this.scanOctant(originX, originY, fullVisionRange, totalRange, 1, 1.0, 0.0, octant);
         }
     },
 
@@ -230,13 +234,15 @@ const VisionSystem = {
 
     /**
      * Scan a single octant recursively
+     * @param {number} fullVisionRange - Range of full visibility
+     * @param {number} totalRange - Total range including fade zone
      */
-    scanOctant(originX, originY, radius, row, startSlope, endSlope, octant) {
+    scanOctant(originX, originY, fullVisionRange, totalRange, row, startSlope, endSlope, octant) {
         if (startSlope < endSlope) return;
 
-        let nextStartSlope = startSlope;
+        const fadeDistance = this.config.fadeDistance;
 
-        for (let currentRow = row; currentRow <= radius; currentRow++) {
+        for (let currentRow = row; currentRow <= totalRange; currentRow++) {
             let blocked = false;
             let newStart = startSlope;
 
@@ -248,16 +254,17 @@ const VisionSystem = {
                 // Calculate distance for visibility falloff
                 const distance = Math.sqrt(currentRow * currentRow + col * col);
 
-                if (distance > radius) continue;
+                if (distance > totalRange) continue;
 
-                // Calculate visibility based on distance (smooth falloff)
+                // Calculate visibility based on distance
+                // Full visibility within fullVisionRange, smooth fade over fadeDistance
                 let visibility = 1;
-                if (this.config.smoothFalloff) {
-                    const falloffStart = radius * this.config.falloffStart;
-                    if (distance > falloffStart) {
-                        visibility = 1 - (distance - falloffStart) / (radius - falloffStart);
-                        visibility = Math.max(0.3, visibility); // Minimum visibility for visible tiles
-                    }
+                if (distance > fullVisionRange) {
+                    // In the fade zone - calculate smooth falloff
+                    // Linear interpolation from 1.0 at fullVisionRange to 0 at totalRange
+                    const fadeProgress = (distance - fullVisionRange) / fadeDistance;
+                    visibility = 1 - fadeProgress;
+                    visibility = Math.max(0, Math.min(1, visibility)); // Clamp to 0-1
                 }
 
                 const leftSlope = (col + 0.5) / (currentRow - 0.5);
@@ -279,10 +286,10 @@ const VisionSystem = {
                         startSlope = newStart;
                     }
                 } else {
-                    if (this.blocksVision(mapX, mapY) && currentRow < radius) {
+                    if (this.blocksVision(mapX, mapY) && currentRow < totalRange) {
                         blocked = true;
                         // Recursive scan for the unblocked area
-                        this.scanOctant(originX, originY, radius, currentRow + 1, startSlope, leftSlope, octant);
+                        this.scanOctant(originX, originY, fullVisionRange, totalRange, currentRow + 1, startSlope, leftSlope, octant);
                         newStart = rightSlope;
                     }
                 }
