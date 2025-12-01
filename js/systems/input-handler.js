@@ -19,7 +19,8 @@ const contextMenu = {
 const inspectPopup = {
     visible: false,
     target: null,
-    targetType: null
+    targetType: null,
+    tab: 0  // 0=STATS, 1=COMBAT, 2=BEHAVIOR, 3=LORE
 };
 
 // Key down - mark as held
@@ -30,7 +31,21 @@ window.addEventListener('keydown', e => {
     if (e.key === 'Escape' && inspectPopup.visible) {
         inspectPopup.visible = false;
         inspectPopup.target = null;
+        inspectPopup.tab = 0;
         return;
+    }
+
+    // Tab switching for inspect popup (left/right arrows or Tab)
+    if (inspectPopup.visible) {
+        if (e.key === 'ArrowRight' || e.key === 'Tab') {
+            e.preventDefault();
+            inspectPopup.tab = (inspectPopup.tab + 1) % 4;
+            return;
+        }
+        if (e.key === 'ArrowLeft') {
+            inspectPopup.tab = (inspectPopup.tab + 3) % 4; // +3 is same as -1 mod 4
+            return;
+        }
     }
 
     // Close context menu on ESC
