@@ -450,19 +450,19 @@ class EnemyAI {
     
     _canMove(x, y, mx, my, game) {
         const tile = game.map?.[y]?.[x];
-        if (!tile || tile.type === 'wall' || tile.type === 'void') return false;
+        if (!tile || tile.type === 'wall' || tile.type === 'void' || tile.type === 'interior_wall') return false;
         if (hasBlockingDecorationAt(x, y)) return false;
 
         // For diagonal moves, check adjacent tiles to prevent corner-cutting
         if (mx !== 0 && my !== 0) {
             // Check horizontal adjacent tile
             const hTile = game.map?.[this.enemy.gridY]?.[this.enemy.gridX + mx];
-            if (!hTile || hTile.type === 'wall' || hTile.type === 'void') return false;
+            if (!hTile || hTile.type === 'wall' || hTile.type === 'void' || hTile.type === 'interior_wall') return false;
             if (hasBlockingDecorationAt(this.enemy.gridX + mx, this.enemy.gridY)) return false;
 
             // Check vertical adjacent tile
             const vTile = game.map?.[this.enemy.gridY + my]?.[this.enemy.gridX];
-            if (!vTile || vTile.type === 'wall' || vTile.type === 'void') return false;
+            if (!vTile || vTile.type === 'wall' || vTile.type === 'void' || vTile.type === 'interior_wall') return false;
             if (hasBlockingDecorationAt(this.enemy.gridX, this.enemy.gridY + my)) return false;
         }
 
@@ -525,7 +525,7 @@ class EnemyAI {
             const cx = Math.floor(this.enemy.gridX + xs * i);
             const cy = Math.floor(this.enemy.gridY + ys * i);
             const tile = game.map?.[cy]?.[cx];
-            if (!tile || tile.type === 'wall' || tile.type === 'void') return false;
+            if (!tile || tile.type === 'wall' || tile.type === 'void' || tile.type === 'interior_wall') return false;
             if (hasVisionBlockingDecorationAt(cx, cy)) return false;
         }
         return true;

@@ -78,8 +78,8 @@ function isTileWalkable(gridX, gridY) {
     // Get tile
     const tile = game.map[gridY]?.[gridX];
 
-    // Check tile type
-    if (!tile || tile.type === 'void' || tile.type === 'wall') {
+    // Check tile type (includes interior_wall from chamber generation)
+    if (!tile || tile.type === 'void' || tile.type === 'wall' || tile.type === 'interior_wall') {
         return false;
     }
 
