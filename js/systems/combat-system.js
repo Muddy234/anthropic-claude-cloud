@@ -193,13 +193,36 @@ function performAttack(attacker, defender) {
  * Apply damage to an entity
  */
 function applyDamage(entity, damage, source) {
+    // DEBUG: Skip damage for player if godMode is enabled
+    if (entity === game.player && window.godMode) {
+        console.log('[DEBUG] God mode: Player took no damage');
+        return;
+    }
+
+    // Validate damage is a valid number
+    if (typeof damage !== 'number' || isNaN(damage)) {
+        console.warn('[Combat] Invalid damage value:', damage, '- defaulting to 1');
+        damage = 1;
+    }
+
     // Apply damage reduction from status effects
     if (typeof StatusEffectSystem !== 'undefined') {
         const damageTakenMod = StatusEffectSystem.getStatModifier(entity, 'damageTaken');
-        damage = Math.floor(damage * (1 + damageTakenMod));
+        if (typeof damageTakenMod === 'number' && !isNaN(damageTakenMod)) {
+            damage = Math.floor(damage * (1 + damageTakenMod));
+        }
     }
 
+    // Ensure damage is still valid after modifications
+    if (isNaN(damage)) damage = 1;
+
     entity.hp -= damage;
+
+    // Fix NaN HP (defensive)
+    if (isNaN(entity.hp)) {
+        console.warn('[Combat] HP became NaN for', entity.name, '- resetting to 0');
+        entity.hp = 0;
+    }
 
     // Interrupt shout if enemy is shouting
     if (entity !== game.player && entity.ai?.currentState === 'shouting') {
@@ -356,6 +379,16 @@ function calculateXPReward(entity) {
 // ============================================================================
 
 function canAttackTarget(attacker, target) {
+    // FOG OF WAR: Player must be able to see target to attack
+    if (attacker === game.player && target !== game.player) {
+        const targetX = Math.floor(target.gridX ?? target.x);
+        const targetY = Math.floor(target.gridY ?? target.y);
+        const tile = game.map?.[targetY]?.[targetX];
+        if (!tile || !tile.visible) {
+            return false; // Can't attack what you can't see
+        }
+    }
+
     const distance = getDistance(attacker, target);
     const range = attacker.combat?.attackRange || 1;
     return distance <= range + 0.5; // Small buffer for diagonal
@@ -544,6 +577,10 @@ if (typeof window !== 'undefined') {
     window.updateDamageNumbers = updateDamageNumbers;
     window.renderDamageNumbers = renderDamageNumbers;
     window.damageNumbers = damageNumbers;
+
+    // DEBUG: Enable god mode for testing (set to false for production)
+    window.godMode = true;
 }
 
 console.log('✅ Combat system loaded (3-layer damage integration)');
+console.log('⚠️ GOD MODE ENABLED - Player takes no damage');

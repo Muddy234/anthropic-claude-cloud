@@ -140,9 +140,9 @@ function hasLineOfSight(from, to) {
     let y = y0;
     
     while (x !== x1 || y !== y1) {
-        // Check if tile blocks vision
+        // Check if tile blocks vision (includes interior_wall from chamber generation)
         const tile = game.map?.[y]?.[x];
-        if (!tile || tile.type === 'wall' || tile.type === 'void') {
+        if (!tile || tile.type === 'wall' || tile.type === 'void' || tile.type === 'interior_wall') {
             return false;
         }
         

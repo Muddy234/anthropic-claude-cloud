@@ -24,13 +24,20 @@ function generateMap() {
     for (const room of game.rooms) {
         placeRoomFloorTiles(room);
     }
-    
+
     // Create doorways between connected rooms
     createDoorways();
-    
+
+    // Generate chambers within each room (cellular automata)
+    for (const room of game.rooms) {
+        if (typeof generateChambers === 'function') {
+            generateChambers(room);
+        }
+    }
+
     // Fill remaining void with walls
     fillVoidWithWalls();
-    
+
     // Decorate rooms
     for (const room of game.rooms) {
         if (typeof decorateRoom === 'function') {
@@ -65,13 +72,15 @@ function initializeVoidMap() {
  * Generate rooms in tree structure starting from entrance
  */
 function generateRoomTree() {
-    const MIN_ROOMS = 5;
-    const MAX_ROOMS = 10;
+    // Use ROOM_CONFIG if available, otherwise defaults
+    const roomTotalSize = (typeof ROOM_CONFIG !== 'undefined') ? ROOM_CONFIG.totalSize : 38;
+    const MIN_ROOMS = (typeof ROOM_CONFIG !== 'undefined') ? ROOM_CONFIG.minRooms : 5;
+    const MAX_ROOMS = (typeof ROOM_CONFIG !== 'undefined') ? ROOM_CONFIG.maxRooms : 8;
     const targetRooms = MIN_ROOMS + Math.floor(Math.random() * (MAX_ROOMS - MIN_ROOMS + 1));
-    
+
     // Create entrance room at center of map
-    const centerX = Math.floor((GRID_WIDTH - 22) / 2);
-    const centerY = Math.floor((GRID_HEIGHT - 22) / 2);
+    const centerX = Math.floor((GRID_WIDTH - roomTotalSize) / 2);
+    const centerY = Math.floor((GRID_HEIGHT - roomTotalSize) / 2);
     
     const entranceRoom = generateRectangularRoom(centerX, centerY, 'entrance', 'obsidian_halls');
     game.rooms.push(entranceRoom);
@@ -115,7 +124,7 @@ function generateRoomTree() {
  * Returns array of {x, y} positions in the 4 cardinal directions
  */
 function getAdjacentRoomPositions(parentRoom) {
-    const roomSize = 22; 
+    const roomSize = (typeof ROOM_CONFIG !== 'undefined') ? ROOM_CONFIG.totalSize : 38;
     const gap = 2; // Gap between rooms for corridors
     
     return [
@@ -154,8 +163,8 @@ function getAdjacentRoomPositions(parentRoom) {
  * @returns {boolean} True if overlap detected
  */
 function wouldRoomOverlap(x, y, rooms) {
-    const roomSize = 22; // ← FIXED: Match actual ROOM_CONFIG.totalSize
-    const margin = 0;    // ← FIXED: No margin needed (gap is handled in positioning)
+    const roomSize = (typeof ROOM_CONFIG !== 'undefined') ? ROOM_CONFIG.totalSize : 38;
+    const margin = 0;    // No margin needed (gap is handled in positioning)
     
     for (const room of rooms) {
         // Check if rectangles overlap (with margin)
@@ -179,20 +188,22 @@ function wouldRoomOverlap(x, y, rooms) {
  * Returns new room object or null if no valid position found
  */
 function tryAddAdjacentRoom(parentRoom) {
+    const roomSize = (typeof ROOM_CONFIG !== 'undefined') ? ROOM_CONFIG.totalSize : 38;
+
     // Get all possible adjacent positions
     const positions = getAdjacentRoomPositions(parentRoom);
-    
+
     // Shuffle positions for randomness
     for (let i = positions.length - 1; i > 0; i--) {
         const j = Math.floor(Math.random() * (i + 1));
         [positions[i], positions[j]] = [positions[j], positions[i]];
     }
-    
+
     // Try each position
     for (const pos of positions) {
         // Check if position is within map bounds
-        if (pos.x < 0 || pos.y < 0 || 
-            pos.x + 22 > GRID_WIDTH || pos.y + 22 > GRID_HEIGHT) {
+        if (pos.x < 0 || pos.y < 0 ||
+            pos.x + roomSize > GRID_WIDTH || pos.y + roomSize > GRID_HEIGHT) {
             continue;
         }
         

@@ -53,15 +53,15 @@ function spawnEnemiesInRoom(room, validTiles, enemyCount) {
     if (!enemyCount || enemyCount <= 0) {
         enemyCount = calculateEnemyCount(room);
     }
-    
-    // Don't spawn in entrance room
+
+    // Entrance rooms get fewer enemies (they have a safe chamber)
     if (room.type === 'entrance') {
+        enemyCount = Math.max(1, Math.floor(enemyCount * 0.5));
         if (SPAWNER_CONFIG.debugLogging) {
-            console.log('[Spawner] Skipping entrance room');
+            console.log(`[Spawner] Entrance room: reduced to ${enemyCount} enemies`);
         }
-        return;
     }
-    
+
     if (SPAWNER_CONFIG.debugLogging) {
         console.log(`[Spawner] Spawning ${enemyCount} enemies in ${room.element || 'neutral'} ${room.type} room`);
     }
@@ -72,8 +72,8 @@ function spawnEnemiesInRoom(room, validTiles, enemyCount) {
     for (let i = 0; i < enemyCount; i++) {
         if (validTiles.length === 0) break;
         
-        // Find valid spawn position
-        const spawnTile = findSpawnPosition(validTiles, usedPositions);
+        // Find valid spawn position (pass room for safe chamber check)
+        const spawnTile = findSpawnPosition(validTiles, usedPositions, room);
         if (!spawnTile) {
             console.warn(`[Spawner] Could not find spawn position for enemy ${i + 1}`);
             continue;
@@ -293,14 +293,14 @@ function createEnemy(monsterType, x, y, room) {
         room: room,
         spawnRoom: room,
         
-        // Combat
+        // Combat - use individual monster values from tierData (via buildCombatConfig)
         combat: {
             isInCombat: false,
             currentTarget: null,
             attackCooldown: 0,
-            attackSpeed: 1.0 / (stats.speed || 3),
+            attackSpeed: tierData?.combat?.attackSpeed || 2.0,
             autoRetaliate: true,
-            attackRange: stats.range || 1
+            attackRange: tierData?.combat?.attackRange || 1
         },
         
         // Loot
@@ -384,39 +384,49 @@ function calculateEnemyCount(room) {
 
 /**
  * Find a valid spawn position
+ * @param {Array} validTiles - Array of valid tiles
+ * @param {Set} usedPositions - Already used positions
+ * @param {Object} room - Room being spawned in (optional, for safe chamber check)
  */
-function findSpawnPosition(validTiles, usedPositions) {
+function findSpawnPosition(validTiles, usedPositions, room) {
     const maxAttempts = 20;
-    
+
     for (let i = 0; i < maxAttempts; i++) {
         const tile = validTiles[Math.floor(Math.random() * validTiles.length)];
         const key = `${tile.x},${tile.y}`;
-        
+
         if (usedPositions.has(key)) continue;
-        
+
         // Verify tile is still valid
         const mapTile = game.map[tile.y]?.[tile.x];
         if (!mapTile || mapTile.type !== 'floor') continue;
-        
+
         // Check for blocking decorations
         if (typeof hasBlockingDecorationAt === 'function' && hasBlockingDecorationAt(tile.x, tile.y)) {
             continue;
         }
-        
+
         // Check for existing enemies
-        const hasEnemy = game.enemies.some(e => 
+        const hasEnemy = game.enemies.some(e =>
             Math.floor(e.gridX) === tile.x && Math.floor(e.gridY) === tile.y
         );
         if (hasEnemy) continue;
-        
+
         // Check for player
         if (game.player && game.player.gridX === tile.x && game.player.gridY === tile.y) {
             continue;
         }
-        
+
+        // Don't spawn in safe chamber of entrance room
+        if (room && room.type === 'entrance' && typeof isInSafeChamber === 'function') {
+            if (isInSafeChamber(room, tile.x, tile.y)) {
+                continue;
+            }
+        }
+
         return tile;
     }
-    
+
     return null;
 }
 

@@ -19,7 +19,8 @@ const contextMenu = {
 const inspectPopup = {
     visible: false,
     target: null,
-    targetType: null
+    targetType: null,
+    tab: 0  // 0=STATS, 1=COMBAT, 2=BEHAVIOR, 3=LORE
 };
 
 // Key down - mark as held
@@ -30,13 +31,33 @@ window.addEventListener('keydown', e => {
     if (e.key === 'Escape' && inspectPopup.visible) {
         inspectPopup.visible = false;
         inspectPopup.target = null;
+        inspectPopup.tab = 0;
         return;
+    }
+
+    // Tab switching for inspect popup (left/right arrows or Tab)
+    if (inspectPopup.visible) {
+        if (e.key === 'ArrowRight' || e.key === 'Tab') {
+            e.preventDefault();
+            inspectPopup.tab = (inspectPopup.tab + 1) % 4;
+            return;
+        }
+        if (e.key === 'ArrowLeft') {
+            inspectPopup.tab = (inspectPopup.tab + 3) % 4; // +3 is same as -1 mod 4
+            return;
+        }
     }
 
     // Close context menu on ESC
     if (e.key === 'Escape' && contextMenu.visible) {
         contextMenu.visible = false;
         contextMenu.target = null;
+        return;
+    }
+
+    // Close skills menu on ESC or K
+    if ((e.key === 'Escape' || e.key === 'k' || e.key === 'K') && game.state === 'skills') {
+        game.state = 'playing';
         return;
     }
 
@@ -103,6 +124,12 @@ window.addEventListener('keydown', e => {
         if (e.key === 'i' || e.key === 'I') {
             game.state = 'inventory';
             game.inventoryTab = 0;
+            return;
+        }
+
+        // Open skills menu
+        if (e.key === 'k' || e.key === 'K') {
+            game.state = 'skills';
             return;
         }
 
@@ -309,20 +336,62 @@ function handleInventoryInput(e) {
 }
 
 /**
+ * Calculate 8-directional direction from delta x/y
+ * Uses 45-degree sectors to determine direction
+ */
+function getDirectionFromDelta(dx, dy) {
+    if (dx === 0 && dy === 0) return null;
+
+    // Calculate angle in degrees (0 = right, 90 = down, etc.)
+    const angle = Math.atan2(dy, dx) * (180 / Math.PI);
+
+    // Map angle to 8 directions using 45-degree sectors
+    // Each sector is 45 degrees wide, centered on the direction
+    if (angle >= -22.5 && angle < 22.5) return 'right';
+    if (angle >= 22.5 && angle < 67.5) return 'down-right';
+    if (angle >= 67.5 && angle < 112.5) return 'down';
+    if (angle >= 112.5 && angle < 157.5) return 'down-left';
+    if (angle >= 157.5 || angle < -157.5) return 'left';
+    if (angle >= -157.5 && angle < -112.5) return 'up-left';
+    if (angle >= -112.5 && angle < -67.5) return 'up';
+    if (angle >= -67.5 && angle < -22.5) return 'up-right';
+
+    return null;
+}
+
+/**
  * Handle movement input - checks held keys and initiates movement
+ * Supports 8-directional movement via simultaneous key presses
  */
 function handleMovementInput() {
     if (!game.player || game.player.isMoving) return;
     if (game.state !== 'playing') return;
 
-    // Check WASD and arrow keys
-    if (keys['w'] || keys['W'] || keys['ArrowUp']) {
+    // Check which directional keys are held
+    const up = keys['w'] || keys['W'] || keys['ArrowUp'];
+    const down = keys['s'] || keys['S'] || keys['ArrowDown'];
+    const left = keys['a'] || keys['A'] || keys['ArrowLeft'];
+    const right = keys['d'] || keys['D'] || keys['ArrowRight'];
+
+    // Determine direction based on held keys
+    // Check diagonals first (two keys held)
+    if (up && left) {
+        startPlayerMove('up-left');
+    } else if (up && right) {
+        startPlayerMove('up-right');
+    } else if (down && left) {
+        startPlayerMove('down-left');
+    } else if (down && right) {
+        startPlayerMove('down-right');
+    }
+    // Cardinal directions (single key)
+    else if (up) {
         startPlayerMove('up');
-    } else if (keys['s'] || keys['S'] || keys['ArrowDown']) {
+    } else if (down) {
         startPlayerMove('down');
-    } else if (keys['a'] || keys['A'] || keys['ArrowLeft']) {
+    } else if (left) {
         startPlayerMove('left');
-    } else if (keys['d'] || keys['D'] || keys['ArrowRight']) {
+    } else if (right) {
         startPlayerMove('right');
     }
 }
@@ -381,9 +450,19 @@ const setupCanvasHandlers = () => {
     canvas.addEventListener('click', (e) => {
         if (game.state !== 'playing') return;
 
-        // Close context menu if open
-        if (contextMenu.visible) {
-            contextMenu.visible = false;
+        // If context menu is visible, let right-click-init.js handle the click
+        // Don't close it here - that would prevent the menu action from being processed
+        if (window.contextMenu?.visible) {
+            return;
+        }
+
+        // Don't auto-walk if inspect popup is visible
+        if (window.inspectPopup?.visible) {
+            return;
+        }
+
+        // Don't auto-walk if context menu just closed (prevents walk when clicking inspect)
+        if (window.contextMenuJustClosed) {
             return;
         }
 
@@ -454,13 +533,9 @@ const setupCanvasHandlers = () => {
 
         const dx = gridX - game.player.gridX;
         const dy = gridY - game.player.gridY;
-        let dir = null;
 
-        if (Math.abs(dx) >= Math.abs(dy)) {
-            dir = dx > 0 ? 'right' : 'left';
-        } else {
-            dir = dy > 0 ? 'down' : 'up';
-        }
+        // Calculate 8-directional movement from click position
+        const dir = getDirectionFromDelta(dx, dy);
 
         if (dir && typeof startPlayerMove === 'function') {
             startPlayerMove(dir);
@@ -579,13 +654,9 @@ function executeContextAction(action, target, targetType) {
                 game.player.manualMoveTarget = { x: target.x, y: target.y };
                 const dx = target.x - game.player.gridX;
                 const dy = target.y - game.player.gridY;
-                let dir = null;
 
-                if (Math.abs(dx) >= Math.abs(dy)) {
-                    dir = dx > 0 ? 'right' : 'left';
-                } else {
-                    dir = dy > 0 ? 'down' : 'up';
-                }
+                // Calculate 8-directional movement
+                const dir = getDirectionFromDelta(dx, dy);
 
                 if (dir && typeof startPlayerMove === 'function') {
                     startPlayerMove(dir);
@@ -647,5 +718,6 @@ window.keys = keys;
 window.handleMovementInput = handleMovementInput;
 window.checkTileInteractions = checkTileInteractions;
 window.executeContextAction = executeContextAction;
+window.getDirectionFromDelta = getDirectionFromDelta;
 
 console.log('✅ Input handler loaded');

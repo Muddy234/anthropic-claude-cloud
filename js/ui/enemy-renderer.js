@@ -225,13 +225,21 @@ function drawEnemyHealthBar(ctx, x, y, width, hp, maxHp) {
 }
 
 /**
- * Render all enemies
+ * Render all enemies (only those visible to the player)
  * Call this from your main render function instead of the inline enemy loop
  */
 function renderAllEnemies(ctx, camX, camY, tileSize, offsetX) {
     if (!game.enemies) return;
-    
+
     for (const enemy of game.enemies) {
+        // FOG OF WAR: Only render enemies that are visible to the player
+        if (enemy.isVisible === false) continue;
+
+        // Also check tile visibility as fallback
+        const enemyTileX = Math.floor(enemy.gridX);
+        const enemyTileY = Math.floor(enemy.gridY);
+        if (game.map[enemyTileY]?.[enemyTileX]?.visible === false) continue;
+
         drawEnemy(ctx, enemy, camX, camY, tileSize, offsetX);
     }
 }

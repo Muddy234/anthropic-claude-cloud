@@ -5,6 +5,7 @@
 /**
  * Start a move in the given direction
  * Called when player presses a direction key
+ * Supports 8 directions: up, down, left, right, up-left, up-right, down-left, down-right
  */
 function startPlayerMove(direction) {
     const player = game.player;
@@ -18,12 +19,16 @@ function startPlayerMove(direction) {
         case 'down': targetY += 1; break;
         case 'left': targetX -= 1; break;
         case 'right': targetX += 1; break;
+        case 'up-left': targetX -= 1; targetY -= 1; break;
+        case 'up-right': targetX += 1; targetY -= 1; break;
+        case 'down-left': targetX -= 1; targetY += 1; break;
+        case 'down-right': targetX += 1; targetY += 1; break;
     }
 
-    // Check if target tile is walkable
-    if (!canMoveToTile(targetX, targetY)) {
+    // Check if target tile is walkable (includes diagonal collision check)
+    if (!canMoveToTile(targetX, targetY, player.gridX, player.gridY)) {
         // Just turn to face that direction, don't move
-        player.facing = direction;
+        player.facing = getCardinalFacing(direction);
         return;
     }
 
@@ -32,24 +37,49 @@ function startPlayerMove(direction) {
     player.moveProgress = 0;
     player.targetGridX = targetX;
     player.targetGridY = targetY;
-    player.facing = direction;
+    player.facing = getCardinalFacing(direction);
+    player.diagonalDirection = isDiagonalDirection(direction) ? direction : null;
     player.bufferedDirection = null;
 }
 
 /**
- * Simple tile-based collision check
+ * Check if a direction is diagonal
  */
-function canMoveToTile(gridX, gridY) {
+function isDiagonalDirection(direction) {
+    return ['up-left', 'up-right', 'down-left', 'down-right'].includes(direction);
+}
+
+/**
+ * Convert any direction (including diagonal) to nearest cardinal for sprite display
+ * Horizontal priority: diagonals use left/right sprites
+ */
+function getCardinalFacing(direction) {
+    switch (direction) {
+        case 'up-left':
+        case 'down-left':
+            return 'left';
+        case 'up-right':
+        case 'down-right':
+            return 'right';
+        default:
+            return direction; // Already cardinal
+    }
+}
+
+/**
+ * Check if a single tile is walkable (no diagonal logic)
+ */
+function isTileWalkable(gridX, gridY) {
     // Bounds check
     if (gridX < 0 || gridX >= GRID_WIDTH || gridY < 0 || gridY >= GRID_HEIGHT) {
         return false;
     }
 
     // Get tile
-    const tile = game.map[gridY][gridX];
+    const tile = game.map[gridY]?.[gridX];
 
-    // Check tile type
-    if (!tile || tile.type === 'void' || tile.type === 'wall') {
+    // Check tile type (includes interior_wall from chamber generation)
+    if (!tile || tile.type === 'void' || tile.type === 'wall' || tile.type === 'interior_wall') {
         return false;
     }
 
@@ -58,12 +88,58 @@ function canMoveToTile(gridX, gridY) {
         return false;
     }
 
-    // Check for enemies
+    return true;
+}
+
+/**
+ * Tile-based collision check with diagonal support
+ * For diagonal moves, checks destination AND both adjacent tiles to prevent corner-cutting
+ * @param {number} targetX - Target grid X
+ * @param {number} targetY - Target grid Y
+ * @param {number} fromX - Current grid X (optional, needed for diagonal check)
+ * @param {number} fromY - Current grid Y (optional, needed for diagonal check)
+ */
+function canMoveToTile(targetX, targetY, fromX, fromY) {
+    // Check destination tile is walkable
+    if (!isTileWalkable(targetX, targetY)) {
+        return false;
+    }
+
+    // Check for enemies at destination
     const hasEnemy = game.enemies.some(e =>
-        e.gridX === gridX && e.gridY === gridY
+        Math.floor(e.gridX) === targetX && Math.floor(e.gridY) === targetY
     );
     if (hasEnemy) {
         return false;
+    }
+
+    // If fromX/fromY provided, check for diagonal movement
+    if (fromX !== undefined && fromY !== undefined) {
+        const dx = targetX - fromX;
+        const dy = targetY - fromY;
+
+        // Diagonal move - must check both adjacent tiles to prevent corner-cutting
+        if (dx !== 0 && dy !== 0) {
+            // Check horizontal adjacent tile (same row, target column)
+            if (!isTileWalkable(fromX + dx, fromY)) {
+                return false;
+            }
+            // Check vertical adjacent tile (target row, same column)
+            if (!isTileWalkable(fromX, fromY + dy)) {
+                return false;
+            }
+
+            // Also check for enemies in adjacent tiles (prevent squeezing between enemies)
+            const hasEnemyHorizontal = game.enemies.some(e =>
+                Math.floor(e.gridX) === fromX + dx && Math.floor(e.gridY) === fromY
+            );
+            const hasEnemyVertical = game.enemies.some(e =>
+                Math.floor(e.gridX) === fromX && Math.floor(e.gridY) === fromY + dy
+            );
+            if (hasEnemyHorizontal || hasEnemyVertical) {
+                return false;
+            }
+        }
     }
 
     return true;
@@ -185,8 +261,11 @@ if (typeof SystemManager !== 'undefined') {
 
 window.startPlayerMove = startPlayerMove;
 window.canMoveToTile = canMoveToTile;
+window.isTileWalkable = isTileWalkable;
 window.updatePlayerMovement = updatePlayerMovement;
 window.updateCameraForPokemon = updateCameraForPokemon;
 window.easeOutQuad = easeOutQuad;
+window.isDiagonalDirection = isDiagonalDirection;
+window.getCardinalFacing = getCardinalFacing;
 
 console.log('✅ Pokemon movement system loaded');

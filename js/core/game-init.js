@@ -133,25 +133,39 @@ function generateDungeon() {
  */
 function initializePlayer() {
     console.log('[Init] Creating player...');
-    
+
     game.player = typeof createPlayer === 'function' ? createPlayer() : createDefaultPlayer();
-    
+
+    // Equip starting torch for fog of war vision
+    equipStartingTorch();
+
     // Find entrance room
     const entranceRoom = game.rooms.find(r => r.type === 'entrance');
-    
+
     if (entranceRoom) {
-        const spawnX = (entranceRoom.floorX || entranceRoom.x + 1) + 
-                       Math.floor((entranceRoom.floorWidth || 20) / 2);
-        const spawnY = (entranceRoom.floorY || entranceRoom.y + 1) + 
-                       Math.floor((entranceRoom.floorHeight || 20) / 2);
-        
+        // Use safe spawn chamber to ensure we spawn on a valid floor tile
+        // This handles the case where chamber center might be a wall
+        let spawnX, spawnY;
+
+        if (typeof getSafeSpawnChamber === 'function') {
+            const safeSpawn = getSafeSpawnChamber(entranceRoom);
+            spawnX = safeSpawn.x;
+            spawnY = safeSpawn.y;
+        } else {
+            // Fallback if chamber generator not loaded
+            spawnX = (entranceRoom.floorX || entranceRoom.x + 1) +
+                           Math.floor((entranceRoom.floorWidth || 20) / 2);
+            spawnY = (entranceRoom.floorY || entranceRoom.y + 1) +
+                           Math.floor((entranceRoom.floorHeight || 20) / 2);
+        }
+
         setPlayerPosition(spawnX, spawnY);
         console.log(`[Init] Player spawned at (${spawnX}, ${spawnY})`);
     } else {
         console.error('[Init] No entrance room found!');
         setPlayerPosition(40, 40);
     }
-    
+
     // Initialize camera
     initializeCamera();
 }
@@ -253,6 +267,16 @@ function registerNewSystems() {
             cleanup: () => MonsterSocialSystem.cleanup()
         }, 42);
     }
+
+    // Vision System (Fog of War)
+    if (typeof VisionSystem !== 'undefined' && !SystemManager.has('vision')) {
+        SystemManager.register('vision', {
+            name: 'vision',
+            init: () => VisionSystem.init(game),
+            update: (dt) => VisionSystem.update(dt),
+            cleanup: () => {}
+        }, 5); // High priority - runs early each frame
+    }
 }
 
 /**
@@ -353,6 +377,37 @@ function setPlayerPosition(x, y) {
     game.player.displayY = y;
     game.player.targetGridX = x;
     game.player.targetGridY = y;
+}
+
+/**
+ * Equip starting torch for fog of war
+ */
+function equipStartingTorch() {
+    if (!game.player || !game.player.equipped) return;
+
+    // Get torch from equipment data
+    const torch = typeof DEFENSE_ARMOR !== 'undefined' ? DEFENSE_ARMOR['torch'] : null;
+
+    if (torch) {
+        // Equip directly to OFF slot
+        game.player.equipped.OFF = { ...torch };
+        console.log('[Init] Equipped starting torch (+2 vision range)');
+
+        // Recalculate stats if function exists
+        if (typeof recalculatePlayerStats === 'function') {
+            recalculatePlayerStats(game.player);
+        }
+    } else {
+        // Fallback: create inline torch item
+        game.player.equipped.OFF = {
+            id: 'torch',
+            name: 'Torch',
+            slot: 'OFF',
+            visionBonus: 2,
+            description: 'A simple torch that illuminates the darkness.'
+        };
+        console.log('[Init] Equipped fallback torch (+2 vision range)');
+    }
 }
 
 /**

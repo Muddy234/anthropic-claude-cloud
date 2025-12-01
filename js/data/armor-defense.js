@@ -6,6 +6,10 @@ const DEFENSE_ARMOR = {
 
 // === SHIELDS (24) ===
 'wooden_shield': { id: 'wooden_shield', name: 'Wooden Shield', slot: 'OFF', armorType: 'hide', rarity: 'common', stats: { defense: 2, block: 0.15 }, element: null, elementPower: 0, noise: { onMove: 5 }, goldValue: 15 },
+
+// === UTILITY OFF-HAND ===
+'torch': { id: 'torch', name: 'Torch', slot: 'OFF', armorType: 'utility', rarity: 'common', stats: { visionBonus: 2 }, element: 'fire', elementPower: 0, noise: { onMove: 0 }, goldValue: 5, description: 'A simple torch that illuminates the darkness. +2 vision range.' },
+
 'iron_shield': { id: 'iron_shield', name: 'Iron Shield', slot: 'OFF', armorType: 'armored', rarity: 'common', stats: { defense: 3, block: 0.20 }, element: null, elementPower: 0, noise: { onMove: 10 }, goldValue: 35 },
 'steel_shield': { id: 'steel_shield', name: 'Steel Shield', slot: 'OFF', armorType: 'armored', rarity: 'uncommon', stats: { defense: 4, block: 0.25 }, element: null, elementPower: 0, noise: { onMove: 10 }, goldValue: 80 },
 'tower_shield': { id: 'tower_shield', name: 'Tower Shield', slot: 'OFF', armorType: 'armored', rarity: 'uncommon', stats: { defense: 6, block: 0.35 }, element: null, elementPower: 0, special: { speedPenalty: -0.10 }, noise: { onMove: 15 }, goldValue: 100 },

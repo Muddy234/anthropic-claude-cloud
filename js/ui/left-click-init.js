@@ -187,14 +187,18 @@ function detectTarget(gridX, gridY) {
     let target = null;
     let targetType = 'tile';
     
-    // Priority 1: Check for enemy at exact position
+    // Priority 1: Check for enemy at exact position (must be visible)
     if (game.enemies) {
-        const enemy = game.enemies.find(e => 
+        const enemy = game.enemies.find(e =>
             Math.floor(e.gridX) === gridX && Math.floor(e.gridY) === gridY
         );
-        
+
+        // FOG OF WAR: Only target visible enemies
         if (enemy) {
-            return { target: enemy, targetType: 'enemy' };
+            const tile = game.map?.[gridY]?.[gridX];
+            if (tile && tile.visible) {
+                return { target: enemy, targetType: 'enemy' };
+            }
         }
     }
     

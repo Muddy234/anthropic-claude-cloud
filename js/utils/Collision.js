@@ -58,7 +58,7 @@ function canMoveTo(x, y, checkEnemies = false, entityRadius = 0.2) {
 
         // Use safe tile accessor
         const tile = safeGetTile(gridX, gridY);
-        if (!tile || tile.type === 'void' || tile.type === 'wall') {
+        if (!tile || tile.type === 'void' || tile.type === 'wall' || tile.type === 'interior_wall') {
             return false;
         }
 
@@ -187,7 +187,7 @@ function raycast(x1, y1, x2, y2) {
     while (true) {
         // Use safe tile accessor to prevent crashes
         const tile = safeGetTile(x, y);
-        if (!tile || tile.type === 'wall' || tile.type === 'void') {
+        if (!tile || tile.type === 'wall' || tile.type === 'void' || tile.type === 'interior_wall') {
             return false; // Vision blocked by wall or out of bounds
         }
 
@@ -235,9 +235,9 @@ function raycastDetailed(x1, y1, x2, y2) {
 
     while (true) {
         const tile = safeGetTile(x, y);
-        
-        // Check walls/void
-        if (!tile || tile.type === 'wall' || tile.type === 'void') {
+
+        // Check walls/void/interior_wall
+        if (!tile || tile.type === 'wall' || tile.type === 'void' || tile.type === 'interior_wall') {
             return { hit: true, x: x, y: y, type: tile ? tile.type : 'out_of_bounds' };
         }
 

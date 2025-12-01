@@ -49,7 +49,8 @@ const StatusEffectSystem = {
                 addMessage(`${entity.name || 'You'} caught fire!`);
             },
             onTick: (entity, effect) => {
-                const damage = effect.damagePerTick * (effect.stacks || 1);
+                const damagePerTick = effect.definition?.damagePerTick || 3;
+                const damage = damagePerTick * (effect.stacks || 1);
                 entity.hp -= damage;
                 if (this.config.debugLogging) {
                     console.log(`[Burning] ${entity.name || 'Entity'} takes ${damage} fire damage`);
@@ -75,7 +76,8 @@ const StatusEffectSystem = {
             statMods: { healingReceived: -0.50 },
             onApply: (entity) => addMessage(`${entity.name || 'You'} were poisoned!`),
             onTick: (entity, effect) => {
-                entity.hp -= effect.damagePerTick * (effect.stacks || 1);
+                const damagePerTick = effect.definition?.damagePerTick || 2;
+                entity.hp -= damagePerTick * (effect.stacks || 1);
             },
             onExpire: (entity) => addMessage(`${entity.name || 'You'} recovered from poison.`)
         });
@@ -94,7 +96,8 @@ const StatusEffectSystem = {
             icon: '🩸',
             onApply: (entity) => addMessage(`${entity.name || 'You'} started bleeding!`),
             onTick: (entity, effect) => {
-                entity.hp -= effect.damagePerTick * (effect.stacks || 1);
+                const damagePerTick = effect.definition?.damagePerTick || 4;
+                entity.hp -= damagePerTick * (effect.stacks || 1);
             }
         });
 
