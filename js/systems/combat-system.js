@@ -379,6 +379,16 @@ function calculateXPReward(entity) {
 // ============================================================================
 
 function canAttackTarget(attacker, target) {
+    // FOG OF WAR: Player must be able to see target to attack
+    if (attacker === game.player && target !== game.player) {
+        const targetX = Math.floor(target.gridX ?? target.x);
+        const targetY = Math.floor(target.gridY ?? target.y);
+        const tile = game.map?.[targetY]?.[targetX];
+        if (!tile || !tile.visible) {
+            return false; // Can't attack what you can't see
+        }
+    }
+
     const distance = getDistance(attacker, target);
     const range = attacker.combat?.attackRange || 1;
     return distance <= range + 0.5; // Small buffer for diagonal

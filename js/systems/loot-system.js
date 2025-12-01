@@ -280,7 +280,13 @@ function renderLootPiles(ctx, camX, camY, tileSize, offsetX) {
     for (const pile of game.groundLoot) {
         const screenX = (pile.x - camX) * tileSize + offsetX + padding;
         const screenY = (pile.y - camY) * tileSize + padding;
-        
+
+        // FOG OF WAR: Skip loot on non-visible tiles (items not shown when remembered)
+        const tile = game.map[pile.y]?.[pile.x];
+        if (!tile || !tile.visible) {
+            continue;
+        }
+
         // Skip if off screen
         if (screenX < offsetX - tileSize || screenX > ctx.canvas.width ||
             screenY < -tileSize || screenY > ctx.canvas.height) {

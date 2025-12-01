@@ -13,7 +13,7 @@ const MONSTER_TIERS = {
         color: '#888888',
         
         senses: {
-            visionRange: 4,
+            visionRange: 3,      // Fog of war: Tier 3 has limited vision
             visionConeAngle: 90,
             hearingRange: 6,
             canSeeInDark: false
@@ -57,7 +57,7 @@ const MONSTER_TIERS = {
         color: '#CCAA44',
         
         senses: {
-            visionRange: 5,
+            visionRange: 3,      // Fog of war: Tier 2 has limited vision
             visionConeAngle: 75,
             hearingRange: 8,
             canSeeInDark: false
@@ -101,7 +101,7 @@ const MONSTER_TIERS = {
         color: '#CC4444',
         
         senses: {
-            visionRange: 6,
+            visionRange: 4,      // Fog of war: Tier 1 has better vision
             visionConeAngle: 60,
             hearingRange: 10,
             canSeeInDark: false
@@ -145,7 +145,7 @@ const MONSTER_TIERS = {
         color: '#FFD700',
         
         senses: {
-            visionRange: 8,
+            visionRange: 5,      // Fog of war: Elites have excellent vision
             visionConeAngle: 45,
             hearingRange: 12,
             canSeeInDark: true

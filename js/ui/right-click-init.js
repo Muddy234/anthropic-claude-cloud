@@ -86,16 +86,22 @@ function handleRightClick(e) {
         const clickedEnemy = game.enemies.find(e =>
             Math.floor(e.gridX) === gridX && Math.floor(e.gridY) === gridY
         );
-        
+
+        // FOG OF WAR: Only allow interaction with visible enemies
         if (clickedEnemy) {
-            console.log('Clicked on enemy:', clickedEnemy.name);
-            target = clickedEnemy;
-            targetType = 'enemy';
-            options = [
-                { text: 'Attack', action: 'attack' },
-                { text: 'Inspect', action: 'inspect' },
-                { text: 'Cancel', action: 'cancel' }
-            ];
+            const tile = game.map?.[gridY]?.[gridX];
+            if (tile && tile.visible) {
+                console.log('Clicked on enemy:', clickedEnemy.name);
+                target = clickedEnemy;
+                targetType = 'enemy';
+                options = [
+                    { text: 'Attack', action: 'attack' },
+                    { text: 'Inspect', action: 'inspect' },
+                    { text: 'Cancel', action: 'cancel' }
+                ];
+            } else {
+                console.log('Enemy not visible - ignoring click');
+            }
         }
     }
     

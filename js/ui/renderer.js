@@ -341,38 +341,59 @@ const camY = game.camera.y;
 
         ctx.save(); ctx.beginPath(); ctx.rect(TRACKER_WIDTH, 0, viewW, canvas.height); ctx.clip();
         
-        // LAYER 1: Draw floor, wall, and doorway tiles
+        // LAYER 1: Draw floor, wall, and doorway tiles (with fog of war)
         for (let y = 0; y < GRID_HEIGHT; y++) {
             for (let x = 0; x < GRID_WIDTH; x++) {
                 const tile = game.map[y][x];
                 const screenX = (x - camX) * effectiveTileSize + TRACKER_WIDTH;
                 const screenY = (y - camY) * effectiveTileSize;
-                
+
+                // Skip tiles that are off-screen for performance
+                if (screenX + effectiveTileSize < TRACKER_WIDTH || screenX > canvas.width ||
+                    screenY + effectiveTileSize < 0 || screenY > canvas.height) {
+                    continue;
+                }
+
+                // FOG OF WAR: Skip unexplored tiles (render as black/void)
+                if (!tile.explored) {
+                    ctx.fillStyle = '#000';
+                    ctx.fillRect(screenX, screenY, effectiveTileSize, effectiveTileSize);
+                    continue;
+                }
+
+                // Render the tile normally
                 if (tile.type === 'floor') {
-                    // NEW: Use tileset floor rendering
                     drawFloorTile(ctx, tile, x, y, screenX, screenY, effectiveTileSize);
                 } else if (tile.type === 'doorway') {
-                    // NEW: Use tileset doorway rendering
                     drawDoorwayTile(ctx, screenX, screenY, effectiveTileSize);
                 } else if (tile.type === 'wall') {
-                    // NEW: Render wall fill tiles
                     drawWallTile(ctx, screenX, screenY, effectiveTileSize);
                 } else if (tile.type === 'interior_wall') {
-                    // Interior chamber walls - same as regular walls
                     drawWallTile(ctx, screenX, screenY, effectiveTileSize);
                 } else if (tile.type === 'void') {
-                    // NEW: Render void tiles
                     drawVoidTile(ctx, screenX, screenY, effectiveTileSize);
                 } else if (tile.type === 'lava') {
-                    ctx.fillStyle = '#e74c3c'; 
-                    ctx.fillRect(screenX, screenY, effectiveTileSize, effectiveTileSize); 
-                    ctx.strokeStyle = '#111'; 
+                    ctx.fillStyle = '#e74c3c';
+                    ctx.fillRect(screenX, screenY, effectiveTileSize, effectiveTileSize);
+                    ctx.strokeStyle = '#111';
                     ctx.strokeRect(screenX, screenY, effectiveTileSize, effectiveTileSize);
                 } else if (tile.type === 'exit') {
-                    ctx.fillStyle = '#0ff'; 
-                    ctx.fillRect(screenX, screenY, effectiveTileSize, effectiveTileSize); 
-                    ctx.strokeStyle = '#111'; 
+                    ctx.fillStyle = '#0ff';
+                    ctx.fillRect(screenX, screenY, effectiveTileSize, effectiveTileSize);
+                    ctx.strokeStyle = '#111';
                     ctx.strokeRect(screenX, screenY, effectiveTileSize, effectiveTileSize);
+                }
+
+                // FOG OF WAR: Apply darkness overlay for remembered (not currently visible) tiles
+                if (tile.explored && !tile.visible) {
+                    ctx.fillStyle = 'rgba(0, 0, 0, 0.65)';
+                    ctx.fillRect(screenX, screenY, effectiveTileSize, effectiveTileSize);
+                }
+                // FOG OF WAR: Apply smooth falloff for visible tiles at edge of vision
+                else if (tile.visible && tile.visibility < 1) {
+                    const darkness = 1 - tile.visibility;
+                    ctx.fillStyle = `rgba(0, 0, 0, ${darkness * 0.5})`;
+                    ctx.fillRect(screenX, screenY, effectiveTileSize, effectiveTileSize);
                 }
             }
         }
@@ -392,16 +413,19 @@ const camY = game.camera.y;
             renderRoomDecorations(camX, camY, effectiveTileSize, TRACKER_WIDTH);
         }
         
-        // Merchant rendering
-        if (game.merchant) { 
-            const mx = (game.merchant.x - camX) * effectiveTileSize + TRACKER_WIDTH; 
-            const my = (game.merchant.y - camY) * effectiveTileSize; 
-            ctx.fillStyle = '#f1c40f'; 
-            ctx.fillRect(mx + 10, my + 10, effectiveTileSize - 20, effectiveTileSize - 20); 
-            ctx.fillStyle = '#000'; 
-            ctx.font = 'bold 24px monospace'; 
-            ctx.textAlign = 'center'; 
-            ctx.fillText('$', mx + effectiveTileSize / 2, my + effectiveTileSize / 2 + 8); 
+        // Merchant rendering (only if visible)
+        if (game.merchant) {
+            const merchantTile = game.map[game.merchant.y]?.[game.merchant.x];
+            if (merchantTile && merchantTile.visible) {
+                const mx = (game.merchant.x - camX) * effectiveTileSize + TRACKER_WIDTH;
+                const my = (game.merchant.y - camY) * effectiveTileSize;
+                ctx.fillStyle = '#f1c40f';
+                ctx.fillRect(mx + 10, my + 10, effectiveTileSize - 20, effectiveTileSize - 20);
+                ctx.fillStyle = '#000';
+                ctx.font = 'bold 24px monospace';
+                ctx.textAlign = 'center';
+                ctx.fillText('$', mx + effectiveTileSize / 2, my + effectiveTileSize / 2 + 8);
+            }
         }
 
 
