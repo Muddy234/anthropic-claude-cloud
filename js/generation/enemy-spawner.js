@@ -293,14 +293,14 @@ function createEnemy(monsterType, x, y, room) {
         room: room,
         spawnRoom: room,
         
-        // Combat
+        // Combat - use individual monster values from tierData (via buildCombatConfig)
         combat: {
             isInCombat: false,
             currentTarget: null,
             attackCooldown: 0,
-            attackSpeed: 1.0 / (stats.speed || 3),
+            attackSpeed: tierData?.combat?.attackSpeed || 2.0,
             autoRetaliate: true,
-            attackRange: stats.range || 1
+            attackRange: tierData?.combat?.attackRange || 1
         },
         
         // Loot
