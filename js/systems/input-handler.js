@@ -40,6 +40,12 @@ window.addEventListener('keydown', e => {
         return;
     }
 
+    // Close skills menu on ESC or K
+    if ((e.key === 'Escape' || e.key === 'k' || e.key === 'K') && game.state === 'skills') {
+        game.state = 'playing';
+        return;
+    }
+
     // Start new game
     if (e.key === ' ') {
         if (game.state === 'menu') {
@@ -103,6 +109,12 @@ window.addEventListener('keydown', e => {
         if (e.key === 'i' || e.key === 'I') {
             game.state = 'inventory';
             game.inventoryTab = 0;
+            return;
+        }
+
+        // Open skills menu
+        if (e.key === 'k' || e.key === 'K') {
+            game.state = 'skills';
             return;
         }
 

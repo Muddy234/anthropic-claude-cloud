@@ -77,8 +77,12 @@ function drawInspectPanel() {
 function drawInventoryOverlay() {
     ctx.fillStyle = 'rgba(0, 0, 0, 0.9)'; ctx.fillRect(TRACKER_WIDTH, 0, canvas.width - TRACKER_WIDTH, canvas.height);
     const cx = TRACKER_WIDTH + (canvas.width - TRACKER_WIDTH) / 2; const cy = canvas.height / 2;
-    const w = 900, h = 800;
-    const x = cx - w / 2, y = cy - h / 2;
+    // Scale panel to fit screen if necessary
+    const maxW = canvas.width - TRACKER_WIDTH - 40;
+    const maxH = canvas.height - 40;
+    const w = Math.min(900, maxW), h = Math.min(800, maxH);
+    const x = Math.max(TRACKER_WIDTH + 20, cx - w / 2);
+    const y = Math.max(20, cy - h / 2);
     ctx.fillStyle = '#1a1a1a'; ctx.strokeStyle = '#3498db'; ctx.lineWidth = 4;
     ctx.fillRect(x, y, w, h); ctx.strokeRect(x, y, w, h);
     const tabs = ['WEAPONS', 'ARMOR', 'CONSUMABLES', 'ITEMS', 'EQUIPPED', 'INSPECT'];
@@ -405,16 +409,9 @@ const camY = game.camera.y;
         drawPlayerSprite(ctx, px, py, effectiveTileSize);
 
 
-        const monsterColors = { 'Magma Slime': '#ff6b35', 'Obsidian Golem': '#2c2c2c', 'Cinder Wisp': '#ffeb3b', 'Flame Bat': '#ff5722', 'Ash Walker': '#757575', 'Salamander': '#4caf50', 'Pyro Cultist': '#d32f2f' };
-        for (const e of game.enemies) {
-            const ex = (e.displayX - camX) * effectiveTileSize + TRACKER_WIDTH; const ey = (e.displayY - camY) * effectiveTileSize; const cx = ex + effectiveTileSize / 2; const cy = ey + effectiveTileSize / 2;
-            const baseColor = monsterColors[e.name] || '#e74c3c'; const radius = e.elite ? (effectiveTileSize / 2) - 8 : (effectiveTileSize / 2) - 12;
-            ctx.fillStyle = e.state === 'chasing' ? '#e67e22' : baseColor; ctx.beginPath(); ctx.arc(cx, cy, radius, 0, Math.PI * 2); ctx.fill();
-            if (e.elite) { ctx.strokeStyle = '#ffd700'; ctx.lineWidth = 3; ctx.stroke(); }
-            ctx.strokeStyle = '#fff'; ctx.lineWidth = 3; ctx.beginPath(); const len = 15; ctx.moveTo(cx, cy); ctx.lineTo(cx + e.facing.x * len, cy + e.facing.y * len); ctx.stroke();
-            ctx.fillStyle = '#fff'; ctx.fillRect(cx + e.facing.x * len - 2, cy + e.facing.y * len - 2, 4, 4);
-            if (e.state === 'chasing') { ctx.fillStyle = '#f00'; ctx.font = 'bold 20px monospace'; ctx.textAlign = 'center'; ctx.fillText('!', cx, ey + 10); }
-            if (e.combat && e.combat.isInCombat) { drawHealthBar(ex, ey - 15, effectiveTileSize, e.hp, e.maxHp); }
+        // Render all enemies using enemy-renderer (handles facing direction + tier indicators)
+        if (typeof renderAllEnemies === 'function') {
+            renderAllEnemies(ctx, camX, camY, effectiveTileSize, TRACKER_WIDTH);
         }
         if (typeof renderDamageNumbers === 'function') { renderDamageNumbers(camX, camY, effectiveTileSize, TRACKER_WIDTH); }
         ctx.restore();
