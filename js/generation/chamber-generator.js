@@ -589,33 +589,84 @@ function applyChamberGridToRoom(grid, room) {
 // ============================================================================
 
 /**
+ * Check if a world position is a valid floor tile (not a wall)
+ */
+function isValidFloorTile(worldX, worldY) {
+    if (!game.map[worldY] || !game.map[worldY][worldX]) return false;
+    const tile = game.map[worldY][worldX];
+    return tile.type === 'floor' || tile.type === 'doorway';
+}
+
+/**
  * Get a safe spawn position within a room (uses pre-marked safe chamber)
+ * FIXED: Validates that spawn position is actually a floor tile, not a wall
  * @param {Object} room - Room to get safe spawn in
  * @returns {Object} {x, y} world coordinates
  */
 function getSafeSpawnChamber(room) {
-    // Use the pre-marked safe chamber if available
-    if (room.safeChamber && room.safeChamber.center) {
-        return {
-            x: room.floorX + room.safeChamber.center.x,
-            y: room.floorY + room.safeChamber.center.y
-        };
-    }
+    // Helper to find a valid floor tile from chamber tiles
+    const findValidTileInChamber = (chamber) => {
+        if (!chamber || !chamber.tiles || chamber.tiles.length === 0) return null;
 
-    // Fallback: first chamber or room center
-    if (room.chambers && room.chambers.length > 0) {
-        const chamber = room.chambers[0];
-        return {
-            x: room.floorX + chamber.center.x,
-            y: room.floorY + chamber.center.y
-        };
-    }
+        // First try the center
+        const centerWorldX = room.floorX + chamber.center.x;
+        const centerWorldY = room.floorY + chamber.center.y;
+        if (isValidFloorTile(centerWorldX, centerWorldY)) {
+            return { x: centerWorldX, y: centerWorldY };
+        }
 
-    // No chambers, return room center
-    return {
-        x: room.floorX + Math.floor(room.floorWidth / 2),
-        y: room.floorY + Math.floor(room.floorHeight / 2)
+        // Center is a wall - find the closest valid floor tile from chamber tiles
+        // Sort tiles by distance to center and pick the first valid one
+        const sortedTiles = [...chamber.tiles].sort((a, b) => {
+            const distA = Math.abs(a.x - chamber.center.x) + Math.abs(a.y - chamber.center.y);
+            const distB = Math.abs(b.x - chamber.center.x) + Math.abs(b.y - chamber.center.y);
+            return distA - distB;
+        });
+
+        for (const tile of sortedTiles) {
+            const worldX = room.floorX + tile.x;
+            const worldY = room.floorY + tile.y;
+            if (isValidFloorTile(worldX, worldY)) {
+                return { x: worldX, y: worldY };
+            }
+        }
+
+        return null;
     };
+
+    // Use the pre-marked safe chamber if available
+    if (room.safeChamber) {
+        const validPos = findValidTileInChamber(room.safeChamber);
+        if (validPos) return validPos;
+    }
+
+    // Fallback: try first chamber
+    if (room.chambers && room.chambers.length > 0) {
+        const validPos = findValidTileInChamber(room.chambers[0]);
+        if (validPos) return validPos;
+    }
+
+    // Final fallback: search for any valid floor tile near room center
+    const centerX = room.floorX + Math.floor(room.floorWidth / 2);
+    const centerY = room.floorY + Math.floor(room.floorHeight / 2);
+
+    // Spiral search outward from center to find a floor tile
+    for (let radius = 0; radius < Math.max(room.floorWidth, room.floorHeight); radius++) {
+        for (let dy = -radius; dy <= radius; dy++) {
+            for (let dx = -radius; dx <= radius; dx++) {
+                if (Math.abs(dx) !== radius && Math.abs(dy) !== radius) continue; // Only check perimeter
+                const testX = centerX + dx;
+                const testY = centerY + dy;
+                if (isValidFloorTile(testX, testY)) {
+                    return { x: testX, y: testY };
+                }
+            }
+        }
+    }
+
+    // Absolute fallback (shouldn't happen)
+    console.warn('[ChamberGen] Could not find valid floor tile for spawn!');
+    return { x: centerX, y: centerY };
 }
 
 /**
