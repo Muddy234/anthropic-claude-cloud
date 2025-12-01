@@ -457,7 +457,7 @@ const setupCanvasHandlers = () => {
         }
 
         // Don't auto-walk if inspect popup is visible
-        if (inspectPopup.visible) {
+        if (window.inspectPopup?.visible) {
             return;
         }
 

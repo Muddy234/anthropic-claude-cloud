@@ -1,10 +1,16 @@
 ﻿// === UI RENDERING FOR CONTEXT MENU AND INSPECT POPUP ===
 // Add this to your renderer.js or create as a separate ui-renderer.js file
 
+// Use window globals for shared state (defined in right-click-init.js and input-handler.js)
+// These getters ensure we always reference the current window object
+const getInspectPopup = () => window.inspectPopup || { visible: false, target: null, targetType: null, tab: 0 };
+const getContextMenu = () => window.contextMenu || { visible: false, options: [] };
+
 /**
  * Render the right-click context menu
  */
 function renderContextMenu(ctx) {
+    const contextMenu = getContextMenu();
     if (!contextMenu.visible) return;
 
     const menuWidth = 120;
@@ -87,15 +93,16 @@ const ELEMENT_COLORS = {
  * Position: Bottom-right, Size: 300x400, Game continues running
  */
 function renderInspectPopup(ctx) {
+    const inspectPopup = getInspectPopup();
     if (!inspectPopup.visible) return;
 
     // Auto-close if enemy is dead or no longer exists
     if (inspectPopup.targetType === 'enemy') {
         const enemy = inspectPopup.target;
         if (!enemy || enemy.hp <= 0 || !game.enemies.includes(enemy)) {
-            inspectPopup.visible = false;
-            inspectPopup.target = null;
-            inspectPopup.tab = 0;
+            window.inspectPopup.visible = false;
+            window.inspectPopup.target = null;
+            window.inspectPopup.tab = 0;
             return;
         }
     }
@@ -558,6 +565,7 @@ canvas.addEventListener('mousemove', (e) => {
  * Handle clicks on inspect popup tabs
  */
 canvas.addEventListener('click', (e) => {
+    const inspectPopup = getInspectPopup();
     if (!inspectPopup.visible) return;
 
     const rect = canvas.getBoundingClientRect();
@@ -586,7 +594,7 @@ canvas.addEventListener('click', (e) => {
     if (clickY >= tabY && clickY <= tabY + tabHeight) {
         const tabIndex = Math.floor((clickX - popupX) / tabWidth);
         if (tabIndex >= 0 && tabIndex <= 3) {
-            inspectPopup.tab = tabIndex;
+            window.inspectPopup.tab = tabIndex;
         }
     }
 });
