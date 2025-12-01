@@ -10,10 +10,10 @@
 // ============================================================================
 
 const ROOM_CONFIG = {
-    roomSize: 20,                 // Interior floor space
-    totalSize: 22,                // Including walls
-    minRooms: 6,
-    maxRooms: 10,
+    roomSize: 36,                 // Interior floor space (increased for chambers)
+    totalSize: 38,                // Including walls
+    minRooms: 5,
+    maxRooms: 8,
     elementSpread: true,          // Adjacent rooms tend toward similar elements
     debugLogging: true
 };

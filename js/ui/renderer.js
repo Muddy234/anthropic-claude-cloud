@@ -357,6 +357,9 @@ const camY = game.camera.y;
                 } else if (tile.type === 'wall') {
                     // NEW: Render wall fill tiles
                     drawWallTile(ctx, screenX, screenY, effectiveTileSize);
+                } else if (tile.type === 'interior_wall') {
+                    // Interior chamber walls - same as regular walls
+                    drawWallTile(ctx, screenX, screenY, effectiveTileSize);
                 } else if (tile.type === 'void') {
                     // NEW: Render void tiles
                     drawVoidTile(ctx, screenX, screenY, effectiveTileSize);

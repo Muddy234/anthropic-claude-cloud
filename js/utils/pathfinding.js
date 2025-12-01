@@ -138,7 +138,7 @@ function heuristic(x1, y1, x2, y2) {
 }
 
 /**
- * Check if a tile is valid (within bounds and not void/wall)
+ * Check if a tile is valid (within bounds and not void/wall/interior_wall)
  */
 function isValidTile(x, y) {
     if (x < 0 || x >= GRID_WIDTH || y < 0 || y >= GRID_HEIGHT) {
@@ -146,7 +146,7 @@ function isValidTile(x, y) {
     }
 
     const tile = game.map[y][x];
-    if (!tile || tile.type === 'void' || tile.type === 'wall') {
+    if (!tile || tile.type === 'void' || tile.type === 'wall' || tile.type === 'interior_wall') {
         return false;
     }
 
