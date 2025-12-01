@@ -1,0 +1,331 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tileset Viewer - The Shifting Chasm</title>
+    <style>
+        body {
+            font-family: monospace;
+            background: #1a1a1a;
+            color: #fff;
+            padding: 20px;
+            margin: 0;
+        }
+        
+        h1 {
+            text-align: center;
+            color: #4CAF50;
+        }
+        
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+        
+        .viewer {
+            background: #2a2a2a;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+        }
+        
+        canvas {
+            border: 2px solid #4CAF50;
+            display: block;
+            margin: 20px auto;
+            background: #000;
+            cursor: crosshair;
+        }
+        
+        .info {
+            background: #333;
+            padding: 15px;
+            border-radius: 5px;
+            margin-bottom: 20px;
+        }
+        
+        .selected-tile {
+            background: #444;
+            padding: 20px;
+            border-radius: 5px;
+            text-align: center;
+        }
+        
+        .selected-tile canvas {
+            border: 2px solid #FFD700;
+            margin: 10px auto;
+        }
+        
+        .mapping-table {
+            background: #2a2a2a;
+            padding: 20px;
+            border-radius: 8px;
+        }
+        
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 10px;
+        }
+        
+        th, td {
+            border: 1px solid #555;
+            padding: 10px;
+            text-align: left;
+        }
+        
+        th {
+            background: #4CAF50;
+            color: white;
+        }
+        
+        tr:nth-child(even) {
+            background: #333;
+        }
+        
+        .coord {
+            color: #FFD700;
+            font-weight: bold;
+        }
+        
+        .highlight {
+            background: #4CAF50 !important;
+            color: white;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🎨 Tileset Viewer - walls_floor.png</h1>
+        
+        <div class="info">
+            <h3>📊 Tileset Information:</h3>
+            <p><strong>Tile Size:</strong> 16x16 pixels</p>
+            <p><strong>Image Size:</strong> <span id="imageSize">Loading...</span></p>
+            <p><strong>Grid Size:</strong> <span id="gridSize">Loading...</span></p>
+            <p><strong>Click any tile</strong> to see its coordinates!</p>
+        </div>
+        
+        <div class="viewer">
+            <h3>📐 Grid View (with coordinates):</h3>
+            <canvas id="tilesetCanvas"></canvas>
+        </div>
+        
+        <div class="selected-tile" id="selectedTileInfo" style="display: none;">
+            <h3>🎯 Selected Tile:</h3>
+            <p class="coord">Row: <span id="selectedRow">-</span>, Column: <span id="selectedCol">-</span></p>
+            <canvas id="selectedTileCanvas" width="64" height="64"></canvas>
+            <p><strong>Code Reference:</strong> <code>{ row: <span id="codeRow">0</span>, col: <span id="codeCol">0</span> }</code></p>
+        </div>
+        
+        <div class="mapping-table">
+            <h3>🗺️ Current Code Mapping:</h3>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Usage</th>
+                        <th>Code Name</th>
+                        <th>Row</th>
+                        <th>Col</th>
+                        <th>Preview</th>
+                    </tr>
+                </thead>
+                <tbody id="mappingTableBody">
+                    <!-- Will be populated by JavaScript -->
+                </tbody>
+            </table>
+        </div>
+    </div>
+    
+    <script>
+        const tileSize = 16;
+        let tilesetImage = null;
+        let canvas = null;
+        let ctx = null;
+        
+        // Current mapping from your code
+        const currentMapping = {
+            'Floor Variant 1': { row: 8, col: 0 },
+            'Floor Variant 2': { row: 8, col: 1 },
+            'Floor Variant 3': { row: 9, col: 0 },
+            'Floor Variant 4': { row: 9, col: 1 },
+            'Wall Top-Left': { row: 0, col: 0 },
+            'Wall Top-Center': { row: 0, col: 1 },
+            'Wall Top-Right': { row: 0, col: 2 },
+            'Wall Left': { row: 0, col: 3 },
+            'Wall Center': { row: 0, col: 4 },
+            'Wall Right': { row: 0, col: 5 },
+            'Wall Bottom-Left': { row: 1, col: 0 },
+            'Wall Bottom-Center': { row: 1, col: 1 },
+            'Wall Bottom-Right': { row: 1, col: 2 }
+        };
+        
+        // Load the tileset
+        function loadTileset() {
+            tilesetImage = new Image();
+            tilesetImage.src = 'assets/spritesheet/walls_floors/walls_floor.png';
+            
+            tilesetImage.onload = () => {
+                console.log('✅ Tileset loaded!');
+                console.log('   Dimensions:', tilesetImage.width, 'x', tilesetImage.height);
+                
+                const cols = Math.floor(tilesetImage.width / tileSize);
+                const rows = Math.floor(tilesetImage.height / tileSize);
+                
+                document.getElementById('imageSize').textContent = 
+                    `${tilesetImage.width}px × ${tilesetImage.height}px`;
+                document.getElementById('gridSize').textContent = 
+                    `${cols} columns × ${rows} rows`;
+                
+                setupCanvas(cols, rows);
+                drawTileset(cols, rows);
+                populateMappingTable();
+            };
+            
+            tilesetImage.onerror = () => {
+                alert('❌ Failed to load tileset! Make sure the path is correct:\nassets/spritesheet/walls_floor.png');
+            };
+        }
+        
+        // Setup canvas
+        function setupCanvas(cols, rows) {
+            canvas = document.getElementById('tilesetCanvas');
+            const scale = 3; // Make it bigger for visibility
+            canvas.width = cols * tileSize * scale;
+            canvas.height = rows * tileSize * scale;
+            ctx = canvas.getContext('2d');
+            ctx.imageSmoothingEnabled = false;
+            
+            // Add click handler
+            canvas.addEventListener('click', (e) => {
+                const rect = canvas.getBoundingClientRect();
+                const x = e.clientX - rect.left;
+                const y = e.clientY - rect.top;
+                
+                const col = Math.floor(x / (tileSize * scale));
+                const row = Math.floor(y / (tileSize * scale));
+                
+                showSelectedTile(row, col);
+            });
+        }
+        
+        // Draw the tileset with grid
+        function drawTileset(cols, rows) {
+            const scale = 3;
+            
+            // Draw the image scaled up
+            ctx.drawImage(tilesetImage, 0, 0, canvas.width, canvas.height);
+            
+            // Draw grid lines
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.3)';
+            ctx.lineWidth = 1;
+            
+            // Vertical lines
+            for (let col = 0; col <= cols; col++) {
+                ctx.beginPath();
+                ctx.moveTo(col * tileSize * scale, 0);
+                ctx.lineTo(col * tileSize * scale, canvas.height);
+                ctx.stroke();
+            }
+            
+            // Horizontal lines
+            for (let row = 0; row <= rows; row++) {
+                ctx.beginPath();
+                ctx.moveTo(0, row * tileSize * scale);
+                ctx.lineTo(canvas.width, row * tileSize * scale);
+                ctx.stroke();
+            }
+            
+            // Draw coordinate labels
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
+            ctx.font = 'bold 10px monospace';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            
+            for (let row = 0; row < rows; row++) {
+                for (let col = 0; col < cols; col++) {
+                    const x = col * tileSize * scale + (tileSize * scale) / 2;
+                    const y = row * tileSize * scale + (tileSize * scale) / 2;
+                    
+                    // Draw semi-transparent background for text
+                    ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+                    ctx.fillRect(
+                        col * tileSize * scale + 2,
+                        row * tileSize * scale + 2,
+                        tileSize * scale - 4,
+                        12
+                    );
+                    
+                    // Draw coordinate
+                    ctx.fillStyle = '#FFD700';
+                    ctx.fillText(`${row},${col}`, x, y - 10);
+                }
+            }
+        }
+        
+        // Show selected tile
+        function showSelectedTile(row, col) {
+            const infoDiv = document.getElementById('selectedTileInfo');
+            infoDiv.style.display = 'block';
+            
+            document.getElementById('selectedRow').textContent = row;
+            document.getElementById('selectedCol').textContent = col;
+            document.getElementById('codeRow').textContent = row;
+            document.getElementById('codeCol').textContent = col;
+            
+            // Draw zoomed tile
+            const selectedCanvas = document.getElementById('selectedTileCanvas');
+            const selectedCtx = selectedCanvas.getContext('2d');
+            selectedCtx.imageSmoothingEnabled = false;
+            
+            selectedCtx.clearRect(0, 0, 64, 64);
+            selectedCtx.drawImage(
+                tilesetImage,
+                col * tileSize, row * tileSize, tileSize, tileSize,
+                0, 0, 64, 64
+            );
+            
+            // Scroll to selected tile info
+            infoDiv.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        }
+        
+        // Populate mapping table
+        function populateMappingTable() {
+            const tbody = document.getElementById('mappingTableBody');
+            tbody.innerHTML = '';
+            
+            for (const [name, coords] of Object.entries(currentMapping)) {
+                const row = document.createElement('tr');
+                
+                // Create mini canvas for preview
+                const previewCanvas = document.createElement('canvas');
+                previewCanvas.width = 32;
+                previewCanvas.height = 32;
+                const previewCtx = previewCanvas.getContext('2d');
+                previewCtx.imageSmoothingEnabled = false;
+                
+                previewCtx.drawImage(
+                    tilesetImage,
+                    coords.col * tileSize, coords.row * tileSize, tileSize, tileSize,
+                    0, 0, 32, 32
+                );
+                
+                row.innerHTML = `
+                    <td><strong>${name}</strong></td>
+                    <td><code>TILESET.DARK_STONE.${name.toLowerCase().replace(/[- ]/g, '_')}</code></td>
+                    <td class="coord">${coords.row}</td>
+                    <td class="coord">${coords.col}</td>
+                    <td></td>
+                `;
+                
+                row.cells[4].appendChild(previewCanvas);
+                tbody.appendChild(row);
+            }
+        }
+        
+        // Start
+        loadTileset();
+    </script>
+</body>
+</html>

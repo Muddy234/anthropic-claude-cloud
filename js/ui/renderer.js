@@ -1,0 +1,437 @@
+﻿// Create canvas element
+const canvas = document.getElementById('gameCanvas');
+const ctx = canvas.getContext('2d');
+ctx.imageSmoothingEnabled = false; // Optimize for pixel art
+canvas.width = window.innerWidth;
+canvas.height = window.innerHeight;
+
+// Handle window resizing
+window.addEventListener('resize', () => {
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+    console.log('Canvas resized to:', canvas.width, 'x', canvas.height);
+});
+
+// Create health bar during combat
+function drawHealthBar(x, y, width, hp, maxHp) {
+    const pct = Math.max(0, Math.min(1, hp / maxHp));
+    ctx.fillStyle = '#333'; ctx.fillRect(x, y, width, 20);
+    ctx.fillStyle = pct > 0.5 ? '#2ecc71' : pct > 0.2 ? '#f1c40f' : '#e74c3c';
+    ctx.fillRect(x, y, width * pct, 20);
+    ctx.strokeStyle = '#333'; ctx.strokeRect(x, y, width, 20);
+}
+
+function drawTracker() {
+    if (!game.player) return;
+    ctx.fillStyle = '#0a0a0a'; ctx.fillRect(0, 0, TRACKER_WIDTH, canvas.height);
+    ctx.strokeStyle = '#333'; ctx.lineWidth = 2; ctx.strokeRect(0, 0, TRACKER_WIDTH, canvas.height);
+    let y = 50; const cx = TRACKER_WIDTH / 2;
+    ctx.fillStyle = '#FFD700'; ctx.font = 'bold 32px monospace'; ctx.textAlign = 'center'; ctx.fillText('ADVENTURER', cx, y); y += 40;
+    ctx.fillStyle = '#fff'; ctx.font = '20px monospace'; ctx.fillText(`Level ${game.player.level}`, cx, y); y += 20;
+    const xpNeeded = 100 + (game.player.level - 1) * 150;
+    const xpPct = Math.min(1, game.player.xp / xpNeeded);
+    ctx.fillStyle = '#333'; ctx.fillRect(50, y, TRACKER_WIDTH - 100, 10);
+    ctx.fillStyle = '#3498db'; ctx.fillRect(50, y, (TRACKER_WIDTH - 100) * xpPct, 10);
+    y += 30; ctx.fillStyle = '#888'; ctx.font = '14px monospace'; ctx.fillText(`${game.player.xp} / ${xpNeeded} XP`, cx, y); y += 50;
+    ctx.fillStyle = '#FFD700'; ctx.font = 'bold 24px monospace'; ctx.fillText('STATS', cx, y); y += 30;
+    ctx.fillStyle = '#fff'; ctx.font = '18px monospace'; ctx.textAlign = 'left'; const px = 80;
+    ctx.fillText(`STR: ${game.player.stats.STR}`, px, y); y += 30;
+    ctx.fillText(`AGI: ${game.player.stats.AGI}`, px, y); y += 30;
+    ctx.fillText(`INT: ${game.player.stats.INT}`, px, y); y += 30;
+    ctx.fillText(`STA: ${game.player.stats.STA}`, px, y); y += 30;
+    y += 10;
+    ctx.fillText(`P.DEF: ${Math.floor(game.player.pDef)}`, px, y); y += 30;
+    ctx.fillText(`M.DEF: ${Math.floor(game.player.mDef)}`, px, y); y += 30;
+    y += 10;
+    ctx.fillText(`HP: ${Math.floor(game.player.hp)}/${game.player.maxHp}`, px, y); y += 30;
+    ctx.fillText(`STM: ${Math.floor(game.player.stamina)}/${game.player.maxStamina}`, px, y); y += 30;
+    ctx.fillText(`MANA: ${Math.floor(game.player.mana)}/${game.player.maxMana}`, px, y); y += 50;
+    ctx.fillStyle = '#FFD700'; ctx.textAlign = 'center'; ctx.font = 'bold 24px monospace'; ctx.fillText(`GOLD: ${game.gold}`, cx, y); y += 50;
+    ctx.fillStyle = '#FFD700'; ctx.fillText('INVENTORY', cx, y); y += 30;
+    ctx.fillStyle = '#fff'; ctx.font = '16px monospace';
+    if (game.player.inventory.length === 0) { ctx.fillText('Empty', cx, y); } else { for (const item of game.player.inventory) { ctx.fillText(`${item.name} x${item.count}`, cx, y); y += 25; } }
+    ctx.fillStyle = '#888'; ctx.font = '14px monospace'; ctx.fillText('[E] Open Inventory', cx, canvas.height - 30);
+}
+
+function drawInspectPanel() {
+    if (!game.combat || !game.combat.inspecting) return;
+    const enemy = game.combat.enemy;
+    const px = 1200 + (TRACKER_WIDTH / 2), py = 100, pw = 600, ph = 600;
+    const finalX = Math.min(canvas.width - pw - 20, px);
+    ctx.fillStyle = 'rgba(20, 20, 30, 0.95)'; ctx.fillRect(finalX, py, pw, ph);
+    ctx.strokeStyle = '#FFD700'; ctx.lineWidth = 4; ctx.strokeRect(finalX, py, pw, ph);
+    ctx.fillStyle = '#FFD700'; ctx.font = 'bold 36px monospace'; ctx.textAlign = 'center'; ctx.fillText('MONSTER DATA', finalX + pw / 2, py + 50);
+    ctx.fillStyle = enemy.element === 'fire' ? '#e74c3c' : enemy.element === 'nature' ? '#27ae60' : '#8e44ad';
+    ctx.fillRect(finalX + 175, py + 80, 250, 250); ctx.strokeStyle = '#fff'; ctx.lineWidth = 3; ctx.strokeRect(finalX + 175, py + 80, 250, 250);
+    ctx.fillStyle = '#fff'; ctx.font = 'bold 32px monospace'; ctx.textAlign = 'left'; ctx.fillText(enemy.name.toUpperCase(), finalX + 30, py + 380);
+    ctx.font = '18px monospace'; ctx.fillText(`STR: ${enemy.str} AGI: ${enemy.agi} INT: ${enemy.int}`, finalX + 40, py + 450);
+    ctx.fillText(`P.DEF: ${enemy.pDef} M.DEF: ${enemy.mDef}`, finalX + 40, py + 480);
+    ctx.fillStyle = '#ccc'; ctx.font = '16px monospace';
+    const description = enemy.description || (MONSTER_DATA[enemy.name] ? MONSTER_DATA[enemy.name].description : 'No description available.');
+    const words = description.split(' '); let line = '', yo = py + 530;
+    for (let w of words) { if (ctx.measureText(line + w).width > pw - 80) { ctx.fillText(line, finalX + 40, yo); line = w + ' '; yo += 24; } else line += w + ' '; }
+    ctx.fillText(line, finalX + 40, yo);
+    ctx.fillStyle = '#888'; ctx.textAlign = 'center'; ctx.fillText('[I] or [4] to close', finalX + pw / 2, py + ph - 20);
+}
+
+function drawInventoryOverlay() {
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.9)'; ctx.fillRect(TRACKER_WIDTH, 0, canvas.width - TRACKER_WIDTH, canvas.height);
+    const cx = TRACKER_WIDTH + (canvas.width - TRACKER_WIDTH) / 2; const cy = canvas.height / 2;
+    const w = 900, h = 800;
+    const x = cx - w / 2, y = cy - h / 2;
+    ctx.fillStyle = '#1a1a1a'; ctx.strokeStyle = '#3498db'; ctx.lineWidth = 4;
+    ctx.fillRect(x, y, w, h); ctx.strokeRect(x, y, w, h);
+    const tabs = ['WEAPONS', 'ARMOR', 'CONSUMABLES', 'ITEMS', 'EQUIPPED', 'INSPECT'];
+    const tabW = w / tabs.length;
+    ctx.font = 'bold 18px monospace'; ctx.textAlign = 'center';
+    for (let i = 0; i < tabs.length; i++) {
+        const tx = x + i * tabW;
+        ctx.fillStyle = game.inventoryTab === i ? '#3498db' : '#333';
+        ctx.fillRect(tx, y, tabW, 40);
+        ctx.strokeStyle = '#111'; ctx.strokeRect(tx, y, tabW, 40);
+        ctx.fillStyle = game.inventoryTab === i ? '#fff' : '#888';
+        ctx.fillText(tabs[i], tx + tabW / 2, y + 26);
+    }
+    const contentX = x + 20; const contentY = y + 60; let lineY = contentY;
+    ctx.textAlign = 'left'; ctx.fillStyle = '#fff'; ctx.font = '18px monospace';
+    if (game.inventoryTab === 5) {
+        const listW = w * 0.4; const detailsX = x + listW + 20;
+        ctx.strokeStyle = '#333'; ctx.beginPath(); ctx.moveTo(x + listW, y + 40); ctx.lineTo(x + listW, y + h); ctx.stroke();
+        if (game.player.inventory.length === 0) { ctx.textAlign = 'center'; ctx.fillStyle = '#888'; ctx.fillText('Inventory is empty.', x + listW / 2, cy); } else {
+            if (typeof game.inspectIndex === 'undefined') game.inspectIndex = 0;
+            if (game.inspectIndex >= game.player.inventory.length) game.inspectIndex = game.player.inventory.length - 1;
+            const startIndex = Math.max(0, Math.min(game.inspectIndex - 10, game.player.inventory.length - 20));
+            const visibleItems = game.player.inventory.slice(startIndex, startIndex + 20);
+            visibleItems.forEach((item, idx) => {
+                const realIdx = startIndex + idx; const isSelected = realIdx === game.inspectIndex; const itemY = contentY + idx * 30;
+                if (isSelected) { ctx.fillStyle = '#3498db'; ctx.fillRect(x + 10, itemY - 20, listW - 20, 30); }
+                ctx.fillStyle = isSelected ? '#fff' : '#aaa'; ctx.font = isSelected ? 'bold 18px monospace' : '18px monospace'; ctx.textAlign = 'left'; ctx.fillText(`${item.name} x${item.count}`, contentX, itemY);
+            });
+            const selectedItem = game.player.inventory[game.inspectIndex];
+            if (selectedItem) {
+                const data = EQUIPMENT_DATA[selectedItem.name]; let dy = contentY;
+                ctx.fillStyle = '#FFD700'; ctx.font = 'bold 28px monospace'; ctx.textAlign = 'center'; ctx.fillText(selectedItem.name.toUpperCase(), detailsX + (w - listW) / 2, dy); dy += 40;
+                if (data) {
+                    ctx.fillStyle = '#fff'; ctx.font = '20px monospace'; ctx.textAlign = 'left';
+                    ctx.fillText(`Type: ${data.category || 'Item'}`, detailsX, dy); dy += 30;
+                    ctx.fillText(`Rarity: ${data.rarity || 'Common'}`, detailsX, dy); dy += 30;
+                    ctx.fillText(`Value: ${data.goldValue || 0} Gold`, detailsX, dy); dy += 50;
+                    if (data.description) {
+                        ctx.fillStyle = '#ccc'; ctx.font = 'italic 18px monospace';
+                        const words = data.description.split(' '); let line = '';
+                        for (let word of words) { if (ctx.measureText(line + word).width > (w - listW - 40)) { ctx.fillText(line, detailsX, dy); line = word + ' '; dy += 24; } else { line += word + ' '; } }
+                        ctx.fillText(line, detailsX, dy); dy += 40;
+                    }
+                } else {
+                    ctx.fillStyle = '#fff'; ctx.font = '20px monospace'; ctx.textAlign = 'left';
+                    ctx.fillText(`Type: ${selectedItem.type || 'Item'}`, detailsX, dy); dy += 30;
+                    ctx.fillText(`Value: ${selectedItem.goldValue || 0} Gold`, detailsX, dy); dy += 50;
+                }
+                ctx.fillStyle = '#3498db'; ctx.font = 'bold 22px monospace'; ctx.fillText('STAT BONUSES', detailsX, dy); dy += 30;
+                ctx.fillStyle = '#fff'; ctx.font = '18px monospace';
+                const stats = [{ label: 'Strength', val: data ? data.str : 0 }, { label: 'Agility', val: data ? data.agi : 0 }, { label: 'Intelligence', val: data ? data.int : 0 }, { label: 'Stamina', val: data ? data.sta : 0 }, { label: 'Physical Def', val: data ? data.pDef : 0 }, { label: 'Magic Def', val: data ? data.mDef : 0 }];
+                let hasStats = false;
+                stats.forEach(s => { if (s.val) { ctx.fillStyle = s.val > 0 ? '#2ecc71' : '#e74c3c'; ctx.fillText(`${s.label}: ${s.val > 0 ? '+' : ''}${s.val}`, detailsX + 20, dy); dy += 25; hasStats = true; } });
+                if (!hasStats) { ctx.fillStyle = '#888'; ctx.fillText('No stat bonuses.', detailsX + 20, dy); }
+            }
+        }
+    } else if (game.inventoryTab === 4) {
+        const eq = game.player.equipped; const slots = ['HEAD', 'CHEST', 'LEGS', 'FEET', 'MAIN', 'OFF'];
+        slots.forEach((slot, idx) => { ctx.fillStyle = '#f1c40f'; ctx.fillText(`[${idx + 1}] ${slot}:`, contentX, lineY); const itemName = eq[slot] ? eq[slot].name : 'Empty'; ctx.fillStyle = eq[slot] ? '#fff' : '#666'; ctx.fillText(itemName, contentX + 200, lineY); lineY += 30; });
+        let totalBonus = { str: 0, agi: 0, int: 0, pDef: 0, mDef: 0 };
+        Object.values(eq).forEach(item => { if (item) { totalBonus.str += item.str || 0; totalBonus.agi += item.agi || 0; totalBonus.int += item.int || 0; totalBonus.pDef += item.pDef || 0; totalBonus.mDef += item.mDef || 0; } });
+        lineY += 20; ctx.fillStyle = '#3498db'; ctx.font = 'bold 24px monospace'; ctx.textAlign = 'center'; ctx.fillText('EQUIPMENT BONUSES', cx, lineY); lineY += 40;
+        ctx.fillStyle = '#fff'; ctx.font = '20px monospace'; ctx.textAlign = 'left'; const statX = x + 80; const formatBonus = (val) => val > 0 ? `+${val}` : `${val}`;
+        ctx.fillStyle = totalBonus.str !== 0 ? (totalBonus.str > 0 ? '#2ecc71' : '#e74c3c') : '#888'; ctx.fillText(`Strength:         ${formatBonus(totalBonus.str)}`, statX, lineY); lineY += 35;
+        ctx.fillStyle = totalBonus.agi !== 0 ? (totalBonus.agi > 0 ? '#2ecc71' : '#e74c3c') : '#888'; ctx.fillText(`Agility:          ${formatBonus(totalBonus.agi)}`, statX, lineY); lineY += 35;
+        ctx.fillStyle = totalBonus.int !== 0 ? (totalBonus.int > 0 ? '#2ecc71' : '#e74c3c') : '#888'; ctx.fillText(`Intelligence:     ${formatBonus(totalBonus.int)}`, statX, lineY); lineY += 35;
+        ctx.fillStyle = totalBonus.pDef !== 0 ? (totalBonus.pDef > 0 ? '#2ecc71' : '#e74c3c') : '#888'; ctx.fillText(`Physical Defense: ${formatBonus(totalBonus.pDef)}`, statX, lineY); lineY += 35;
+        ctx.fillStyle = totalBonus.mDef !== 0 ? (totalBonus.mDef > 0 ? '#2ecc71' : '#e74c3c') : '#888'; ctx.fillText(`Magic Defense:    ${formatBonus(totalBonus.mDef)}`, statX, lineY);
+        ctx.fillStyle = '#888'; ctx.font = '16px monospace'; ctx.textAlign = 'center'; ctx.fillText('Press [Number] to Unequip Item', cx, y + h - 20);
+    } else {
+        const types = ['weapon', 'armor', 'consumable', 'material']; const targetType = types[game.inventoryTab]; const filteredItems = game.player.inventory.filter(i => i.type === targetType);
+        if (filteredItems.length === 0) { ctx.textAlign = 'center'; ctx.fillStyle = '#888'; ctx.fillText('No items in this category', cx, cy); } else {
+            filteredItems.forEach((item, idx) => {
+                const itemData = EQUIPMENT_DATA[item.name]; ctx.fillStyle = '#fff'; ctx.fillText(`[${idx + 1}] ${item.name} x${item.count}`, contentX + 20, lineY);
+                if (itemData) { const stats = []; if (itemData.str) stats.push(`STR ${itemData.str}`); if (itemData.pDef) stats.push(`DEF ${itemData.pDef}`); if (stats.length) { ctx.fillStyle = '#aaa'; ctx.font = '16px monospace'; ctx.fillText(stats.join(', '), contentX + 300, lineY); ctx.font = '18px monospace'; } }
+                lineY += 40;
+            });
+        }
+    }
+    if (game.inventoryTab !== 4) { ctx.fillStyle = '#888'; ctx.font = '16px monospace'; ctx.textAlign = 'center'; ctx.fillText('Use [Left/Right] to Switch Tabs | [Number] to Use/Equip | [E] Close', cx, y + h - 20); }
+}
+
+function drawMerchant() {
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.9)'; ctx.fillRect(TRACKER_WIDTH, 0, canvas.width - TRACKER_WIDTH, canvas.height);
+    const cx = TRACKER_WIDTH + (canvas.width - TRACKER_WIDTH) / 2; const cy = canvas.height / 2;
+    const w = 800, h = 600; const x = cx - w / 2, y = cy - h / 2;
+    ctx.fillStyle = '#1a1a1a'; ctx.strokeStyle = '#f1c40f'; ctx.lineWidth = 4; ctx.fillRect(x, y, w, h); ctx.strokeRect(x, y, w, h);
+    ctx.fillStyle = '#f1c40f'; ctx.textAlign = 'center'; ctx.font = 'bold 40px monospace'; ctx.fillText('MERCHANT', cx, y + 60);
+    ctx.fillStyle = '#fff'; ctx.font = '24px monospace'; ctx.fillText(`Your Gold: ${game.gold}`, cx, y + 100);
+    if (!game.merchantMode) game.merchantMode = 'menu';
+    if (game.merchantMode === 'menu') {
+        ctx.fillStyle = '#fff'; ctx.font = 'bold 36px monospace'; ctx.fillText('[1] BUY', cx, cy - 20); ctx.fillText('[2] SELL', cx, cy + 40);
+        ctx.fillStyle = '#888'; ctx.font = '20px monospace'; ctx.fillText('Press [SPACE] to Leave', cx, y + h - 40);
+    } else if (game.merchantMode === 'buy') {
+        ctx.fillStyle = '#3498db'; ctx.font = 'bold 32px monospace'; ctx.fillText('BUY ITEMS', cx, y + 150);
+        ctx.fillStyle = '#fff'; ctx.font = '28px monospace'; ctx.fillText('[1] Health Potion - 30 Gold', cx, cy + 20);
+        if (game.merchantMsg) { ctx.fillStyle = game.merchantMsg.includes('Bought') ? '#2ecc71' : '#e74c3c'; ctx.fillText(game.merchantMsg, cx, cy + 80); }
+        ctx.fillStyle = '#888'; ctx.font = '20px monospace'; ctx.fillText('[ESC] Back | [SPACE] Leave', cx, y + h - 40);
+    } else if (game.merchantMode === 'sell') {
+        drawInventoryOverlay(); const cx = TRACKER_WIDTH + (canvas.width - TRACKER_WIDTH) / 2;
+        ctx.fillStyle = '#f1c40f'; ctx.font = 'bold 24px monospace'; ctx.textAlign = 'center'; ctx.fillText('SELL MODE - [Number] to Sell', cx, 60);
+        if (game.inventoryTab !== 4 && game.inventoryTab !== 5) {
+            const x = cx - 450; const y = (canvas.height / 2) - 400; const contentY = y + 60; let lineY = contentY;
+            const types = ['weapon', 'armor', 'consumable', 'material']; const targetType = types[game.inventoryTab]; const filteredItems = game.player.inventory.filter(i => i.type === targetType);
+            filteredItems.forEach((item, idx) => {
+                const itemData = EQUIPMENT_DATA[item.name]; const sellPrice = itemData ? Math.floor(itemData.goldValue / 2) : Math.floor((item.goldValue || 1) / 2);
+                ctx.fillStyle = '#f1c40f'; ctx.textAlign = 'right'; ctx.fillText(`${sellPrice} G`, x + 880, lineY); lineY += 40;
+            });
+        }
+    }
+}
+
+function drawLevelUpScreen() {
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.95)'; ctx.fillRect(0, 0, canvas.width, canvas.height);
+    const cx = canvas.width / 2; const cy = canvas.height / 2; const y = cy - 200;
+    ctx.fillStyle = '#fff'; ctx.font = 'bold 48px monospace'; ctx.textAlign = 'center'; ctx.fillText(`Level ${game.player.level} Reached!`, cx, y);
+    if (game.levelUpData) {
+        let ly = y + 80; ctx.font = '24px monospace'; ctx.fillText(`Attribute Points: ${game.levelUpData.attributePoints}`, cx, ly); ly += 50;
+        const stats = game.levelUpData.tempStats;
+        const labels = [`[1] STR: ${stats.STR} (Phys Dmg, Def)`, `[2] AGI: ${stats.AGI} (Crit, Dodge, Spd)`, `[3] INT: ${stats.INT} (Mag Dmg, Mana, M.Def)`, `[4] STA: ${stats.STA} (HP, Stamina, Regen)`];
+        ctx.textAlign = 'left'; const lx = cx - 200; for (const l of labels) { ctx.fillStyle = '#fff'; ctx.fillText(l, lx, ly); ly += 40; }
+        ly += 40; ctx.textAlign = 'center';
+        if (game.levelUpData.attributePoints === 0) { ctx.fillStyle = '#2ecc71'; ctx.fillText('[SPACE] CONFIRM', cx, ly); } else { ctx.fillStyle = '#888'; ctx.fillText('Spend all points to confirm', cx, ly); }
+    }
+}
+
+function drawBattleScene() {
+    const enemy = game.combat.enemy; const offset = TRACKER_WIDTH;
+    ctx.fillStyle = '#f8f9fa'; ctx.fillRect(offset, 0, canvas.width - offset, canvas.height);
+    ctx.fillStyle = '#e0e0e0'; ctx.strokeStyle = '#bdc3c7'; ctx.lineWidth = 4;
+    ctx.beginPath(); ctx.ellipse(1400 + (offset / 2), 450, 300, 100, 0, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+    ctx.beginPath(); ctx.ellipse(500 + offset, 750, 350, 120, 0, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+    ctx.fillStyle = enemy.element === 'fire' ? '#e74c3c' : enemy.element === 'nature' ? '#27ae60' : '#8e44ad';
+    ctx.fillRect(1250 + (offset / 2), 150, 300, 300);
+    ctx.fillStyle = '#3498db'; ctx.fillRect(350 + offset, 450, 350, 350);
+    ctx.fillStyle = '#fff'; ctx.strokeStyle = '#333'; ctx.fillRect(80 + offset, 80, 540, 120); ctx.strokeRect(80 + offset, 80, 540, 120);
+    ctx.fillStyle = '#000'; ctx.font = 'bold 32px monospace'; ctx.textAlign = 'left'; ctx.fillText(enemy.name.toUpperCase(), 100 + offset, 120);
+    drawHealthBar(120 + offset, 150, 460, enemy.hp, enemy.maxHp);
+    ctx.fillStyle = '#fff'; ctx.fillRect(1180 + (offset / 3), 580, 540, 140); ctx.strokeRect(1180 + (offset / 3), 580, 540, 140);
+    ctx.fillStyle = '#000'; ctx.fillText('ADVENTURER', 1200 + (offset / 3), 620);
+    drawHealthBar(1220 + (offset / 3), 650, 460, game.player.hp, game.player.maxHp);
+    ctx.fillStyle = '#2c3e50'; ctx.fillRect(offset, 830, canvas.width - offset, 250);
+    ctx.fillStyle = '#fff'; ctx.fillRect(offset + 10, 840, canvas.width - offset - 20, 230);
+    ctx.fillStyle = '#000'; ctx.font = '28px monospace';
+    for (let i = 0; i < game.combat.log.length && i < 4; i++) { ctx.fillText(game.combat.log[game.combat.log.length - 1 - i], offset + 40, 1030 - i * 40); }
+    const menuX = 1240 + (offset / 3);
+    if (game.combat.menuState === 'main') {
+        ctx.font = 'bold 36px monospace'; ctx.fillStyle = '#000'; ctx.textAlign = 'left';
+        ctx.fillText('[1] FIGHT', menuX, 900); ctx.fillText('[2] INSPECT', menuX, 960); ctx.fillText('[3] BAG', menuX, 1020); ctx.fillText('[4] RUN', menuX + 300, 900);
+    }
+    if (game.combat.menuState === 'fight_popup') {
+        const px = 1200 + (TRACKER_WIDTH / 2), py = 100, pw = 600, ph = 600; const finalX = Math.min(canvas.width - pw - 20, px);
+        ctx.fillStyle = 'rgba(20, 20, 30, 0.95)'; ctx.fillRect(finalX, py, pw, ph); ctx.strokeStyle = '#FFD700'; ctx.lineWidth = 4; ctx.strokeRect(finalX, py, pw, ph);
+        ctx.fillStyle = '#FFD700'; ctx.font = 'bold 28px monospace'; ctx.textAlign = 'center'; ctx.fillText('SELECT ATTACK', finalX + pw / 2, py + 50);
+        ctx.fillStyle = '#fff'; ctx.font = '22px monospace'; ctx.textAlign = 'left'; let ay = py + 120;
+        for (let i = 0; i < 4; i++) {
+            const ability = game.player.abilities[i];
+            if (ability) {
+                ctx.fillStyle = '#2ecc71'; ctx.fillText(`[${i + 1}] ${ability.name}`, finalX + 40, ay);
+                ctx.fillStyle = '#aaa'; ctx.font = '16px monospace'; ctx.fillText(`Cost: ${ability.cost} ${ability.type === 'stamina' ? 'STM' : 'MANA'} | Dmg: ${ability.baseDmg} | Acc: ${ability.accuracy}%`, finalX + 60, ay + 28); ctx.font = '22px monospace';
+            } else { ctx.fillStyle = '#666'; ctx.fillText(`[${i + 1}] Unselected`, finalX + 40, ay); }
+            ay += 100;
+        }
+        ctx.fillStyle = '#888'; ctx.font = '18px monospace'; ctx.textAlign = 'center'; ctx.fillText('[C] or [ESC] to Cancel', finalX + pw / 2, py + ph - 30);
+    }
+    if (game.combat.menuState === 'bag_popup') {
+        const px = 1200 + (TRACKER_WIDTH / 2), py = 100, pw = 600, ph = 600; const finalX = Math.min(canvas.width - pw - 20, px);
+        ctx.fillStyle = 'rgba(20, 20, 30, 0.95)'; ctx.fillRect(finalX, py, pw, ph); ctx.strokeStyle = '#FFD700'; ctx.lineWidth = 4; ctx.strokeRect(finalX, py, pw, ph);
+        ctx.fillStyle = '#FFD700'; ctx.font = 'bold 28px monospace'; ctx.textAlign = 'center'; ctx.fillText('CONSUMABLES', finalX + pw / 2, py + 50);
+        const consumables = game.player.inventory.filter(i => i.type === 'consumable');
+        if (consumables.length === 0) { ctx.fillStyle = '#888'; ctx.font = '22px monospace'; ctx.fillText('No consumables available', finalX + pw / 2, py + 300); } else {
+            ctx.fillStyle = '#fff'; ctx.font = '22px monospace'; ctx.textAlign = 'left'; let iy = py + 120;
+            consumables.forEach((item, idx) => { if (idx < 9) { ctx.fillText(`[${idx + 1}] ${item.name} x${item.count}`, finalX + 40, iy); iy += 50; } });
+        }
+        ctx.fillStyle = '#888'; ctx.font = '18px monospace'; ctx.textAlign = 'center'; ctx.fillText('[C] or [ESC] to Cancel', finalX + pw / 2, py + ph - 30);
+    }
+    drawInspectPanel();
+}
+
+function drawNotification() {
+    // Placeholder for notification drawing logic
+}
+
+function getFloorColorByTheme(room) {
+    return ['#222', '#2a2a2a', '#333'];
+}
+
+function drawThemedFloor(tile, x, y, size) {
+    const room = game.rooms.find(r => x >= r.x && x < r.x + r.w && y >= r.y && y < r.y + r.h);
+    if (!room) { ctx.fillStyle = '#222'; ctx.fillRect(x, y, size, size); return; }
+    const colors = getFloorColorByTheme(room);
+    const pattern = (room.x + room.y + Math.floor(tile.x) + Math.floor(tile.y)) % colors.length;
+    ctx.fillStyle = colors[pattern];
+    ctx.fillRect(x, y, size, size);
+}
+
+function render() {
+    ctx.fillStyle = '#000'; 
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    
+ if (!game.player) {
+        return; // Don't render if player doesn't exist yet
+    }
+
+if (game.state === 'menu') {
+        ctx.fillStyle = '#fff'; ctx.font = '64px monospace'; ctx.textAlign = 'center'; ctx.fillText('THE SHIFTING CHASM', canvas.width / 2, 400); ctx.font = '32px monospace'; ctx.fillText('Press SPACE to Start', canvas.width / 2, 500);
+    } else if (game.state === 'playing' || game.state === 'merchant' || game.state === 'inventory' || game.state === 'map' || game.state === 'skills' || game.state === 'moveset' || game.state === 'levelup') {
+
+const effectiveTileSize = TILE_SIZE * ZOOM_LEVEL;
+const viewW = canvas.width - TRACKER_WIDTH;
+const viewH = canvas.height;
+
+// Calculate player's position on screen (in pixels)
+const playerScreenX = (game.player.displayX - game.camera.x) * effectiveTileSize + TRACKER_WIDTH;
+const playerScreenY = (game.player.displayY - game.camera.y) * effectiveTileSize;
+
+// Calculate screen center and deadzone bounds
+const screenCenterX = TRACKER_WIDTH + viewW / 2;
+const screenCenterY = viewH / 2;
+
+const deadzoneLeft = screenCenterX - CAMERA_DEADZONE_WIDTH / 2;
+const deadzoneRight = screenCenterX + CAMERA_DEADZONE_WIDTH / 2;
+const deadzoneTop = screenCenterY - CAMERA_DEADZONE_HEIGHT / 2;
+const deadzoneBottom = screenCenterY + CAMERA_DEADZONE_HEIGHT / 2;
+
+// Calculate target camera position (only if player outside deadzone)
+let targetCamX = game.camera.x;
+let targetCamY = game.camera.y;
+
+// Horizontal deadzone check
+if (playerScreenX < deadzoneLeft) {
+    // Player too far left - move camera left
+    targetCamX = game.player.displayX - (deadzoneLeft - TRACKER_WIDTH) / effectiveTileSize;
+} else if (playerScreenX > deadzoneRight) {
+    // Player too far right - move camera right
+    targetCamX = game.player.displayX - (deadzoneRight - TRACKER_WIDTH) / effectiveTileSize;
+}
+
+// Vertical deadzone check
+if (playerScreenY < deadzoneTop) {
+    // Player too far up - move camera up
+    targetCamY = game.player.displayY - deadzoneTop / effectiveTileSize;
+} else if (playerScreenY > deadzoneBottom) {
+    // Player too far down - move camera down
+    targetCamY = game.player.displayY - deadzoneBottom / effectiveTileSize;
+}
+
+// Smooth camera movement (lerp to target position)
+game.camera.targetX = targetCamX;
+game.camera.targetY = targetCamY;
+game.camera.x += (game.camera.targetX - game.camera.x) * CAMERA_SMOOTHING;
+game.camera.y += (game.camera.targetY - game.camera.y) * CAMERA_SMOOTHING;
+
+const camX = game.camera.x;
+const camY = game.camera.y;
+
+        ctx.save(); ctx.beginPath(); ctx.rect(TRACKER_WIDTH, 0, viewW, canvas.height); ctx.clip();
+        
+        // LAYER 1: Draw floor, wall, and doorway tiles
+        for (let y = 0; y < GRID_HEIGHT; y++) {
+            for (let x = 0; x < GRID_WIDTH; x++) {
+                const tile = game.map[y][x];
+                const screenX = (x - camX) * effectiveTileSize + TRACKER_WIDTH;
+                const screenY = (y - camY) * effectiveTileSize;
+                
+                if (tile.type === 'floor') {
+                    // NEW: Use tileset floor rendering
+                    drawFloorTile(ctx, tile, x, y, screenX, screenY, effectiveTileSize);
+                } else if (tile.type === 'doorway') {
+                    // NEW: Use tileset doorway rendering
+                    drawDoorwayTile(ctx, screenX, screenY, effectiveTileSize);
+                } else if (tile.type === 'wall') {
+                    // NEW: Render wall fill tiles
+                    drawWallTile(ctx, screenX, screenY, effectiveTileSize);
+                } else if (tile.type === 'void') {
+                    // NEW: Render void tiles
+                    drawVoidTile(ctx, screenX, screenY, effectiveTileSize);
+                } else if (tile.type === 'lava') {
+                    ctx.fillStyle = '#e74c3c'; 
+                    ctx.fillRect(screenX, screenY, effectiveTileSize, effectiveTileSize); 
+                    ctx.strokeStyle = '#111'; 
+                    ctx.strokeRect(screenX, screenY, effectiveTileSize, effectiveTileSize);
+                } else if (tile.type === 'exit') {
+                    ctx.fillStyle = '#0ff'; 
+                    ctx.fillRect(screenX, screenY, effectiveTileSize, effectiveTileSize); 
+                    ctx.strokeStyle = '#111'; 
+                    ctx.strokeRect(screenX, screenY, effectiveTileSize, effectiveTileSize);
+                }
+            }
+        }
+        
+        // LAYER 1.5: Draw room perimeter walls with proper corners/edges (NEW!)
+        if (typeof renderAllWalls === 'function') {
+            renderAllWalls(ctx, camX, camY, effectiveTileSize, TRACKER_WIDTH);
+        }
+        
+        // LAYER 2: Draw loot piles
+        if (typeof renderLootPiles === 'function') {
+            renderLootPiles(ctx, camX, camY, effectiveTileSize, TRACKER_WIDTH);
+        }
+        
+        // LAYER 3: Draw decorations
+        if (typeof renderRoomDecorations === 'function') {
+            renderRoomDecorations(camX, camY, effectiveTileSize, TRACKER_WIDTH);
+        }
+        
+        // Merchant rendering
+        if (game.merchant) { 
+            const mx = (game.merchant.x - camX) * effectiveTileSize + TRACKER_WIDTH; 
+            const my = (game.merchant.y - camY) * effectiveTileSize; 
+            ctx.fillStyle = '#f1c40f'; 
+            ctx.fillRect(mx + 10, my + 10, effectiveTileSize - 20, effectiveTileSize - 20); 
+            ctx.fillStyle = '#000'; 
+            ctx.font = 'bold 24px monospace'; 
+            ctx.textAlign = 'center'; 
+            ctx.fillText('$', mx + effectiveTileSize / 2, my + effectiveTileSize / 2 + 8); 
+        }
+
+
+
+        // Player rendering with spritesheet animation
+        const px = (game.player.displayX - camX) * effectiveTileSize + TRACKER_WIDTH;
+        const py = (game.player.displayY - camY) * effectiveTileSize;
+        drawPlayerSprite(ctx, px, py, effectiveTileSize);
+
+
+        const monsterColors = { 'Magma Slime': '#ff6b35', 'Obsidian Golem': '#2c2c2c', 'Cinder Wisp': '#ffeb3b', 'Flame Bat': '#ff5722', 'Ash Walker': '#757575', 'Salamander': '#4caf50', 'Pyro Cultist': '#d32f2f' };
+        for (const e of game.enemies) {
+            const ex = (e.displayX - camX) * effectiveTileSize + TRACKER_WIDTH; const ey = (e.displayY - camY) * effectiveTileSize; const cx = ex + effectiveTileSize / 2; const cy = ey + effectiveTileSize / 2;
+            const baseColor = monsterColors[e.name] || '#e74c3c'; const radius = e.elite ? (effectiveTileSize / 2) - 8 : (effectiveTileSize / 2) - 12;
+            ctx.fillStyle = e.state === 'chasing' ? '#e67e22' : baseColor; ctx.beginPath(); ctx.arc(cx, cy, radius, 0, Math.PI * 2); ctx.fill();
+            if (e.elite) { ctx.strokeStyle = '#ffd700'; ctx.lineWidth = 3; ctx.stroke(); }
+            ctx.strokeStyle = '#fff'; ctx.lineWidth = 3; ctx.beginPath(); const len = 15; ctx.moveTo(cx, cy); ctx.lineTo(cx + e.facing.x * len, cy + e.facing.y * len); ctx.stroke();
+            ctx.fillStyle = '#fff'; ctx.fillRect(cx + e.facing.x * len - 2, cy + e.facing.y * len - 2, 4, 4);
+            if (e.state === 'chasing') { ctx.fillStyle = '#f00'; ctx.font = 'bold 20px monospace'; ctx.textAlign = 'center'; ctx.fillText('!', cx, ey + 10); }
+            if (e.combat && e.combat.isInCombat) { drawHealthBar(ex, ey - 15, effectiveTileSize, e.hp, e.maxHp); }
+        }
+        if (typeof renderDamageNumbers === 'function') { renderDamageNumbers(camX, camY, effectiveTileSize, TRACKER_WIDTH); }
+        ctx.restore();
+        drawTracker();
+        if (!game.merchant && game.state !== 'inventory' && game.state !== 'map' && game.state !== 'skills' && game.state !== 'moveset' && game.state !== 'levelup') {
+            ctx.fillStyle = '#fff'; ctx.font = '20px monospace'; ctx.textAlign = 'left'; const msgX = TRACKER_WIDTH + 20; const msgY = canvas.height - 40;
+            if (game.messageLog.length > 0 && Date.now() - game.lastMessageTime < 3000) { ctx.fillText(game.messageLog[game.messageLog.length - 1].text, msgX, msgY); }
+        }
+        drawNotification();
+        if (game.state === 'merchant') drawMerchant();
+        if (game.state === 'inventory') drawInventoryOverlay();
+        if (game.state === 'map') drawMapOverlay();
+        if (game.state === 'skills') drawSkillsOverlay();
+        if (game.state === 'moveset') drawMoveSetOverlay();
+        if (game.state === 'levelup') drawLevelUpScreen();
+    } else if (game.state === 'gameover') {
+        ctx.fillStyle = '#e74c3c'; ctx.font = '64px monospace'; ctx.textAlign = 'center'; ctx.fillText('GAME OVER', canvas.width / 2, 500); ctx.fillStyle = '#fff'; ctx.font = '32px monospace'; ctx.fillText('Press SPACE to Restart', canvas.width / 2, 600);
+    }
+    if (typeof renderUIOverlays === 'function') { renderUIOverlays(ctx); }
+}

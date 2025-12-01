@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description"
+        content="The Shifting Chasm - A roguelike dungeon crawler where the map changes beneath your feet. Fight monsters, loot gear, and escape the lava!">
+    <title>The Shifting Chasm</title>
+    <link rel="stylesheet" href="css/style.css">
+    <link rel="icon"
+        href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🌋</text></svg>">
+</head>
+<body>
+    <h1 style="display:none;">The Shifting Chasm</h1>
+    <canvas id="gameCanvas"></canvas>
+    <div id="debug"></div>
+    
+    <!-- ========================================== -->
+    <!-- SYSTEMMANAGER ARCHITECTURE                -->
+    <!-- ========================================== -->
+    
+    <!-- ==================== -->
+    <!-- CORE: Load first     -->
+    <!-- ==================== -->
+    <script src="js/core/constants.js"></script>
+    <script src="js/core/game-state.js"></script>
+    <script src="js/core/system-manager.js"></script>
+    
+    <!-- ==================== -->
+    <!-- DATA: Static definitions (no registration) -->
+    <!-- ==================== -->
+    <script src="js/data/elements.js"></script>
+    <script src="js/data/element-matrix.js"></script>
+    <script src="js/data/monsters-data.js"></script>
+    <script src="js/data/monster-tiers.js"></script>
+    <script src="js/data/items.js"></script>
+    <script src="js/data/weapon-types.js"></script>
+    <script src="js/data/weapons-melee.js"></script>
+    <script src="js/data/weapons-ranged.js"></script>
+    <script src="js/data/armor-types.js"></script>
+    <script src="js/data/armor-defense.js"></script>
+    <script src="js/data/armor-mobility.js"></script>
+    <script src="js/data/weapon-armor-matrix.js"></script>
+    <script src="js/data/room-attunement-matrix.js"></script>
+    <script src="js/data/tileset-reference.js"></script>
+    <script src="js/data/room-themes.js"></script>
+    
+    <!-- ==================== -->
+    <!-- UTILS: Helper functions (no registration) -->
+    <!-- ==================== -->
+    <script src="js/utils/message-log.js"></script>
+    <script src="js/utils/Collision.js"></script>
+    <script src="js/utils/movement-utils.js"></script>
+    <script src="js/utils/pathfinding.js"></script>
+    <script src="js/utils/damage-calculator.js"></script>
+    <script src="js/utils/stat-system.js"></script>
+    
+    <!-- ==================== -->
+    <!-- ENTITIES: Factories (no registration) -->
+    <!-- ==================== -->
+    <script src="js/entities/equipment-loader.js"></script>
+    <script src="js/entities/player.js"></script>
+    <script src="js/entities/enemy.js"></script>
+    
+    <!-- ==================== -->
+    <!-- GENERATION: Map building (no registration) -->
+    <!-- ==================== -->
+    <script src="js/generation/room-decorator.js"></script>
+    <script src="js/generation/room-generator.js"></script>
+    <script src="js/generation/enemy-spawner.js"></script>
+    <script src="js/generation/map-generator.js"></script>
+    
+    <!-- ==================== -->
+    <!-- RENDERING: Display (no registration) -->
+    <!-- ==================== -->
+    <script src="js/ui/tile-renderer.js"></script>
+    <script src="js/ui/decoration-renderer.js"></script>
+    <script src="js/ui/enemy-renderer.js"></script>
+    <script src="js/ui/enemy-movement-updater.js"></script>
+    <script src="js/ui/renderer.js"></script>
+    <script src="js/ui/ui-renderer.js"></script>
+    <script src="js/ui/skills-ui.js"></script>
+    <script src="js/ui/auto-walk.js"></script>
+    <script src="js/ui/left-click-init.js"></script>
+    <script src="js/ui/right-click-init.js"></script>
+    
+    <!-- ==================== -->
+    <!-- SYSTEMS: Register with SystemManager -->
+    <!-- Order doesn't matter - priority handles execution order -->
+    <!-- ==================== -->
+    <script src="js/systems/input-handler.js"></script>             <!-- Priority 10 -->
+    <script src="js/systems/pokemon-movement.js"></script>          <!-- Priority 20 -->
+    <script src="js/systems/player-animation.js"></script>          <!-- Priority 25 -->
+    <script src="js/systems/noise-system.js"></script>              <!-- Priority 30 -->
+    <script src="js/systems/hazard-system.js"></script>             <!-- Priority 35 -->
+    <script src="js/systems/enemy-ai.js"></script>                  <!-- Priority 40 -->
+    <script src="js/systems/monster-social-system.js"></script>     <!-- Priority 42 -->
+    <script src="js/systems/attunement-system.js"></script>         <!-- Priority 45 -->
+    <script src="js/systems/combat-system.js"></script>             <!-- Priority 50 -->
+    <script src="js/systems/skills-combat-integration.js"></script> <!-- Priority 55 -->
+    <script src="js/systems/status-effect-system.js"></script>      <!-- Priority 56 -->
+    <script src="js/systems/skill-system.js"></script>              <!-- Priority 60 -->
+    <script src="js/systems/inventory-system.js"></script>          <!-- Priority 65 -->
+    <script src="js/systems/loot-system.js"></script>               <!-- Priority 70 -->
+    <script src="js/systems/shift-system.js"></script>              <!-- Priority 80 -->
+    <script src="js/systems/merchant-shop.js"></script>             <!-- Priority 90 -->
+    
+    <!-- ==================== -->
+    <!-- MAIN: Load last      -->
+    <!-- ==================== -->
+    <script src="js/core/game-init.js"></script>
+    <script src="js/core/main.js"></script>
+</body>
+</html>
