@@ -309,20 +309,62 @@ function handleInventoryInput(e) {
 }
 
 /**
+ * Calculate 8-directional direction from delta x/y
+ * Uses 45-degree sectors to determine direction
+ */
+function getDirectionFromDelta(dx, dy) {
+    if (dx === 0 && dy === 0) return null;
+
+    // Calculate angle in degrees (0 = right, 90 = down, etc.)
+    const angle = Math.atan2(dy, dx) * (180 / Math.PI);
+
+    // Map angle to 8 directions using 45-degree sectors
+    // Each sector is 45 degrees wide, centered on the direction
+    if (angle >= -22.5 && angle < 22.5) return 'right';
+    if (angle >= 22.5 && angle < 67.5) return 'down-right';
+    if (angle >= 67.5 && angle < 112.5) return 'down';
+    if (angle >= 112.5 && angle < 157.5) return 'down-left';
+    if (angle >= 157.5 || angle < -157.5) return 'left';
+    if (angle >= -157.5 && angle < -112.5) return 'up-left';
+    if (angle >= -112.5 && angle < -67.5) return 'up';
+    if (angle >= -67.5 && angle < -22.5) return 'up-right';
+
+    return null;
+}
+
+/**
  * Handle movement input - checks held keys and initiates movement
+ * Supports 8-directional movement via simultaneous key presses
  */
 function handleMovementInput() {
     if (!game.player || game.player.isMoving) return;
     if (game.state !== 'playing') return;
 
-    // Check WASD and arrow keys
-    if (keys['w'] || keys['W'] || keys['ArrowUp']) {
+    // Check which directional keys are held
+    const up = keys['w'] || keys['W'] || keys['ArrowUp'];
+    const down = keys['s'] || keys['S'] || keys['ArrowDown'];
+    const left = keys['a'] || keys['A'] || keys['ArrowLeft'];
+    const right = keys['d'] || keys['D'] || keys['ArrowRight'];
+
+    // Determine direction based on held keys
+    // Check diagonals first (two keys held)
+    if (up && left) {
+        startPlayerMove('up-left');
+    } else if (up && right) {
+        startPlayerMove('up-right');
+    } else if (down && left) {
+        startPlayerMove('down-left');
+    } else if (down && right) {
+        startPlayerMove('down-right');
+    }
+    // Cardinal directions (single key)
+    else if (up) {
         startPlayerMove('up');
-    } else if (keys['s'] || keys['S'] || keys['ArrowDown']) {
+    } else if (down) {
         startPlayerMove('down');
-    } else if (keys['a'] || keys['A'] || keys['ArrowLeft']) {
+    } else if (left) {
         startPlayerMove('left');
-    } else if (keys['d'] || keys['D'] || keys['ArrowRight']) {
+    } else if (right) {
         startPlayerMove('right');
     }
 }
@@ -454,13 +496,9 @@ const setupCanvasHandlers = () => {
 
         const dx = gridX - game.player.gridX;
         const dy = gridY - game.player.gridY;
-        let dir = null;
 
-        if (Math.abs(dx) >= Math.abs(dy)) {
-            dir = dx > 0 ? 'right' : 'left';
-        } else {
-            dir = dy > 0 ? 'down' : 'up';
-        }
+        // Calculate 8-directional movement from click position
+        const dir = getDirectionFromDelta(dx, dy);
 
         if (dir && typeof startPlayerMove === 'function') {
             startPlayerMove(dir);
@@ -579,13 +617,9 @@ function executeContextAction(action, target, targetType) {
                 game.player.manualMoveTarget = { x: target.x, y: target.y };
                 const dx = target.x - game.player.gridX;
                 const dy = target.y - game.player.gridY;
-                let dir = null;
 
-                if (Math.abs(dx) >= Math.abs(dy)) {
-                    dir = dx > 0 ? 'right' : 'left';
-                } else {
-                    dir = dy > 0 ? 'down' : 'up';
-                }
+                // Calculate 8-directional movement
+                const dir = getDirectionFromDelta(dx, dy);
 
                 if (dir && typeof startPlayerMove === 'function') {
                     startPlayerMove(dir);
@@ -647,5 +681,6 @@ window.keys = keys;
 window.handleMovementInput = handleMovementInput;
 window.checkTileInteractions = checkTileInteractions;
 window.executeContextAction = executeContextAction;
+window.getDirectionFromDelta = getDirectionFromDelta;
 
 console.log('✅ Input handler loaded');

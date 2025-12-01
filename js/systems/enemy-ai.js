@@ -352,15 +352,18 @@ class EnemyAI {
         if (this.enemy.isMoving) return;
         const dx = tx - this.enemy.gridX, dy = ty - this.enemy.gridY;
         if (Math.abs(dx) < 0.1 && Math.abs(dy) < 0.1) return;
-        
+
+        // Calculate 8-directional movement
         let mx = 0, my = 0;
-        if (Math.abs(dx) > Math.abs(dy)) mx = dx > 0 ? 1 : -1;
-        else my = dy > 0 ? 1 : -1;
-        
+        if (dx > 0.1) mx = 1;
+        else if (dx < -0.1) mx = -1;
+        if (dy > 0.1) my = 1;
+        else if (dy < -0.1) my = -1;
+
         this._updateFacing(mx, my);
         const nx = this.enemy.gridX + mx, ny = this.enemy.gridY + my;
-        
-        if (this._shouldAvoidHazard(nx, ny, game) || !this._canMove(nx, ny, game)) {
+
+        if (this._shouldAvoidHazard(nx, ny, game) || !this._canMove(nx, ny, mx, my, game)) {
             this._tryAltMove(tx, ty, game, speedMult);
         } else {
             this._startMove(nx, ny, speedMult);
@@ -370,12 +373,16 @@ class EnemyAI {
     _moveAwayFrom(tx, ty, game, speedMult = 1.0) {
         if (this.enemy.isMoving) return;
         const dx = this.enemy.gridX - tx, dy = this.enemy.gridY - ty;
+
+        // Calculate 8-directional movement away from target
         let mx = 0, my = 0;
-        if (Math.abs(dx) > Math.abs(dy)) mx = dx > 0 ? 1 : -1;
-        else my = dy > 0 ? 1 : -1;
-        
+        if (dx > 0.1) mx = 1;
+        else if (dx < -0.1) mx = -1;
+        if (dy > 0.1) my = 1;
+        else if (dy < -0.1) my = -1;
+
         const nx = this.enemy.gridX + mx, ny = this.enemy.gridY + my;
-        if (this._canMove(nx, ny, game)) {
+        if (this._canMove(nx, ny, mx, my, game)) {
             this._updateFacing(mx, my);
             this._startMove(nx, ny, speedMult);
         }
@@ -390,7 +397,11 @@ class EnemyAI {
     }
     
     _tryAltMove(tx, ty, game, speedMult) {
-        const dirs = [{x:0,y:-1},{x:1,y:0},{x:0,y:1},{x:-1,y:0}];
+        // 8-directional alternatives: cardinals + diagonals
+        const dirs = [
+            {x:0,y:-1}, {x:1,y:0}, {x:0,y:1}, {x:-1,y:0},  // cardinals
+            {x:1,y:-1}, {x:1,y:1}, {x:-1,y:1}, {x:-1,y:-1}  // diagonals
+        ];
         for (let i = dirs.length - 1; i > 0; i--) {
             const j = Math.floor(Math.random() * (i + 1));
             [dirs[i], dirs[j]] = [dirs[j], dirs[i]];
@@ -398,7 +409,7 @@ class EnemyAI {
         const curDist = this._dist(tx, ty);
         for (const d of dirs) {
             const nx = this.enemy.gridX + d.x, ny = this.enemy.gridY + d.y;
-            if (this._shouldAvoidHazard(nx, ny, game) || !this._canMove(nx, ny, game)) continue;
+            if (this._shouldAvoidHazard(nx, ny, game) || !this._canMove(nx, ny, d.x, d.y, game)) continue;
             if (Math.sqrt((nx-tx)**2 + (ny-ty)**2) < curDist) {
                 this._updateFacing(d.x, d.y);
                 this._startMove(nx, ny, speedMult);
@@ -408,14 +419,28 @@ class EnemyAI {
     }
     
     _updateFacing(mx, my) {
-        if (Math.abs(mx) > Math.abs(my)) this.enemy.facing = mx > 0 ? 'right' : 'left';
-        else if (my !== 0) this.enemy.facing = my > 0 ? 'down' : 'up';
+        // For diagonal movement, use horizontal priority (matches player behavior)
+        if (mx !== 0 && my !== 0) {
+            // Diagonal - prioritize horizontal
+            this.enemy.facing = mx > 0 ? 'right' : 'left';
+        } else if (mx !== 0) {
+            this.enemy.facing = mx > 0 ? 'right' : 'left';
+        } else if (my !== 0) {
+            this.enemy.facing = my > 0 ? 'down' : 'up';
+        }
     }
-    
+
     _face(x, y) {
         const dx = x - this.enemy.gridX, dy = y - this.enemy.gridY;
-        if (Math.abs(dx) > Math.abs(dy)) this.enemy.facing = dx > 0 ? 'right' : 'left';
-        else this.enemy.facing = dy > 0 ? 'down' : 'up';
+        // For diagonal facing, use horizontal priority (matches player behavior)
+        if (Math.abs(dx) > 0.1 && Math.abs(dy) > 0.1) {
+            // Diagonal - prioritize horizontal
+            this.enemy.facing = dx > 0 ? 'right' : 'left';
+        } else if (Math.abs(dx) > Math.abs(dy)) {
+            this.enemy.facing = dx > 0 ? 'right' : 'left';
+        } else {
+            this.enemy.facing = dy > 0 ? 'down' : 'up';
+        }
     }
     
     _shouldAvoidHazard(x, y, game) {
@@ -423,19 +448,42 @@ class EnemyAI {
         return tile?.hazard && HazardSystem.shouldAvoid(this.enemy, tile.hazard);
     }
     
-    _canMove(x, y, game) {
+    _canMove(x, y, mx, my, game) {
         const tile = game.map?.[y]?.[x];
         if (!tile || tile.type === 'wall' || tile.type === 'void') return false;
         if (hasBlockingDecorationAt(x, y)) return false;
-        
+
+        // For diagonal moves, check adjacent tiles to prevent corner-cutting
+        if (mx !== 0 && my !== 0) {
+            // Check horizontal adjacent tile
+            const hTile = game.map?.[this.enemy.gridY]?.[this.enemy.gridX + mx];
+            if (!hTile || hTile.type === 'wall' || hTile.type === 'void') return false;
+            if (hasBlockingDecorationAt(this.enemy.gridX + mx, this.enemy.gridY)) return false;
+
+            // Check vertical adjacent tile
+            const vTile = game.map?.[this.enemy.gridY + my]?.[this.enemy.gridX];
+            if (!vTile || vTile.type === 'wall' || vTile.type === 'void') return false;
+            if (hasBlockingDecorationAt(this.enemy.gridX, this.enemy.gridY + my)) return false;
+        }
+
         for (const o of game.enemies) {
             if (o === this.enemy) continue;
             if (Math.floor(o.gridX) === x && Math.floor(o.gridY) === y) return false;
             if (MonsterSocialSystem.shouldAvoid(this.enemy, o)) {
                 if (Math.sqrt((o.gridX-x)**2 + (o.gridY-y)**2) < 2) return false;
             }
+            // For diagonal moves, also check adjacent tiles for enemy collision
+            if (mx !== 0 && my !== 0) {
+                if (Math.floor(o.gridX) === this.enemy.gridX + mx && Math.floor(o.gridY) === this.enemy.gridY) return false;
+                if (Math.floor(o.gridX) === this.enemy.gridX && Math.floor(o.gridY) === this.enemy.gridY + my) return false;
+            }
         }
         if (game.player?.gridX === x && game.player?.gridY === y) return false;
+        // For diagonal moves, check player in adjacent tiles too
+        if (mx !== 0 && my !== 0) {
+            if (game.player?.gridX === this.enemy.gridX + mx && game.player?.gridY === this.enemy.gridY) return false;
+            if (game.player?.gridX === this.enemy.gridX && game.player?.gridY === this.enemy.gridY + my) return false;
+        }
         return true;
     }
     
