@@ -5,7 +5,15 @@ window.contextMenu = {
     visible: false, x: 0, y: 0, target: null, targetType: null, options: [], hoveredOption: -1
 };
 
-window.inspectPopup = { visible: false, target: null, targetType: null };
+// Flag to prevent click-to-move after context menu action
+window.contextMenuJustClosed = false;
+
+// inspectPopup is now defined in input-handler.js and exported to window
+// We just ensure it exists with defaults if not yet loaded
+if (!window.inspectPopup) {
+    window.inspectPopup = { visible: false, target: null, targetType: null, tab: 0 };
+}
+
 let rightClickSystemInitialized = false;
 
 function initRightClickSystem() {
@@ -205,9 +213,13 @@ function handleContextMenuClick(e) {
         console.log('Click outside menu bounds');
     }
     
-    // Close menu
+    // Close menu and set flag to prevent click-to-move
     window.contextMenu.visible = false;
     window.contextMenu.hoveredOption = -1;
+    window.contextMenuJustClosed = true;
+
+    // Reset flag after a short delay (prevents the same click from triggering walk)
+    setTimeout(() => { window.contextMenuJustClosed = false; }, 50);
 }
 
 function executeContextAction(action, target, targetType) {
@@ -278,20 +290,39 @@ function handleInspectPopupClick(e) {
     const rect = canvas.getBoundingClientRect();
     const scaleX = canvas.width / rect.width;
     const scaleY = canvas.height / rect.height;
-    
+
     const mouseX = (e.clientX - rect.left) * scaleX;
     const mouseY = (e.clientY - rect.top) * scaleY;
-    
-    const popupWidth = 400;
-    const popupHeight = 300;
-    const popupX = (canvas.width - popupWidth) / 2;
-    const popupY = (canvas.height - popupHeight) / 2;
-    
-    if (mouseX < popupX || mouseX > popupX + popupWidth ||
-        mouseY < popupY || mouseY > popupY + popupHeight) {
-        console.log('Closing inspect popup');
-        window.inspectPopup.visible = false;
+
+    // New dimensions: 300x400, bottom-right position
+    const popupWidth = 300;
+    const popupHeight = 400;
+    const margin = 20;
+    const popupX = canvas.width - popupWidth - margin;
+    const popupY = canvas.height - popupHeight - margin;
+
+    // Check if click is inside popup
+    if (mouseX >= popupX && mouseX <= popupX + popupWidth &&
+        mouseY >= popupY && mouseY <= popupY + popupHeight) {
+
+        // Check for tab clicks
+        const tabY = popupY + 40;
+        const tabHeight = 22;
+        const tabWidth = popupWidth / 4;
+
+        if (mouseY >= tabY && mouseY <= tabY + tabHeight) {
+            const tabIndex = Math.floor((mouseX - popupX) / tabWidth);
+            if (tabIndex >= 0 && tabIndex <= 3) {
+                window.inspectPopup.tab = tabIndex;
+                console.log('Switched to tab:', tabIndex);
+            }
+        }
+        // Click inside popup, don't close
+        return;
     }
+
+    // Click outside popup - don't close (let player interact with game)
+    // Only close with ESC key
 }
 
 function handleEscapeKey(e) {

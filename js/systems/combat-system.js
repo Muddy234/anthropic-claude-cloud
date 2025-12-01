@@ -193,6 +193,12 @@ function performAttack(attacker, defender) {
  * Apply damage to an entity
  */
 function applyDamage(entity, damage, source) {
+    // DEBUG: Skip damage for player if godMode is enabled
+    if (entity === game.player && window.godMode) {
+        console.log('[DEBUG] God mode: Player took no damage');
+        return;
+    }
+
     // Apply damage reduction from status effects
     if (typeof StatusEffectSystem !== 'undefined') {
         const damageTakenMod = StatusEffectSystem.getStatModifier(entity, 'damageTaken');
@@ -544,6 +550,10 @@ if (typeof window !== 'undefined') {
     window.updateDamageNumbers = updateDamageNumbers;
     window.renderDamageNumbers = renderDamageNumbers;
     window.damageNumbers = damageNumbers;
+
+    // DEBUG: Enable god mode for testing (set to false for production)
+    window.godMode = true;
 }
 
 console.log('✅ Combat system loaded (3-layer damage integration)');
+console.log('⚠️ GOD MODE ENABLED - Player takes no damage');

@@ -456,6 +456,16 @@ const setupCanvasHandlers = () => {
             return;
         }
 
+        // Don't auto-walk if inspect popup is visible
+        if (inspectPopup.visible) {
+            return;
+        }
+
+        // Don't auto-walk if context menu just closed (prevents walk when clicking inspect)
+        if (window.contextMenuJustClosed) {
+            return;
+        }
+
         // Convert screen coords to grid coords
         const rect = canvas.getBoundingClientRect();
         const clickX = e.clientX - rect.left;
