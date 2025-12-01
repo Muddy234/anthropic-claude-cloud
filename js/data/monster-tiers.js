@@ -389,15 +389,19 @@ function buildCombatConfig(monsterName) {
         console.error(`[Tiers] Unknown monster: ${monsterName}`);
         return null;
     }
-    
+
     const overrides = MONSTER_AI_OVERRIDES[monsterName];
-    const attackRange = monsterData.attackType === 'magic' ? 5 : 1;
     const scalingStat = monsterData.attackType === 'magic' ? 'int' : 'str';
     const primaryStat = monsterData.attackType === 'magic' ? monsterData.int : monsterData.str;
     const baseDamage = Math.floor(8 + (primaryStat * 0.5));
-    
+
+    // Use individual monster attack properties from MONSTER_DATA
+    const attackRange = monsterData.attackRange || (monsterData.attackType === 'magic' ? 5 : 1);
+    const attackSpeed = monsterData.attackSpeed || 2.0;
+
     return {
         attackRange: attackRange,
+        attackSpeed: attackSpeed,
         baseDamage: baseDamage,
         scalingStat: scalingStat,
         scalingMultiplier: 1.0,
