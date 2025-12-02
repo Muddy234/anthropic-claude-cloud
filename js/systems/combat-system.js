@@ -629,11 +629,20 @@ const CombatSystemManager = {
     },
 
     update(dt) {
+        // Debug: Check if combat system is updating
+        if (game.player?.actionCooldowns?.baseAttack > 0) {
+            console.log('[CombatSystem.update] BEFORE dt:', dt, 'baseAttack:', game.player.actionCooldowns.baseAttack);
+        }
+
         updateCombat(dt);
         updateDamageNumbers(dt);
         updateManaRegen(dt);
         updateGCD(dt);
         updateActionCooldowns(dt);
+
+        if (game.player?.actionCooldowns?.baseAttack > 0) {
+            console.log('[CombatSystem.update] AFTER baseAttack:', game.player.actionCooldowns.baseAttack);
+        }
 
         // Update projectiles if system is loaded
         if (typeof updateProjectiles === 'function') {
