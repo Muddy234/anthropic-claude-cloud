@@ -583,6 +583,8 @@ function updateGCD(deltaTime) {
  * Update action cooldowns
  */
 function updateActionCooldowns(deltaTime) {
+    console.error('🔥🔥🔥 UPDATE COOLDOWNS CALLED - deltaTime:', deltaTime, '🔥🔥🔥');
+
     const player = game.player;
     if (!player?.actionCooldowns) {
         console.log('[UpdateCooldowns] No actionCooldowns object on player!');
