@@ -193,15 +193,22 @@ function getEnemySpriteFrame(enemy) {
 // SYSTEM REGISTRATION
 // ============================================================================
 
+const MonsterAnimationSystemDef = {
+    name: 'monster-animation-system',
+
+    init(game) {
+        console.log('✅ Monster Animation System initialized');
+    },
+
+    update(dt) {
+        updateMonsterAnimations(dt);
+    }
+};
+
 if (typeof SystemManager !== 'undefined') {
-    SystemManager.register({
-        name: 'MonsterAnimationSystem',
-        priority: 43,
-        update: updateMonsterAnimations,
-        init: () => {
-            console.log('✅ Monster Animation System initialized');
-        }
-    });
+    SystemManager.register('monster-animation-system', MonsterAnimationSystemDef, 43);
+} else {
+    console.warn('⚠️ SystemManager not found - monster-animation-system running standalone');
 }
 
 // ============================================================================
