@@ -24,16 +24,11 @@ function drawCombatActionBar(ctx, canvasWidth, canvasHeight) {
     const barPadding = 20;
     const numSlots = 4;
 
-    // Skills bar dimensions (from skills-ui.js) - need to position ABOVE it
-    const skillsBarHeight = 70;
-    const skillsBarPadding = 15;
-    const verticalGap = 10; // Gap between combat and skills bars
-
-    // Position (bottom-right, ABOVE the skills action bar to avoid overlap)
+    // Position at bottom-right (simple positioning)
     const barWidth = (slotSize * numSlots) + (slotSpacing * (numSlots - 1));
     const barHeight = slotSize;
     const barX = canvasWidth - barWidth - barPadding;
-    const barY = canvasHeight - barHeight - skillsBarHeight - skillsBarPadding - verticalGap - barPadding;
+    const barY = canvasHeight - barHeight - barPadding - 90; // 90px from bottom to avoid skills bar
 
     // Draw each slot
     for (let i = 0; i < numSlots; i++) {
@@ -443,6 +438,60 @@ function getMagicManaCost(element) {
 function findItemInPlayerInventory(player, itemId) {
     if (!player.inventory) return null;
     return player.inventory.find(item => item.id === itemId);
+}
+
+// ============================================================================
+// CLICK HANDLER
+// ============================================================================
+
+/**
+ * Initialize action bar click detection
+ */
+function initActionBarClickHandler() {
+    if (typeof canvas === 'undefined') {
+        console.warn('Canvas not found for action bar click handler');
+        return;
+    }
+
+    canvas.addEventListener('click', (e) => {
+        if (game.state !== 'playing') return;
+        if (!game.player) return;
+
+        const rect = canvas.getBoundingClientRect();
+        const clickX = e.clientX - rect.left;
+        const clickY = e.clientY - rect.top;
+
+        // Action bar configuration (must match drawCombatActionBar)
+        const slotSize = 60;
+        const slotSpacing = 8;
+        const barPadding = 20;
+        const numSlots = 4;
+        const barWidth = (slotSize * numSlots) + (slotSpacing * (numSlots - 1));
+        const barHeight = slotSize;
+        const barX = canvas.width - barWidth - barPadding;
+        const barY = canvas.height - barHeight - barPadding - 90;
+
+        // Check if click is within action bar area
+        for (let i = 0; i < numSlots; i++) {
+            const slotX = barX + (i * (slotSize + slotSpacing));
+            const slotY = barY;
+
+            if (clickX >= slotX && clickX <= slotX + slotSize &&
+                clickY >= slotY && clickY <= slotY + slotSize) {
+                // Clicked on slot i+1
+                const hotkey = i + 1;
+                if (typeof handleActiveCombatHotkey === 'function') {
+                    handleActiveCombatHotkey(hotkey, game.player);
+                }
+                return;
+            }
+        }
+    });
+}
+
+// Initialize on load
+if (typeof window !== 'undefined') {
+    window.addEventListener('load', initActionBarClickHandler);
 }
 
 // ============================================================================

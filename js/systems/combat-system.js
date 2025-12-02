@@ -41,6 +41,12 @@ function updateEntityCombat(entity, deltaTime) {
     const combat = entity.combat;
     if (!combat) return;
 
+    // ACTIVE COMBAT: Player uses hotkeys, doesn't auto-attack
+    if (entity === game.player) {
+        // Player manual combat only - no auto-attack
+        return;
+    }
+
     // Check if entity can act (not stunned, frozen, etc.)
     if (typeof canEntityAct === 'function' && !canEntityAct(entity)) {
         return;
@@ -60,10 +66,10 @@ function updateEntityCombat(entity, deltaTime) {
         return;
     }
 
-    // Ready to attack?
+    // Ready to attack? (Enemies only - player uses hotkeys)
     if (combat.attackCooldown <= 0) {
         performAttack(entity, combat.currentTarget);
-        
+
         // Calculate attack speed (lower = faster)
         const baseSpeed = combat.attackSpeed || 1.0;
         const attackTimeMs = COMBAT_CONFIG.baseAttackTime * baseSpeed;

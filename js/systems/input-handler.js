@@ -572,25 +572,21 @@ const setupCanvasHandlers = () => {
         );
 
         if (clickedEnemy) {
-            // Attack or engage the enemy
-            const dist = Math.max(
-                Math.abs(game.player.gridX - clickedEnemy.gridX),
-                Math.abs(game.player.gridY - clickedEnemy.gridY)
-            );
-
-            if (dist <= (game.player.combat?.attackRange || 1)) {
-                // In range - engage
-                const oldTarget = game.player.combat.currentTarget;
-                if (oldTarget && oldTarget !== clickedEnemy && oldTarget.combat) {
-                    disengageCombat(oldTarget);
-                }
-                disengageCombat(game.player);
-                engageCombat(game.player, clickedEnemy);
-                return;
+            // ACTIVE COMBAT: Left-click targets enemy (doesn't auto-attack)
+            const oldTarget = game.player.combat?.currentTarget;
+            if (oldTarget && oldTarget !== clickedEnemy && oldTarget.combat) {
+                disengageCombat(oldTarget);
             }
+            disengageCombat(game.player);
+            engageCombat(game.player, clickedEnemy);
+            return;
         }
 
-        // No enemy clicked - move toward position
+        // ACTIVE COMBAT: No enemy clicked - do nothing (no auto-walk)
+        // Player must use WASD to move
+        return;
+
+        // (Old auto-walk code disabled for active combat)
         if (game.player.combat.isInCombat && game.player.combat.currentTarget) {
             const targetDist = Math.max(
                 Math.abs(gridX - Math.floor(game.player.combat.currentTarget.gridX)),
