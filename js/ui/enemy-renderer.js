@@ -60,18 +60,13 @@ function tryDrawEnemySprite(ctx, enemy, ex, ey, cx, cy, tileSize) {
     const spriteWidth = frameData.frameWidth;
     const spriteHeight = frameData.frameHeight;
 
-    // Scale sprite to fit tile while maintaining aspect ratio
-    let drawWidth = tileSize;
-    let drawHeight = tileSize;
+    // Scale sprite to 1.5x tile size for better visibility
+    const targetSize = tileSize * 1.5;
+    const scale = Math.min(targetSize / spriteWidth, targetSize / spriteHeight);
+    const drawWidth = spriteWidth * scale;
+    const drawHeight = spriteHeight * scale;
 
-    // If sprite is larger than tile, scale down
-    if (spriteWidth > tileSize || spriteHeight > tileSize) {
-        const scale = Math.min(tileSize / spriteWidth, tileSize / spriteHeight);
-        drawWidth = spriteWidth * scale;
-        drawHeight = spriteHeight * scale;
-    }
-
-    // Center in tile
+    // Center in tile (sprite will overflow tile bounds, which is desired)
     const spriteX = ex + (tileSize - drawWidth) / 2;
     const spriteY = ey + (tileSize - drawHeight) / 2;
 

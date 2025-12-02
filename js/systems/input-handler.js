@@ -35,10 +35,30 @@ window.addEventListener('keydown', e => {
         return;
     }
 
-    // Tab switching for inspect popup (left/right arrows or Tab)
-    if (inspectPopup.visible) {
-        if (e.key === 'ArrowRight' || e.key === 'Tab') {
+    // Tab switching for inspect popup
+    if (inspectPopup.visible && inspectPopup.targetType === 'enemy') {
+        // Shift+Tab: Cycle through enemies
+        if (e.key === 'Tab' && e.shiftKey) {
             e.preventDefault();
+            const visibleEnemies = game.enemies.filter(enemy => {
+                const tile = game.map?.[Math.floor(enemy.gridY)]?.[Math.floor(enemy.gridX)];
+                return tile && tile.visible && enemy.hp > 0;
+            });
+            if (visibleEnemies.length > 1) {
+                const currentIndex = visibleEnemies.indexOf(inspectPopup.target);
+                const nextIndex = (currentIndex + 1) % visibleEnemies.length;
+                inspectPopup.target = visibleEnemies[nextIndex];
+            }
+            return;
+        }
+        // Tab: Cycle through tabs
+        if (e.key === 'Tab') {
+            e.preventDefault();
+            inspectPopup.tab = (inspectPopup.tab + 1) % 4;
+            return;
+        }
+        // Arrow keys: Cycle through tabs
+        if (e.key === 'ArrowRight') {
             inspectPopup.tab = (inspectPopup.tab + 1) % 4;
             return;
         }

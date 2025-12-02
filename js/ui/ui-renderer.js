@@ -219,25 +219,71 @@ function renderInspectPopup(ctx) {
     ctx.font = '10px monospace';
     ctx.fillStyle = '#666';
     ctx.textAlign = 'center';
-    ctx.fillText('ESC to close | ←/→ switch tabs', popupX + popupWidth / 2, popupY + popupHeight - 8);
+    const footerText = inspectPopup.targetType === 'enemy'
+        ? 'ESC to close | TAB: next tab | SHIFT+TAB: next enemy'
+        : 'ESC to close | ←/→ switch tabs';
+    ctx.fillText(footerText, popupX + popupWidth / 2, popupY + popupHeight - 8);
 }
 
 /**
  * STATS tab content
  */
 function renderInspectStatsTab(ctx, enemy, x, y, width, lh) {
-    // Image placeholder
+    // Image area
     const imgSize = 80;
     const imgX = x + (width - imgSize) / 2;
-    ctx.fillStyle = '#222';
-    ctx.fillRect(imgX, y, imgSize, imgSize);
-    ctx.strokeStyle = '#444';
-    ctx.lineWidth = 1;
-    ctx.strokeRect(imgX, y, imgSize, imgSize);
-    ctx.fillStyle = '#555';
-    ctx.textAlign = 'center';
-    ctx.font = '10px monospace';
-    ctx.fillText('[Portrait]', imgX + imgSize / 2, y + imgSize / 2 + 4);
+
+    // Try to draw animated sprite
+    let spriteDrawn = false;
+    if (typeof getEnemySpriteFrame === 'function') {
+        const frameData = getEnemySpriteFrame(enemy);
+        if (frameData) {
+            ctx.imageSmoothingEnabled = false;
+
+            // Draw background
+            ctx.fillStyle = '#222';
+            ctx.fillRect(imgX, y, imgSize, imgSize);
+
+            // Scale sprite to fit the portrait box
+            const scale = Math.min(imgSize / frameData.frameWidth, imgSize / frameData.frameHeight);
+            const drawWidth = frameData.frameWidth * scale;
+            const drawHeight = frameData.frameHeight * scale;
+            const spriteX = imgX + (imgSize - drawWidth) / 2;
+            const spriteY = y + (imgSize - drawHeight) / 2;
+
+            ctx.drawImage(
+                frameData.sprite,
+                frameData.sourceX,
+                frameData.sourceY,
+                frameData.sourceWidth,
+                frameData.sourceHeight,
+                spriteX,
+                spriteY,
+                drawWidth,
+                drawHeight
+            );
+
+            // Border
+            ctx.strokeStyle = '#444';
+            ctx.lineWidth = 1;
+            ctx.strokeRect(imgX, y, imgSize, imgSize);
+
+            spriteDrawn = true;
+        }
+    }
+
+    // Fallback: placeholder
+    if (!spriteDrawn) {
+        ctx.fillStyle = '#222';
+        ctx.fillRect(imgX, y, imgSize, imgSize);
+        ctx.strokeStyle = '#444';
+        ctx.lineWidth = 1;
+        ctx.strokeRect(imgX, y, imgSize, imgSize);
+        ctx.fillStyle = '#555';
+        ctx.textAlign = 'center';
+        ctx.font = '10px monospace';
+        ctx.fillText('[Portrait]', imgX + imgSize / 2, y + imgSize / 2 + 4);
+    }
 
     let lineY = y + imgSize + 20;
     ctx.textAlign = 'left';
