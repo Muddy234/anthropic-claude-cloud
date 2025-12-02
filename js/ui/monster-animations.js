@@ -28,8 +28,8 @@ const MONSTER_ANIMATIONS = {
 
     'Phantom': {
         spriteDir: 'Ghost',  // Maps to Ghost spritesheet folder
-        frameWidth: 32,
-        frameHeight: 32,
+        frameWidth: 64,
+        frameHeight: 64,
         animations: {
             run: {
                 fileName: 'ghost-run.png',
@@ -196,8 +196,8 @@ const MONSTER_ANIMATIONS = {
     'Magma Slime': {
         spriteDir: null,  // Legacy: single file in root Monsters folder
         legacyFile: 'Magmaslime.png',
-        frameWidth: 48,
-        frameHeight: 48,
+        frameWidth: 64,
+        frameHeight: 64,
         animations: {
             // NOTE: All animations use the same frames until separate sprites are created
             run: {
@@ -368,3 +368,4 @@ if (typeof window !== 'undefined') {
 }
 
 console.log('✅ Monster animations loaded:', Object.keys(MONSTER_ANIMATIONS).length, 'monsters configured');
+
