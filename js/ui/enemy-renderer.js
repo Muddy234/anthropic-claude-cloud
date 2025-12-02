@@ -160,9 +160,8 @@ function drawEnemy(ctx, enemy, camX, camY, tileSize, offsetX) {
         ctx.textAlign = 'center';
         ctx.fillText('!', cx, ey + 10);
     }
-    
-    // Draw health bar if damaged or in combat
-    const isTargeted = game.player?.combat?.currentTarget === enemy;
+
+    // Draw health bar if damaged or in combat (isTargeted already declared above)
     const isDamaged = enemy.hp < enemy.maxHp;
 
     if (isDamaged || enemy.combat?.isInCombat) {

@@ -9,12 +9,12 @@
 // ============================================================================
 
 /**
- * Draw the action bar (bottom-right of screen)
+ * Draw the combat action bar (bottom-right of screen)
  * @param {CanvasRenderingContext2D} ctx - Canvas context
  * @param {number} canvasWidth - Canvas width
  * @param {number} canvasHeight - Canvas height
  */
-function drawActionBar(ctx, canvasWidth, canvasHeight) {
+function drawCombatActionBar(ctx, canvasWidth, canvasHeight) {
     const player = game.player;
     if (!player) return;
 
@@ -428,7 +428,7 @@ function findItemInPlayerInventory(player, itemId) {
 // ============================================================================
 
 if (typeof window !== 'undefined') {
-    window.drawActionBar = drawActionBar;
+    window.drawCombatActionBar = drawCombatActionBar;
 }
 
 console.log('✅ Action bar UI loaded');

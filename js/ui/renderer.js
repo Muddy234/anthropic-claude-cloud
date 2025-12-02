@@ -804,9 +804,14 @@ const camY = game.camera.y;
         ctx.restore();
         drawTracker();
 
-        // Action bar (hotkeys 1-4)
+        // Combat action bar (hotkeys 1-4)
+        if (typeof drawCombatActionBar === 'function') {
+            drawCombatActionBar(ctx, canvas.width, canvas.height);
+        }
+
+        // Skills action bar (hotkeys 5-9) - from old skills system
         if (typeof drawActionBar === 'function') {
-            drawActionBar(ctx, canvas.width, canvas.height);
+            drawActionBar();
         }
         if (!game.merchant && game.state !== 'inventory' && game.state !== 'map' && game.state !== 'skills' && game.state !== 'moveset' && game.state !== 'levelup') {
             ctx.fillStyle = '#fff'; ctx.font = '20px monospace'; ctx.textAlign = 'left'; const msgX = TRACKER_WIDTH + 20; const msgY = canvas.height - 40;
