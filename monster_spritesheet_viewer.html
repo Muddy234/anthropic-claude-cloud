@@ -143,26 +143,42 @@
             <div class="control-group">
                 <label>Monster:</label>
                 <select id="monsterSelect">
-                    <option value="VampireRun.png">Vampire</option>
-                    <option value="Skeleton-Soldier.png">Skeleton Soldier</option>
-                    <option value="Minotaur.png">Minotaur</option>
-                    <option value="Necromancer.png">Necromancer</option>
-                    <option value="OrcMage.png">Orc Mage</option>
-                    <option value="GiantCrab.png">Giant Crab</option>
-                    <option value="Magmaslime.png">Magma Slime</option>
-                    <option value="PlantRun.png">Plant</option>
-                    <option value="AssasinTemplate.png">Assassin</option>
-                    <option value="MageTemplate.png">Mage</option>
-                    <option value="SpearmanTemplate.png">Spearman</option>
-                    <option value="SwordsmanTemplate.png">Swordsman</option>
+                    <optgroup label="🆕 New Format (Organized)">
+                        <option value="Ghost">Ghost</option>
+                        <option value="Vampire">Vampire</option>
+                    </optgroup>
+                    <optgroup label="📦 Legacy Format">
+                        <option value="VampireRun.png">Vampire (Legacy)</option>
+                        <option value="Skeleton-Soldier.png">Skeleton Soldier</option>
+                        <option value="Minotaur.png">Minotaur</option>
+                        <option value="Necromancer.png">Necromancer</option>
+                        <option value="OrcMage.png">Orc Mage</option>
+                        <option value="GiantCrab.png">Giant Crab</option>
+                        <option value="Magmaslime.png">Magma Slime</option>
+                        <option value="PlantRun.png">Plant</option>
+                        <option value="AssasinTemplate.png">Assassin</option>
+                        <option value="MageTemplate.png">Mage</option>
+                        <option value="SpearmanTemplate.png">Spearman</option>
+                        <option value="SwordsmanTemplate.png">Swordsman</option>
+                    </optgroup>
+                </select>
+            </div>
+
+            <div class="control-group" id="animTypeGroup" style="display: none;">
+                <label>Animation:</label>
+                <select id="animTypeSelect">
+                    <option value="run">Run</option>
+                    <option value="attack">Attack</option>
+                    <option value="hurt">Hurt</option>
+                    <option value="death">Death</option>
                 </select>
             </div>
 
             <div class="control-group">
                 <label>Frame Size:</label>
-                <input type="number" id="frameWidth" value="64" min="8" max="128" step="8">
+                <input type="number" id="frameWidth" value="32" min="8" max="128" step="8">
                 ×
-                <input type="number" id="frameHeight" value="64" min="8" max="128" step="8">
+                <input type="number" id="frameHeight" value="32" min="8" max="128" step="8">
                 <button onclick="reloadSpritesheet()">Apply</button>
             </div>
 
@@ -225,6 +241,8 @@
         let animationInterval = null;
 
         const monsterSelect = document.getElementById('monsterSelect');
+        const animTypeSelect = document.getElementById('animTypeSelect');
+        const animTypeGroup = document.getElementById('animTypeGroup');
         const frameWidthInput = document.getElementById('frameWidth');
         const frameHeightInput = document.getElementById('frameHeight');
         const rowSelect = document.getElementById('rowSelect');
@@ -233,11 +251,25 @@
 
         function loadSpritesheet() {
             const monster = monsterSelect.value;
+            const animType = animTypeSelect.value;
+
+            // Determine if this is new format (no .png extension) or legacy
+            const isNewFormat = !monster.includes('.png');
+
+            let spritePath;
+            if (isNewFormat) {
+                // New format: Ghost/ghost-run.png
+                spritePath = `assets/spritesheet/Monsters/${monster}/${monster.toLowerCase()}-${animType}.png`;
+            } else {
+                // Legacy format: VampireRun.png
+                spritePath = `assets/spritesheet/Monsters/${monster}`;
+            }
+
             spritesheet = new Image();
-            spritesheet.src = `assets/spritesheet/Monsters/${monster}`;
+            spritesheet.src = spritePath;
 
             spritesheet.onload = () => {
-                console.log('✅ Spritesheet loaded:', monster);
+                console.log('✅ Spritesheet loaded:', spritePath);
                 console.log('   Dimensions:', spritesheet.width, 'x', spritesheet.height);
 
                 frameWidth = parseInt(frameWidthInput.value);
@@ -275,7 +307,7 @@
             };
 
             spritesheet.onerror = () => {
-                alert(`❌ Failed to load: ${monster}`);
+                alert(`❌ Failed to load: ${spritePath}`);
             };
         }
 
@@ -450,23 +482,25 @@
         }
 
         // Event listeners
-        monsterSelect.addEventListener('change', reloadSpritesheet);
-
-        rowSelect.addEventListener('change', () => {
-            if (isPlaying) toggleAnimation();
-            currentRow = parseInt(rowSelect.value);
-            currentFrame = 0;
-            drawAnimation();
-            createFrameStrip();
-            updateFrameInfo();
-        });
-
-        // Auto-detect frame size based on monster
         monsterSelect.addEventListener('change', () => {
             const monster = monsterSelect.value;
+            const isNewFormat = !monster.includes('.png');
 
-            // Set reasonable defaults based on monster
-            if (monster.includes('Vampire') || monster.includes('Plant')) {
+            // Show/hide animation type selector for new format monsters
+            if (isNewFormat) {
+                animTypeGroup.style.display = 'inline-block';
+            } else {
+                animTypeGroup.style.display = 'none';
+            }
+
+            // Auto-detect frame size based on monster
+            if (monster === 'Ghost') {
+                frameWidthInput.value = 32;
+                frameHeightInput.value = 32;
+            } else if (monster === 'Vampire') {
+                frameWidthInput.value = 64;
+                frameHeightInput.value = 64;
+            } else if (monster.includes('Vampire') || monster.includes('Plant')) {
                 frameWidthInput.value = 64;
                 frameHeightInput.value = 64;
             } else if (monster.includes('Skeleton') || monster.includes('Crab')) {
@@ -479,6 +513,19 @@
                 frameWidthInput.value = 64;
                 frameHeightInput.value = 64;
             }
+
+            reloadSpritesheet();
+        });
+
+        animTypeSelect.addEventListener('change', reloadSpritesheet);
+
+        rowSelect.addEventListener('change', () => {
+            if (isPlaying) toggleAnimation();
+            currentRow = parseInt(rowSelect.value);
+            currentFrame = 0;
+            drawAnimation();
+            createFrameStrip();
+            updateFrameInfo();
         });
 
         // Start
