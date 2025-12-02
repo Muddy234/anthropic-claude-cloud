@@ -96,7 +96,17 @@ function drawEnemy(ctx, enemy, camX, camY, tileSize, offsetX) {
         ctx.lineWidth = 3;
         ctx.stroke();
     }
-    
+
+    // Targeted enemy outline (red)
+    const isTargeted = game.player?.combat?.currentTarget === enemy;
+    if (isTargeted) {
+        ctx.strokeStyle = '#ff0000';
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.arc(cx, cy, radius + 2, 0, Math.PI * 2);
+        ctx.stroke();
+    }
+
     // Draw facing direction indicator
     ctx.strokeStyle = '#fff';
     ctx.lineWidth = 3;
@@ -151,9 +161,15 @@ function drawEnemy(ctx, enemy, camX, camY, tileSize, offsetX) {
         ctx.fillText('!', cx, ey + 10);
     }
     
-    // Draw health bar if in combat
-    if (enemy.combat && enemy.combat.isInCombat) {
-        drawEnemyHealthBar(ctx, ex, ey - 15, tileSize, enemy.hp, enemy.maxHp);
+    // Draw health bar if damaged or in combat
+    const isTargeted = game.player?.combat?.currentTarget === enemy;
+    const isDamaged = enemy.hp < enemy.maxHp;
+
+    if (isDamaged || enemy.combat?.isInCombat) {
+        // Larger health bar for targeted enemy
+        const barHeight = isTargeted ? 8 : 4;
+        const barY = isTargeted ? ey - 20 : ey - 15;
+        drawEnemyHealthBar(ctx, ex, barY, tileSize, enemy.hp, enemy.maxHp, isTargeted, barHeight);
     }
 }
 
@@ -207,21 +223,24 @@ function drawTierIndicator(ctx, enemy, cx, ey, tileSize) {
 /**
  * Draw health bar for enemy
  */
-function drawEnemyHealthBar(ctx, x, y, width, hp, maxHp) {
+function drawEnemyHealthBar(ctx, x, y, width, hp, maxHp, isTargeted, barHeight) {
+    // Default bar height if not specified
+    barHeight = barHeight || 4;
+
     const pct = Math.max(0, Math.min(1, hp / maxHp));
-    
+
     // Background
     ctx.fillStyle = '#333';
-    ctx.fillRect(x, y, width, 8);
-    
+    ctx.fillRect(x, y, width, barHeight);
+
     // Health fill
     ctx.fillStyle = pct > 0.5 ? '#2ecc71' : pct > 0.2 ? '#f1c40f' : '#e74c3c';
-    ctx.fillRect(x, y, width * pct, 8);
-    
-    // Border
-    ctx.strokeStyle = '#111';
-    ctx.lineWidth = 1;
-    ctx.strokeRect(x, y, width, 8);
+    ctx.fillRect(x, y, width * pct, barHeight);
+
+    // Border (yellow for targeted enemy, black for normal)
+    ctx.strokeStyle = isTargeted ? '#ffff00' : '#111';
+    ctx.lineWidth = isTargeted ? 2 : 1;
+    ctx.strokeRect(x, y, width, barHeight);
 }
 
 /**

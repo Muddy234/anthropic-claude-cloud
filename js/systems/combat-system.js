@@ -90,6 +90,14 @@ function engageCombat(attacker, target) {
     attacker.combat.currentTarget = target;
     attacker.combat.attackCooldown = COMBAT_CONFIG.engageDelay;
 
+    // Set active combat flag (blocks inventory for player)
+    if (attacker === game.player) {
+        attacker.inCombat = true;
+    }
+    if (target === game.player) {
+        target.inCombat = true;
+    }
+
     if (typeof addMessage === 'function') {
         addMessage(`Engaging ${target.name || 'target'}!`);
     }
@@ -111,10 +119,15 @@ function engageCombat(attacker, target) {
 
 function disengageCombat(entity) {
     if (!entity?.combat) return;
-    
+
     entity.combat.isInCombat = false;
     entity.combat.currentTarget = null;
     entity.combat.attackCooldown = 0;
+
+    // Clear active combat flag
+    if (entity === game.player) {
+        entity.inCombat = false;
+    }
 }
 
 // ============================================================================
@@ -529,22 +542,86 @@ function renderDamageNumbers(camX, camY, tileSize, offset) {
 }
 
 // ============================================================================
+// ACTIVE COMBAT SYSTEMS (Mana, GCD, Cooldowns)
+// ============================================================================
+
+/**
+ * Update mana regeneration for player
+ */
+function updateManaRegen(deltaTime) {
+    const player = game.player;
+    if (!player || player.mp === undefined) return;
+
+    // Regenerate mana (updates every frame, 100ms visual smoothness)
+    const regenAmount = (player.manaRegen / 1000) * deltaTime;  // Convert to per-frame
+    player.mp = Math.min(player.maxMp, player.mp + regenAmount);
+}
+
+/**
+ * Update global cooldown (GCD)
+ */
+function updateGCD(deltaTime) {
+    const player = game.player;
+    if (!player?.gcd) return;
+
+    if (player.gcd.active && player.gcd.remaining > 0) {
+        player.gcd.remaining -= deltaTime / 1000;
+        if (player.gcd.remaining <= 0) {
+            player.gcd.active = false;
+            player.gcd.remaining = 0;
+        }
+    }
+}
+
+/**
+ * Update action cooldowns
+ */
+function updateActionCooldowns(deltaTime) {
+    const player = game.player;
+    if (!player?.actionCooldowns) return;
+
+    const dt = deltaTime / 1000;
+    for (const key in player.actionCooldowns) {
+        if (player.actionCooldowns[key] > 0) {
+            player.actionCooldowns[key] = Math.max(0, player.actionCooldowns[key] - dt);
+        }
+    }
+
+    // Update item cooldowns
+    if (player.itemCooldowns) {
+        for (const itemId in player.itemCooldowns) {
+            if (player.itemCooldowns[itemId] > 0) {
+                player.itemCooldowns[itemId] = Math.max(0, player.itemCooldowns[itemId] - dt);
+            }
+        }
+    }
+}
+
+// ============================================================================
 // SYSTEM MANAGER REGISTRATION
 // ============================================================================
 
 const CombatSystemManager = {
     name: 'combat-system',
-    
+
     init(game) {
         damageNumbers.length = 0;
         console.log('[CombatSystem] Initialized');
     },
-    
+
     update(dt) {
         updateCombat(dt);
         updateDamageNumbers(dt);
+        updateManaRegen(dt);
+        updateGCD(dt);
+        updateActionCooldowns(dt);
+
+        // Update projectiles if system is loaded
+        if (typeof updateProjectiles === 'function') {
+            updateProjectiles(dt);
+        }
     },
-    
+
     cleanup() {
         damageNumbers.length = 0;
         if (game.player?.combat) {

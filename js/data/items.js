@@ -173,6 +173,72 @@ const CONSUMABLES = {
 };
 
 // ============================================================================
+// AMMO - Arrows and Bolts for ranged weapons
+// ============================================================================
+
+const AMMO = {
+    // === ARROWS (for bows) ===
+    'arrows': {
+        id: 'arrows', name: 'Arrows', type: 'ammo', subtype: 'arrow',
+        rarity: 'common', stackable: true, maxStack: 99,
+        description: 'Standard metal-tipped arrows for bows.',
+        goldValue: 1
+    },
+    'fire_arrows': {
+        id: 'fire_arrows', name: 'Fire Arrows', type: 'ammo', subtype: 'arrow',
+        rarity: 'uncommon', stackable: true, maxStack: 99,
+        element: 'fire', elementPower: 2,
+        description: 'Arrows tipped with flaming oil.',
+        goldValue: 5
+    },
+    'ice_arrows': {
+        id: 'ice_arrows', name: 'Ice Arrows', type: 'ammo', subtype: 'arrow',
+        rarity: 'uncommon', stackable: true, maxStack: 99,
+        element: 'ice', elementPower: 2,
+        description: 'Arrows infused with freezing magic.',
+        goldValue: 5
+    },
+    'poison_arrows': {
+        id: 'poison_arrows', name: 'Poison Arrows', type: 'ammo', subtype: 'arrow',
+        rarity: 'uncommon', stackable: true, maxStack: 99,
+        element: 'nature', elementPower: 2,
+        special: { poisonChance: 0.30 },
+        description: 'Arrows coated with deadly poison.',
+        goldValue: 5
+    },
+
+    // === BOLTS (for crossbows) ===
+    'bolts': {
+        id: 'bolts', name: 'Bolts', type: 'ammo', subtype: 'bolt',
+        rarity: 'common', stackable: true, maxStack: 99,
+        description: 'Standard metal bolts for crossbows.',
+        goldValue: 2
+    },
+    'fire_bolts': {
+        id: 'fire_bolts', name: 'Fire Bolts', type: 'ammo', subtype: 'bolt',
+        rarity: 'uncommon', stackable: true, maxStack: 99,
+        element: 'fire', elementPower: 2,
+        description: 'Bolts tipped with flaming oil.',
+        goldValue: 6
+    },
+    'ice_bolts': {
+        id: 'ice_bolts', name: 'Ice Bolts', type: 'ammo', subtype: 'bolt',
+        rarity: 'uncommon', stackable: true, maxStack: 99,
+        element: 'ice', elementPower: 2,
+        description: 'Bolts infused with freezing magic.',
+        goldValue: 6
+    },
+    'poison_bolts': {
+        id: 'poison_bolts', name: 'Poison Bolts', type: 'ammo', subtype: 'bolt',
+        rarity: 'uncommon', stackable: true, maxStack: 99,
+        element: 'nature', elementPower: 2,
+        special: { poisonChance: 0.30 },
+        description: 'Bolts coated with deadly poison.',
+        goldValue: 6
+    }
+};
+
+// ============================================================================
 // MATERIALS - Crafting and selling items
 // ============================================================================
 
@@ -234,6 +300,7 @@ const QUEST_ITEMS = {
 
 const ITEMS_DATA = {
     ...CONSUMABLES,
+    ...AMMO,
     ...MATERIALS,
     ...QUEST_ITEMS
 };
@@ -366,6 +433,7 @@ function useItem(player, itemId) {
 // ============================================================================
 
 window.CONSUMABLES = CONSUMABLES;
+window.AMMO = AMMO;
 window.MATERIALS = MATERIALS;
 window.QUEST_ITEMS = QUEST_ITEMS;
 window.ITEMS_DATA = ITEMS_DATA;

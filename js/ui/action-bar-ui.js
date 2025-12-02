@@ -1,0 +1,434 @@
+// ============================================================================
+// ACTION BAR UI - Hotkey display (slots 1-4)
+// ============================================================================
+// Shows attack/consumable hotkeys with cooldowns, range indicators, and states
+// ============================================================================
+
+// ============================================================================
+// RENDERING
+// ============================================================================
+
+/**
+ * Draw the action bar (bottom-right of screen)
+ * @param {CanvasRenderingContext2D} ctx - Canvas context
+ * @param {number} canvasWidth - Canvas width
+ * @param {number} canvasHeight - Canvas height
+ */
+function drawActionBar(ctx, canvasWidth, canvasHeight) {
+    const player = game.player;
+    if (!player) return;
+
+    // Action bar configuration
+    const slotSize = 60;
+    const slotSpacing = 8;
+    const barPadding = 20;
+    const numSlots = 4;
+
+    // Position (bottom-right)
+    const barWidth = (slotSize * numSlots) + (slotSpacing * (numSlots - 1));
+    const barHeight = slotSize;
+    const barX = canvasWidth - barWidth - barPadding;
+    const barY = canvasHeight - barHeight - barPadding;
+
+    // Draw each slot
+    for (let i = 0; i < numSlots; i++) {
+        const slotX = barX + (i * (slotSize + slotSpacing));
+        const slotY = barY;
+        const hotkey = i + 1;
+
+        drawActionSlot(ctx, slotX, slotY, slotSize, hotkey, player);
+    }
+}
+
+/**
+ * Draw a single action slot
+ */
+function drawActionSlot(ctx, x, y, size, hotkey, player) {
+    // Determine slot state and content
+    const slotInfo = getSlotInfo(hotkey, player);
+
+    // Background
+    ctx.fillStyle = '#222222';
+    ctx.fillRect(x, y, size, size);
+
+    // Border color based on state
+    let borderColor = '#444444'; // Default (disabled)
+    let borderWidth = 2;
+
+    if (slotInfo.state === 'ready') {
+        borderColor = '#ffffff'; // Ready: white
+        borderWidth = 3;
+    } else if (slotInfo.state === 'outOfRange') {
+        borderColor = '#666666'; // Out of range: grey
+    } else if (slotInfo.state === 'outOfAmmo' || slotInfo.state === 'outOfMana') {
+        borderColor = '#ff0000'; // Out of resources: red
+    } else if (slotInfo.state === 'cooldown' || slotInfo.state === 'gcd') {
+        borderColor = '#888888'; // On cooldown: light grey
+    }
+
+    // Draw border
+    ctx.strokeStyle = borderColor;
+    ctx.lineWidth = borderWidth;
+    ctx.strokeRect(x, y, size, size);
+
+    // Icon (placeholder for now)
+    drawSlotIcon(ctx, x, y, size, slotInfo);
+
+    // Cooldown overlay
+    if (slotInfo.cooldown > 0) {
+        drawCooldownOverlay(ctx, x, y, size, slotInfo.cooldown, slotInfo.maxCooldown);
+    }
+
+    // Hotkey number
+    ctx.fillStyle = '#ffffff';
+    ctx.font = 'bold 14px monospace';
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'top';
+    ctx.fillText(hotkey.toString(), x + 4, y + 4);
+
+    // Cooldown text
+    if (slotInfo.cooldown > 0) {
+        const cdText = slotInfo.cooldown >= 10
+            ? Math.ceil(slotInfo.cooldown).toString()
+            : slotInfo.cooldown.toFixed(1);
+
+        ctx.fillStyle = '#ffff00';
+        ctx.font = 'bold 16px monospace';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(cdText + 's', x + size/2, y + size/2);
+    }
+}
+
+/**
+ * Get slot information (state, cooldown, etc.)
+ */
+function getSlotInfo(hotkey, player) {
+    const info = {
+        hotkey: hotkey,
+        name: '',
+        icon: null,
+        state: 'disabled',
+        cooldown: 0,
+        maxCooldown: 1,
+        canUse: false
+    };
+
+    // Check GCD first (affects all slots)
+    if (player.gcd?.active && player.gcd?.remaining > 0) {
+        info.state = 'gcd';
+        info.cooldown = player.gcd.remaining;
+        info.maxCooldown = player.gcd.duration;
+        return info;
+    }
+
+    // Hotkey-specific logic
+    switch(hotkey) {
+        case 1: // Base Attack
+            return getBaseAttackInfo(player);
+        case 2: // Skill Attack
+            return getSkillAttackInfo(player);
+        case 3: // Consumable 1
+            return getConsumableInfo(player, 'slot3');
+        case 4: // Consumable 2
+            return getConsumableInfo(player, 'slot4');
+    }
+
+    return info;
+}
+
+/**
+ * Get base attack slot info
+ */
+function getBaseAttackInfo(player) {
+    const info = {
+        hotkey: 1,
+        name: 'Base Attack',
+        icon: 'sword',
+        state: 'disabled',
+        cooldown: 0,
+        maxCooldown: 1,
+        canUse: false
+    };
+
+    // Check cooldown
+    if (player.actionCooldowns?.baseAttack > 0) {
+        info.state = 'cooldown';
+        info.cooldown = player.actionCooldowns.baseAttack;
+        info.maxCooldown = player.combat?.attackSpeed || 1.0;
+        return info;
+    }
+
+    // Check target
+    const target = player.combat?.currentTarget;
+    if (!target || target.hp <= 0) {
+        info.state = 'disabled';
+        return info;
+    }
+
+    // Check range
+    const weapon = player.equipped?.MAIN;
+    const range = weapon?.stats?.range || 1;
+    const distance = getDistanceToTarget(player, target);
+
+    if (distance > range) {
+        info.state = 'outOfRange';
+        return info;
+    }
+
+    // Check ammo/mana
+    const weaponType = getWeaponTypeFromPlayer(player);
+
+    if (weaponType === 'ranged') {
+        const ammoType = weapon?.weaponType === 'crossbow' ? 'bolts' : 'arrows';
+        if (!player.ammo || player.ammo[ammoType] <= 0) {
+            info.state = 'outOfAmmo';
+            return info;
+        }
+    }
+
+    if (weaponType === 'magic') {
+        const element = weapon?.element || 'arcane';
+        const manaCost = getMagicManaCost(element);
+        if (player.mp < manaCost) {
+            info.state = 'outOfMana';
+            return info;
+        }
+    }
+
+    // Ready to use!
+    info.state = 'ready';
+    info.canUse = true;
+    return info;
+}
+
+/**
+ * Get skill attack slot info
+ */
+function getSkillAttackInfo(player) {
+    const info = {
+        hotkey: 2,
+        name: 'Skill Attack',
+        icon: 'star',
+        state: 'disabled',
+        cooldown: 0,
+        maxCooldown: 10,
+        canUse: false
+    };
+
+    // Check cooldown
+    if (player.actionCooldowns?.skillAttack > 0) {
+        info.state = 'cooldown';
+        info.cooldown = player.actionCooldowns.skillAttack;
+        info.maxCooldown = 10;
+        return info;
+    }
+
+    // Check target
+    const target = player.combat?.currentTarget;
+    if (!target || target.hp <= 0) {
+        info.state = 'disabled';
+        return info;
+    }
+
+    // Check range
+    const weapon = player.equipped?.MAIN;
+    const range = weapon?.stats?.range || 1;
+    const distance = getDistanceToTarget(player, target);
+
+    if (distance > range) {
+        info.state = 'outOfRange';
+        return info;
+    }
+
+    // Check ammo/mana (same as base attack)
+    const weaponType = getWeaponTypeFromPlayer(player);
+
+    if (weaponType === 'ranged') {
+        const ammoType = weapon?.weaponType === 'crossbow' ? 'bolts' : 'arrows';
+        if (!player.ammo || player.ammo[ammoType] <= 0) {
+            info.state = 'outOfAmmo';
+            return info;
+        }
+    }
+
+    if (weaponType === 'magic') {
+        const element = weapon?.element || 'arcane';
+        const manaCost = getMagicManaCost(element);
+        if (player.mp < manaCost) {
+            info.state = 'outOfMana';
+            return info;
+        }
+    }
+
+    // Ready to use!
+    info.state = 'ready';
+    info.canUse = true;
+    return info;
+}
+
+/**
+ * Get consumable slot info
+ */
+function getConsumableInfo(player, slot) {
+    const slotNum = slot === 'slot3' ? 3 : 4;
+    const cooldownKey = slot === 'slot3' ? 'consumable3' : 'consumable4';
+
+    const info = {
+        hotkey: slotNum,
+        name: 'Consumable',
+        icon: 'potion',
+        state: 'disabled',
+        cooldown: 0,
+        maxCooldown: 10,
+        canUse: false
+    };
+
+    // Check if item assigned
+    const itemId = player.assignedConsumables?.[slot];
+    if (!itemId) {
+        info.state = 'disabled';
+        info.name = 'Empty';
+        return info;
+    }
+
+    // Get item
+    const item = findItemInPlayerInventory(player, itemId);
+    if (!item || item.count <= 0) {
+        info.state = 'disabled';
+        info.name = 'Out of Items';
+        return info;
+    }
+
+    info.name = item.name || 'Consumable';
+
+    // Check cooldown
+    if (player.actionCooldowns?.[cooldownKey] > 0) {
+        info.state = 'cooldown';
+        info.cooldown = player.actionCooldowns[cooldownKey];
+        info.maxCooldown = 10;
+        return info;
+    }
+
+    // Check item cooldown
+    if (player.itemCooldowns?.[itemId] > 0) {
+        info.state = 'cooldown';
+        info.cooldown = player.itemCooldowns[itemId];
+        info.maxCooldown = 10;
+        return info;
+    }
+
+    // Ready to use!
+    info.state = 'ready';
+    info.canUse = true;
+    return info;
+}
+
+/**
+ * Draw cooldown overlay (pie chart style)
+ */
+function drawCooldownOverlay(ctx, x, y, size, remaining, max) {
+    const progress = 1 - (remaining / max);
+
+    ctx.save();
+    ctx.globalAlpha = 0.7;
+    ctx.fillStyle = '#000000';
+
+    // Draw pie sector
+    const centerX = x + size / 2;
+    const centerY = y + size / 2;
+    const radius = size / 2;
+    const startAngle = -Math.PI / 2; // Start at top
+    const endAngle = startAngle + (progress * Math.PI * 2);
+
+    ctx.beginPath();
+    ctx.moveTo(centerX, centerY);
+    ctx.arc(centerX, centerY, radius, startAngle, endAngle);
+    ctx.closePath();
+    ctx.fill();
+
+    ctx.restore();
+}
+
+/**
+ * Draw slot icon (placeholder)
+ */
+function drawSlotIcon(ctx, x, y, size, slotInfo) {
+    const iconSize = 32;
+    const iconX = x + (size - iconSize) / 2;
+    const iconY = y + (size - iconSize) / 2 + 8;
+
+    ctx.fillStyle = '#666666';
+    ctx.font = `${iconSize}px monospace`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+
+    // Icon based on slot type
+    let icon = '?';
+
+    switch(slotInfo.icon) {
+        case 'sword':
+            icon = '⚔️';
+            break;
+        case 'star':
+            icon = '✨';
+            break;
+        case 'potion':
+            icon = '🧪';
+            break;
+    }
+
+    ctx.fillText(icon, x + size/2, iconY);
+}
+
+// ============================================================================
+// HELPER FUNCTIONS
+// ============================================================================
+
+function getDistanceToTarget(player, target) {
+    if (typeof getDistance === 'function') {
+        return getDistance(player, target);
+    }
+    const dx = player.gridX - target.gridX;
+    const dy = player.gridY - target.gridY;
+    return Math.sqrt(dx * dx + dy * dy);
+}
+
+function getWeaponTypeFromPlayer(player) {
+    const weapon = player.equipped?.MAIN;
+    if (!weapon) return 'melee';
+
+    const weaponType = weapon.weaponType || weapon.damageType;
+
+    if (['staff', 'wand', 'tome'].includes(weaponType)) {
+        return 'magic';
+    }
+
+    if (['bow', 'crossbow', 'throwing'].includes(weaponType)) {
+        return 'ranged';
+    }
+
+    return 'melee';
+}
+
+function getMagicManaCost(element) {
+    if (typeof MAGIC_CONFIG !== 'undefined' && MAGIC_CONFIG[element]) {
+        return MAGIC_CONFIG[element].manaCost;
+    }
+    return 12; // Default
+}
+
+function findItemInPlayerInventory(player, itemId) {
+    if (!player.inventory) return null;
+    return player.inventory.find(item => item.id === itemId);
+}
+
+// ============================================================================
+// EXPORTS
+// ============================================================================
+
+if (typeof window !== 'undefined') {
+    window.drawActionBar = drawActionBar;
+}
+
+console.log('✅ Action bar UI loaded');
