@@ -9,7 +9,7 @@ const MONSTER_DATA = {
         xp: 25, goldMin: 10, goldMax: 15,
         element: 'fire', attack: 'Slam', attackType: 'physical',
         attackRange: 1, attackSpeed: 2.5,  // Slow melee attacker
-        elite: false, moveInterval: 3, aggression: 2, spawnWeight: 10,
+        elite: false, moveInterval: 3, aggression: 2, spawnWeight: 30,  // TESTING: Increased for sprite animation testing
         loot: [
             { name: 'Magma Core', dropChance: 0.03, goldValue: 100 },
             { name: 'Ite', dropChance: 0.25, goldValue: 2 },
@@ -126,7 +126,7 @@ const MONSTER_DATA = {
         xp: 28, goldMin: 8, goldMax: 15,
         element: 'nature', attack: 'Spore Cloud', attackType: 'magic',
         attackRange: 3, attackSpeed: 2.2,  // Medium range AOE caster
-        elite: false, moveInterval: 2, aggression: 2, spawnWeight: 6,
+        elite: false, moveInterval: 2, aggression: 2, spawnWeight: 30,  // TESTING: Increased for sprite animation testing
         loot: [
             { name: 'Glowing Spore', dropChance: 0.04, goldValue: 80 },
             { name: 'Mushroom Cap', dropChance: 0.30, goldValue: 2 }
@@ -166,7 +166,7 @@ const MONSTER_DATA = {
         xp: 38, goldMin: 15, goldMax: 25,
         element: 'death', attack: 'Soul Drain', attackType: 'magic',
         attackRange: 3, attackSpeed: 2.0,  // Medium range life drainer
-        elite: false, moveInterval: 2, aggression: 3, spawnWeight: 4,
+        elite: false, moveInterval: 2, aggression: 3, spawnWeight: 30,  // TESTING: Increased for sprite animation testing
         loot: [
             { name: 'Ectoplasm', dropChance: 0.05, goldValue: 100 },
             { name: 'Spirit Dust', dropChance: 0.25, goldValue: 3 }
@@ -231,7 +231,7 @@ const MONSTER_DATA = {
         xp: 48, goldMin: 22, goldMax: 35,
         element: 'shadow', attack: 'Void Bolt', attackType: 'magic',
         attackRange: 4, attackSpeed: 1.8,  // Ranged void caster
-        elite: false, moveInterval: 2, aggression: 3, spawnWeight: 3,
+        elite: false, moveInterval: 2, aggression: 3, spawnWeight: 30,  // TESTING: Increased for sprite animation testing
         loot: [
             { name: 'Void Crystal', dropChance: 0.03, goldValue: 140 },
             { name: 'Shadow Essence', dropChance: 0.20, goldValue: 5 }

@@ -35,10 +35,30 @@ window.addEventListener('keydown', e => {
         return;
     }
 
-    // Tab switching for inspect popup (left/right arrows or Tab)
-    if (inspectPopup.visible) {
-        if (e.key === 'ArrowRight' || e.key === 'Tab') {
+    // Tab switching for inspect popup
+    if (inspectPopup.visible && inspectPopup.targetType === 'enemy') {
+        // Shift+Tab: Cycle through enemies
+        if (e.key === 'Tab' && e.shiftKey) {
             e.preventDefault();
+            const visibleEnemies = game.enemies.filter(enemy => {
+                const tile = game.map?.[Math.floor(enemy.gridY)]?.[Math.floor(enemy.gridX)];
+                return tile && tile.visible && enemy.hp > 0;
+            });
+            if (visibleEnemies.length > 1) {
+                const currentIndex = visibleEnemies.indexOf(inspectPopup.target);
+                const nextIndex = (currentIndex + 1) % visibleEnemies.length;
+                inspectPopup.target = visibleEnemies[nextIndex];
+            }
+            return;
+        }
+        // Tab: Cycle through tabs
+        if (e.key === 'Tab') {
+            e.preventDefault();
+            inspectPopup.tab = (inspectPopup.tab + 1) % 4;
+            return;
+        }
+        // Arrow keys: Cycle through tabs
+        if (e.key === 'ArrowRight') {
             inspectPopup.tab = (inspectPopup.tab + 1) % 4;
             return;
         }
@@ -572,25 +592,21 @@ const setupCanvasHandlers = () => {
         );
 
         if (clickedEnemy) {
-            // Attack or engage the enemy
-            const dist = Math.max(
-                Math.abs(game.player.gridX - clickedEnemy.gridX),
-                Math.abs(game.player.gridY - clickedEnemy.gridY)
-            );
-
-            if (dist <= (game.player.combat?.attackRange || 1)) {
-                // In range - engage
-                const oldTarget = game.player.combat.currentTarget;
-                if (oldTarget && oldTarget !== clickedEnemy && oldTarget.combat) {
-                    disengageCombat(oldTarget);
-                }
-                disengageCombat(game.player);
-                engageCombat(game.player, clickedEnemy);
-                return;
+            // ACTIVE COMBAT: Left-click targets enemy (doesn't auto-attack)
+            const oldTarget = game.player.combat?.currentTarget;
+            if (oldTarget && oldTarget !== clickedEnemy && oldTarget.combat) {
+                disengageCombat(oldTarget);
             }
+            disengageCombat(game.player);
+            engageCombat(game.player, clickedEnemy);
+            return;
         }
 
-        // No enemy clicked - move toward position
+        // ACTIVE COMBAT: No enemy clicked - do nothing (no auto-walk)
+        // Player must use WASD to move
+        return;
+
+        // (Old auto-walk code disabled for active combat)
         if (game.player.combat.isInCombat && game.player.combat.currentTarget) {
             const targetDist = Math.max(
                 Math.abs(gridX - Math.floor(game.player.combat.currentTarget.gridX)),

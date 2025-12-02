@@ -9,12 +9,12 @@
 // ============================================================================
 
 /**
- * Draw the action bar (bottom-right of screen)
+ * Draw the combat action bar (bottom-right of screen)
  * @param {CanvasRenderingContext2D} ctx - Canvas context
  * @param {number} canvasWidth - Canvas width
  * @param {number} canvasHeight - Canvas height
  */
-function drawActionBar(ctx, canvasWidth, canvasHeight) {
+function drawCombatActionBar(ctx, canvasWidth, canvasHeight) {
     const player = game.player;
     if (!player) return;
 
@@ -24,7 +24,7 @@ function drawActionBar(ctx, canvasWidth, canvasHeight) {
     const barPadding = 20;
     const numSlots = 4;
 
-    // Position (bottom-right)
+    // Position at bottom-right corner
     const barWidth = (slotSize * numSlots) + (slotSpacing * (numSlots - 1));
     const barHeight = slotSize;
     const barX = canvasWidth - barWidth - barPadding;
@@ -44,60 +44,71 @@ function drawActionBar(ctx, canvasWidth, canvasHeight) {
  * Draw a single action slot
  */
 function drawActionSlot(ctx, x, y, size, hotkey, player) {
+    // Save canvas state
+    ctx.save();
+
     // Determine slot state and content
     const slotInfo = getSlotInfo(hotkey, player);
 
-    // Background
-    ctx.fillStyle = '#222222';
+    // LAYER 1: Black background for entire slot
+    ctx.fillStyle = '#1a1a1a';
     ctx.fillRect(x, y, size, size);
 
-    // Border color based on state
-    let borderColor = '#444444'; // Default (disabled)
+    // LAYER 2: Border based on state
+    let borderColor = '#555555'; // Default
     let borderWidth = 2;
 
     if (slotInfo.state === 'ready') {
-        borderColor = '#ffffff'; // Ready: white
+        borderColor = '#00ff00'; // Green for ready
         borderWidth = 3;
     } else if (slotInfo.state === 'outOfRange') {
-        borderColor = '#666666'; // Out of range: grey
+        borderColor = '#888888'; // Grey for out of range
     } else if (slotInfo.state === 'outOfAmmo' || slotInfo.state === 'outOfMana') {
-        borderColor = '#ff0000'; // Out of resources: red
+        borderColor = '#ff0000'; // Red for out of resources
     } else if (slotInfo.state === 'cooldown' || slotInfo.state === 'gcd') {
-        borderColor = '#888888'; // On cooldown: light grey
+        borderColor = '#ffaa00'; // Orange for cooldown
     }
 
-    // Draw border
     ctx.strokeStyle = borderColor;
     ctx.lineWidth = borderWidth;
-    ctx.strokeRect(x, y, size, size);
+    ctx.strokeRect(x + 1, y + 1, size - 2, size - 2);
 
-    // Icon (placeholder for now)
-    drawSlotIcon(ctx, x, y, size, slotInfo);
-
-    // Cooldown overlay
-    if (slotInfo.cooldown > 0) {
-        drawCooldownOverlay(ctx, x, y, size, slotInfo.cooldown, slotInfo.maxCooldown);
-    }
-
-    // Hotkey number
+    // LAYER 3: Icon text (centered in slot)
     ctx.fillStyle = '#ffffff';
-    ctx.font = 'bold 14px monospace';
+    ctx.font = 'bold 20px Arial';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+
+    let icon = '?';
+    if (slotInfo.icon === 'sword') icon = 'ATK';
+    else if (slotInfo.icon === 'star') icon = 'SKL';
+    else if (slotInfo.icon === 'potion') icon = 'USE';
+    else icon = '---';
+
+    ctx.fillText(icon, x + size/2, y + size/2);
+
+    // LAYER 4: Hotkey number (top-left corner)
+    ctx.fillStyle = '#ffff00';
+    ctx.font = 'bold 14px Arial';
     ctx.textAlign = 'left';
     ctx.textBaseline = 'top';
     ctx.fillText(hotkey.toString(), x + 4, y + 4);
 
-    // Cooldown text
+    // LAYER 5: Cooldown text (if on cooldown)
     if (slotInfo.cooldown > 0) {
         const cdText = slotInfo.cooldown >= 10
             ? Math.ceil(slotInfo.cooldown).toString()
             : slotInfo.cooldown.toFixed(1);
 
-        ctx.fillStyle = '#ffff00';
-        ctx.font = 'bold 16px monospace';
+        ctx.fillStyle = '#ff00ff';
+        ctx.font = 'bold 16px Arial';
         ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.fillText(cdText + 's', x + size/2, y + size/2);
+        ctx.textBaseline = 'bottom';
+        ctx.fillText(cdText + 's', x + size/2, y + size - 4);
     }
+
+    // Restore canvas state
+    ctx.restore();
 }
 
 /**
@@ -354,12 +365,13 @@ function drawCooldownOverlay(ctx, x, y, size, remaining, max) {
  * Draw slot icon (placeholder)
  */
 function drawSlotIcon(ctx, x, y, size, slotInfo) {
-    const iconSize = 32;
-    const iconX = x + (size - iconSize) / 2;
-    const iconY = y + (size - iconSize) / 2 + 8;
+    const iconSize = 28;
+    const iconX = x + size / 2;
+    const iconY = y + size / 2;
 
-    ctx.fillStyle = '#666666';
-    ctx.font = `${iconSize}px monospace`;
+    // Use simple text icons instead of emojis for compatibility
+    ctx.fillStyle = '#aaaaaa';
+    ctx.font = `bold ${iconSize}px Arial`;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
 
@@ -368,17 +380,20 @@ function drawSlotIcon(ctx, x, y, size, slotInfo) {
 
     switch(slotInfo.icon) {
         case 'sword':
-            icon = '⚔️';
+            icon = 'ATK';
             break;
         case 'star':
-            icon = '✨';
+            icon = 'SKL';
             break;
         case 'potion':
-            icon = '🧪';
+            icon = 'USE';
+            break;
+        default:
+            icon = '---';
             break;
     }
 
-    ctx.fillText(icon, x + size/2, iconY);
+    ctx.fillText(icon, iconX, iconY);
 }
 
 // ============================================================================
@@ -424,11 +439,65 @@ function findItemInPlayerInventory(player, itemId) {
 }
 
 // ============================================================================
+// CLICK HANDLER
+// ============================================================================
+
+/**
+ * Initialize action bar click detection
+ */
+function initActionBarClickHandler() {
+    if (typeof canvas === 'undefined') {
+        console.warn('Canvas not found for action bar click handler');
+        return;
+    }
+
+    canvas.addEventListener('click', (e) => {
+        if (game.state !== 'playing') return;
+        if (!game.player) return;
+
+        const rect = canvas.getBoundingClientRect();
+        const clickX = e.clientX - rect.left;
+        const clickY = e.clientY - rect.top;
+
+        // Action bar configuration (must match drawCombatActionBar)
+        const slotSize = 60;
+        const slotSpacing = 8;
+        const barPadding = 20;
+        const numSlots = 4;
+        const barWidth = (slotSize * numSlots) + (slotSpacing * (numSlots - 1));
+        const barHeight = slotSize;
+        const barX = canvas.width - barWidth - barPadding;
+        const barY = canvas.height - barHeight - barPadding;
+
+        // Check if click is within action bar area
+        for (let i = 0; i < numSlots; i++) {
+            const slotX = barX + (i * (slotSize + slotSpacing));
+            const slotY = barY;
+
+            if (clickX >= slotX && clickX <= slotX + slotSize &&
+                clickY >= slotY && clickY <= slotY + slotSize) {
+                // Clicked on slot i+1
+                const hotkey = i + 1;
+                if (typeof handleActiveCombatHotkey === 'function') {
+                    handleActiveCombatHotkey(hotkey, game.player);
+                }
+                return;
+            }
+        }
+    });
+}
+
+// Initialize on load
+if (typeof window !== 'undefined') {
+    window.addEventListener('load', initActionBarClickHandler);
+}
+
+// ============================================================================
 // EXPORTS
 // ============================================================================
 
 if (typeof window !== 'undefined') {
-    window.drawActionBar = drawActionBar;
+    window.drawCombatActionBar = drawCombatActionBar;
 }
 
 console.log('✅ Action bar UI loaded');

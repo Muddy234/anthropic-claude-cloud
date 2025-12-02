@@ -175,14 +175,20 @@ function initializePlayer() {
  */
 function initializeAllSystems() {
     console.log('[Init] Initializing systems...');
-    
+
+    // Load monster sprites
+    if (typeof loadMonsterSprites === 'function') {
+        loadMonsterSprites();
+        console.log('[Init] Loading monster sprites...');
+    }
+
     if (typeof SystemManager !== 'undefined') {
         // Register new systems if not already registered
         registerNewSystems();
-        
+
         // Initialize all systems
         SystemManager.initAll(game);
-        
+
         // Verify all expected systems are present
         SystemManager.verify();
     } else {

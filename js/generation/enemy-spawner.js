@@ -93,7 +93,12 @@ function spawnEnemiesInRoom(room, validTiles, enemyCount) {
         if (enemy) {
             game.enemies.push(enemy);
             spawnedCount++;
-            
+
+            // Initialize animation state
+            if (typeof initEnemyAnimation === 'function') {
+                initEnemyAnimation(enemy);
+            }
+
             // Register with AI system
             if (typeof AIManager !== 'undefined') {
                 AIManager.registerEnemy(enemy);

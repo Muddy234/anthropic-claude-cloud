@@ -43,6 +43,109 @@ function getFacingCoordinates(facing) {
 }
 
 /**
+ * Try to draw enemy as animated sprite
+ * @returns {boolean} True if sprite was drawn, false if should fall back to circle
+ */
+function tryDrawEnemySprite(ctx, enemy, ex, ey, cx, cy, tileSize) {
+    // Check if sprite rendering is available
+    if (typeof getEnemySpriteFrame !== 'function') return false;
+
+    const frameData = getEnemySpriteFrame(enemy);
+    if (!frameData) return false;
+
+    // Draw sprite
+    ctx.imageSmoothingEnabled = false; // Pixel art
+
+    // Center the sprite in the tile
+    const spriteWidth = frameData.frameWidth;
+    const spriteHeight = frameData.frameHeight;
+
+    // Scale sprite to 1.5x tile size for better visibility
+    const targetSize = tileSize * 1.5;
+    const scale = Math.min(targetSize / spriteWidth, targetSize / spriteHeight);
+    const drawWidth = spriteWidth * scale;
+    const drawHeight = spriteHeight * scale;
+
+    // Center in tile (sprite will overflow tile bounds, which is desired)
+    const spriteX = ex + (tileSize - drawWidth) / 2;
+    const spriteY = ey + (tileSize - drawHeight) / 2;
+
+    ctx.drawImage(
+        frameData.sprite,
+        frameData.sourceX,
+        frameData.sourceY,
+        frameData.sourceWidth,
+        frameData.sourceHeight,
+        spriteX,
+        spriteY,
+        drawWidth,
+        drawHeight
+    );
+
+    // Draw targeted outline for sprites
+    const isTargeted = game.player?.combat?.currentTarget === enemy;
+    if (isTargeted) {
+        ctx.strokeStyle = '#ff0000';
+        ctx.lineWidth = 3;
+        ctx.strokeRect(ex, ey, tileSize, tileSize);
+    }
+
+    return true; // Sprite drawn successfully
+}
+
+/**
+ * Draw enemy overlays (tier indicator, alerts, health bar)
+ * Works for both sprite and circle rendering
+ */
+function drawEnemyOverlays(ctx, enemy, ex, ey, cx, cy, tileSize) {
+    const isTargeted = game.player?.combat?.currentTarget === enemy;
+    const isElite = enemy.elite || enemy.tier === 'ELITE';
+
+    // Draw tier indicator
+    drawTierIndicator(ctx, enemy, cx, ey, tileSize);
+
+    // Draw alert indicators
+    if (enemy.ai) {
+        const state = enemy.ai.currentState;
+        if (state === 'chasing' || state === 'combat') {
+            ctx.fillStyle = '#f00';
+            ctx.font = 'bold 20px monospace';
+            ctx.textAlign = 'center';
+            ctx.fillText('!', cx, ey + 10);
+        } else if (state === 'alert' || state === 'searching') {
+            ctx.fillStyle = '#ff0';
+            ctx.font = 'bold 20px monospace';
+            ctx.textAlign = 'center';
+            ctx.fillText('?', cx, ey + 10);
+        } else if (state === 'shouting') {
+            // Shouting indicator - concentric circles
+            ctx.strokeStyle = 'rgba(255, 200, 0, 0.5)';
+            ctx.lineWidth = 2;
+            const progress = enemy.ai.shoutTimer / (enemy.aiConfig?.communication?.shoutDelay || 1);
+            for (let i = 0; i < 3; i++) {
+                const ringRadius = tileSize / 2 + 10 + (i * 8 * progress);
+                ctx.beginPath();
+                ctx.arc(cx, cy, ringRadius, 0, Math.PI * 2);
+                ctx.stroke();
+            }
+        }
+    } else if (enemy.state === 'chasing') {
+        ctx.fillStyle = '#f00';
+        ctx.font = 'bold 20px monospace';
+        ctx.textAlign = 'center';
+        ctx.fillText('!', cx, ey + 10);
+    }
+
+    // Draw health bar
+    const isDamaged = enemy.hp < enemy.maxHp;
+    if (isDamaged || enemy.combat?.isInCombat) {
+        const barHeight = isTargeted ? 8 : 4;
+        const barY = isTargeted ? ey - 20 : ey - 15;
+        drawEnemyHealthBar(ctx, ex, barY, tileSize, enemy.hp, enemy.maxHp, isTargeted, barHeight);
+    }
+}
+
+/**
  * Draw a single enemy with all visual elements
  * @param {CanvasRenderingContext2D} ctx - Canvas context
  * @param {Object} enemy - Enemy object
@@ -56,8 +159,17 @@ function drawEnemy(ctx, enemy, camX, camY, tileSize, offsetX) {
     const ey = (enemy.displayY - camY) * tileSize;
     const cx = ex + tileSize / 2;
     const cy = ey + tileSize / 2;
-    
-    // Get base color
+
+    // Try to draw sprite if available
+    const spriteDrawn = tryDrawEnemySprite(ctx, enemy, ex, ey, cx, cy, tileSize);
+
+    if (spriteDrawn) {
+        // Sprite was drawn successfully, still draw overlays
+        drawEnemyOverlays(ctx, enemy, ex, ey, cx, cy, tileSize);
+        return;
+    }
+
+    // Fallback: Get base color and draw circle
     const baseColor = MONSTER_COLORS[enemy.name] || '#e74c3c';
     
     // Calculate radius based on elite status
@@ -125,52 +237,9 @@ function drawEnemy(ctx, enemy, camX, camY, tileSize, offsetX) {
     // Draw facing dot
     ctx.fillStyle = '#fff';
     ctx.fillRect(cx + facingX * len - 2, cy + facingY * len - 2, 4, 4);
-    
-    // === NEW: Draw tier indicator ===
-    drawTierIndicator(ctx, enemy, cx, ey, tileSize);
-    
-    // Draw alert indicator (! when chasing/alert)
-    if (enemy.ai) {
-        const state = enemy.ai.currentState;
-        if (state === 'chasing' || state === 'combat') {
-            ctx.fillStyle = '#f00';
-            ctx.font = 'bold 20px monospace';
-            ctx.textAlign = 'center';
-            ctx.fillText('!', cx, ey + 10);
-        } else if (state === 'alert' || state === 'searching') {
-            ctx.fillStyle = '#ff0';
-            ctx.font = 'bold 20px monospace';
-            ctx.textAlign = 'center';
-            ctx.fillText('?', cx, ey + 10);
-        } else if (state === 'shouting') {
-            // Shouting indicator - concentric circles
-            ctx.strokeStyle = 'rgba(255, 200, 0, 0.5)';
-            ctx.lineWidth = 2;
-            const progress = enemy.ai.shoutTimer / (enemy.aiConfig?.communication?.shoutDelay || 1);
-            for (let i = 0; i < 3; i++) {
-                const ringRadius = radius + 10 + (i * 8 * progress);
-                ctx.beginPath();
-                ctx.arc(cx, cy, ringRadius, 0, Math.PI * 2);
-                ctx.stroke();
-            }
-        }
-    } else if (enemy.state === 'chasing') {
-        ctx.fillStyle = '#f00';
-        ctx.font = 'bold 20px monospace';
-        ctx.textAlign = 'center';
-        ctx.fillText('!', cx, ey + 10);
-    }
-    
-    // Draw health bar if damaged or in combat
-    const isTargeted = game.player?.combat?.currentTarget === enemy;
-    const isDamaged = enemy.hp < enemy.maxHp;
 
-    if (isDamaged || enemy.combat?.isInCombat) {
-        // Larger health bar for targeted enemy
-        const barHeight = isTargeted ? 8 : 4;
-        const barY = isTargeted ? ey - 20 : ey - 15;
-        drawEnemyHealthBar(ctx, ex, barY, tileSize, enemy.hp, enemy.maxHp, isTargeted, barHeight);
-    }
+    // Draw overlays (tier, alerts, health bar)
+    drawEnemyOverlays(ctx, enemy, ex, ey, cx, cy, tileSize);
 }
 
 /**

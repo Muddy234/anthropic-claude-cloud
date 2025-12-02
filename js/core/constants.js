@@ -9,7 +9,7 @@
 const GRID_WIDTH = 200;
 const GRID_HEIGHT = 200;
 const TILE_SIZE = 16;
-const ZOOM_LEVEL = 2;
+const ZOOM_LEVEL = 2.5;  // Increased from 2.0 for better sprite visibility (25% zoom in)
 const TRACKER_WIDTH = 350;
 const CAMERA_DEADZONE_WIDTH = 200;
 const CAMERA_DEADZONE_HEIGHT = 150;

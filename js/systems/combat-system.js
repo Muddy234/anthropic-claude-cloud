@@ -41,6 +41,12 @@ function updateEntityCombat(entity, deltaTime) {
     const combat = entity.combat;
     if (!combat) return;
 
+    // ACTIVE COMBAT: Player uses hotkeys, doesn't auto-attack
+    if (entity === game.player) {
+        // Player manual combat only - no auto-attack
+        return;
+    }
+
     // Check if entity can act (not stunned, frozen, etc.)
     if (typeof canEntityAct === 'function' && !canEntityAct(entity)) {
         return;
@@ -60,10 +66,10 @@ function updateEntityCombat(entity, deltaTime) {
         return;
     }
 
-    // Ready to attack?
+    // Ready to attack? (Enemies only - player uses hotkeys)
     if (combat.attackCooldown <= 0) {
         performAttack(entity, combat.currentTarget);
-        
+
         // Calculate attack speed (lower = faster)
         const baseSpeed = combat.attackSpeed || 1.0;
         const attackTimeMs = COMBAT_CONFIG.baseAttackTime * baseSpeed;
@@ -574,13 +580,15 @@ function updateGCD(deltaTime) {
 }
 
 /**
- * Update action cooldowns
+ * Update active combat action cooldowns (renamed to avoid skill-system conflict)
  */
-function updateActionCooldowns(deltaTime) {
+function updateActiveCombatCooldowns(deltaTime) {
     const player = game.player;
     if (!player?.actionCooldowns) return;
 
     const dt = deltaTime / 1000;
+
+    // Update action cooldowns
     for (const key in player.actionCooldowns) {
         if (player.actionCooldowns[key] > 0) {
             player.actionCooldowns[key] = Math.max(0, player.actionCooldowns[key] - dt);
@@ -614,7 +622,7 @@ const CombatSystemManager = {
         updateDamageNumbers(dt);
         updateManaRegen(dt);
         updateGCD(dt);
-        updateActionCooldowns(dt);
+        updateActiveCombatCooldowns(dt);
 
         // Update projectiles if system is loaded
         if (typeof updateProjectiles === 'function') {

@@ -1,0 +1,535 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Monster Spritesheet Viewer - The Shifting Chasm</title>
+    <style>
+        body {
+            font-family: monospace;
+            background: #1a1a1a;
+            color: #fff;
+            padding: 20px;
+            margin: 0;
+        }
+
+        h1 {
+            text-align: center;
+            color: #FF6B6B;
+        }
+
+        .container {
+            max-width: 1600px;
+            margin: 0 auto;
+        }
+
+        .controls {
+            background: #2a2a2a;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+        }
+
+        .control-group {
+            display: inline-block;
+            margin-right: 30px;
+            margin-bottom: 10px;
+        }
+
+        label {
+            display: inline-block;
+            margin-right: 10px;
+            color: #FFD700;
+        }
+
+        select, input[type="number"], button {
+            background: #333;
+            color: #fff;
+            border: 1px solid #555;
+            padding: 8px 12px;
+            border-radius: 4px;
+            font-family: monospace;
+            cursor: pointer;
+        }
+
+        button {
+            background: #4CAF50;
+            border: none;
+            font-weight: bold;
+        }
+
+        button:hover {
+            background: #45a049;
+        }
+
+        button:active {
+            background: #3d8b40;
+        }
+
+        button.playing {
+            background: #FF6B6B;
+        }
+
+        .info {
+            background: #333;
+            padding: 15px;
+            border-radius: 5px;
+            margin-bottom: 20px;
+        }
+
+        .viewer {
+            background: #2a2a2a;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+        }
+
+        canvas {
+            border: 2px solid #FF6B6B;
+            display: block;
+            margin: 20px auto;
+            background: #000;
+            cursor: crosshair;
+        }
+
+        .animation-preview {
+            background: #2a2a2a;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            text-align: center;
+        }
+
+        .animation-preview canvas {
+            border: 2px solid #FFD700;
+            background: #000;
+        }
+
+        .frame-strip {
+            background: #333;
+            padding: 15px;
+            border-radius: 5px;
+            margin-top: 15px;
+            overflow-x: auto;
+            white-space: nowrap;
+        }
+
+        .frame-strip canvas {
+            display: inline-block;
+            border: 2px solid #555;
+            margin: 0 5px;
+            cursor: pointer;
+        }
+
+        .frame-strip canvas.active {
+            border-color: #FFD700;
+        }
+
+        .coord {
+            color: #FFD700;
+            font-weight: bold;
+        }
+
+        .grid-container {
+            text-align: center;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>👾 Monster Spritesheet Viewer</h1>
+
+        <div class="controls">
+            <div class="control-group">
+                <label>Monster:</label>
+                <select id="monsterSelect">
+                    <optgroup label="🆕 New Format (Organized)">
+                        <option value="Ghost">Ghost</option>
+                        <option value="Vampire">Vampire</option>
+                    </optgroup>
+                    <optgroup label="📦 Legacy Format">
+                        <option value="VampireRun.png">Vampire (Legacy)</option>
+                        <option value="Skeleton-Soldier.png">Skeleton Soldier</option>
+                        <option value="Minotaur.png">Minotaur</option>
+                        <option value="Necromancer.png">Necromancer</option>
+                        <option value="OrcMage.png">Orc Mage</option>
+                        <option value="GiantCrab.png">Giant Crab</option>
+                        <option value="Magmaslime.png">Magma Slime</option>
+                        <option value="PlantRun.png">Plant</option>
+                        <option value="AssasinTemplate.png">Assassin</option>
+                        <option value="MageTemplate.png">Mage</option>
+                        <option value="SpearmanTemplate.png">Spearman</option>
+                        <option value="SwordsmanTemplate.png">Swordsman</option>
+                    </optgroup>
+                </select>
+            </div>
+
+            <div class="control-group" id="animTypeGroup" style="display: none;">
+                <label>Animation:</label>
+                <select id="animTypeSelect">
+                    <option value="run">Run</option>
+                    <option value="attack">Attack</option>
+                    <option value="hurt">Hurt</option>
+                    <option value="death">Death</option>
+                </select>
+            </div>
+
+            <div class="control-group">
+                <label>Frame Size:</label>
+                <input type="number" id="frameWidth" value="32" min="8" max="128" step="8">
+                ×
+                <input type="number" id="frameHeight" value="32" min="8" max="128" step="8">
+                <button onclick="reloadSpritesheet()">Apply</button>
+            </div>
+
+            <div class="control-group">
+                <label>Animation Row:</label>
+                <select id="rowSelect">
+                    <option value="0">Row 0</option>
+                </select>
+            </div>
+
+            <div class="control-group">
+                <label>Speed (FPS):</label>
+                <input type="number" id="animSpeed" value="8" min="1" max="30">
+            </div>
+
+            <div class="control-group">
+                <button id="playButton" onclick="toggleAnimation()">▶️ Play</button>
+                <button onclick="stepFrame(-1)">◀️ Prev</button>
+                <button onclick="stepFrame(1)">▶️ Next</button>
+            </div>
+        </div>
+
+        <div class="info">
+            <h3>📊 Spritesheet Information:</h3>
+            <p><strong>Image Size:</strong> <span id="imageSize">Loading...</span></p>
+            <p><strong>Frame Size:</strong> <span id="frameSizeInfo">Loading...</span></p>
+            <p><strong>Grid Size:</strong> <span id="gridSize">Loading...</span></p>
+            <p><strong>Total Frames:</strong> <span id="totalFrames">Loading...</span></p>
+            <p><strong>Current Frame:</strong> <span class="coord"><span id="currentFrame">0</span> / <span id="maxFrame">0</span></span></p>
+        </div>
+
+        <div class="animation-preview">
+            <h3>🎬 Animation Preview (Row <span id="previewRow">0</span>):</h3>
+            <canvas id="animationCanvas" width="192" height="192"></canvas>
+            <p class="coord">Frame: <span id="animFrameNum">0</span></p>
+        </div>
+
+        <div class="frame-strip">
+            <h4>🎞️ Frame Strip:</h4>
+            <div id="frameStripContainer"></div>
+        </div>
+
+        <div class="viewer">
+            <h3>📐 Full Spritesheet Grid:</h3>
+            <div class="grid-container">
+                <canvas id="gridCanvas"></canvas>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let spritesheet = null;
+        let frameWidth = 64;
+        let frameHeight = 64;
+        let cols = 0;
+        let rows = 0;
+        let currentFrame = 0;
+        let currentRow = 0;
+        let isPlaying = false;
+        let animationInterval = null;
+
+        const monsterSelect = document.getElementById('monsterSelect');
+        const animTypeSelect = document.getElementById('animTypeSelect');
+        const animTypeGroup = document.getElementById('animTypeGroup');
+        const frameWidthInput = document.getElementById('frameWidth');
+        const frameHeightInput = document.getElementById('frameHeight');
+        const rowSelect = document.getElementById('rowSelect');
+        const animSpeed = document.getElementById('animSpeed');
+        const playButton = document.getElementById('playButton');
+
+        function loadSpritesheet() {
+            const monster = monsterSelect.value;
+            const animType = animTypeSelect.value;
+
+            // Determine if this is new format (no .png extension) or legacy
+            const isNewFormat = !monster.includes('.png');
+
+            let spritePath;
+            if (isNewFormat) {
+                // New format: Ghost/ghost-run.png
+                spritePath = `assets/spritesheet/Monsters/${monster}/${monster.toLowerCase()}-${animType}.png`;
+            } else {
+                // Legacy format: VampireRun.png
+                spritePath = `assets/spritesheet/Monsters/${monster}`;
+            }
+
+            spritesheet = new Image();
+            spritesheet.src = spritePath;
+
+            spritesheet.onload = () => {
+                console.log('✅ Spritesheet loaded:', spritePath);
+                console.log('   Dimensions:', spritesheet.width, 'x', spritesheet.height);
+
+                frameWidth = parseInt(frameWidthInput.value);
+                frameHeight = parseInt(frameHeightInput.value);
+
+                cols = Math.floor(spritesheet.width / frameWidth);
+                rows = Math.floor(spritesheet.height / frameHeight);
+
+                document.getElementById('imageSize').textContent =
+                    `${spritesheet.width}px × ${spritesheet.height}px`;
+                document.getElementById('frameSizeInfo').textContent =
+                    `${frameWidth}px × ${frameHeight}px`;
+                document.getElementById('gridSize').textContent =
+                    `${cols} columns × ${rows} rows`;
+                document.getElementById('totalFrames').textContent =
+                    `${cols * rows} frames`;
+
+                // Update row selector
+                rowSelect.innerHTML = '';
+                for (let i = 0; i < rows; i++) {
+                    const option = document.createElement('option');
+                    option.value = i;
+                    option.textContent = `Row ${i}`;
+                    rowSelect.appendChild(option);
+                }
+
+                currentFrame = 0;
+                currentRow = 0;
+                rowSelect.value = '0';
+
+                drawGrid();
+                drawAnimation();
+                createFrameStrip();
+                updateFrameInfo();
+            };
+
+            spritesheet.onerror = () => {
+                alert(`❌ Failed to load: ${spritePath}`);
+            };
+        }
+
+        function drawGrid() {
+            const canvas = document.getElementById('gridCanvas');
+            const scale = 2;
+            canvas.width = cols * frameWidth * scale;
+            canvas.height = rows * frameHeight * scale;
+
+            const ctx = canvas.getContext('2d');
+            ctx.imageSmoothingEnabled = false;
+
+            // Draw scaled spritesheet
+            ctx.drawImage(spritesheet, 0, 0, canvas.width, canvas.height);
+
+            // Draw grid
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.3)';
+            ctx.lineWidth = 1;
+
+            // Vertical lines
+            for (let col = 0; col <= cols; col++) {
+                ctx.beginPath();
+                ctx.moveTo(col * frameWidth * scale, 0);
+                ctx.lineTo(col * frameWidth * scale, canvas.height);
+                ctx.stroke();
+            }
+
+            // Horizontal lines
+            for (let row = 0; row <= rows; row++) {
+                ctx.beginPath();
+                ctx.moveTo(0, row * frameHeight * scale);
+                ctx.lineTo(canvas.width, row * frameHeight * scale);
+                ctx.stroke();
+            }
+
+            // Draw coordinates
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
+            ctx.font = 'bold 10px monospace';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+
+            for (let row = 0; row < rows; row++) {
+                for (let col = 0; col < cols; col++) {
+                    const x = col * frameWidth * scale + (frameWidth * scale) / 2;
+                    const y = row * frameHeight * scale + (frameHeight * scale) / 2;
+
+                    // Background for text
+                    ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+                    ctx.fillRect(
+                        col * frameWidth * scale + 2,
+                        row * frameHeight * scale + 2,
+                        frameWidth * scale - 4,
+                        12
+                    );
+
+                    // Coordinate text
+                    ctx.fillStyle = '#FFD700';
+                    ctx.fillText(`${row},${col}`, x, y);
+                }
+            }
+        }
+
+        function drawAnimation() {
+            const canvas = document.getElementById('animationCanvas');
+            const ctx = canvas.getContext('2d');
+            ctx.imageSmoothingEnabled = false;
+
+            ctx.fillStyle = '#000';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            const scale = 3;
+            const centerX = (canvas.width - frameWidth * scale) / 2;
+            const centerY = (canvas.height - frameHeight * scale) / 2;
+
+            ctx.drawImage(
+                spritesheet,
+                currentFrame * frameWidth, currentRow * frameHeight, frameWidth, frameHeight,
+                centerX, centerY, frameWidth * scale, frameHeight * scale
+            );
+
+            document.getElementById('animFrameNum').textContent = currentFrame;
+            document.getElementById('previewRow').textContent = currentRow;
+        }
+
+        function createFrameStrip() {
+            const container = document.getElementById('frameStripContainer');
+            container.innerHTML = '';
+
+            for (let col = 0; col < cols; col++) {
+                const canvas = document.createElement('canvas');
+                canvas.width = frameWidth * 2;
+                canvas.height = frameHeight * 2;
+                canvas.dataset.frame = col;
+
+                const ctx = canvas.getContext('2d');
+                ctx.imageSmoothingEnabled = false;
+
+                ctx.drawImage(
+                    spritesheet,
+                    col * frameWidth, currentRow * frameHeight, frameWidth, frameHeight,
+                    0, 0, frameWidth * 2, frameHeight * 2
+                );
+
+                if (col === currentFrame) {
+                    canvas.classList.add('active');
+                }
+
+                canvas.onclick = () => {
+                    currentFrame = col;
+                    drawAnimation();
+                    updateFrameInfo();
+                    updateFrameStrip();
+                };
+
+                container.appendChild(canvas);
+            }
+        }
+
+        function updateFrameStrip() {
+            const container = document.getElementById('frameStripContainer');
+            const canvases = container.getElementsByTagName('canvas');
+
+            for (let i = 0; i < canvases.length; i++) {
+                if (i === currentFrame) {
+                    canvases[i].classList.add('active');
+                } else {
+                    canvases[i].classList.remove('active');
+                }
+            }
+        }
+
+        function updateFrameInfo() {
+            document.getElementById('currentFrame').textContent = currentFrame;
+            document.getElementById('maxFrame').textContent = cols - 1;
+        }
+
+        function toggleAnimation() {
+            isPlaying = !isPlaying;
+
+            if (isPlaying) {
+                playButton.textContent = '⏸️ Pause';
+                playButton.classList.add('playing');
+
+                const fps = parseInt(animSpeed.value);
+                const frameTime = 1000 / fps;
+
+                animationInterval = setInterval(() => {
+                    currentFrame = (currentFrame + 1) % cols;
+                    drawAnimation();
+                    updateFrameInfo();
+                    updateFrameStrip();
+                }, frameTime);
+            } else {
+                playButton.textContent = '▶️ Play';
+                playButton.classList.remove('playing');
+                clearInterval(animationInterval);
+            }
+        }
+
+        function stepFrame(direction) {
+            if (isPlaying) toggleAnimation();
+
+            currentFrame = (currentFrame + direction + cols) % cols;
+            drawAnimation();
+            updateFrameInfo();
+            updateFrameStrip();
+        }
+
+        function reloadSpritesheet() {
+            if (isPlaying) toggleAnimation();
+            loadSpritesheet();
+        }
+
+        // Event listeners
+        monsterSelect.addEventListener('change', () => {
+            const monster = monsterSelect.value;
+            const isNewFormat = !monster.includes('.png');
+
+            // Show/hide animation type selector for new format monsters
+            if (isNewFormat) {
+                animTypeGroup.style.display = 'inline-block';
+            } else {
+                animTypeGroup.style.display = 'none';
+            }
+
+            // Auto-detect frame size based on monster
+            if (monster === 'Ghost') {
+                frameWidthInput.value = 32;
+                frameHeightInput.value = 32;
+            } else if (monster === 'Vampire') {
+                frameWidthInput.value = 64;
+                frameHeightInput.value = 64;
+            } else if (monster.includes('Vampire') || monster.includes('Plant')) {
+                frameWidthInput.value = 64;
+                frameHeightInput.value = 64;
+            } else if (monster.includes('Skeleton') || monster.includes('Crab')) {
+                frameWidthInput.value = 32;
+                frameHeightInput.value = 32;
+            } else if (monster.includes('Minotaur')) {
+                frameWidthInput.value = 48;
+                frameHeightInput.value = 48;
+            } else {
+                frameWidthInput.value = 64;
+                frameHeightInput.value = 64;
+            }
+
+            reloadSpritesheet();
+        });
+
+        animTypeSelect.addEventListener('change', reloadSpritesheet);
+
+        rowSelect.addEventListener('change', () => {
+            if (isPlaying) toggleAnimation();
+            currentRow = parseInt(rowSelect.value);
+            currentFrame = 0;
+            drawAnimation();
+            createFrameStrip();
+            updateFrameInfo();
+        });
+
+        // Start
+        loadSpritesheet();
+    </script>
+</body>
+</html>
