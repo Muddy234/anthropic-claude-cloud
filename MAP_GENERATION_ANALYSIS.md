@@ -6,11 +6,11 @@ Located in `js/generation/chamber-generator.js` (lines 12-25):
 
 ```javascript
 const CHAMBER_CONFIG = {
-    initialWallChance: 0.52,       // 52% walls initially (UPDATED from 0.45)
-    smoothingPasses: 5,            // Number of cellular automata passes (UPDATED from 4)
-    wallThreshold: 4,              // Floor needs 4+ neighbors to become wall (UPDATED from 5)
-    floorThreshold: 5,             // Wall needs 5+ neighbors to survive (UPDATED from 4)
-    minChamberSize: 25,            // Minimum tiles for a valid chamber (UPDATED from 16)
+    initialWallChance: 0.65,       // 65% walls initially (AGGRESSIVE SUBDIVISION)
+    smoothingPasses: 3,            // Number of cellular automata passes (REDUCED for barriers)
+    wallThreshold: 3,              // Floor needs 3+ neighbors to become wall (VERY EASY formation)
+    floorThreshold: 5,             // Wall needs 5+ neighbors to survive (STABLE)
+    minChamberSize: 40,            // Minimum tiles for a valid chamber (LARGER distinct spaces)
     corridorWidth: 2,              // Width of connecting corridors
     edgeBuffer: 2,                 // Keep edges clear for doorways
 }
@@ -18,16 +18,17 @@ const CHAMBER_CONFIG = {
 
 ### Birth/Survival Rules
 
-The cellular automata uses a **B4/S5** rule set (UPDATED from B5/S4):
+The cellular automata uses a **B3/S5** rule set (UPDATED from B4/S5):
 
 - **Wall Survival (S5)**: Walls stay walls if they have **5+ wall neighbors** (out of 8 total)
-- **Floor→Wall Birth (B4)**: Floors become walls if they have **4+ wall neighbors**
+- **Floor→Wall Birth (B3)**: Floors become walls if they have **3+ wall neighbors**
 
-This creates **balanced chamber formation** with good variety:
-1. Walls survive more reliably (need 5/8 neighbors - more stable)
-2. New walls form more readily (only need 4/8 neighbors)
-3. 52% initial density compensates for edge buffer reduction
-4. Extra smoothing pass creates organic shapes
+This creates **aggressive chamber subdivision** with distinct spaces:
+1. Very high initial density (65%) creates dense wall networks
+2. Walls form very easily (only need 3/8 neighbors - B3 rule)
+3. Walls survive reliably (need 5/8 neighbors - S5 rule)
+4. Less smoothing (3 passes) keeps walls jagged and barrier-like
+5. Higher min chamber size (40) filters fragments
 
 ### Standard Cave Generation Comparison
 
@@ -35,8 +36,10 @@ Common cellular automata cave rules:
 - **B678/S345678** (very cavernous): Birth on 6-8 neighbors, survive on 3-8
 - **B5678/S45678** (tighter caves): Birth on 5-8 neighbors, survive on 4-8
 
-**Previous system**: B5/S4 (too erosive, created massive open caverns)
-**Current system**: B4/S5 (balanced, creates 5-8 chambers per room)
+**System progression**:
+- B5/S4 (too erosive, massive open caverns)
+- B4/S5 (better density, but walls formed as blobs not barriers)
+- **B3/S5 (current)**: Aggressive subdivision with distinct chambers
 
 ---
 
@@ -53,7 +56,7 @@ Common cellular automata cave rules:
 **Root Cause:**
 B5/S4 rules were too erosive - walls died easily, new walls formed rarely. Initial 45% density → 35% after edge buffer → 19% after smoothing.
 
-### Fix Applied
+### First Fix Applied (B4/S5)
 
 Changed parameters to B4/S5 rules:
 - `initialWallChance`: 0.45 → **0.52** (+15.6%)
@@ -62,11 +65,32 @@ Changed parameters to B4/S5 rules:
 - `floorThreshold`: 4 → **5** (better wall survival)
 - `minChamberSize`: 16 → **25** (+56% filter threshold)
 
+### Second Test (10 maps) - AFTER FIRST FIX
+
+**Results:**
+- ✅ Wall density: **36.35%** (target achieved!)
+- ❌ Avg chambers per room: **1.33** (still too low, target: 6-8)
+- ❌ 72% of rooms had only 1 chamber
+- ❌ Avg chamber size: **604 tiles** (47% of room)
+- ❌ Dead ends: **0%** (no variety)
+
+**Problem Identified:**
+Walls formed as isolated **blobs/pillars** rather than **barriers** that subdivide space. Good wall density but poor spatial division.
+
+### Second Fix Applied (B3/S5 - AGGRESSIVE)
+
+Changed parameters to B3/S5 with aggressive subdivision:
+- `initialWallChance`: 0.52 → **0.65** (+25% for dense networks)
+- `smoothingPasses`: 5 → **3** (-2 to keep jagged barriers)
+- `wallThreshold`: 4 → **3** (walls form very easily)
+- `floorThreshold`: 5 → **5** (keep stable)
+- `minChamberSize`: 25 → **40** (+60% for distinct spaces)
+
 **Expected Results:**
-- ✅ 5-8 chambers per room
-- ✅ 28-35% wall density
-- ✅ 25-35% dead end ratio
-- ✅ Mix of 30-150 tile chambers
+- 5-8 distinct chambers per room
+- Walls that subdivide (not just decorate)
+- 25-35% dead end ratio
+- Mix of 80-200 tile chambers
 
 ---
 
