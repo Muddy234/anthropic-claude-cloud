@@ -43,9 +43,28 @@ function drawTracker() {
     ctx.fillText(`P.DEF: ${Math.floor(game.player.pDef)}`, px, y); y += 30;
     ctx.fillText(`M.DEF: ${Math.floor(game.player.mDef)}`, px, y); y += 30;
     y += 10;
-    ctx.fillText(`HP: ${Math.floor(game.player.hp)}/${game.player.maxHp}`, px, y); y += 30;
-    ctx.fillText(`STM: ${Math.floor(game.player.stamina)}/${game.player.maxStamina}`, px, y); y += 30;
-    ctx.fillText(`MANA: ${Math.floor(game.player.mana)}/${game.player.maxMana}`, px, y); y += 50;
+    // HP Bar
+    ctx.fillText(`HP: ${Math.floor(game.player.hp)}/${game.player.maxHp}`, px, y); y += 5;
+    const hpBarWidth = TRACKER_WIDTH - 160;
+    const hpPct = game.player.hp / game.player.maxHp;
+    ctx.fillStyle = '#333'; ctx.fillRect(px, y, hpBarWidth, 15);
+    ctx.fillStyle = '#e74c3c'; ctx.fillRect(px, y, hpBarWidth * hpPct, 15);
+    ctx.strokeStyle = '#fff'; ctx.strokeRect(px, y, hpBarWidth, 15);
+    y += 25;
+
+    // Mana Bar (new system: mp/maxMp)
+    const mp = Math.floor(game.player.mp || 0);
+    const maxMp = game.player.maxMp || 100;
+    ctx.fillStyle = '#fff';
+    ctx.fillText(`MP: ${mp}/${maxMp}`, px, y); y += 5;
+    const mpPct = mp / maxMp;
+    ctx.fillStyle = '#333'; ctx.fillRect(px, y, hpBarWidth, 15);
+    ctx.fillStyle = '#3498db'; ctx.fillRect(px, y, hpBarWidth * mpPct, 15);
+    ctx.strokeStyle = '#fff'; ctx.strokeRect(px, y, hpBarWidth, 15);
+    y += 25;
+
+    // Stamina (text only for now)
+    ctx.fillText(`STM: ${Math.floor(game.player.stamina)}/${game.player.maxStamina}`, px, y); y += 50;
     ctx.fillStyle = '#FFD700'; ctx.textAlign = 'center'; ctx.font = 'bold 24px monospace'; ctx.fillText(`GOLD: ${game.gold}`, cx, y); y += 50;
     ctx.fillStyle = '#FFD700'; ctx.fillText('INVENTORY', cx, y); y += 30;
     ctx.fillStyle = '#fff'; ctx.font = '16px monospace';
@@ -784,6 +803,11 @@ const camY = game.camera.y;
         if (typeof renderDamageNumbers === 'function') { renderDamageNumbers(camX, camY, effectiveTileSize, TRACKER_WIDTH); }
         ctx.restore();
         drawTracker();
+
+        // Action bar (hotkeys 1-4)
+        if (typeof drawActionBar === 'function') {
+            drawActionBar(ctx, canvas.width, canvas.height);
+        }
         if (!game.merchant && game.state !== 'inventory' && game.state !== 'map' && game.state !== 'skills' && game.state !== 'moveset' && game.state !== 'levelup') {
             ctx.fillStyle = '#fff'; ctx.font = '20px monospace'; ctx.textAlign = 'left'; const msgX = TRACKER_WIDTH + 20; const msgY = canvas.height - 40;
             if (game.messageLog.length > 0 && Date.now() - game.lastMessageTime < 3000) { ctx.fillText(game.messageLog[game.messageLog.length - 1].text, msgX, msgY); }
