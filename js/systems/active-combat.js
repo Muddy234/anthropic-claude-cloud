@@ -619,11 +619,14 @@ function removeItemFromInventory(player, itemId) {
 }
 
 function getDistance(entity1, entity2) {
-    if (typeof window.getDistance === 'function') {
-        return window.getDistance(entity1, entity2);
-    }
-    const dx = entity1.gridX - entity2.gridX;
-    const dy = entity1.gridY - entity2.gridY;
+    // Use Euclidean distance for ranged/magic attacks
+    const x1 = entity1.gridX ?? entity1.x;
+    const y1 = entity1.gridY ?? entity1.y;
+    const x2 = entity2.gridX ?? entity2.x;
+    const y2 = entity2.gridY ?? entity2.y;
+
+    const dx = x1 - x2;
+    const dy = y1 - y2;
     return Math.sqrt(dx * dx + dy * dy);
 }
 
