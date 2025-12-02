@@ -804,11 +804,6 @@ const camY = game.camera.y;
         ctx.restore();
         drawTracker();
 
-        // Combat action bar (hotkeys 1-4)
-        if (typeof drawCombatActionBar === 'function') {
-            drawCombatActionBar(ctx, canvas.width, canvas.height);
-        }
-
         // DISABLED: Old skills action bar (replaced by combat action bar)
         // if (typeof drawActionBar === 'function') {
         //     drawActionBar();
@@ -828,4 +823,9 @@ const camY = game.camera.y;
         ctx.fillStyle = '#e74c3c'; ctx.font = '64px monospace'; ctx.textAlign = 'center'; ctx.fillText('GAME OVER', canvas.width / 2, 500); ctx.fillStyle = '#fff'; ctx.font = '32px monospace'; ctx.fillText('Press SPACE to Restart', canvas.width / 2, 600);
     }
     if (typeof renderUIOverlays === 'function') { renderUIOverlays(ctx); }
+
+    // Combat action bar (hotkeys 1-4) - Draw AFTER overlays so icons appear on top
+    if (typeof drawCombatActionBar === 'function') {
+        drawCombatActionBar(ctx, canvas.width, canvas.height);
+    }
 }
