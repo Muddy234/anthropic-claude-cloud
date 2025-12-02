@@ -121,7 +121,6 @@ function isTileWalkable(gridX, gridY) {
  */
 function canMoveToPosition(newX, newY, oldX, oldY) {
     const WALL_MARGIN = 0.125;
-    const PLAYER_RADIUS = 0.3; // Player occupies a small radius
 
     // Get the tile coordinates
     const newTileX = Math.floor(newX);
@@ -136,63 +135,42 @@ function canMoveToPosition(newX, newY, oldX, oldY) {
     const fracX = newX - newTileX;
     const fracY = newY - newTileY;
 
-    // Check wall margins on all sides (with player radius)
-    // Left wall
-    if (fracX - PLAYER_RADIUS < WALL_MARGIN) {
-        if (!isTileWalkable(newTileX - 1, newTileY)) {
-            return false;
-        }
+    // Only check adjacent walls if we're close to the edge AND have a wall there
+    // Left edge - check if there's a wall to the left
+    if (fracX < WALL_MARGIN && !isTileWalkable(newTileX - 1, newTileY)) {
+        return false;
     }
-    // Right wall
-    if (fracX + PLAYER_RADIUS > (1 - WALL_MARGIN)) {
-        if (!isTileWalkable(newTileX + 1, newTileY)) {
-            return false;
-        }
+    // Right edge - check if there's a wall to the right
+    if (fracX > (1 - WALL_MARGIN) && !isTileWalkable(newTileX + 1, newTileY)) {
+        return false;
     }
-    // Top wall
-    if (fracY - PLAYER_RADIUS < WALL_MARGIN) {
-        if (!isTileWalkable(newTileX, newTileY - 1)) {
-            return false;
-        }
+    // Top edge - check if there's a wall above
+    if (fracY < WALL_MARGIN && !isTileWalkable(newTileX, newTileY - 1)) {
+        return false;
     }
-    // Bottom wall
-    if (fracY + PLAYER_RADIUS > (1 - WALL_MARGIN)) {
-        if (!isTileWalkable(newTileX, newTileY + 1)) {
-            return false;
-        }
+    // Bottom edge - check if there's a wall below
+    if (fracY > (1 - WALL_MARGIN) && !isTileWalkable(newTileX, newTileY + 1)) {
+        return false;
     }
 
     // For diagonal movement, check corners to prevent wall clipping
     const dx = newX - oldX;
     const dy = newY - oldY;
 
-    if (dx !== 0 && dy !== 0) {
-        // Moving diagonally - check both adjacent tiles
+    if (Math.abs(dx) > 0.001 && Math.abs(dy) > 0.001) {
+        // Moving diagonally - check the corner tile
         const moveRight = dx > 0;
         const moveDown = dy > 0;
 
-        // Check horizontal adjacent tile
-        const adjX = moveRight ? newTileX + 1 : newTileX - 1;
-        if (!isTileWalkable(adjX, newTileY)) {
-            // Wall on horizontal side - check if we're close enough to hit it
-            const distToWall = moveRight ? (1 - fracX) : fracX;
-            if (distToWall < WALL_MARGIN + PLAYER_RADIUS) {
-                return false;
-            }
-        }
+        const cornerX = moveRight ? newTileX + 1 : newTileX - 1;
+        const cornerY = moveDown ? newTileY + 1 : newTileY - 1;
 
-        // Check vertical adjacent tile
-        const adjY = moveDown ? newTileY + 1 : newTileY - 1;
-        if (!isTileWalkable(newTileX, adjY)) {
-            // Wall on vertical side - check if we're close enough to hit it
-            const distToWall = moveDown ? (1 - fracY) : fracY;
-            if (distToWall < WALL_MARGIN + PLAYER_RADIUS) {
-                return false;
-            }
-        }
+        // Check if moving into a diagonal corner with walls on both sides
+        const hasWallX = !isTileWalkable(cornerX, newTileY);
+        const hasWallY = !isTileWalkable(newTileX, cornerY);
 
-        // Check diagonal tile (corner)
-        if (!isTileWalkable(adjX, adjY)) {
+        // Block if both adjacent tiles are walls (corner cutting)
+        if (hasWallX && hasWallY) {
             return false;
         }
     }
