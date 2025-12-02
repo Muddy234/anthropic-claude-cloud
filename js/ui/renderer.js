@@ -813,12 +813,6 @@ const camY = game.camera.y;
             if (game.messageLog.length > 0 && Date.now() - game.lastMessageTime < 3000) { ctx.fillText(game.messageLog[game.messageLog.length - 1].text, msgX, msgY); }
         }
         drawNotification();
-        if (game.state === 'merchant') drawMerchant();
-        if (game.state === 'inventory') drawInventoryOverlay();
-        if (game.state === 'map') drawMapOverlay();
-        if (game.state === 'skills') drawSkillsOverlay();
-        if (game.state === 'moveset') drawMoveSetOverlay();
-        if (game.state === 'levelup') drawLevelUpScreen();
     } else if (game.state === 'gameover') {
         ctx.fillStyle = '#e74c3c'; ctx.font = '64px monospace'; ctx.textAlign = 'center'; ctx.fillText('GAME OVER', canvas.width / 2, 500); ctx.fillStyle = '#fff'; ctx.font = '32px monospace'; ctx.fillText('Press SPACE to Restart', canvas.width / 2, 600);
     }
@@ -828,4 +822,12 @@ const camY = game.camera.y;
     if (typeof drawCombatActionBar === 'function') {
         drawCombatActionBar(ctx, canvas.width, canvas.height);
     }
+
+    // Draw popup menus LAST so they appear on top of action icons
+    if (game.state === 'merchant') drawMerchant();
+    if (game.state === 'inventory') drawInventoryOverlay();
+    if (game.state === 'map') drawMapOverlay();
+    if (game.state === 'skills') drawSkillsOverlay();
+    if (game.state === 'moveset') drawMoveSetOverlay();
+    if (game.state === 'levelup') drawLevelUpScreen();
 }
