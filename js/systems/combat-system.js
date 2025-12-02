@@ -641,7 +641,10 @@ const CombatSystemManager = {
         updateDamageNumbers(dt);
         updateManaRegen(dt);
         updateGCD(dt);
+
+        console.error('⚡⚡⚡ ABOUT TO CALL updateActionCooldowns ⚡⚡⚡');
         updateActionCooldowns(dt);
+        console.error('⚡⚡⚡ RETURNED FROM updateActionCooldowns ⚡⚡⚡');
 
         if (game.player?.actionCooldowns?.baseAttack > 0) {
             console.log('[CombatSystem.update] AFTER baseAttack:', game.player.actionCooldowns.baseAttack);
