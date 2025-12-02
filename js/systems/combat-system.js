@@ -583,31 +583,17 @@ function updateGCD(deltaTime) {
  * Update active combat action cooldowns (renamed to avoid skill-system conflict)
  */
 function updateActiveCombatCooldowns(deltaTime) {
-    console.error('🔥🔥🔥 UPDATE COOLDOWNS CALLED - deltaTime:', deltaTime, '🔥🔥🔥');
-
     const player = game.player;
-    if (!player?.actionCooldowns) {
-        console.log('[UpdateCooldowns] No actionCooldowns object on player!');
-        return;
-    }
-
-    console.log('[UpdateCooldowns] Starting - actionCooldowns:', JSON.stringify(player.actionCooldowns), 'deltaTime:', deltaTime);
+    if (!player?.actionCooldowns) return;
 
     const dt = deltaTime / 1000;
 
+    // Update action cooldowns
     for (const key in player.actionCooldowns) {
-        const oldValue = player.actionCooldowns[key];
-        console.log(`[UpdateCooldowns] key="${key}" oldValue=${oldValue} dt=${dt}`);
-
-        if (oldValue > 0) {
-            const newValue = Math.max(0, oldValue - dt);
-            console.log(`[UpdateCooldowns] Attempting to set ${key} from ${oldValue} to ${newValue}`);
-            player.actionCooldowns[key] = newValue;
-            console.log(`[UpdateCooldowns] After assignment, ${key} is now:`, player.actionCooldowns[key]);
+        if (player.actionCooldowns[key] > 0) {
+            player.actionCooldowns[key] = Math.max(0, player.actionCooldowns[key] - dt);
         }
     }
-
-    console.log('[UpdateCooldowns] Finished - actionCooldowns:', JSON.stringify(player.actionCooldowns));
 
     // Update item cooldowns
     if (player.itemCooldowns) {
@@ -632,23 +618,11 @@ const CombatSystemManager = {
     },
 
     update(dt) {
-        // Debug: Check if combat system is updating
-        if (game.player?.actionCooldowns?.baseAttack > 0) {
-            console.log('[CombatSystem.update] BEFORE dt:', dt, 'baseAttack:', game.player.actionCooldowns.baseAttack);
-        }
-
         updateCombat(dt);
         updateDamageNumbers(dt);
         updateManaRegen(dt);
         updateGCD(dt);
-
-        console.error('⚡⚡⚡ ABOUT TO CALL updateActiveCombatCooldowns ⚡⚡⚡');
         updateActiveCombatCooldowns(dt);
-        console.error('⚡⚡⚡ RETURNED FROM updateActiveCombatCooldowns ⚡⚡⚡');
-
-        if (game.player?.actionCooldowns?.baseAttack > 0) {
-            console.log('[CombatSystem.update] AFTER baseAttack:', game.player.actionCooldowns.baseAttack);
-        }
 
         // Update projectiles if system is loaded
         if (typeof updateProjectiles === 'function') {

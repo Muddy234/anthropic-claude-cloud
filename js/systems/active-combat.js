@@ -89,30 +89,19 @@ function handleActiveCombatHotkey(key, player) {
 // ============================================================================
 
 function handleBaseAttack(player) {
-    console.log('[BaseAttack] Triggered', {
-        gcdActive: player.gcd?.active,
-        gcdRemaining: player.gcd?.remaining,
-        cooldown: player.actionCooldowns?.baseAttack,
-        target: player.combat?.currentTarget?.name,
-        targetHP: player.combat?.currentTarget?.hp
-    });
-
     // Check GCD
     if (player.gcd?.active) {
-        console.log('[BaseAttack] Blocked by GCD');
-        return; // Silently fail during GCD
+        return;
     }
 
     // Check cooldown
     if (player.actionCooldowns?.baseAttack > 0) {
-        console.log('[BaseAttack] Blocked by cooldown');
-        return; // Silently fail during cooldown
+        return;
     }
 
     // Check target
     const target = player.combat?.currentTarget;
     if (!target || target.hp <= 0) {
-        console.log('[BaseAttack] No valid target');
         if (typeof addMessage === 'function') {
             addMessage('No target selected!');
         }
@@ -129,12 +118,8 @@ function handleBaseAttack(player) {
     const range = weapon?.stats?.range || 1;
     const distance = getDistance(player, target);
     if (distance > range) {
-        console.log('[BaseAttack] Out of range', { distance, range });
-        // Out of range - silently fail (button will be greyed)
         return;
     }
-
-    console.log('[BaseAttack] Executing attack', { weaponType });
 
     // Execute attack based on weapon type
     switch(weaponType) {
