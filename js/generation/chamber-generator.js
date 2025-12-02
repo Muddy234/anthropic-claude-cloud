@@ -20,7 +20,41 @@ const CHAMBER_CONFIG = {
     minChamberSize: 16,            // Minimum tiles for a valid chamber
     corridorWidth: 2,              // Width of connecting corridors
     edgeBuffer: 2,                 // Keep edges clear for doorways
-    debugLogging: true
+    debugLogging: true,
+    trackStats: false              // Enable statistics tracking for analysis
+};
+
+// Statistics tracking (optional)
+const CHAMBER_STATS = {
+    enabled: false,
+    data: {
+        initialDensities: [],
+        smoothedDensities: [],
+        finalDensities: [],
+        chamberCounts: [],
+        chamberSizes: []
+    },
+
+    reset() {
+        this.data = {
+            initialDensities: [],
+            smoothedDensities: [],
+            finalDensities: [],
+            chamberCounts: [],
+            chamberSizes: []
+        };
+    },
+
+    record(type, value) {
+        if (!this.enabled) return;
+        if (this.data[type]) {
+            if (Array.isArray(value)) {
+                this.data[type].push(...value);
+            } else {
+                this.data[type].push(value);
+            }
+        }
+    }
 };
 
 // ============================================================================
@@ -65,8 +99,10 @@ function generateChambers(room) {
             if (grid[y][x] === 1) initialWalls++;
         }
     }
+    const initialDensity = initialWalls / (width * height);
+    CHAMBER_STATS.record('initialDensities', initialDensity);
     if (CHAMBER_CONFIG.debugLogging) {
-        console.log(`[ChamberGen] Initial walls: ${initialWalls} / ${width * height} (${(initialWalls / (width * height) * 100).toFixed(1)}%)`);
+        console.log(`[ChamberGen] Initial walls: ${initialWalls} / ${width * height} (${(initialDensity * 100).toFixed(1)}%)`);
     }
 
     // Run cellular automata smoothing
@@ -81,8 +117,10 @@ function generateChambers(room) {
             if (grid[y][x] === 1) smoothedWalls++;
         }
     }
+    const smoothedDensity = smoothedWalls / (width * height);
+    CHAMBER_STATS.record('smoothedDensities', smoothedDensity);
     if (CHAMBER_CONFIG.debugLogging) {
-        console.log(`[ChamberGen] After smoothing: ${smoothedWalls} walls (${(smoothedWalls / (width * height) * 100).toFixed(1)}%)`);
+        console.log(`[ChamberGen] After smoothing: ${smoothedWalls} walls (${(smoothedDensity * 100).toFixed(1)}%)`);
     }
 
     // Ensure doorway connectivity
@@ -101,9 +139,15 @@ function generateChambers(room) {
             if (grid[y][x] === 1) finalWalls++;
         }
     }
+    const finalDensity = finalWalls / (width * height);
+    CHAMBER_STATS.record('finalDensities', finalDensity);
     if (CHAMBER_CONFIG.debugLogging) {
-        console.log(`[ChamberGen] Final walls: ${finalWalls} (${(finalWalls / (width * height) * 100).toFixed(1)}%)`);
+        console.log(`[ChamberGen] Final walls: ${finalWalls} (${(finalDensity * 100).toFixed(1)}%)`);
     }
+
+    // Track chamber statistics
+    CHAMBER_STATS.record('chamberCounts', chambers.length);
+    CHAMBER_STATS.record('chamberSizes', chambers.map(c => c.size));
 
     // Apply grid to game map
     applyChamberGridToRoom(grid, room);
@@ -691,6 +735,7 @@ function isInSafeChamber(room, x, y) {
 
 if (typeof window !== 'undefined') {
     window.CHAMBER_CONFIG = CHAMBER_CONFIG;
+    window.CHAMBER_STATS = CHAMBER_STATS;
     window.generateChambers = generateChambers;
     window.getSafeSpawnChamber = getSafeSpawnChamber;
     window.isInSafeChamber = isInSafeChamber;
