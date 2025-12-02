@@ -50,63 +50,61 @@ function drawActionSlot(ctx, x, y, size, hotkey, player) {
     // Determine slot state and content
     const slotInfo = getSlotInfo(hotkey, player);
 
-    // Background
-    ctx.fillStyle = '#222222';
+    // LAYER 1: Black background for entire slot
+    ctx.fillStyle = '#1a1a1a';
     ctx.fillRect(x, y, size, size);
 
-    // Border color based on state
-    let borderColor = '#444444'; // Default (disabled)
+    // LAYER 2: Border based on state
+    let borderColor = '#555555'; // Default
     let borderWidth = 2;
 
     if (slotInfo.state === 'ready') {
-        borderColor = '#ffffff'; // Ready: white
+        borderColor = '#00ff00'; // Green for ready
         borderWidth = 3;
     } else if (slotInfo.state === 'outOfRange') {
-        borderColor = '#666666'; // Out of range: grey
+        borderColor = '#888888'; // Grey for out of range
     } else if (slotInfo.state === 'outOfAmmo' || slotInfo.state === 'outOfMana') {
-        borderColor = '#ff0000'; // Out of resources: red
+        borderColor = '#ff0000'; // Red for out of resources
     } else if (slotInfo.state === 'cooldown' || slotInfo.state === 'gcd') {
-        borderColor = '#888888'; // On cooldown: light grey
+        borderColor = '#ffaa00'; // Orange for cooldown
     }
 
-    // Draw border
     ctx.strokeStyle = borderColor;
     ctx.lineWidth = borderWidth;
-    ctx.strokeRect(x, y, size, size);
+    ctx.strokeRect(x + 1, y + 1, size - 2, size - 2);
 
-    // Draw icon background (for visibility)
-    const iconBgSize = 36;
-    const iconBgX = x + (size - iconBgSize) / 2;
-    const iconBgY = y + (size - iconBgSize) / 2;
-    ctx.fillStyle = '#333333';
-    ctx.fillRect(iconBgX, iconBgY, iconBgSize, iconBgSize);
-
-    // Icon (placeholder for now)
-    drawSlotIcon(ctx, x, y, size, slotInfo);
-
-    // Cooldown overlay
-    if (slotInfo.cooldown > 0) {
-        drawCooldownOverlay(ctx, x, y, size, slotInfo.cooldown, slotInfo.maxCooldown);
-    }
-
-    // Hotkey number (top-left corner)
+    // LAYER 3: Icon text (centered in slot)
     ctx.fillStyle = '#ffffff';
-    ctx.font = 'bold 16px Arial';
+    ctx.font = 'bold 20px Arial';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+
+    let icon = '?';
+    if (slotInfo.icon === 'sword') icon = 'ATK';
+    else if (slotInfo.icon === 'star') icon = 'SKL';
+    else if (slotInfo.icon === 'potion') icon = 'USE';
+    else icon = '---';
+
+    ctx.fillText(icon, x + size/2, y + size/2);
+
+    // LAYER 4: Hotkey number (top-left corner)
+    ctx.fillStyle = '#ffff00';
+    ctx.font = 'bold 14px Arial';
     ctx.textAlign = 'left';
     ctx.textBaseline = 'top';
-    ctx.fillText(hotkey.toString(), x + 6, y + 6);
+    ctx.fillText(hotkey.toString(), x + 4, y + 4);
 
-    // Cooldown text (center)
+    // LAYER 5: Cooldown text (if on cooldown)
     if (slotInfo.cooldown > 0) {
         const cdText = slotInfo.cooldown >= 10
             ? Math.ceil(slotInfo.cooldown).toString()
             : slotInfo.cooldown.toFixed(1);
 
-        ctx.fillStyle = '#ffff00';
-        ctx.font = 'bold 18px Arial';
+        ctx.fillStyle = '#ff00ff';
+        ctx.font = 'bold 16px Arial';
         ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.fillText(cdText + 's', x + size/2, y + size/2);
+        ctx.textBaseline = 'bottom';
+        ctx.fillText(cdText + 's', x + size/2, y + size - 4);
     }
 
     // Restore canvas state
