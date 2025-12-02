@@ -580,9 +580,9 @@ function updateGCD(deltaTime) {
 }
 
 /**
- * Update action cooldowns
+ * Update active combat action cooldowns (renamed to avoid skill-system conflict)
  */
-function updateActionCooldowns(deltaTime) {
+function updateActiveCombatCooldowns(deltaTime) {
     console.error('🔥🔥🔥 UPDATE COOLDOWNS CALLED - deltaTime:', deltaTime, '🔥🔥🔥');
 
     const player = game.player;
@@ -642,9 +642,9 @@ const CombatSystemManager = {
         updateManaRegen(dt);
         updateGCD(dt);
 
-        console.error('⚡⚡⚡ ABOUT TO CALL updateActionCooldowns ⚡⚡⚡');
-        updateActionCooldowns(dt);
-        console.error('⚡⚡⚡ RETURNED FROM updateActionCooldowns ⚡⚡⚡');
+        console.error('⚡⚡⚡ ABOUT TO CALL updateActiveCombatCooldowns ⚡⚡⚡');
+        updateActiveCombatCooldowns(dt);
+        console.error('⚡⚡⚡ RETURNED FROM updateActiveCombatCooldowns ⚡⚡⚡');
 
         if (game.player?.actionCooldowns?.baseAttack > 0) {
             console.log('[CombatSystem.update] AFTER baseAttack:', game.player.actionCooldowns.baseAttack);
