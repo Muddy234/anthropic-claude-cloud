@@ -24,11 +24,16 @@ function drawCombatActionBar(ctx, canvasWidth, canvasHeight) {
     const barPadding = 20;
     const numSlots = 4;
 
-    // Position (bottom-right)
+    // Skills bar dimensions (from skills-ui.js) - need to position ABOVE it
+    const skillsBarHeight = 70;
+    const skillsBarPadding = 15;
+    const verticalGap = 10; // Gap between combat and skills bars
+
+    // Position (bottom-right, ABOVE the skills action bar to avoid overlap)
     const barWidth = (slotSize * numSlots) + (slotSpacing * (numSlots - 1));
     const barHeight = slotSize;
     const barX = canvasWidth - barWidth - barPadding;
-    const barY = canvasHeight - barHeight - barPadding;
+    const barY = canvasHeight - barHeight - skillsBarHeight - skillsBarPadding - verticalGap - barPadding;
 
     // Draw each slot
     for (let i = 0; i < numSlots; i++) {
