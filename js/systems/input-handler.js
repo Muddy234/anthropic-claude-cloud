@@ -120,8 +120,14 @@ window.addEventListener('keydown', e => {
             return;
         }
 
-        // Open inventory
+        // Open inventory (blocked during combat)
         if (e.key === 'i' || e.key === 'I') {
+            if (game.player?.inCombat) {
+                if (typeof addMessage === 'function') {
+                    addMessage('Cannot access inventory during combat!');
+                }
+                return;
+            }
             game.state = 'inventory';
             game.inventoryTab = 0;
             return;

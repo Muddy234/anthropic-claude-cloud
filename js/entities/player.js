@@ -63,13 +63,18 @@ function createPlayer() {
         // ====================================================================
         // RESOURCES
         // ====================================================================
-        
+
         hp: 100,
         maxHp: 100,
         stamina: 100,
         maxStamina: 100,
-        mana: 50,
-        maxMana: 50,
+
+        // Mana system (for magic weapons)
+        mp: 100,                      // Current mana
+        maxMp: 100,                   // Max mana (fixed at 100)
+        manaRegen: 5,                 // Base mana regen per second
+        mana: 50,                     // Legacy (deprecated)
+        maxMana: 50,                  // Legacy (deprecated)
 
         // ====================================================================
         // ELEMENT & ATTUNEMENT
@@ -141,7 +146,7 @@ function createPlayer() {
         // ====================================================================
         // COMBAT STATE
         // ====================================================================
-        
+
         combat: {
             isInCombat: false,
             currentTarget: null,
@@ -150,6 +155,39 @@ function createPlayer() {
             autoRetaliate: true,
             attackRange: 1            // Melee range (updated by weapon)
         },
+
+        // Active combat system
+        inCombat: false,              // Combat state flag (blocks inventory)
+
+        // Global cooldown system
+        gcd: {
+            active: false,
+            remaining: 0,
+            duration: 0.5             // 500ms GCD
+        },
+
+        // Action cooldowns (individual)
+        actionCooldowns: {
+            baseAttack: 0,            // Hotkey 1
+            skillAttack: 0,           // Hotkey 2
+            consumable3: 0,           // Hotkey 3
+            consumable4: 0            // Hotkey 4
+        },
+
+        // Ammo system (for ranged weapons)
+        ammo: {
+            arrows: 0,
+            bolts: 0
+        },
+
+        // Consumable hotkey assignments
+        assignedConsumables: {
+            slot3: null,              // Item ID assigned to hotkey 3
+            slot4: null               // Item ID assigned to hotkey 4
+        },
+
+        // Item cooldowns (10s default for all consumables)
+        itemCooldowns: {},            // { itemId: remainingSeconds }
 
         // ====================================================================
         // STATUS
@@ -248,13 +286,17 @@ function recalculatePlayerStats(player) {
     // Calculate max HP from STA
     const totalSTA = stats.STA + bonusSTA;
     player.maxHp = 80 + (totalSTA * 2);  // 80 base + 2 per STA
-    
+
     // Calculate max Stamina from STA
     player.maxStamina = 80 + (totalSTA * 2);
-    
-    // Calculate max Mana from INT
+
+    // Calculate max Mana from INT (legacy system)
     const totalINT = stats.INT + bonusINT;
-    player.maxMana = 30 + (totalINT * 2);  // 30 base + 2 per INT
+    player.maxMana = 30 + (totalINT * 2);  // 30 base + 2 per INT (deprecated)
+
+    // New mana system: maxMp is fixed at 100, INT affects regen
+    player.maxMp = 100;
+    player.manaRegen = 5 * (1 + totalINT / 100);  // 5 base × (1 + INT/100)
 
     // Set defense values
     player.pDef = bonusPDef;
