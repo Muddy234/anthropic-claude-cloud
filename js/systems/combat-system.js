@@ -584,13 +584,26 @@ function updateGCD(deltaTime) {
  */
 function updateActionCooldowns(deltaTime) {
     const player = game.player;
-    if (!player?.actionCooldowns) return;
+    if (!player?.actionCooldowns) {
+        console.log('[UpdateCooldowns] No actionCooldowns object on player!');
+        return;
+    }
 
     const dt = deltaTime / 1000;
+    let anyChanged = false;
+
     for (const key in player.actionCooldowns) {
-        if (player.actionCooldowns[key] > 0) {
-            player.actionCooldowns[key] = Math.max(0, player.actionCooldowns[key] - dt);
+        const oldValue = player.actionCooldowns[key];
+        if (oldValue > 0) {
+            player.actionCooldowns[key] = Math.max(0, oldValue - dt);
+            if (player.actionCooldowns[key] !== oldValue) {
+                anyChanged = true;
+            }
         }
+    }
+
+    if (anyChanged) {
+        console.log('[UpdateCooldowns]', player.actionCooldowns);
     }
 
     // Update item cooldowns

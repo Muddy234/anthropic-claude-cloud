@@ -809,10 +809,10 @@ const camY = game.camera.y;
             drawCombatActionBar(ctx, canvas.width, canvas.height);
         }
 
-        // Skills action bar (hotkeys 5-9) - from old skills system
-        if (typeof drawActionBar === 'function') {
-            drawActionBar();
-        }
+        // DISABLED: Old skills action bar (replaced by combat action bar)
+        // if (typeof drawActionBar === 'function') {
+        //     drawActionBar();
+        // }
         if (!game.merchant && game.state !== 'inventory' && game.state !== 'map' && game.state !== 'skills' && game.state !== 'moveset' && game.state !== 'levelup') {
             ctx.fillStyle = '#fff'; ctx.font = '20px monospace'; ctx.textAlign = 'left'; const msgX = TRACKER_WIDTH + 20; const msgY = canvas.height - 40;
             if (game.messageLog.length > 0 && Date.now() - game.lastMessageTime < 3000) { ctx.fillText(game.messageLog[game.messageLog.length - 1].text, msgX, msgY); }

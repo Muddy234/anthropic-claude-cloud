@@ -24,11 +24,11 @@ function drawCombatActionBar(ctx, canvasWidth, canvasHeight) {
     const barPadding = 20;
     const numSlots = 4;
 
-    // Position at bottom-right (simple positioning)
+    // Position at bottom-right corner
     const barWidth = (slotSize * numSlots) + (slotSpacing * (numSlots - 1));
     const barHeight = slotSize;
     const barX = canvasWidth - barWidth - barPadding;
-    const barY = canvasHeight - barHeight - barPadding - 90; // 90px from bottom to avoid skills bar
+    const barY = canvasHeight - barHeight - barPadding;
 
     // Draw each slot
     for (let i = 0; i < numSlots; i++) {
@@ -467,7 +467,7 @@ function initActionBarClickHandler() {
         const barWidth = (slotSize * numSlots) + (slotSpacing * (numSlots - 1));
         const barHeight = slotSize;
         const barX = canvas.width - barWidth - barPadding;
-        const barY = canvas.height - barHeight - barPadding - 90;
+        const barY = canvas.height - barHeight - barPadding;
 
         // Check if click is within action bar area
         for (let i = 0; i < numSlots; i++) {
