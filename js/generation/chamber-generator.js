@@ -10,14 +10,14 @@
 // ============================================================================
 
 const CHAMBER_CONFIG = {
-    initialWallChance: 0.45,       // 45% walls initially
-    smoothingPasses: 4,            // Number of cellular automata passes
-    wallThreshold: 5,              // Neighbors needed to become/stay wall
-    floorThreshold: 4,             // Neighbors needed to become floor
+    initialWallChance: 0.52,       // 52% walls initially (increased from 0.45)
+    smoothingPasses: 5,            // Number of cellular automata passes (increased from 4)
+    wallThreshold: 4,              // Floor needs 4+ neighbors to become wall (decreased from 5)
+    floorThreshold: 5,             // Wall needs 5+ neighbors to survive (increased from 4)
     minChambers: 4,                // Minimum chambers per room
     maxChambers: 10,               // Maximum chambers per room
     targetChambers: 7,             // Target ~6-8 chambers
-    minChamberSize: 16,            // Minimum tiles for a valid chamber
+    minChamberSize: 25,            // Minimum tiles for a valid chamber (increased from 16)
     corridorWidth: 2,              // Width of connecting corridors
     edgeBuffer: 2,                 // Keep edges clear for doorways
     debugLogging: true,
