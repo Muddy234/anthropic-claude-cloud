@@ -44,6 +44,9 @@ function drawCombatActionBar(ctx, canvasWidth, canvasHeight) {
  * Draw a single action slot
  */
 function drawActionSlot(ctx, x, y, size, hotkey, player) {
+    // Save canvas state
+    ctx.save();
+
     // Determine slot state and content
     const slotInfo = getSlotInfo(hotkey, player);
 
@@ -71,6 +74,13 @@ function drawActionSlot(ctx, x, y, size, hotkey, player) {
     ctx.lineWidth = borderWidth;
     ctx.strokeRect(x, y, size, size);
 
+    // Draw icon background (for visibility)
+    const iconBgSize = 36;
+    const iconBgX = x + (size - iconBgSize) / 2;
+    const iconBgY = y + (size - iconBgSize) / 2;
+    ctx.fillStyle = '#333333';
+    ctx.fillRect(iconBgX, iconBgY, iconBgSize, iconBgSize);
+
     // Icon (placeholder for now)
     drawSlotIcon(ctx, x, y, size, slotInfo);
 
@@ -79,25 +89,28 @@ function drawActionSlot(ctx, x, y, size, hotkey, player) {
         drawCooldownOverlay(ctx, x, y, size, slotInfo.cooldown, slotInfo.maxCooldown);
     }
 
-    // Hotkey number
+    // Hotkey number (top-left corner)
     ctx.fillStyle = '#ffffff';
-    ctx.font = 'bold 14px monospace';
+    ctx.font = 'bold 16px Arial';
     ctx.textAlign = 'left';
     ctx.textBaseline = 'top';
-    ctx.fillText(hotkey.toString(), x + 4, y + 4);
+    ctx.fillText(hotkey.toString(), x + 6, y + 6);
 
-    // Cooldown text
+    // Cooldown text (center)
     if (slotInfo.cooldown > 0) {
         const cdText = slotInfo.cooldown >= 10
             ? Math.ceil(slotInfo.cooldown).toString()
             : slotInfo.cooldown.toFixed(1);
 
         ctx.fillStyle = '#ffff00';
-        ctx.font = 'bold 16px monospace';
+        ctx.font = 'bold 18px Arial';
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
         ctx.fillText(cdText + 's', x + size/2, y + size/2);
     }
+
+    // Restore canvas state
+    ctx.restore();
 }
 
 /**
@@ -354,12 +367,13 @@ function drawCooldownOverlay(ctx, x, y, size, remaining, max) {
  * Draw slot icon (placeholder)
  */
 function drawSlotIcon(ctx, x, y, size, slotInfo) {
-    const iconSize = 32;
-    const iconX = x + (size - iconSize) / 2;
-    const iconY = y + (size - iconSize) / 2 + 8;
+    const iconSize = 28;
+    const iconX = x + size / 2;
+    const iconY = y + size / 2;
 
-    ctx.fillStyle = '#666666';
-    ctx.font = `${iconSize}px monospace`;
+    // Use simple text icons instead of emojis for compatibility
+    ctx.fillStyle = '#aaaaaa';
+    ctx.font = `bold ${iconSize}px Arial`;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
 
@@ -368,17 +382,20 @@ function drawSlotIcon(ctx, x, y, size, slotInfo) {
 
     switch(slotInfo.icon) {
         case 'sword':
-            icon = '⚔️';
+            icon = 'ATK';
             break;
         case 'star':
-            icon = '✨';
+            icon = 'SKL';
             break;
         case 'potion':
-            icon = '🧪';
+            icon = 'USE';
+            break;
+        default:
+            icon = '---';
             break;
     }
 
-    ctx.fillText(icon, x + size/2, iconY);
+    ctx.fillText(icon, iconX, iconY);
 }
 
 // ============================================================================
