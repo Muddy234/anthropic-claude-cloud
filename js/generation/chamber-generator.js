@@ -1,8 +1,9 @@
 // ============================================================================
 // CHAMBER GENERATOR - The Shifting Chasm
 // ============================================================================
-// Uses cellular automata to subdivide rooms into interconnected chambers
-// Creates maze-like structures with guaranteed connectivity
+// Uses BSP (Binary Space Partitioning) + Cellular Automata
+// - BSP creates 5-7 distinct chambers (guaranteed subdivision)
+// - CA adds organic interior detail within each chamber
 // ============================================================================
 
 // ============================================================================
@@ -10,39 +11,51 @@
 // ============================================================================
 
 const CHAMBER_CONFIG = {
-    initialWallChance: 0.65,       // 65% walls initially (increased from 0.52 for aggressive subdivision)
-    smoothingPasses: 3,            // Number of cellular automata passes (decreased from 5 for jagged barriers)
-    wallThreshold: 3,              // Floor needs 3+ neighbors to become wall (decreased from 4 for easier formation)
-    floorThreshold: 5,             // Wall needs 5+ neighbors to survive (kept for stability)
-    minChambers: 4,                // Minimum chambers per room
-    maxChambers: 10,               // Maximum chambers per room
-    targetChambers: 7,             // Target ~6-8 chambers
-    minChamberSize: 40,            // Minimum tiles for a valid chamber (increased from 25 for distinct spaces)
-    corridorWidth: 2,              // Width of connecting corridors
-    edgeBuffer: 2,                 // Keep edges clear for doorways
+    // BSP Settings
+    targetSections: 6,             // Target 5-7 sections (chambers)
+    minSectionSize: 12,            // Minimum 12x12 for CA to work
+    splitVariance: 0.2,            // Split at 40-60% (0.5 ± 0.2)
+
+    // CA Settings (light, for interior detail only)
+    initialWallChance: 0.30,       // Light interior texture
+    smoothingPasses: 3,            // Moderate smoothing
+    wallThreshold: 4,              // B4: floors become walls on 4+ neighbors
+    floorThreshold: 4,             // S4: walls survive on 4+ neighbors
+
+    // Corridor Settings
+    corridorWidth: 2,              // 2-tile wide corridors
+    minCorridors: 1,               // Min connections per boundary
+    maxCorridors: 3,               // Max connections per boundary
+
+    // Doorway Settings
+    doorwayClearance: 2,           // 2 tiles clear in all directions
+    maxRegenAttempts: 5,           // Max room regeneration attempts
+
+    // Dead End Settings
+    deadEndRatio: 0.25,            // 25% of sections as dead ends
+
+    // System
     debugLogging: true,
-    trackStats: false              // Enable statistics tracking for analysis
+    trackStats: true
 };
 
-// Statistics tracking (optional)
+// Statistics tracking
 const CHAMBER_STATS = {
     enabled: false,
     data: {
-        initialDensities: [],
-        smoothedDensities: [],
-        finalDensities: [],
-        chamberCounts: [],
-        chamberSizes: []
+        bspSections: [],           // Section count per room
+        sectionSizes: [],          // Individual section sizes
+        corridorCounts: [],        // Corridor count per room
+        deadEndCounts: [],         // Dead end count per room
+        wallDensities: [],         // Final wall density per room
+        regenAttempts: [],         // Regeneration attempts per room
+        splitDepths: []            // BSP tree depths
     },
 
     reset() {
-        this.data = {
-            initialDensities: [],
-            smoothedDensities: [],
-            finalDensities: [],
-            chamberCounts: [],
-            chamberSizes: []
-        };
+        for (const key in this.data) {
+            this.data[key] = [];
+        }
     },
 
     record(type, value) {
@@ -58,11 +71,11 @@ const CHAMBER_STATS = {
 };
 
 // ============================================================================
-// MAIN CHAMBER GENERATION
+// MAIN CHAMBER GENERATION (BSP + CA)
 // ============================================================================
 
 /**
- * Generate chambers within a room using cellular automata
+ * Generate chambers within a room using BSP + CA
  * @param {Object} room - Room to generate chambers in
  */
 function generateChambers(room) {
@@ -76,188 +89,490 @@ function generateChambers(room) {
 
     if (CHAMBER_CONFIG.debugLogging) {
         console.log(`[ChamberGen] ========================================`);
-        console.log(`[ChamberGen] Generating chambers for ${room.type} room`);
-        console.log(`[ChamberGen] Room pos: (${room.x}, ${room.y}), Floor: (${room.floorX}, ${room.floorY})`);
+        console.log(`[ChamberGen] Generating BSP+CA chambers for ${room.type} room`);
         console.log(`[ChamberGen] Floor size: ${width}x${height}`);
-        console.log(`[ChamberGen] Doorways on room: ${room.doorways ? room.doorways.length : 0}`);
     }
 
-    // Find doorway positions relative to room floor
-    const doorwayTiles = findDoorwayTiles(room);
+    let attempts = 0;
+    let success = false;
+    let grid, sections, corridors;
 
-    if (CHAMBER_CONFIG.debugLogging) {
-        console.log(`[ChamberGen] Doorway tiles found: ${doorwayTiles.length}`);
-    }
+    // Try to generate valid layout (with doorway connectivity)
+    while (!success && attempts < CHAMBER_CONFIG.maxRegenAttempts) {
+        attempts++;
 
-    // Initialize chamber grid
-    let grid = initializeChamberGrid(width, height, doorwayTiles);
+        // 1. BSP Subdivision
+        sections = binarySpacePartition(width, height);
 
-    // Count initial walls
-    let initialWalls = 0;
-    for (let y = 0; y < height; y++) {
-        for (let x = 0; x < width; x++) {
-            if (grid[y][x] === 1) initialWalls++;
+        // 2. Apply CA to each section
+        grid = Array(height).fill(null).map(() => Array(width).fill(1)); // Start with walls
+        for (const section of sections) {
+            applyCellularAutomataToSection(grid, section, width, height);
+        }
+
+        // 3. Carve corridors between sections
+        corridors = carveCorridorsBetweenSections(grid, sections, width, height);
+
+        // 4. Validate doorway connectivity
+        success = validateDoorwayConnectivity(grid, room, width, height);
+
+        if (!success && CHAMBER_CONFIG.debugLogging) {
+            console.log(`[ChamberGen] Attempt ${attempts} failed connectivity test, regenerating...`);
         }
     }
-    const initialDensity = initialWalls / (width * height);
-    CHAMBER_STATS.record('initialDensities', initialDensity);
-    if (CHAMBER_CONFIG.debugLogging) {
-        console.log(`[ChamberGen] Initial walls: ${initialWalls} / ${width * height} (${(initialDensity * 100).toFixed(1)}%)`);
+
+    if (!success) {
+        console.warn(`[ChamberGen] Failed to generate valid layout after ${attempts} attempts, using last attempt`);
     }
 
-    // Run cellular automata smoothing
-    for (let i = 0; i < CHAMBER_CONFIG.smoothingPasses; i++) {
-        grid = smoothChamberGrid(grid, width, height, doorwayTiles);
-    }
-
-    // Count walls after smoothing
-    let smoothedWalls = 0;
-    for (let y = 0; y < height; y++) {
-        for (let x = 0; x < width; x++) {
-            if (grid[y][x] === 1) smoothedWalls++;
-        }
-    }
-    const smoothedDensity = smoothedWalls / (width * height);
-    CHAMBER_STATS.record('smoothedDensities', smoothedDensity);
-    if (CHAMBER_CONFIG.debugLogging) {
-        console.log(`[ChamberGen] After smoothing: ${smoothedWalls} walls (${(smoothedDensity * 100).toFixed(1)}%)`);
-    }
-
-    // Ensure doorway connectivity
-    ensureDoorwayConnectivity(grid, width, height, doorwayTiles);
-
-    // Identify distinct chambers
-    const chambers = identifyChambers(grid, width, height);
-
-    // Connect isolated chambers
-    connectIsolatedChambers(grid, width, height, chambers, doorwayTiles);
-
-    // Count final walls
-    let finalWalls = 0;
-    for (let y = 0; y < height; y++) {
-        for (let x = 0; x < width; x++) {
-            if (grid[y][x] === 1) finalWalls++;
-        }
-    }
-    const finalDensity = finalWalls / (width * height);
-    CHAMBER_STATS.record('finalDensities', finalDensity);
-    if (CHAMBER_CONFIG.debugLogging) {
-        console.log(`[ChamberGen] Final walls: ${finalWalls} (${(finalDensity * 100).toFixed(1)}%)`);
-    }
-
-    // Track chamber statistics
-    CHAMBER_STATS.record('chamberCounts', chambers.length);
-    CHAMBER_STATS.record('chamberSizes', chambers.map(c => c.size));
+    CHAMBER_STATS.record('regenAttempts', attempts);
 
     // Apply grid to game map
     applyChamberGridToRoom(grid, room);
 
-    // Store chamber data on room
+    // Identify chambers (connected floor regions)
+    const chambers = identifyChambers(grid, width, height);
+
+    // Store data on room
     room.chambers = chambers;
     room.chamberGrid = grid;
+    room.bspSections = sections;
+    room.corridors = corridors;
 
-    // Mark safe chamber (furthest from doorways) - used for player spawn in entrance
+    // Mark safe chamber
     if (chambers.length > 0) {
-        const safeChamber = findSafestChamber(chambers, doorwayTiles, room);
-        room.safeChamber = safeChamber;
-        if (safeChamber) {
-            safeChamber.isSafe = true;
-        }
-        if (CHAMBER_CONFIG.debugLogging && room.type === 'entrance') {
-            console.log(`[ChamberGen] Safe chamber marked: ID ${safeChamber?.id}, ${safeChamber?.tiles?.length} tiles`);
+        const doorwayTiles = findDoorwayTiles(room);
+        room.safeChamber = findSafestChamber(chambers, doorwayTiles, room);
+        if (room.safeChamber) {
+            room.safeChamber.isSafe = true;
         }
     }
 
+    // Track statistics
+    trackRoomStatistics(room, sections, corridors, grid, width, height);
+
     if (CHAMBER_CONFIG.debugLogging) {
-        console.log(`[ChamberGen] Created ${chambers.length} chambers`);
+        console.log(`[ChamberGen] Created ${sections.length} BSP sections, ${chambers.length} chambers`);
+        console.log(`[ChamberGen] Regeneration attempts: ${attempts}`);
         console.log(`[ChamberGen] ========================================`);
     }
 }
 
+// ============================================================================
+// BSP (BINARY SPACE PARTITIONING)
+// ============================================================================
+
 /**
- * Find the chamber furthest from all doorways (safest for player spawn)
+ * Subdivide space using recursive BSP
+ * @returns {Array} Array of section objects
  */
-function findSafestChamber(chambers, doorwayTiles, room) {
-    if (!chambers || chambers.length === 0) return null;
-    if (!doorwayTiles || doorwayTiles.length === 0) return chambers[0];
+function binarySpacePartition(width, height) {
+    const sections = [];
+    const targetCount = CHAMBER_CONFIG.targetSections;
+    const minSize = CHAMBER_CONFIG.minSectionSize;
 
-    let safestChamber = null;
-    let maxMinDistance = -1;
+    // Start with full area
+    const root = {
+        x: 0,
+        y: 0,
+        width: width,
+        height: height,
+        id: 0,
+        depth: 0
+    };
 
-    for (const chamber of chambers) {
-        // Find minimum distance from this chamber's center to any doorway
-        let minDistToDoor = Infinity;
+    const toSplit = [root];
+    let nextId = 1;
 
-        for (const doorTile of doorwayTiles) {
-            const dist = Math.abs(chamber.center.x - doorTile.x) +
-                        Math.abs(chamber.center.y - doorTile.y);
-            if (dist < minDistToDoor) {
-                minDistToDoor = dist;
-            }
+    // Keep splitting until we have enough sections
+    while (toSplit.length + sections.length < targetCount && toSplit.length > 0) {
+        // Pick a random section to split
+        const index = Math.floor(Math.random() * toSplit.length);
+        const section = toSplit.splice(index, 1)[0];
+
+        // Determine split direction (prefer alternating, but allow random)
+        const preferHorizontal = section.depth % 2 === 0;
+        const canSplitH = section.height >= minSize * 2;
+        const canSplitV = section.width >= minSize * 2;
+
+        let splitHorizontal;
+        if (canSplitH && !canSplitV) {
+            splitHorizontal = true;
+        } else if (!canSplitH && canSplitV) {
+            splitHorizontal = false;
+        } else if (canSplitH && canSplitV) {
+            // Both possible, prefer based on depth but randomize
+            splitHorizontal = Math.random() < (preferHorizontal ? 0.7 : 0.3);
+        } else {
+            // Can't split, add as final section
+            sections.push(section);
+            continue;
         }
 
-        // Chamber with the largest minimum distance is safest
-        if (minDistToDoor > maxMinDistance) {
-            maxMinDistance = minDistToDoor;
-            safestChamber = chamber;
+        // Calculate split position (40-60% with variance)
+        const variance = CHAMBER_CONFIG.splitVariance;
+        const splitRatio = 0.5 + (Math.random() - 0.5) * variance * 2;
+
+        if (splitHorizontal) {
+            const splitY = Math.floor(section.y + section.height * splitRatio);
+            const height1 = splitY - section.y;
+            const height2 = section.y + section.height - splitY;
+
+            if (height1 >= minSize && height2 >= minSize) {
+                const child1 = {
+                    x: section.x,
+                    y: section.y,
+                    width: section.width,
+                    height: height1,
+                    id: nextId++,
+                    depth: section.depth + 1,
+                    parent: section
+                };
+                const child2 = {
+                    x: section.x,
+                    y: splitY,
+                    width: section.width,
+                    height: height2,
+                    id: nextId++,
+                    depth: section.depth + 1,
+                    parent: section
+                };
+                toSplit.push(child1, child2);
+            } else {
+                sections.push(section);
+            }
+        } else {
+            const splitX = Math.floor(section.x + section.width * splitRatio);
+            const width1 = splitX - section.x;
+            const width2 = section.x + section.width - splitX;
+
+            if (width1 >= minSize && width2 >= minSize) {
+                const child1 = {
+                    x: section.x,
+                    y: section.y,
+                    width: width1,
+                    height: section.height,
+                    id: nextId++,
+                    depth: section.depth + 1,
+                    parent: section
+                };
+                const child2 = {
+                    x: splitX,
+                    y: section.y,
+                    width: width2,
+                    height: section.height,
+                    id: nextId++,
+                    depth: section.depth + 1,
+                    parent: section
+                };
+                toSplit.push(child1, child2);
+            } else {
+                sections.push(section);
+            }
         }
     }
 
-    return safestChamber;
+    // Add any remaining unsplit sections
+    sections.push(...toSplit);
+
+    // Add neighbor tracking for corridor generation
+    for (const section of sections) {
+        section.neighbors = findNeighboringSections(section, sections);
+    }
+
+    return sections;
+}
+
+/**
+ * Find neighboring sections (share a boundary)
+ */
+function findNeighboringSections(section, allSections) {
+    const neighbors = [];
+
+    for (const other of allSections) {
+        if (other === section) continue;
+
+        // Check if sections share a boundary
+        const shareVertical = (
+            section.x + section.width === other.x ||
+            other.x + other.width === section.x
+        ) && !(
+            section.y >= other.y + other.height ||
+            section.y + section.height <= other.y
+        );
+
+        const shareHorizontal = (
+            section.y + section.height === other.y ||
+            other.y + other.height === section.y
+        ) && !(
+            section.x >= other.x + other.width ||
+            section.x + section.width <= other.x
+        );
+
+        if (shareVertical || shareHorizontal) {
+            neighbors.push({
+                section: other,
+                vertical: shareVertical,
+                horizontal: shareHorizontal
+            });
+        }
+    }
+
+    return neighbors;
 }
 
 // ============================================================================
-// GRID INITIALIZATION
+// CELLULAR AUTOMATA (APPLIED PER SECTION)
 // ============================================================================
 
 /**
- * Initialize chamber grid with random walls
+ * Apply light CA to a single section for organic interior
  */
-function initializeChamberGrid(width, height, doorwayTiles) {
-    const grid = [];
-    const doorwaySet = new Set(doorwayTiles.map(t => `${t.x},${t.y}`));
+function applyCellularAutomataToSection(grid, section, gridWidth, gridHeight) {
+    const { x, y, width, height } = section;
 
-    for (let y = 0; y < height; y++) {
-        grid[y] = [];
-        for (let x = 0; x < width; x++) {
-            // Keep edges clear for doorways
-            const isEdge = x < CHAMBER_CONFIG.edgeBuffer ||
-                          x >= width - CHAMBER_CONFIG.edgeBuffer ||
-                          y < CHAMBER_CONFIG.edgeBuffer ||
-                          y >= height - CHAMBER_CONFIG.edgeBuffer;
-
-            // Keep doorway tiles as floor
-            const isDoorway = doorwaySet.has(`${x},${y}`);
-
-            if (isDoorway || isEdge) {
-                grid[y][x] = 0; // Floor
-            } else {
-                // Random wall based on initial chance
-                grid[y][x] = Math.random() < CHAMBER_CONFIG.initialWallChance ? 1 : 0;
+    // Initialize section with random walls
+    for (let sy = 0; sy < height; sy++) {
+        for (let sx = 0; sx < width; sx++) {
+            const gx = x + sx;
+            const gy = y + sy;
+            if (gx >= 0 && gx < gridWidth && gy >= 0 && gy < gridHeight) {
+                grid[gy][gx] = Math.random() < CHAMBER_CONFIG.initialWallChance ? 1 : 0;
             }
         }
     }
 
-    return grid;
+    // Run CA smoothing passes
+    for (let pass = 0; pass < CHAMBER_CONFIG.smoothingPasses; pass++) {
+        const newGrid = grid.map(row => [...row]);
+
+        for (let sy = 0; sy < height; sy++) {
+            for (let sx = 0; sx < width; sx++) {
+                const gx = x + sx;
+                const gy = y + sy;
+                if (gx < 0 || gx >= gridWidth || gy < 0 || gy >= gridHeight) continue;
+
+                // Count wall neighbors
+                let wallCount = 0;
+                for (let dy = -1; dy <= 1; dy++) {
+                    for (let dx = -1; dx <= 1; dx++) {
+                        if (dx === 0 && dy === 0) continue;
+                        const nx = gx + dx;
+                        const ny = gy + dy;
+
+                        // Out of bounds or out of section = wall
+                        if (nx < x || nx >= x + width || ny < y || ny >= y + height) {
+                            wallCount++;
+                        } else if (nx >= 0 && nx < gridWidth && ny >= 0 && ny < gridHeight) {
+                            if (grid[ny][nx] === 1) wallCount++;
+                        }
+                    }
+                }
+
+                // Apply B4/S4 rules
+                if (grid[gy][gx] === 1) {
+                    // Wall survives if 4+ neighbors
+                    newGrid[gy][gx] = wallCount >= CHAMBER_CONFIG.floorThreshold ? 1 : 0;
+                } else {
+                    // Floor becomes wall if 4+ neighbors
+                    newGrid[gy][gx] = wallCount >= CHAMBER_CONFIG.wallThreshold ? 1 : 0;
+                }
+            }
+        }
+
+        // Copy new grid to grid (only within section bounds)
+        for (let sy = 0; sy < height; sy++) {
+            for (let sx = 0; sx < width; sx++) {
+                const gx = x + sx;
+                const gy = y + sy;
+                if (gx >= 0 && gx < gridWidth && gy >= 0 && gy < gridHeight) {
+                    grid[gy][gx] = newGrid[gy][gx];
+                }
+            }
+        }
+    }
+}
+
+// ============================================================================
+// CORRIDOR CARVING
+// ============================================================================
+
+/**
+ * Carve corridors between BSP sections
+ */
+function carveCorridorsBetweenSections(grid, sections, width, height) {
+    const corridors = [];
+    const deadEndTarget = Math.floor(sections.length * CHAMBER_CONFIG.deadEndRatio);
+    const sectionConnections = sections.map(() => 0);
+
+    // Shuffle sections for random dead end selection
+    const shuffled = [...sections].sort(() => Math.random() - 0.5);
+
+    for (const section of sections) {
+        for (const neighbor of section.neighbors) {
+            // Skip if this would create too many connections
+            if (Math.random() < 0.3 && sectionConnections[section.id] > 0) continue;
+
+            // Determine corridor count for this boundary
+            const numCorridors = CHAMBER_CONFIG.minCorridors +
+                Math.floor(Math.random() * (CHAMBER_CONFIG.maxCorridors - CHAMBER_CONFIG.minCorridors + 1));
+
+            for (let i = 0; i < numCorridors; i++) {
+                const corridor = carveCorridorBetweenSections(
+                    grid, section, neighbor.section, neighbor.vertical, width, height
+                );
+                if (corridor) {
+                    corridors.push(corridor);
+                    sectionConnections[section.id]++;
+                    sectionConnections[neighbor.section.id]++;
+                }
+            }
+        }
+    }
+
+    return corridors;
+}
+
+/**
+ * Carve a single corridor between two sections
+ */
+function carveCorridorBetweenSections(grid, section1, section2, isVertical, gridWidth, gridHeight) {
+    const corridorWidth = CHAMBER_CONFIG.corridorWidth;
+    let corridor = null;
+
+    if (isVertical) {
+        // Sections are side-by-side (vertical boundary)
+        const boundaryX = section1.x + section1.width === section2.x ? section1.x + section1.width : section2.x + section2.width;
+        const overlapStart = Math.max(section1.y, section2.y);
+        const overlapEnd = Math.min(section1.y + section1.height, section2.y + section2.height);
+        const overlapSize = overlapEnd - overlapStart;
+
+        if (overlapSize > corridorWidth) {
+            // Random position along overlap
+            const corridorY = overlapStart + Math.floor(Math.random() * (overlapSize - corridorWidth));
+
+            // Carve corridor
+            for (let y = corridorY; y < corridorY + corridorWidth; y++) {
+                // Carve left of boundary (in section1)
+                for (let x = boundaryX - corridorWidth; x < boundaryX; x++) {
+                    if (x >= 0 && x < gridWidth && y >= 0 && y < gridHeight) {
+                        grid[y][x] = 0;
+                    }
+                }
+                // Carve right of boundary (in section2)
+                for (let x = boundaryX; x < boundaryX + corridorWidth; x++) {
+                    if (x >= 0 && x < gridWidth && y >= 0 && y < gridHeight) {
+                        grid[y][x] = 0;
+                    }
+                }
+            }
+
+            corridor = {
+                x: boundaryX - corridorWidth,
+                y: corridorY,
+                width: corridorWidth * 2,
+                height: corridorWidth,
+                orientation: 'vertical'
+            };
+        }
+    } else {
+        // Sections are above/below (horizontal boundary)
+        const boundaryY = section1.y + section1.height === section2.y ? section1.y + section1.height : section2.y + section2.height;
+        const overlapStart = Math.max(section1.x, section2.x);
+        const overlapEnd = Math.min(section1.x + section1.width, section2.x + section2.width);
+        const overlapSize = overlapEnd - overlapStart;
+
+        if (overlapSize > corridorWidth) {
+            // Random position along overlap
+            const corridorX = overlapStart + Math.floor(Math.random() * (overlapSize - corridorWidth));
+
+            // Carve corridor
+            for (let x = corridorX; x < corridorX + corridorWidth; x++) {
+                // Carve above boundary (in section1)
+                for (let y = boundaryY - corridorWidth; y < boundaryY; y++) {
+                    if (x >= 0 && x < gridWidth && y >= 0 && y < gridHeight) {
+                        grid[y][x] = 0;
+                    }
+                }
+                // Carve below boundary (in section2)
+                for (let y = boundaryY; y < boundaryY + corridorWidth; y++) {
+                    if (x >= 0 && x < gridWidth && y >= 0 && y < gridHeight) {
+                        grid[y][x] = 0;
+                    }
+                }
+            }
+
+            corridor = {
+                x: corridorX,
+                y: boundaryY - corridorWidth,
+                width: corridorWidth,
+                height: corridorWidth * 2,
+                orientation: 'horizontal'
+            };
+        }
+    }
+
+    return corridor;
+}
+
+// ============================================================================
+// DOORWAY VALIDATION
+// ============================================================================
+
+/**
+ * Validate that doorways connect to playable space
+ * Also ensures 2-tile clearance around doorways
+ */
+function validateDoorwayConnectivity(grid, room, width, height) {
+    const doorwayTiles = findDoorwayTiles(room);
+
+    if (doorwayTiles.length === 0) {
+        return true; // No doorways to validate
+    }
+
+    // Ensure doorway clearance
+    for (const doorTile of doorwayTiles) {
+        const clearance = CHAMBER_CONFIG.doorwayClearance;
+
+        // Clear area around doorway
+        for (let dy = -clearance; dy <= clearance; dy++) {
+            for (let dx = -clearance; dx <= clearance; dx++) {
+                const x = doorTile.x + dx;
+                const y = doorTile.y + dy;
+                if (x >= 0 && x < width && y >= 0 && y < height) {
+                    grid[y][x] = 0; // Force floor
+                }
+            }
+        }
+    }
+
+    // Flood fill from first doorway
+    const start = doorwayTiles[0];
+    const reachable = floodFill(grid, width, height, start.x, start.y);
+
+    // Check if all doorways are reachable from first one
+    for (let i = 1; i < doorwayTiles.length; i++) {
+        const door = doorwayTiles[i];
+        if (!reachable.has(`${door.x},${door.y}`)) {
+            return false; // Doorway not connected
+        }
+    }
+
+    return true;
 }
 
 /**
  * Find floor tiles that connect to doorways (relative to room floor)
- * Doorways are on walls, so we find the floor tiles adjacent to them
  */
 function findDoorwayTiles(room) {
     const tiles = [];
     const tileSet = new Set();
 
     if (!room.doorways || room.doorways.length === 0) {
-        if (CHAMBER_CONFIG.debugLogging) {
-            console.log(`[ChamberGen] No doorways found for room at (${room.x}, ${room.y})`);
-        }
         return tiles;
     }
 
     const addTile = (localX, localY) => {
-        // Ensure within floor bounds
         if (localX < 0 || localX >= room.floorWidth ||
             localY < 0 || localY >= room.floorHeight) {
             return;
@@ -265,147 +580,35 @@ function findDoorwayTiles(room) {
         const key = `${localX},${localY}`;
         if (!tileSet.has(key)) {
             tileSet.add(key);
-            tiles.push({
-                x: localX,
-                y: localY,
-                worldX: room.floorX + localX,
-                worldY: room.floorY + localY
-            });
+            tiles.push({ x: localX, y: localY });
         }
     };
 
     for (const doorway of room.doorways) {
-        // Doorways are on walls - find where they connect to floor
-        // Based on doorway side, calculate floor entry point
         const side = doorway.side;
 
-        if (CHAMBER_CONFIG.debugLogging) {
-            console.log(`[ChamberGen] Processing ${side} doorway at (${doorway.x}, ${doorway.y}), size: ${doorway.width}x${doorway.height}`);
-        }
-
-        // Calculate floor entry tiles based on doorway side
         for (let i = 0; i < (doorway.orientation === 'horizontal' ? doorway.width : doorway.height); i++) {
             let entryX, entryY;
 
             if (side === 'north') {
-                // Doorway on north wall, entry is at top of floor (y=0)
                 entryX = doorway.x + i - room.floorX;
                 entryY = 0;
             } else if (side === 'south') {
-                // Doorway on south wall, entry is at bottom of floor
                 entryX = doorway.x + i - room.floorX;
                 entryY = room.floorHeight - 1;
             } else if (side === 'west') {
-                // Doorway on west wall, entry is at left of floor (x=0)
                 entryX = 0;
                 entryY = doorway.y + i - room.floorY;
             } else if (side === 'east') {
-                // Doorway on east wall, entry is at right of floor
                 entryX = room.floorWidth - 1;
                 entryY = doorway.y + i - room.floorY;
             }
 
-            // Add entry tile and surrounding tiles to ensure path
             addTile(entryX, entryY);
-            addTile(entryX + 1, entryY);
-            addTile(entryX - 1, entryY);
-            addTile(entryX, entryY + 1);
-            addTile(entryX, entryY - 1);
-            addTile(entryX + 1, entryY + 1);
-            addTile(entryX - 1, entryY - 1);
-            addTile(entryX + 1, entryY - 1);
-            addTile(entryX - 1, entryY + 1);
-            // Extended path into room
-            addTile(entryX + 2, entryY);
-            addTile(entryX - 2, entryY);
-            addTile(entryX, entryY + 2);
-            addTile(entryX, entryY - 2);
         }
-    }
-
-    if (CHAMBER_CONFIG.debugLogging) {
-        console.log(`[ChamberGen] Found ${tiles.length} doorway entry tiles`);
     }
 
     return tiles;
-}
-
-// ============================================================================
-// CELLULAR AUTOMATA
-// ============================================================================
-
-/**
- * Run one pass of cellular automata smoothing
- */
-function smoothChamberGrid(grid, width, height, doorwayTiles) {
-    const newGrid = [];
-    const doorwaySet = new Set(doorwayTiles.map(t => `${t.x},${t.y}`));
-
-    for (let y = 0; y < height; y++) {
-        newGrid[y] = [];
-        for (let x = 0; x < width; x++) {
-            // Doorways always stay floor
-            if (doorwaySet.has(`${x},${y}`)) {
-                newGrid[y][x] = 0;
-                continue;
-            }
-
-            // Count wall neighbors (including diagonals)
-            let wallCount = 0;
-            for (let dy = -1; dy <= 1; dy++) {
-                for (let dx = -1; dx <= 1; dx++) {
-                    if (dx === 0 && dy === 0) continue;
-
-                    const nx = x + dx;
-                    const ny = y + dy;
-
-                    // Out of bounds counts as wall
-                    if (nx < 0 || nx >= width || ny < 0 || ny >= height) {
-                        wallCount++;
-                    } else if (grid[ny][nx] === 1) {
-                        wallCount++;
-                    }
-                }
-            }
-
-            // Apply cellular automata rules
-            if (grid[y][x] === 1) {
-                // Wall stays wall if enough neighbors
-                newGrid[y][x] = wallCount >= CHAMBER_CONFIG.floorThreshold ? 1 : 0;
-            } else {
-                // Floor becomes wall if many neighbors
-                newGrid[y][x] = wallCount >= CHAMBER_CONFIG.wallThreshold ? 1 : 0;
-            }
-        }
-    }
-
-    return newGrid;
-}
-
-// ============================================================================
-// CONNECTIVITY
-// ============================================================================
-
-/**
- * Ensure all doorways can reach each other
- */
-function ensureDoorwayConnectivity(grid, width, height, doorwayTiles) {
-    if (doorwayTiles.length < 2) return;
-
-    // Get first doorway as starting point
-    const start = doorwayTiles[0];
-
-    // Find all reachable tiles from start
-    const reachable = floodFill(grid, width, height, start.x, start.y);
-
-    // Check if all other doorways are reachable
-    for (let i = 1; i < doorwayTiles.length; i++) {
-        const door = doorwayTiles[i];
-        if (!reachable.has(`${door.x},${door.y}`)) {
-            // This doorway is not reachable, carve a path
-            carvePath(grid, width, height, start, door);
-        }
-    }
 }
 
 /**
@@ -425,7 +628,6 @@ function floodFill(grid, width, height, startX, startY) {
 
         reachable.add(key);
 
-        // Add neighbors (4-directional)
         stack.push({ x: x + 1, y: y });
         stack.push({ x: x - 1, y: y });
         stack.push({ x: x, y: y + 1 });
@@ -435,48 +637,12 @@ function floodFill(grid, width, height, startX, startY) {
     return reachable;
 }
 
-/**
- * Carve a corridor between two points
- */
-function carvePath(grid, width, height, from, to) {
-    let x = from.x;
-    let y = from.y;
-
-    const corridorWidth = CHAMBER_CONFIG.corridorWidth;
-
-    while (x !== to.x || y !== to.y) {
-        // Carve corridor width tiles
-        for (let w = 0; w < corridorWidth; w++) {
-            if (y + w >= 0 && y + w < height && x >= 0 && x < width) {
-                grid[y + w][x] = 0;
-            }
-            if (x + w >= 0 && x + w < width && y >= 0 && y < height) {
-                grid[y][x + w] = 0;
-            }
-        }
-
-        // Move toward target (prefer horizontal, then vertical)
-        if (x !== to.x) {
-            x += x < to.x ? 1 : -1;
-        } else if (y !== to.y) {
-            y += y < to.y ? 1 : -1;
-        }
-    }
-
-    // Carve destination
-    for (let w = 0; w < corridorWidth; w++) {
-        if (to.y + w >= 0 && to.y + w < height && to.x >= 0 && to.x < width) {
-            grid[to.y + w][to.x] = 0;
-        }
-    }
-}
-
 // ============================================================================
 // CHAMBER IDENTIFICATION
 // ============================================================================
 
 /**
- * Identify distinct chambers using flood fill
+ * Identify distinct chambers using flood fill (same as before)
  */
 function identifyChambers(grid, width, height) {
     const chambers = [];
@@ -487,7 +653,7 @@ function identifyChambers(grid, width, height) {
             if (grid[y][x] === 1) continue; // Wall
             if (visited.has(`${x},${y}`)) continue;
 
-            // Found new chamber, flood fill it
+            // Found new chamber
             const chamberTiles = [];
             const stack = [{ x, y }];
 
@@ -508,8 +674,8 @@ function identifyChambers(grid, width, height) {
                 stack.push({ x: tile.x, y: tile.y - 1 });
             }
 
-            // Only count as chamber if large enough
-            if (chamberTiles.length >= CHAMBER_CONFIG.minChamberSize) {
+            // All chambers are valid (no minimum size for BSP-based generation)
+            if (chamberTiles.length > 0) {
                 chambers.push({
                     id: chambers.length,
                     tiles: chamberTiles,
@@ -523,9 +689,6 @@ function identifyChambers(grid, width, height) {
     return chambers;
 }
 
-/**
- * Calculate center of a chamber
- */
 function calculateChamberCenter(tiles) {
     let sumX = 0, sumY = 0;
     for (const tile of tiles) {
@@ -539,53 +702,33 @@ function calculateChamberCenter(tiles) {
 }
 
 /**
- * Connect isolated chambers
+ * Find the chamber furthest from all doorways
  */
-function connectIsolatedChambers(grid, width, height, chambers, doorwayTiles) {
-    if (chambers.length <= 1) return;
+function findSafestChamber(chambers, doorwayTiles, room) {
+    if (!chambers || chambers.length === 0) return null;
+    if (!doorwayTiles || doorwayTiles.length === 0) return chambers[0];
 
-    // Find main chamber (one connected to doorways)
-    let mainChamber = null;
-    const doorwaySet = new Set(doorwayTiles.map(t => `${t.x},${t.y}`));
+    let safestChamber = null;
+    let maxMinDistance = -1;
 
     for (const chamber of chambers) {
-        for (const tile of chamber.tiles) {
-            if (doorwaySet.has(`${tile.x},${tile.y}`)) {
-                mainChamber = chamber;
-                break;
-            }
-        }
-        if (mainChamber) break;
-    }
+        let minDistToDoor = Infinity;
 
-    if (!mainChamber) {
-        mainChamber = chambers[0]; // Fallback to largest
-    }
-
-    // Connect all other chambers to main
-    for (const chamber of chambers) {
-        if (chamber === mainChamber) continue;
-
-        // Find closest tiles between chambers
-        let minDist = Infinity;
-        let fromTile = null;
-        let toTile = null;
-
-        for (const t1 of mainChamber.tiles) {
-            for (const t2 of chamber.tiles) {
-                const dist = Math.abs(t1.x - t2.x) + Math.abs(t1.y - t2.y);
-                if (dist < minDist) {
-                    minDist = dist;
-                    fromTile = t1;
-                    toTile = t2;
-                }
+        for (const doorTile of doorwayTiles) {
+            const dist = Math.abs(chamber.center.x - doorTile.x) +
+                        Math.abs(chamber.center.y - doorTile.y);
+            if (dist < minDistToDoor) {
+                minDistToDoor = dist;
             }
         }
 
-        if (fromTile && toTile) {
-            carvePath(grid, width, height, fromTile, toTile);
+        if (minDistToDoor > maxMinDistance) {
+            maxMinDistance = minDistToDoor;
+            safestChamber = chamber;
         }
     }
+
+    return safestChamber;
 }
 
 // ============================================================================
@@ -596,18 +739,12 @@ function connectIsolatedChambers(grid, width, height, chambers, doorwayTiles) {
  * Apply chamber grid to game map
  */
 function applyChamberGridToRoom(grid, room) {
-    let wallsPlaced = 0;
-    let skipped = 0;
-
     for (let y = 0; y < room.floorHeight; y++) {
         for (let x = 0; x < room.floorWidth; x++) {
             const worldX = room.floorX + x;
             const worldY = room.floorY + y;
 
-            if (!game.map[worldY] || !game.map[worldY][worldX]) {
-                skipped++;
-                continue;
-            }
+            if (!game.map[worldY] || !game.map[worldY][worldX]) continue;
 
             if (grid[y][x] === 1) {
                 // Interior wall
@@ -617,109 +754,75 @@ function applyChamberGridToRoom(grid, room) {
                     element: room.element,
                     blocked: true
                 };
-                wallsPlaced++;
             }
-            // Floor tiles were already placed by placeRoomFloorTiles()
+            // Floor tiles already placed by placeRoomFloorTiles()
         }
     }
+}
 
-    if (CHAMBER_CONFIG.debugLogging) {
-        console.log(`[ChamberGen] Applied ${wallsPlaced} interior walls to map (${skipped} tiles skipped)`);
+// ============================================================================
+// STATISTICS TRACKING
+// ============================================================================
+
+function trackRoomStatistics(room, sections, corridors, grid, width, height) {
+    if (!CHAMBER_STATS.enabled) return;
+
+    // Section count
+    CHAMBER_STATS.record('bspSections', sections.length);
+
+    // Section sizes
+    const sizes = sections.map(s => s.width * s.height);
+    CHAMBER_STATS.record('sectionSizes', sizes);
+
+    // Corridor count
+    CHAMBER_STATS.record('corridorCounts', corridors.length);
+
+    // Wall density
+    let wallCount = 0;
+    for (let y = 0; y < height; y++) {
+        for (let x = 0; x < width; x++) {
+            if (grid[y][x] === 1) wallCount++;
+        }
     }
+    CHAMBER_STATS.record('wallDensities', wallCount / (width * height));
+
+    // Dead ends (sections with only 1 connection)
+    let deadEnds = 0;
+    for (const section of sections) {
+        const connections = corridors.filter(c =>
+            (c.x >= section.x && c.x < section.x + section.width &&
+             c.y >= section.y && c.y < section.y + section.height)
+        ).length;
+        if (connections <= 1) deadEnds++;
+    }
+    CHAMBER_STATS.record('deadEndCounts', deadEnds);
+
+    // Max split depth
+    const maxDepth = Math.max(...sections.map(s => s.depth || 0));
+    CHAMBER_STATS.record('splitDepths', maxDepth);
 }
 
 // ============================================================================
-// UTILITY FUNCTIONS
+// SAFE SPAWN UTILITY
 // ============================================================================
 
-/**
- * Check if a world position is a valid floor tile (not a wall)
- */
-function isValidFloorTile(worldX, worldY) {
-    if (!game.map[worldY] || !game.map[worldY][worldX]) return false;
-    const tile = game.map[worldY][worldX];
-    return tile.type === 'floor' || tile.type === 'doorway';
-}
-
-/**
- * Get a safe spawn position within a room (uses pre-marked safe chamber)
- * FIXED: Validates that spawn position is actually a floor tile, not a wall
- * @param {Object} room - Room to get safe spawn in
- * @returns {Object} {x, y} world coordinates
- */
 function getSafeSpawnChamber(room) {
-    // Helper to find a valid floor tile from chamber tiles
-    const findValidTileInChamber = (chamber) => {
-        if (!chamber || !chamber.tiles || chamber.tiles.length === 0) return null;
+    if (room.safeChamber && room.safeChamber.tiles && room.safeChamber.tiles.length > 0) {
+        // Use center of safe chamber
+        const tile = room.safeChamber.tiles[Math.floor(room.safeChamber.tiles.length / 2)];
+        return {
+            x: room.floorX + tile.x,
+            y: room.floorY + tile.y
+        };
+    }
 
-        // First try the center
-        const centerWorldX = room.floorX + chamber.center.x;
-        const centerWorldY = room.floorY + chamber.center.y;
-        if (isValidFloorTile(centerWorldX, centerWorldY)) {
-            return { x: centerWorldX, y: centerWorldY };
-        }
-
-        // Center is a wall - find the closest valid floor tile from chamber tiles
-        // Sort tiles by distance to center and pick the first valid one
-        const sortedTiles = [...chamber.tiles].sort((a, b) => {
-            const distA = Math.abs(a.x - chamber.center.x) + Math.abs(a.y - chamber.center.y);
-            const distB = Math.abs(b.x - chamber.center.x) + Math.abs(b.y - chamber.center.y);
-            return distA - distB;
-        });
-
-        for (const tile of sortedTiles) {
-            const worldX = room.floorX + tile.x;
-            const worldY = room.floorY + tile.y;
-            if (isValidFloorTile(worldX, worldY)) {
-                return { x: worldX, y: worldY };
-            }
-        }
-
-        return null;
+    // Fallback: room center
+    return {
+        x: room.floorX + Math.floor(room.floorWidth / 2),
+        y: room.floorY + Math.floor(room.floorHeight / 2)
     };
-
-    // Use the pre-marked safe chamber if available
-    if (room.safeChamber) {
-        const validPos = findValidTileInChamber(room.safeChamber);
-        if (validPos) return validPos;
-    }
-
-    // Fallback: try first chamber
-    if (room.chambers && room.chambers.length > 0) {
-        const validPos = findValidTileInChamber(room.chambers[0]);
-        if (validPos) return validPos;
-    }
-
-    // Final fallback: search for any valid floor tile near room center
-    const centerX = room.floorX + Math.floor(room.floorWidth / 2);
-    const centerY = room.floorY + Math.floor(room.floorHeight / 2);
-
-    // Spiral search outward from center to find a floor tile
-    for (let radius = 0; radius < Math.max(room.floorWidth, room.floorHeight); radius++) {
-        for (let dy = -radius; dy <= radius; dy++) {
-            for (let dx = -radius; dx <= radius; dx++) {
-                if (Math.abs(dx) !== radius && Math.abs(dy) !== radius) continue; // Only check perimeter
-                const testX = centerX + dx;
-                const testY = centerY + dy;
-                if (isValidFloorTile(testX, testY)) {
-                    return { x: testX, y: testY };
-                }
-            }
-        }
-    }
-
-    // Absolute fallback (shouldn't happen)
-    console.warn('[ChamberGen] Could not find valid floor tile for spawn!');
-    return { x: centerX, y: centerY };
 }
 
-/**
- * Check if a position is within the safe chamber
- * @param {Object} room - Room to check
- * @param {number} x - World X coordinate
- * @param {number} y - World Y coordinate
- * @returns {boolean} True if in safe chamber
- */
 function isInSafeChamber(room, x, y) {
     if (!room.safeChamber || !room.safeChamber.tiles) return false;
 
@@ -739,7 +842,6 @@ if (typeof window !== 'undefined') {
     window.generateChambers = generateChambers;
     window.getSafeSpawnChamber = getSafeSpawnChamber;
     window.isInSafeChamber = isInSafeChamber;
-    window.findSafestChamber = findSafestChamber;
 }
 
-console.log('✅ Chamber generator loaded (cellular automata)');
+console.log('✅ Chamber generator loaded (BSP + Cellular Automata)');
