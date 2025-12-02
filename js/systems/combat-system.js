@@ -589,22 +589,23 @@ function updateActionCooldowns(deltaTime) {
         return;
     }
 
+    console.log('[UpdateCooldowns] Starting - actionCooldowns:', JSON.stringify(player.actionCooldowns), 'deltaTime:', deltaTime);
+
     const dt = deltaTime / 1000;
-    let anyChanged = false;
 
     for (const key in player.actionCooldowns) {
         const oldValue = player.actionCooldowns[key];
+        console.log(`[UpdateCooldowns] key="${key}" oldValue=${oldValue} dt=${dt}`);
+
         if (oldValue > 0) {
-            player.actionCooldowns[key] = Math.max(0, oldValue - dt);
-            if (player.actionCooldowns[key] !== oldValue) {
-                anyChanged = true;
-            }
+            const newValue = Math.max(0, oldValue - dt);
+            console.log(`[UpdateCooldowns] Attempting to set ${key} from ${oldValue} to ${newValue}`);
+            player.actionCooldowns[key] = newValue;
+            console.log(`[UpdateCooldowns] After assignment, ${key} is now:`, player.actionCooldowns[key]);
         }
     }
 
-    if (anyChanged) {
-        console.log('[UpdateCooldowns]', player.actionCooldowns);
-    }
+    console.log('[UpdateCooldowns] Finished - actionCooldowns:', JSON.stringify(player.actionCooldowns));
 
     // Update item cooldowns
     if (player.itemCooldowns) {
