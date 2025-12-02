@@ -272,7 +272,10 @@ function createEnemy(monsterType, x, y, room) {
         moveProgress: 0,
         moveSpeed: stats.speed || template.movement?.baseSpeed || 3,
         facing: facing,
-        
+
+        // Collision
+        blockingRadius: template.elite ? 1.0 : 0.75,
+
         // Stats
         hp: stats.health || 50,
         maxHp: stats.health || 50,

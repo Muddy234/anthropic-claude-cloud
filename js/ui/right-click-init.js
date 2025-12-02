@@ -256,26 +256,8 @@ function executeContextAction(action, target, targetType) {
                 }
                 break;
             case 'walk':
-                console.log('Walk action triggered!');
-                console.log('startAutoWalk exists:', typeof startAutoWalk === 'function');
-                console.log('startPlayerMove exists:', typeof startPlayerMove === 'function');
-                
-                if (targetType === 'tile') {
-                    if (typeof startAutoWalk === 'function') {
-                        console.log('%c✓ Calling startAutoWalk(' + target.x + ', ' + target.y + ')', 'color: lime');
-                        startAutoWalk(target.x, target.y, { ignoreEnemies: false, ignoreNPCs: false });
-                    } else if (typeof startPlayerMove === 'function') {
-                        console.log('⚠️ Auto-walk not available, using single move');
-                        const dx = target.x - game.player.gridX;
-                        const dy = target.y - game.player.gridY;
-                        const dir = (Math.abs(dx) >= Math.abs(dy)) ? (dx > 0 ? 'right' : 'left') : (dy > 0 ? 'down' : 'up');
-                        if (dir) startPlayerMove(dir);
-                    } else {
-                        console.error('❌ No movement functions available!');
-                    }
-                } else {
-                    console.log('Not a tile target, skipping walk');
-                }
+                // Auto-walk disabled for player - manual movement only
+                console.log('Click-to-move disabled. Use WASD/Arrow keys to move.');
                 break;
             case 'cancel':
                 console.log('Menu cancelled');

@@ -253,21 +253,9 @@ function executeDefaultAction(target, targetType, gridX, gridY) {
 function handleTileClick(target) {
     console.log('→ Walking to tile:', target.x, target.y);
     
-    if (typeof startAutoWalk === 'function') {
-        startAutoWalk(target.x, target.y);
-    } else if (typeof startPlayerMove === 'function') {
-        // Fallback: single step toward target
-        const dx = target.x - game.player.gridX;
-        const dy = target.y - game.player.gridY;
-        
-        if (Math.abs(dx) >= Math.abs(dy)) {
-            startPlayerMove(dx > 0 ? 'right' : 'left');
-        } else {
-            startPlayerMove(dy > 0 ? 'down' : 'up');
-        }
-    } else {
-        console.error('No movement function available!');
-    }
+    // Auto-walk disabled for player - manual movement only
+    console.log('Click-to-move disabled. Use WASD/Arrow keys to move.');
+    return;
 }
 
 // ----- ENEMY CLICK: Walk toward + engage combat -----
@@ -282,23 +270,12 @@ function handleEnemyClick(enemy) {
     const dy = enemy.gridY - game.player.gridY;
     const distance = Math.sqrt(dx * dx + dy * dy);
 
-    // If already in range, don't move - just attack
+    // Auto-walk disabled - only engage if in range
     if (distance <= attackRange + 0.5) {
         console.log(`✓ Already in range (distance: ${distance.toFixed(1)}, range: ${attackRange})`);
     } else {
-        // Out of range - calculate position within attack range
-        // Move toward enemy but stop at attack range distance
-        const angle = Math.atan2(dy, dx);
-        const targetDistance = Math.max(1, attackRange - 0.5); // Stop slightly before max range
-        const targetX = Math.floor(game.player.gridX + Math.cos(angle) * targetDistance);
-        const targetY = Math.floor(game.player.gridY + Math.sin(angle) * targetDistance);
-
-        console.log(`Moving to attack position (range: ${attackRange}, distance: ${distance.toFixed(1)})`);
-
-        if (typeof startAutoWalk === 'function') {
-            // Walk toward attack position - ignore enemies in pathfinding
-            startAutoWalk(targetX, targetY, { ignoreEnemies: true });
-        }
+        console.log('Click-to-move disabled. Move closer to attack (use WASD).');
+        return; // Don't engage combat if out of range
     }
 
     // Engage combat immediately - will attack when in range
@@ -310,22 +287,25 @@ function handleEnemyClick(enemy) {
     }
 }
 
-// ----- NPC CLICK: Walk toward + set pending interaction -----
+// ----- NPC CLICK: Check if adjacent for interaction -----
 function handleNPCClick(npc) {
     console.log('→ Interacting with NPC');
-    
+
     // Get NPC position
     const targetX = npc.x !== undefined ? npc.x : npc.gridX;
     const targetY = npc.y !== undefined ? npc.y : npc.gridY;
-    
-    // Start walking toward NPC - ignore the NPC tile so we path TO them
-    if (typeof startAutoWalk === 'function') {
-        startAutoWalk(targetX, targetY, { ignoreNPCs: true });
+
+    // Check if player is already adjacent
+    const dx = Math.abs(game.player.gridX - targetX);
+    const dy = Math.abs(game.player.gridY - targetY);
+
+    if (dx <= 1 && dy <= 1) {
+        // Adjacent - interact immediately
+        setPendingAction(npc, 'npc', 'interact');
+        checkPendingAction(); // Trigger immediately
+    } else {
+        console.log('Click-to-move disabled. Move closer to interact (use WASD).');
     }
-    
-    // Set pending action - will trigger when player is adjacent
-    setPendingAction(npc, 'npc', 'interact');
-    console.log('✓ Pending interaction set (will trigger when adjacent)');
 }
 
 // ==================== PENDING ACTION SYSTEM ====================

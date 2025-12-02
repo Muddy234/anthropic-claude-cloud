@@ -39,7 +39,6 @@ function startPlayerMove(direction) {
     player.targetGridY = targetY;
     player.facing = getCardinalFacing(direction);
     player.diagonalDirection = isDiagonalDirection(direction) ? direction : null;
-    player.bufferedDirection = null;
 }
 
 /**
@@ -92,51 +91,81 @@ function isTileWalkable(gridX, gridY) {
 }
 
 /**
- * Tile-based collision check with diagonal support
- * For diagonal moves, checks destination AND both adjacent tiles to prevent corner-cutting
- * @param {number} targetX - Target grid X
- * @param {number} targetY - Target grid Y
+ * Tile-based collision check with sub-tile precision and radius-based enemy blocking
+ * Supports diagonal movement and wall margins
+ * @param {number} targetX - Target grid X (can be sub-tile like 10.375)
+ * @param {number} targetY - Target grid Y (can be sub-tile like 5.625)
  * @param {number} fromX - Current grid X (optional, needed for diagonal check)
  * @param {number} fromY - Current grid Y (optional, needed for diagonal check)
  */
 function canMoveToTile(targetX, targetY, fromX, fromY) {
+    const WALL_MARGIN = 0.125;
+
+    // Get the tile coordinates (floor for tile lookup)
+    const tileX = Math.floor(targetX);
+    const tileY = Math.floor(targetY);
+
     // Check destination tile is walkable
-    if (!isTileWalkable(targetX, targetY)) {
+    if (!isTileWalkable(tileX, tileY)) {
         return false;
     }
 
-    // Check for enemies at destination
-    const hasEnemy = game.enemies.some(e =>
-        Math.floor(e.gridX) === targetX && Math.floor(e.gridY) === targetY
-    );
-    if (hasEnemy) {
+    // Check wall margins - don't let player get too close to walls
+    // Check if adjacent tiles are walls and if we're too close to them
+    const fracX = targetX - tileX;
+    const fracY = targetY - tileY;
+
+    // Check left wall (if we're close to left edge of tile)
+    if (fracX < WALL_MARGIN && !isTileWalkable(tileX - 1, tileY)) {
+        return false;
+    }
+    // Check right wall (if we're close to right edge of tile)
+    if (fracX > (1 - WALL_MARGIN) && !isTileWalkable(tileX + 1, tileY)) {
+        return false;
+    }
+    // Check top wall (if we're close to top edge of tile)
+    if (fracY < WALL_MARGIN && !isTileWalkable(tileX, tileY - 1)) {
+        return false;
+    }
+    // Check bottom wall (if we're close to bottom edge of tile)
+    if (fracY > (1 - WALL_MARGIN) && !isTileWalkable(tileX, tileY + 1)) {
         return false;
     }
 
-    // If fromX/fromY provided, check for diagonal movement
+    // Check for enemy collision using radius-based blocking
+    for (const enemy of game.enemies) {
+        const enemyRadius = enemy.blockingRadius || 0.75;
+        const dx = targetX - enemy.gridX;
+        const dy = targetY - enemy.gridY;
+        const distance = Math.sqrt(dx * dx + dy * dy);
+
+        // If player would be within enemy's blocking radius, block movement
+        if (distance < enemyRadius) {
+            return false;
+        }
+    }
+
+    // If fromX/fromY provided, check for diagonal movement corner-cutting
     if (fromX !== undefined && fromY !== undefined) {
         const dx = targetX - fromX;
         const dy = targetY - fromY;
 
         // Diagonal move - must check both adjacent tiles to prevent corner-cutting
         if (dx !== 0 && dy !== 0) {
-            // Check horizontal adjacent tile (same row, target column)
-            if (!isTileWalkable(fromX + dx, fromY)) {
-                return false;
-            }
-            // Check vertical adjacent tile (target row, same column)
-            if (!isTileWalkable(fromX, fromY + dy)) {
+            const moveX = dx > 0 ? 1 : -1;
+            const moveY = dy > 0 ? 1 : -1;
+
+            // Check horizontal adjacent tile
+            const adjTileX = Math.floor(fromX) + moveX;
+            const adjTileY = Math.floor(fromY);
+            if (!isTileWalkable(adjTileX, adjTileY)) {
                 return false;
             }
 
-            // Also check for enemies in adjacent tiles (prevent squeezing between enemies)
-            const hasEnemyHorizontal = game.enemies.some(e =>
-                Math.floor(e.gridX) === fromX + dx && Math.floor(e.gridY) === fromY
-            );
-            const hasEnemyVertical = game.enemies.some(e =>
-                Math.floor(e.gridX) === fromX && Math.floor(e.gridY) === fromY + dy
-            );
-            if (hasEnemyHorizontal || hasEnemyVertical) {
+            // Check vertical adjacent tile
+            const adjTileX2 = Math.floor(fromX);
+            const adjTileY2 = Math.floor(fromY) + moveY;
+            if (!isTileWalkable(adjTileX2, adjTileY2)) {
                 return false;
             }
         }
@@ -182,13 +211,38 @@ function updatePlayerMovement(deltaTime) {
 
         // Check for tile interactions
         checkTileInteractions(player);
+    }
+}
 
-        // If there's a buffered direction, start moving that way
-        if (player.bufferedDirection) {
-            const nextDir = player.bufferedDirection;
-            player.bufferedDirection = null;
-            startPlayerMove(nextDir);
-        }
+/**
+ * Cancel current movement and snap player to nearest .125 tile increment
+ */
+function cancelPlayerMove() {
+    const player = game.player;
+    if (!player || !player.isMoving) return;
+
+    // Snap to nearest .125 increment
+    const snapIncrement = 0.125;
+    const snappedX = Math.round(player.displayX / snapIncrement) * snapIncrement;
+    const snappedY = Math.round(player.displayY / snapIncrement) * snapIncrement;
+
+    // Update all position values
+    player.gridX = snappedX;
+    player.gridY = snappedY;
+    player.displayX = snappedX;
+    player.displayY = snappedY;
+    player.x = snappedX;
+    player.y = snappedY;
+    player.targetGridX = snappedX;
+    player.targetGridY = snappedY;
+
+    // Stop movement
+    player.isMoving = false;
+    player.moveProgress = 0;
+
+    // Check for tile interactions at new position
+    if (typeof checkTileInteractions === 'function') {
+        checkTileInteractions(player);
     }
 }
 
@@ -260,6 +314,7 @@ if (typeof SystemManager !== 'undefined') {
 // ============================================================================
 
 window.startPlayerMove = startPlayerMove;
+window.cancelPlayerMove = cancelPlayerMove;
 window.canMoveToTile = canMoveToTile;
 window.isTileWalkable = isTileWalkable;
 window.updatePlayerMovement = updatePlayerMovement;

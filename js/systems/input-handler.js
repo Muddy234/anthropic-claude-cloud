@@ -460,10 +460,10 @@ function getDirectionFromDelta(dx, dy) {
 
 /**
  * Handle movement input - checks held keys and initiates movement
- * Supports 8-directional movement via simultaneous key presses
+ * Supports 8-directional movement and cancellable movement with .125 tile precision
  */
 function handleMovementInput() {
-    if (!game.player || game.player.isMoving) return;
+    if (!game.player) return;
     if (game.state !== 'playing') return;
 
     // Check which directional keys are held
@@ -471,6 +471,17 @@ function handleMovementInput() {
     const down = keys['s'] || keys['S'] || keys['ArrowDown'];
     const left = keys['a'] || keys['A'] || keys['ArrowLeft'];
     const right = keys['d'] || keys['D'] || keys['ArrowRight'];
+
+    // If no movement keys are held, cancel any ongoing movement
+    if (!up && !down && !left && !right) {
+        if (game.player.isMoving && typeof cancelPlayerMove === 'function') {
+            cancelPlayerMove();
+        }
+        return;
+    }
+
+    // If already moving, don't start a new move (but allow current move to continue)
+    if (game.player.isMoving) return;
 
     // Determine direction based on held keys
     // Check diagonals first (two keys held)
