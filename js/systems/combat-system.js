@@ -615,6 +615,11 @@ const CombatSystemManager = {
         updateManaRegen(dt);
         updateGCD(dt);
         updateActionCooldowns(dt);
+
+        // Update projectiles if system is loaded
+        if (typeof updateProjectiles === 'function') {
+            updateProjectiles(dt);
+        }
     },
 
     cleanup() {

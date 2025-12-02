@@ -112,10 +112,22 @@ window.addEventListener('keydown', e => {
 
     // Playing state - hotkeys and movement
     if (game.state === 'playing') {
-        // Action hotkeys (1-4)
+        // Tab targeting
+        if (e.key === 'Tab') {
+            e.preventDefault(); // Prevent default tab behavior
+            if (typeof handleTabTargeting === 'function') {
+                handleTabTargeting(game.player);
+            }
+            return;
+        }
+
+        // Action hotkeys (1-4) - Active Combat System
         if (['1', '2', '3', '4'].includes(e.key)) {
-            if (typeof handleActionHotkey === 'function') {
-		handleActionHotkey(parseInt(e.key), game.player);
+            if (typeof handleActiveCombatHotkey === 'function') {
+                handleActiveCombatHotkey(parseInt(e.key), game.player);
+            } else if (typeof handleActionHotkey === 'function') {
+                // Fallback to old system
+                handleActionHotkey(parseInt(e.key), game.player);
             }
             return;
         }

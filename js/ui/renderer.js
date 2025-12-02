@@ -778,6 +778,9 @@ const camY = game.camera.y;
         if (typeof renderAllEnemies === 'function') {
             renderAllEnemies(ctx, camX, camY, effectiveTileSize, TRACKER_WIDTH);
         }
+        // Projectiles (arrows, bolts, magic)
+        if (typeof renderProjectiles === 'function') { renderProjectiles(ctx, camX, camY, effectiveTileSize); }
+
         if (typeof renderDamageNumbers === 'function') { renderDamageNumbers(camX, camY, effectiveTileSize, TRACKER_WIDTH); }
         ctx.restore();
         drawTracker();
