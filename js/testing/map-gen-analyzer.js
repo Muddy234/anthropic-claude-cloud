@@ -221,12 +221,14 @@ const MapGenAnalyzer = {
         console.log(`  Final mean: ${(this.mean(s.wallDensities.final) * 100).toFixed(2)}%`);
         console.log(`  Final range: ${(Math.min(...s.wallDensities.final) * 100).toFixed(2)}% - ${(Math.max(...s.wallDensities.final) * 100).toFixed(2)}%`);
 
-        // Include CHAMBER_STATS data if available
-        if (typeof CHAMBER_STATS !== 'undefined' && CHAMBER_STATS.data.initialDensities.length > 0) {
-            console.log(`\n  Density progression (from CHAMBER_STATS):`);
-            console.log(`    Initial: ${(this.mean(CHAMBER_STATS.data.initialDensities) * 100).toFixed(2)}%`);
-            console.log(`    After smoothing: ${(this.mean(CHAMBER_STATS.data.smoothedDensities) * 100).toFixed(2)}%`);
-            console.log(`    Final: ${(this.mean(CHAMBER_STATS.data.finalDensities) * 100).toFixed(2)}%`);
+        // Include CHAMBER_STATS data if available (BSP system)
+        if (typeof CHAMBER_STATS !== 'undefined' && CHAMBER_STATS.data.bspSections && CHAMBER_STATS.data.bspSections.length > 0) {
+            console.log(`\n📐 BSP STATISTICS:`);
+            console.log(`  Avg BSP sections per room: ${this.mean(CHAMBER_STATS.data.bspSections).toFixed(2)}`);
+            console.log(`  Avg corridors per room: ${this.mean(CHAMBER_STATS.data.corridorCounts).toFixed(2)}`);
+            console.log(`  Avg dead end sections: ${this.mean(CHAMBER_STATS.data.deadEndCounts).toFixed(2)}`);
+            console.log(`  Avg regeneration attempts: ${this.mean(CHAMBER_STATS.data.regenAttempts).toFixed(2)}`);
+            console.log(`  Max BSP depth: ${Math.max(...CHAMBER_STATS.data.splitDepths)}`);
         }
 
         // Dead ends

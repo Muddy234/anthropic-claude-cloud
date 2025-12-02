@@ -530,7 +530,7 @@ function validateDoorwayConnectivity(grid, room, width, height) {
         return true; // No doorways to validate
     }
 
-    // Ensure doorway clearance
+    // Ensure doorway clearance - be MORE aggressive
     for (const doorTile of doorwayTiles) {
         const clearance = CHAMBER_CONFIG.doorwayClearance;
 
@@ -544,6 +544,46 @@ function validateDoorwayConnectivity(grid, room, width, height) {
                 }
             }
         }
+
+        // EXTRA: Clear a path into the room from doorway edges
+        if (doorTile.y === 0) {
+            // North doorway - clear path downward
+            for (let i = 0; i < 4; i++) {
+                if (doorTile.y + i < height) {
+                    grid[doorTile.y + i][doorTile.x] = 0;
+                    if (doorTile.x > 0) grid[doorTile.y + i][doorTile.x - 1] = 0;
+                    if (doorTile.x < width - 1) grid[doorTile.y + i][doorTile.x + 1] = 0;
+                }
+            }
+        } else if (doorTile.y === height - 1) {
+            // South doorway - clear path upward
+            for (let i = 0; i < 4; i++) {
+                if (doorTile.y - i >= 0) {
+                    grid[doorTile.y - i][doorTile.x] = 0;
+                    if (doorTile.x > 0) grid[doorTile.y - i][doorTile.x - 1] = 0;
+                    if (doorTile.x < width - 1) grid[doorTile.y - i][doorTile.x + 1] = 0;
+                }
+            }
+        }
+        if (doorTile.x === 0) {
+            // West doorway - clear path rightward
+            for (let i = 0; i < 4; i++) {
+                if (doorTile.x + i < width) {
+                    grid[doorTile.y][doorTile.x + i] = 0;
+                    if (doorTile.y > 0) grid[doorTile.y - 1][doorTile.x + i] = 0;
+                    if (doorTile.y < height - 1) grid[doorTile.y + 1][doorTile.x + i] = 0;
+                }
+            }
+        } else if (doorTile.x === width - 1) {
+            // East doorway - clear path leftward
+            for (let i = 0; i < 4; i++) {
+                if (doorTile.x - i >= 0) {
+                    grid[doorTile.y][doorTile.x - i] = 0;
+                    if (doorTile.y > 0) grid[doorTile.y - 1][doorTile.x - i] = 0;
+                    if (doorTile.y < height - 1) grid[doorTile.y + 1][doorTile.x - i] = 0;
+                }
+            }
+        }
     }
 
     // Flood fill from first doorway
@@ -554,6 +594,9 @@ function validateDoorwayConnectivity(grid, room, width, height) {
     for (let i = 1; i < doorwayTiles.length; i++) {
         const door = doorwayTiles[i];
         if (!reachable.has(`${door.x},${door.y}`)) {
+            if (CHAMBER_CONFIG.debugLogging) {
+                console.warn(`[ChamberGen] Doorway at (${door.x}, ${door.y}) not reachable!`);
+            }
             return false; // Doorway not connected
         }
     }
