@@ -337,33 +337,105 @@ function drawItemInspectPanel(item, x, y, w, h, itemType) {
         dy += 40;
     }
 
-    // Stats comparison (for weapons and armor only)
+    // Find currently equipped item in same slot (used by both sections)
+    const slot = itemData.slot || 'MAIN';
+    const equippedItem = game.player.equipped[slot];
+    const equippedData = equippedItem ? (EQUIPMENT_DATA[equippedItem.name] || equippedItem) : null;
+
+    // WEAPON-SPECIFIC STATS (for weapons only)
+    if (itemType === 'weapon') {
+        ctx.fillStyle = '#e67e22';
+        ctx.font = 'bold 18px monospace';
+        ctx.textAlign = 'center';
+        ctx.fillText('WEAPON STATS', x + w / 2, dy);
+        dy += 25;
+
+        ctx.font = '14px monospace';
+        ctx.textAlign = 'left';
+
+        // Damage
+        const thisDmg = itemData.stats?.damage || 0;
+        const equippedDmg = equippedData?.stats?.damage || 0;
+        ctx.fillStyle = '#fff';
+        ctx.fillText('Damage:', x + 20, dy);
+        ctx.textAlign = 'right';
+        ctx.fillStyle = thisDmg > equippedDmg ? '#2ecc71' : thisDmg < equippedDmg ? '#e74c3c' : '#fff';
+        ctx.fillText(`${thisDmg}`, x + w / 2 - 20, dy);
+        ctx.fillStyle = '#888';
+        ctx.fillText(`(${equippedDmg})`, x + w - 20, dy);
+        dy += 20;
+
+        // Speed (lower is better)
+        ctx.textAlign = 'left';
+        const thisSpeed = itemData.stats?.speed || 1.0;
+        const equippedSpeed = equippedData?.stats?.speed || 1.0;
+        ctx.fillStyle = '#fff';
+        ctx.fillText('Speed:', x + 20, dy);
+        ctx.textAlign = 'right';
+        ctx.fillStyle = thisSpeed < equippedSpeed ? '#2ecc71' : thisSpeed > equippedSpeed ? '#e74c3c' : '#fff';
+        ctx.fillText(`${thisSpeed.toFixed(1)}x`, x + w / 2 - 20, dy);
+        ctx.fillStyle = '#888';
+        ctx.fillText(`(${equippedSpeed.toFixed(1)}x)`, x + w - 20, dy);
+        dy += 20;
+
+        // Range
+        ctx.textAlign = 'left';
+        const thisRange = itemData.stats?.range || 1;
+        const equippedRange = equippedData?.stats?.range || 1;
+        ctx.fillStyle = '#fff';
+        ctx.fillText('Range:', x + 20, dy);
+        ctx.textAlign = 'right';
+        ctx.fillStyle = thisRange > equippedRange ? '#2ecc71' : thisRange < equippedRange ? '#e74c3c' : '#fff';
+        ctx.fillText(`${thisRange}`, x + w / 2 - 20, dy);
+        ctx.fillStyle = '#888';
+        ctx.fillText(`(${equippedRange})`, x + w - 20, dy);
+        dy += 20;
+
+        // Element
+        ctx.textAlign = 'left';
+        ctx.fillStyle = '#fff';
+        ctx.fillText('Element:', x + 20, dy);
+        ctx.textAlign = 'right';
+        const thisElement = (itemData.element || 'physical').toUpperCase();
+        const elementColors = {
+            'FIRE': '#ff6b35', 'ICE': '#3498db', 'WATER': '#5dade2',
+            'EARTH': '#8b4513', 'NATURE': '#27ae60', 'DARK': '#9b59b6',
+            'HOLY': '#f1c40f', 'DEATH': '#666', 'ARCANE': '#e67e22',
+            'PHYSICAL': '#ccc'
+        };
+        ctx.fillStyle = elementColors[thisElement] || '#fff';
+        ctx.fillText(thisElement, x + w - 20, dy);
+        dy += 20;
+
+        // Weapon Type & Damage Type
+        ctx.textAlign = 'left';
+        ctx.fillStyle = '#fff';
+        ctx.fillText('Type:', x + 20, dy);
+        ctx.textAlign = 'right';
+        ctx.fillText(`${(itemData.weaponType || 'melee').toUpperCase()}`, x + w - 20, dy);
+        dy += 20;
+
+        ctx.textAlign = 'left';
+        ctx.fillText('Dmg Type:', x + 20, dy);
+        ctx.textAlign = 'right';
+        ctx.fillText(`${(itemData.damageType || 'slash').toUpperCase()}`, x + w - 20, dy);
+        dy += 30;
+    }
+
+    // CHARACTER STATS COMPARISON (for weapons and armor)
     if (itemType === 'weapon' || itemType === 'armor') {
         ctx.fillStyle = '#3498db';
-        ctx.font = 'bold 20px monospace';
+        ctx.font = 'bold 18px monospace';
         ctx.textAlign = 'center';
-        ctx.fillText('STATS COMPARISON', x + w / 2, dy);
-        dy += 30;
-
-        // Find currently equipped item in same slot
-        const slot = itemData.slot || 'MAIN';
-        const equippedItem = game.player.equipped[slot];
-        const equippedData = equippedItem ? (EQUIPMENT_DATA[equippedItem.name] || equippedItem) : null;
+        ctx.fillText('CHARACTER STATS', x + w / 2, dy);
+        dy += 25;
 
         // Stats to compare
         const stats = ['STR', 'AGI', 'INT', 'P.DEF', 'M.DEF'];
         const statProps = ['str', 'agi', 'int', 'pDef', 'mDef'];
 
-        ctx.font = '16px monospace';
+        ctx.font = '14px monospace';
         ctx.textAlign = 'left';
-
-        // Header
-        ctx.fillStyle = '#888';
-        ctx.fillText('STAT', x + 20, dy);
-        ctx.textAlign = 'center';
-        ctx.fillText('THIS', x + w / 2 - 60, dy);
-        ctx.fillText('EQUIPPED', x + w / 2 + 60, dy);
-        dy += 25;
 
         // Draw each stat
         statProps.forEach((prop, idx) => {
@@ -373,18 +445,18 @@ function drawItemInspectPanel(item, x, y, w, h, itemType) {
 
             ctx.textAlign = 'left';
             ctx.fillStyle = '#fff';
-            ctx.fillText(stats[idx], x + 20, dy);
+            ctx.fillText(`${stats[idx]}:`, x + 20, dy);
 
-            ctx.textAlign = 'center';
+            ctx.textAlign = 'right';
             // This item's stat
             ctx.fillStyle = diff > 0 ? '#2ecc71' : diff < 0 ? '#e74c3c' : '#fff';
-            ctx.fillText(thisStat.toString(), x + w / 2 - 60, dy);
+            ctx.fillText(thisStat.toString(), x + w / 2 - 20, dy);
 
             // Equipped item's stat
             ctx.fillStyle = '#888';
-            ctx.fillText(equippedStat.toString(), x + w / 2 + 60, dy);
+            ctx.fillText(`(${equippedStat})`, x + w - 20, dy);
 
-            dy += 22;
+            dy += 20;
         });
 
         dy += 20;

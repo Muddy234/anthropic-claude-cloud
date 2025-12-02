@@ -273,18 +273,35 @@ function handleTileClick(target) {
 // ----- ENEMY CLICK: Walk toward + engage combat -----
 function handleEnemyClick(enemy) {
     console.log('→ Engaging enemy:', enemy.name);
-    
-    // Start walking toward the enemy
-    const targetX = Math.floor(enemy.gridX);
-    const targetY = Math.floor(enemy.gridY);
-    
-    if (typeof startAutoWalk === 'function') {
-        // Walk toward enemy - ignore enemies in pathfinding so we path TO them
-        // Also ignore other enemies so we don't get stuck behind friendlies
-        startAutoWalk(targetX, targetY, { ignoreEnemies: true });
+
+    // Get player's attack range from equipped weapon
+    const attackRange = game.player.combat?.attackRange || 1;
+
+    // Calculate current distance to enemy
+    const dx = enemy.gridX - game.player.gridX;
+    const dy = enemy.gridY - game.player.gridY;
+    const distance = Math.sqrt(dx * dx + dy * dy);
+
+    // If already in range, don't move - just attack
+    if (distance <= attackRange + 0.5) {
+        console.log(`✓ Already in range (distance: ${distance.toFixed(1)}, range: ${attackRange})`);
+    } else {
+        // Out of range - calculate position within attack range
+        // Move toward enemy but stop at attack range distance
+        const angle = Math.atan2(dy, dx);
+        const targetDistance = Math.max(1, attackRange - 0.5); // Stop slightly before max range
+        const targetX = Math.floor(game.player.gridX + Math.cos(angle) * targetDistance);
+        const targetY = Math.floor(game.player.gridY + Math.sin(angle) * targetDistance);
+
+        console.log(`Moving to attack position (range: ${attackRange}, distance: ${distance.toFixed(1)})`);
+
+        if (typeof startAutoWalk === 'function') {
+            // Walk toward attack position - ignore enemies in pathfinding
+            startAutoWalk(targetX, targetY, { ignoreEnemies: true });
+        }
     }
-    
-    // Engage combat immediately - combat system handles range
+
+    // Engage combat immediately - will attack when in range
     if (typeof engageCombat === 'function') {
         engageCombat(game.player, enemy);
         console.log('✓ Combat engaged (will attack when in range)');
