@@ -95,35 +95,48 @@ function resetGameState() {
  */
 function generateDungeon() {
     console.log('[Init] Generating dungeon...');
-    
-    // Generate map layout
-    if (typeof generateMap === 'function') {
-        generateMap();
+
+    // Use new blob-based generator if available, otherwise fall back to old system
+    if (typeof generateBlobDungeon === 'function') {
+        console.log('[Init] Using blob-based dungeon generator');
+        generateBlobDungeon();
+
+        // Spawn hazards (blob generator doesn't handle this yet)
+        if (typeof HazardSystem !== 'undefined') {
+            HazardSystem.spawnForAllRooms();
+        }
     } else {
-        console.error('[Init] generateMap function not found!');
-        return;
-    }
-    
-    // Assign elements to rooms (if not done by generator)
-    assignRoomElements();
-    
-    // Place decorations
-    if (typeof decorateAllRooms === 'function') {
-        decorateAllRooms();
-    }
-    
-    // Spawn hazards
-    if (typeof HazardSystem !== 'undefined') {
-        HazardSystem.spawnForAllRooms();
-    }
-    
-    // Spawn enemies
-    if (typeof spawnEnemiesForAllRooms === 'function') {
-        spawnEnemiesForAllRooms();
-    } else if (typeof spawnEnemiesInRoom === 'function') {
-        // Fallback: spawn per room
-        for (const room of game.rooms) {
-            spawnEnemiesInRoom(room);
+        console.log('[Init] Using legacy room-based generator');
+
+        // Generate map layout
+        if (typeof generateMap === 'function') {
+            generateMap();
+        } else {
+            console.error('[Init] generateMap function not found!');
+            return;
+        }
+
+        // Assign elements to rooms (if not done by generator)
+        assignRoomElements();
+
+        // Place decorations
+        if (typeof decorateAllRooms === 'function') {
+            decorateAllRooms();
+        }
+
+        // Spawn hazards
+        if (typeof HazardSystem !== 'undefined') {
+            HazardSystem.spawnForAllRooms();
+        }
+
+        // Spawn enemies
+        if (typeof spawnEnemiesForAllRooms === 'function') {
+            spawnEnemiesForAllRooms();
+        } else if (typeof spawnEnemiesInRoom === 'function') {
+            // Fallback: spawn per room
+            for (const room of game.rooms) {
+                spawnEnemiesInRoom(room);
+            }
         }
     }
 }
