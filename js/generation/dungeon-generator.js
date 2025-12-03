@@ -513,17 +513,32 @@ function generateBlobDungeonMap() {
 
 function createCorridors(leaf, grid) {
     if (leaf.child1 && leaf.child2) {
-        const pt1 = leaf.child1.getConnectionPoint();
-        const pt2 = leaf.child2.getConnectionPoint();
+        // Get the first blob from each child's subtree
+        const blob1 = getFirstBlob(leaf.child1);
+        const blob2 = getFirstBlob(leaf.child2);
 
-        if (pt1 && pt2) {
-            const corridor = createCorridorPath(grid, leaf.child1.blob || leaf.child1, leaf.child2.blob || leaf.child2);
+        if (blob1 && blob2 && blob1.connectionPoint && blob2.connectionPoint) {
+            const corridor = createCorridorPath(grid, blob1, blob2);
             DUNGEON_STATE.corridors.push(corridor);
         }
     }
 
     if (leaf.child1) createCorridors(leaf.child1, grid);
     if (leaf.child2) createCorridors(leaf.child2, grid);
+}
+
+/**
+ * Get the first blob in a leaf's subtree
+ */
+function getFirstBlob(leaf) {
+    if (leaf.blob) {
+        return leaf.blob;
+    } else if (leaf.child1) {
+        return getFirstBlob(leaf.child1);
+    } else if (leaf.child2) {
+        return getFirstBlob(leaf.child2);
+    }
+    return null;
 }
 
 // ============================================================================
