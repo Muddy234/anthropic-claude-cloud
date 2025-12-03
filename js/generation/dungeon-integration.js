@@ -260,8 +260,8 @@ function generateBlobDungeon() {
     game.decorations = [];
     game.enemies = [];
 
-    // Generate the dungeon
-    generateDungeon();
+    // Generate the dungeon blob map
+    generateBlobDungeonMap();
 
     // Convert to game format
     applyDungeonToGame();

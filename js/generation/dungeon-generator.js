@@ -405,7 +405,7 @@ function validateConnectivity(grid) {
 // MAIN GENERATION
 // ============================================================================
 
-function generateDungeon() {
+function generateBlobDungeonMap() {
     if (DUNGEON_CONFIG.debugLogging) {
         console.log(`\n🗺️  GENERATING BLOB-BASED DUNGEON (${DUNGEON_CONFIG.mapWidth}×${DUNGEON_CONFIG.mapHeight})`);
         console.log(`========================================`);
@@ -562,7 +562,7 @@ function getThemeAtPosition(x, y) {
 if (typeof window !== 'undefined') {
     window.DUNGEON_CONFIG = DUNGEON_CONFIG;
     window.DUNGEON_STATE = DUNGEON_STATE;
-    window.generateDungeon = generateDungeon;
+    window.generateBlobDungeonMap = generateBlobDungeonMap;
     window.getThemeAtPosition = getThemeAtPosition;
 }
 
