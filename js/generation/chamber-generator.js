@@ -12,20 +12,19 @@
 
 const CHAMBER_CONFIG = {
     // BSP Settings
-    targetSections: 6,             // Target 5-7 sections (chambers)
+    targetSections: 4,             // Target 4 sections (realistic for 36x36 rooms)
     minSectionSize: 12,            // Minimum 12x12 for CA to work
     splitVariance: 0.2,            // Split at 40-60% (0.5 ± 0.2)
 
-    // CA Settings (light, for interior detail only)
-    initialWallChance: 0.30,       // Light interior texture
+    // CA Settings (very light, for interior detail only)
+    initialWallChance: 0.20,       // Very light interior texture (reduced from 0.30)
     smoothingPasses: 3,            // Moderate smoothing
     wallThreshold: 4,              // B4: floors become walls on 4+ neighbors
     floorThreshold: 4,             // S4: walls survive on 4+ neighbors
 
     // Corridor Settings
     corridorWidth: 2,              // 2-tile wide corridors
-    minCorridors: 1,               // Min connections per boundary
-    maxCorridors: 3,               // Max connections per boundary
+    corridorsPerBoundary: 1,       // Fixed 1 corridor per boundary (was 1-3 random)
 
     // Doorway Settings
     doorwayClearance: 2,           // 2 tiles clear in all directions
@@ -399,33 +398,46 @@ function applyCellularAutomataToSection(grid, section, gridWidth, gridHeight) {
 
 /**
  * Carve corridors between BSP sections
+ * FIXED: Avoid duplicates, enforce dead ends
  */
 function carveCorridorsBetweenSections(grid, sections, width, height) {
     const corridors = [];
-    const deadEndTarget = Math.floor(sections.length * CHAMBER_CONFIG.deadEndRatio);
     const sectionConnections = sections.map(() => 0);
+    const connectedPairs = new Set(); // Track which pairs already have corridors
 
-    // Shuffle sections for random dead end selection
+    // Calculate dead end target
+    const deadEndTarget = Math.floor(sections.length * CHAMBER_CONFIG.deadEndRatio);
+    const deadEndSections = new Set();
+
+    // Randomly select sections to be dead ends
     const shuffled = [...sections].sort(() => Math.random() - 0.5);
+    for (let i = 0; i < deadEndTarget && i < shuffled.length; i++) {
+        deadEndSections.add(shuffled[i].id);
+    }
 
+    // Iterate through all sections
     for (const section of sections) {
         for (const neighbor of section.neighbors) {
-            // Skip if this would create too many connections
-            if (Math.random() < 0.3 && sectionConnections[section.id] > 0) continue;
+            // Create unique pair key (sorted to avoid duplicates)
+            const pairKey = [section.id, neighbor.section.id].sort((a, b) => a - b).join('-');
 
-            // Determine corridor count for this boundary
-            const numCorridors = CHAMBER_CONFIG.minCorridors +
-                Math.floor(Math.random() * (CHAMBER_CONFIG.maxCorridors - CHAMBER_CONFIG.minCorridors + 1));
+            // Skip if already connected
+            if (connectedPairs.has(pairKey)) continue;
 
-            for (let i = 0; i < numCorridors; i++) {
-                const corridor = carveCorridorBetweenSections(
-                    grid, section, neighbor.section, neighbor.vertical, width, height
-                );
-                if (corridor) {
-                    corridors.push(corridor);
-                    sectionConnections[section.id]++;
-                    sectionConnections[neighbor.section.id]++;
-                }
+            // Enforce dead ends: skip if this would give dead end section a 2nd connection
+            if (deadEndSections.has(section.id) && sectionConnections[section.id] >= 1) continue;
+            if (deadEndSections.has(neighbor.section.id) && sectionConnections[neighbor.section.id] >= 1) continue;
+
+            // Carve corridor (fixed 1 per boundary)
+            const corridor = carveCorridorBetweenSections(
+                grid, section, neighbor.section, neighbor.vertical, width, height
+            );
+
+            if (corridor) {
+                corridors.push(corridor);
+                connectedPairs.add(pairKey);
+                sectionConnections[section.id]++;
+                sectionConnections[neighbor.section.id]++;
             }
         }
     }
