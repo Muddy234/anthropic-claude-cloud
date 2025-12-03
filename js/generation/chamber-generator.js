@@ -405,30 +405,17 @@ function carveCorridorsBetweenSections(grid, sections, width, height) {
     const sectionConnections = sections.map(() => 0);
     const connectedPairs = new Set(); // Track which pairs already have corridors
 
-    // Calculate dead end target
-    const deadEndTarget = Math.floor(sections.length * CHAMBER_CONFIG.deadEndRatio);
-    const deadEndSections = new Set();
-
-    // Randomly select sections to be dead ends
-    const shuffled = [...sections].sort(() => Math.random() - 0.5);
-    for (let i = 0; i < deadEndTarget && i < shuffled.length; i++) {
-        deadEndSections.add(shuffled[i].id);
-    }
-
-    // Iterate through all sections
+    // First pass: Connect all sections with at least 1 corridor
+    // This ensures connectivity before enforcing dead ends
     for (const section of sections) {
-        for (const neighbor of section.neighbors) {
-            // Create unique pair key (sorted to avoid duplicates)
-            const pairKey = [section.id, neighbor.section.id].sort((a, b) => a - b).join('-');
+        // Ensure each section has at least 1 connection
+        if (sectionConnections[section.id] > 0) continue;
 
-            // Skip if already connected
+        // Find first available neighbor to connect to
+        for (const neighbor of section.neighbors) {
+            const pairKey = [section.id, neighbor.section.id].sort((a, b) => a - b).join('-');
             if (connectedPairs.has(pairKey)) continue;
 
-            // Enforce dead ends: skip if this would give dead end section a 2nd connection
-            if (deadEndSections.has(section.id) && sectionConnections[section.id] >= 1) continue;
-            if (deadEndSections.has(neighbor.section.id) && sectionConnections[neighbor.section.id] >= 1) continue;
-
-            // Carve corridor (fixed 1 per boundary)
             const corridor = carveCorridorBetweenSections(
                 grid, section, neighbor.section, neighbor.vertical, width, height
             );
@@ -436,6 +423,43 @@ function carveCorridorsBetweenSections(grid, sections, width, height) {
             if (corridor) {
                 corridors.push(corridor);
                 connectedPairs.add(pairKey);
+                sectionConnections[section.id]++;
+                sectionConnections[neighbor.section.id]++;
+                break; // Only need 1 connection per section for now
+            }
+        }
+    }
+
+    // Second pass: Add additional connections (non-dead-end sections get 2+ connections)
+    const deadEndTarget = Math.floor(sections.length * CHAMBER_CONFIG.deadEndRatio);
+    let currentDeadEnds = sectionConnections.filter(count => count === 1).length;
+
+    for (const section of sections) {
+        // Skip if this section should remain a dead end
+        if (sectionConnections[section.id] === 1 && currentDeadEnds <= deadEndTarget) {
+            continue;
+        }
+
+        // Try to add more connections
+        for (const neighbor of section.neighbors) {
+            // Skip if we have enough connections
+            if (sectionConnections[section.id] >= 2) break;
+
+            const pairKey = [section.id, neighbor.section.id].sort((a, b) => a - b).join('-');
+            if (connectedPairs.has(pairKey)) continue;
+
+            const corridor = carveCorridorBetweenSections(
+                grid, section, neighbor.section, neighbor.vertical, width, height
+            );
+
+            if (corridor) {
+                corridors.push(corridor);
+                connectedPairs.add(pairKey);
+
+                // Update connection counts and dead end tracking
+                if (sectionConnections[section.id] === 1) currentDeadEnds--;
+                if (sectionConnections[neighbor.section.id] === 1) currentDeadEnds--;
+
                 sectionConnections[section.id]++;
                 sectionConnections[neighbor.section.id]++;
             }
@@ -794,6 +818,25 @@ function findSafestChamber(chambers, doorwayTiles, room) {
  * Apply chamber grid to game map
  */
 function applyChamberGridToRoom(grid, room) {
+    // First, identify doorway edge tiles that must stay as floors
+    const doorwayEdgeTiles = new Set();
+    const doorwayTiles = findDoorwayTiles(room);
+    const clearance = CHAMBER_CONFIG.doorwayClearance;
+
+    for (const doorTile of doorwayTiles) {
+        // Mark tiles around doorway as protected
+        for (let dy = -clearance; dy <= clearance; dy++) {
+            for (let dx = -clearance; dx <= clearance; dx++) {
+                const x = doorTile.x + dx;
+                const y = doorTile.y + dy;
+                if (x >= 0 && x < room.floorWidth && y >= 0 && y < room.floorHeight) {
+                    doorwayEdgeTiles.add(`${x},${y}`);
+                }
+            }
+        }
+    }
+
+    // Apply grid to map, but protect doorway edges
     for (let y = 0; y < room.floorHeight; y++) {
         for (let x = 0; x < room.floorWidth; x++) {
             const worldX = room.floorX + x;
@@ -801,14 +844,28 @@ function applyChamberGridToRoom(grid, room) {
 
             if (!game.map[worldY] || !game.map[worldY][worldX]) continue;
 
-            if (grid[y][x] === 1) {
-                // Interior wall
+            // CRITICAL: Never place walls at doorway edges
+            const isProtected = doorwayEdgeTiles.has(`${x},${y}`);
+
+            if (grid[y][x] === 1 && !isProtected) {
+                // Interior wall (only if not protecting a doorway)
                 game.map[worldY][worldX] = {
                     type: 'interior_wall',
                     room: room,
                     element: room.element,
                     blocked: true
                 };
+            } else if (isProtected) {
+                // Force floor at doorway edges
+                if (game.map[worldY][worldX].type !== 'floor') {
+                    game.map[worldY][worldX] = {
+                        type: 'floor',
+                        room: room,
+                        element: room.element,
+                        floorColor: room.floorColor,
+                        accentColor: room.accentColor
+                    };
+                }
             }
             // Floor tiles already placed by placeRoomFloorTiles()
         }

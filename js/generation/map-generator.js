@@ -369,22 +369,22 @@ function placeDoorwayTiles(doorway) {
     const room = doorway.room1;
     const parent = doorway.room2;
     const side = doorway.side;
-    
+
     // Place walkable floor tiles for the full corridor
     if (doorway.orientation === 'horizontal') {
         // North-South connection
         let startY, endY;
-        
+
         if (side === 'north') {
             // Room's north wall to parent's south wall
-            startY = room.y;                    // Room's north wall
-            endY = parent.y + parent.height;    // Just inside parent's south wall
+            startY = Math.min(room.y, parent.y + parent.height);
+            endY = Math.max(room.y, parent.y + parent.height);
         } else {
             // Room's south wall to parent's north wall
-            startY = parent.y;                  // Parent's north wall
-            endY = room.y + room.height;        // Just inside room's south wall
+            startY = Math.min(parent.y, room.y + room.height);
+            endY = Math.max(parent.y, room.y + room.height);
         }
-        
+
         // Create corridor tiles for full length
         for (let y = startY; y < endY; y++) {
             for (let dx = 0; dx < doorway.width; dx++) {
@@ -401,17 +401,17 @@ function placeDoorwayTiles(doorway) {
     } else {
         // East-West connection
         let startX, endX;
-        
+
         if (side === 'west') {
             // Room's west wall to parent's east wall
-            startX = room.x;                    // Room's west wall
-            endX = parent.x + parent.width;     // Just inside parent's east wall
+            startX = Math.min(room.x, parent.x + parent.width);
+            endX = Math.max(room.x, parent.x + parent.width);
         } else {
             // Room's east wall to parent's west wall
-            startX = parent.x;                  // Parent's west wall
-            endX = room.x + room.width;         // Just inside room's east wall
+            startX = Math.min(parent.x, room.x + room.width);
+            endX = Math.max(parent.x, room.x + room.width);
         }
-        
+
         // Create corridor tiles for full length
         for (let x = startX; x < endX; x++) {
             for (let dy = 0; dy < doorway.height; dy++) {
