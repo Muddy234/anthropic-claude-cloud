@@ -431,37 +431,45 @@ function carveCorridorsBetweenSections(grid, sections, width, height) {
     }
 
     // Second pass: Add additional connections (non-dead-end sections get 2+ connections)
-    const deadEndTarget = Math.floor(sections.length * CHAMBER_CONFIG.deadEndRatio);
+    const deadEndTarget = Math.max(1, Math.round(sections.length * CHAMBER_CONFIG.deadEndRatio));
     let currentDeadEnds = sectionConnections.filter(count => count === 1).length;
 
-    for (const section of sections) {
-        // Skip if this section should remain a dead end
-        if (sectionConnections[section.id] === 1 && currentDeadEnds <= deadEndTarget) {
-            continue;
-        }
+    // Shuffle sections to randomize which ones get extra connections
+    const shuffledSections = [...sections].sort(() => Math.random() - 0.5);
 
-        // Try to add more connections
-        for (const neighbor of section.neighbors) {
-            // Skip if we have enough connections
-            if (sectionConnections[section.id] >= 2) break;
+    for (const section of shuffledSections) {
+        // Count current dead ends
+        currentDeadEnds = sectionConnections.filter(count => count === 1).length;
 
-            const pairKey = [section.id, neighbor.section.id].sort((a, b) => a - b).join('-');
-            if (connectedPairs.has(pairKey)) continue;
+        // If we have too many dead ends, add connections to this section
+        // If we're at or below target, only add if this section already has 2+ connections
+        if (currentDeadEnds > deadEndTarget || sectionConnections[section.id] >= 2) {
+            // Try to add more connections
+            for (const neighbor of section.neighbors) {
+                // Skip if we have enough connections (limit to 2-3 per section)
+                if (sectionConnections[section.id] >= 3) break;
 
-            const corridor = carveCorridorBetweenSections(
-                grid, section, neighbor.section, neighbor.vertical, width, height
-            );
+                const pairKey = [section.id, neighbor.section.id].sort((a, b) => a - b).join('-');
+                if (connectedPairs.has(pairKey)) continue;
 
-            if (corridor) {
-                corridors.push(corridor);
-                connectedPairs.add(pairKey);
+                const corridor = carveCorridorBetweenSections(
+                    grid, section, neighbor.section, neighbor.vertical, width, height
+                );
 
-                // Update connection counts and dead end tracking
-                if (sectionConnections[section.id] === 1) currentDeadEnds--;
-                if (sectionConnections[neighbor.section.id] === 1) currentDeadEnds--;
+                if (corridor) {
+                    corridors.push(corridor);
+                    connectedPairs.add(pairKey);
 
-                sectionConnections[section.id]++;
-                sectionConnections[neighbor.section.id]++;
+                    // Update connection counts
+                    sectionConnections[section.id]++;
+                    sectionConnections[neighbor.section.id]++;
+
+                    // Check if we've reached target dead ends
+                    currentDeadEnds = sectionConnections.filter(count => count === 1).length;
+                    if (currentDeadEnds <= deadEndTarget && sectionConnections[section.id] >= 2) {
+                        break; // This section is good enough
+                    }
+                }
             }
         }
     }
