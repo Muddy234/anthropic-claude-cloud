@@ -363,7 +363,7 @@ function createDoorwayBetweenRooms(room, parentRoom, side) {
 
 /**
  * Place doorway tiles on the map (makes them walkable)
- * Punches through BOTH room walls and creates corridor between them
+ * Punches through BOTH room walls, gap, and connects to floor tiles
  */
 function placeDoorwayTiles(doorway) {
     const room = doorway.room1;
@@ -371,22 +371,23 @@ function placeDoorwayTiles(doorway) {
     const side = doorway.side;
 
     // Place walkable floor tiles for the full corridor
+    // Must connect from one room's FLOOR through walls to the other room's FLOOR
     if (doorway.orientation === 'horizontal') {
         // North-South connection
         let startY, endY;
 
         if (side === 'north') {
-            // Room's north wall to parent's south wall
-            startY = Math.min(room.y, parent.y + parent.height);
-            endY = Math.max(room.y, parent.y + parent.height);
+            // Connect from room's floor (just inside north wall) to parent's floor (just inside south wall)
+            startY = room.floorY;                           // Room's first floor row
+            endY = parent.floorY + parent.floorHeight;      // Parent's last floor row + 1
         } else {
-            // Room's south wall to parent's north wall
-            startY = Math.min(parent.y, room.y + room.height);
-            endY = Math.max(parent.y, room.y + room.height);
+            // Connect from parent's floor (just inside north wall) to room's floor (just inside south wall)
+            startY = parent.floorY;                         // Parent's first floor row
+            endY = room.floorY + room.floorHeight;          // Room's last floor row + 1
         }
 
-        // Create corridor tiles for full length
-        for (let y = startY; y < endY; y++) {
+        // Create corridor tiles for full length (includes walls, gap, and floor edges)
+        for (let y = startY; y <= endY; y++) {
             for (let dx = 0; dx < doorway.width; dx++) {
                 const x = doorway.x + dx;
                 if (x >= 0 && x < GRID_WIDTH && y >= 0 && y < GRID_HEIGHT) {
@@ -403,17 +404,17 @@ function placeDoorwayTiles(doorway) {
         let startX, endX;
 
         if (side === 'west') {
-            // Room's west wall to parent's east wall
-            startX = Math.min(room.x, parent.x + parent.width);
-            endX = Math.max(room.x, parent.x + parent.width);
+            // Connect from room's floor (just inside west wall) to parent's floor (just inside east wall)
+            startX = room.floorX;                           // Room's first floor column
+            endX = parent.floorX + parent.floorWidth;       // Parent's last floor column + 1
         } else {
-            // Room's east wall to parent's west wall
-            startX = Math.min(parent.x, room.x + room.width);
-            endX = Math.max(parent.x, room.x + room.width);
+            // Connect from parent's floor (just inside west wall) to room's floor (just inside east wall)
+            startX = parent.floorX;                         // Parent's first floor column
+            endX = room.floorX + room.floorWidth;           // Room's last floor column + 1
         }
 
-        // Create corridor tiles for full length
-        for (let x = startX; x < endX; x++) {
+        // Create corridor tiles for full length (includes walls, gap, and floor edges)
+        for (let x = startX; x <= endX; x++) {
             for (let dy = 0; dy < doorway.height; dy++) {
                 const y = doorway.y + dy;
                 if (x >= 0 && x < GRID_WIDTH && y >= 0 && y < GRID_HEIGHT) {
