@@ -770,6 +770,13 @@ function executeContextAction(action, target, targetType) {
             }
             break;
 
+        case 'pickup':
+            if (typeof window.pickupLootPile === 'function' && targetType === 'loot') {
+                console.log('Picking up loot pile');
+                window.pickupLootPile(target);
+            }
+            break;
+
         case 'inspect':
             inspectPopup.visible = true;
             inspectPopup.target = target;
