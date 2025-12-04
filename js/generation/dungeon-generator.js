@@ -224,8 +224,10 @@ function digBiasedWalk(grid, p1, p2, corridorTiles, path) {
     const tx = p2.x;
     const ty = p2.y;
 
-    grid[y][x] = 0; // Floor
-    corridorTiles.add(`${x},${y}`);
+    const corridorWidth = 4; // 4 tiles wide minimum
+
+    // Dig starting position (4 tiles wide)
+    digWideCorridorTile(grid, x, y, corridorWidth, corridorTiles);
     path.push({ x, y });
 
     while (x !== tx || y !== ty) {
@@ -239,24 +241,32 @@ function digBiasedWalk(grid, p1, p2, corridorTiles, path) {
 
         const [dx, dy] = candidates[Math.floor(Math.random() * candidates.length)];
 
-        // Add wobble to widen path
-        if (Math.random() < DUNGEON_CONFIG.corridorWobble) {
-            const perpX = -dy;
-            const perpY = dx;
-            const wx = x + perpX;
-            const wy = y + perpY;
-            if (wx > 1 && wx < DUNGEON_CONFIG.mapWidth - 2 &&
-                wy > 1 && wy < DUNGEON_CONFIG.mapHeight - 2) {
-                grid[wy][wx] = 0;
-                corridorTiles.add(`${wx},${wy}`);
-            }
-        }
-
         x += dx;
         y += dy;
-        grid[y][x] = 0;
-        corridorTiles.add(`${x},${y}`);
+
+        // Dig 4-tile wide corridor at this position
+        digWideCorridorTile(grid, x, y, corridorWidth, corridorTiles);
         path.push({ x, y });
+    }
+}
+
+/**
+ * Dig a wide corridor tile (4x4 area centered on x,y)
+ */
+function digWideCorridorTile(grid, cx, cy, width, corridorTiles) {
+    const halfWidth = Math.floor(width / 2);
+
+    for (let dy = -halfWidth; dy <= halfWidth; dy++) {
+        for (let dx = -halfWidth; dx <= halfWidth; dx++) {
+            const x = cx + dx;
+            const y = cy + dy;
+
+            if (x > 1 && x < DUNGEON_CONFIG.mapWidth - 2 &&
+                y > 1 && y < DUNGEON_CONFIG.mapHeight - 2) {
+                grid[y][x] = 0;
+                corridorTiles.add(`${x},${y}`);
+            }
+        }
     }
 }
 
