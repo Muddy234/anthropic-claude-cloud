@@ -237,10 +237,14 @@ function handleContextMenuClick(e) {
 
             // Execute action BEFORE closing menu
             try {
-                executeContextAction(option.action, window.contextMenu.target, window.contextMenu.targetType);
+                console.log('Calling function now...');
+                const result = executeContextAction(option.action, window.contextMenu.target, window.contextMenu.targetType);
+                console.log('Function returned:', result);
             } catch (error) {
                 console.error('ERROR calling executeContextAction:', error);
+                console.error('Error stack:', error.stack);
             }
+            console.log('After executeContextAction call');
         } else {
             console.log('Invalid option index');
         }
