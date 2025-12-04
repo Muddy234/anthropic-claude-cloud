@@ -633,6 +633,54 @@ function drawThemedFloor(tile, x, y, size) {
     ctx.fillRect(x, y, size, size);
 }
 
+/**
+ * Apply radial gradient fog of war overlay for smooth visibility fade
+ * Creates a gradient that spans across tiles for seamless transition
+ */
+function applyRadialFogOverlay(ctx, player, camX, camY, tileSize, offsetX, viewW, viewH) {
+    // Get vision ranges from VisionSystem
+    const fullVisionRange = typeof VisionSystem !== 'undefined'
+        ? VisionSystem.getPlayerVisionRange()
+        : 4;
+    const fadeDistance = typeof VisionSystem !== 'undefined'
+        ? VisionSystem.config.fadeDistance
+        : 2;
+    const totalRange = fullVisionRange + fadeDistance;
+
+    // Calculate player's screen position
+    const playerScreenX = (player.displayX - camX) * tileSize + offsetX;
+    const playerScreenY = (player.displayY - camY) * tileSize;
+
+    // Calculate radii in pixels
+    const innerRadius = fullVisionRange * tileSize;
+    const outerRadius = totalRange * tileSize;
+
+    // Create radial gradient centered on player
+    const gradient = ctx.createRadialGradient(
+        playerScreenX, playerScreenY, innerRadius,  // Inner circle (full visibility)
+        playerScreenX, playerScreenY, outerRadius   // Outer circle (full darkness)
+    );
+
+    // Add color stops to approximate smoothstep curve
+    // We use multiple stops to create a smooth ease-in-ease-out effect
+    const steps = 20; // Number of gradient steps for smooth interpolation
+    for (let i = 0; i <= steps; i++) {
+        const t = i / steps; // 0 to 1
+
+        // Apply smoothstep function: t * t * (3 - 2 * t)
+        const smoothT = t * t * (3 - 2 * t);
+
+        // Calculate darkness (0 = transparent, 0.8 = nearly opaque)
+        const darkness = smoothT * 0.8;
+
+        gradient.addColorStop(t, `rgba(0, 0, 0, ${darkness})`);
+    }
+
+    // Draw gradient overlay across entire viewport
+    ctx.fillStyle = gradient;
+    ctx.fillRect(offsetX, 0, viewW, viewH);
+}
+
 function render() {
     ctx.fillStyle = '#000'; 
     ctx.fillRect(0, 0, canvas.width, canvas.height);
@@ -743,18 +791,15 @@ const camY = game.camera.y;
                     ctx.fillStyle = 'rgba(0, 0, 0, 0.65)';
                     ctx.fillRect(screenX, screenY, effectiveTileSize, effectiveTileSize);
                 }
-                // FOG OF WAR: Apply smooth falloff for visible tiles in the fade zone
-                // visibility: 1.0 = full light, 0.0 = edge of vision (nearly dark gray)
-                else if (tile.visible && tile.visibility < 1) {
-                    // Smooth fade: darkness increases as visibility decreases
-                    // At visibility 0, we want ~80% darkness to nearly match unexplored gray
-                    const darkness = (1 - tile.visibility) * 0.8;
-                    ctx.fillStyle = `rgba(0, 0, 0, ${darkness})`;
-                    ctx.fillRect(screenX, screenY, effectiveTileSize, effectiveTileSize);
-                }
+                // Note: Per-tile visibility overlay removed in favor of radial gradient (see Layer 1.4)
             }
         }
-        
+
+        // LAYER 1.4: Apply radial gradient fog of war overlay (smooth fade across tiles)
+        if (typeof applyRadialFogOverlay === 'function') {
+            applyRadialFogOverlay(ctx, game.player, camX, camY, effectiveTileSize, TRACKER_WIDTH, viewW, viewH);
+        }
+
         // LAYER 1.5: Draw room perimeter walls with proper corners/edges (NEW!)
         // DISABLED for blob-based dungeons - walls are rendered in Layer 1 based on game.map[y][x].type
         // The renderAllWalls() function draws rectangular perimeters which don't work for organic blob shapes
