@@ -686,8 +686,9 @@ const Debug = {
     },
 
     inspectTile(x, y) {
-        x = x ?? game.player.gridX;
-        y = y ?? game.player.gridY;
+        // Convert to integer grid coordinates
+        x = x !== undefined ? Math.floor(x) : Math.floor(game.player.gridX ?? game.player.x);
+        y = y !== undefined ? Math.floor(y) : Math.floor(game.player.gridY ?? game.player.y);
 
         console.log(`\n🔍 INSPECTING TILE (${x}, ${y})`);
         console.log('═══════════════════════════════════');
