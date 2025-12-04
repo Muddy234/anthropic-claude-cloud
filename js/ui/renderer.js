@@ -633,6 +633,56 @@ function drawThemedFloor(tile, x, y, size) {
     ctx.fillRect(x, y, size, size);
 }
 
+/**
+ * Apply radial gradient fog of war overlay for smooth visibility fade
+ * Creates a gradient that spans across tiles for seamless transition
+ * Combined with Layer 1.45 shadow overlay to respect shadowcasting
+ */
+function applyRadialFogOverlay(ctx, player, camX, camY, tileSize, offsetX, viewW, viewH) {
+    // Get vision ranges from VisionSystem
+    const fullVisionRange = typeof VisionSystem !== 'undefined'
+        ? VisionSystem.getPlayerVisionRange()
+        : 4;
+    const fadeDistance = typeof VisionSystem !== 'undefined'
+        ? VisionSystem.config.fadeDistance
+        : 2;
+    const totalRange = fullVisionRange + fadeDistance;
+
+    // Calculate player's screen position
+    const playerScreenX = (player.displayX - camX) * tileSize + offsetX;
+    const playerScreenY = (player.displayY - camY) * tileSize;
+
+    // Calculate radii in pixels
+    const innerRadius = fullVisionRange * tileSize;
+    const outerRadius = totalRange * tileSize;
+
+    // Create radial gradient centered on player
+    const gradient = ctx.createRadialGradient(
+        playerScreenX, playerScreenY, innerRadius,  // Inner circle (full visibility)
+        playerScreenX, playerScreenY, outerRadius   // Outer circle (full darkness)
+    );
+
+    // Add color stops to approximate smoothstep curve
+    // We use multiple stops to create a smooth ease-in-ease-out effect
+    const steps = 20; // Number of gradient steps for smooth interpolation
+    for (let i = 0; i <= steps; i++) {
+        const t = i / steps; // 0 to 1
+
+        // Apply smoothstep function: t * t * (3 - 2 * t)
+        const smoothT = t * t * (3 - 2 * t);
+
+        // Calculate darkness (0 = transparent, 0.8 = nearly opaque)
+        const darkness = smoothT * 0.8;
+
+        gradient.addColorStop(t, `rgba(0, 0, 0, ${darkness})`);
+    }
+
+    // Draw gradient overlay across entire viewport
+    // Note: Shadowed areas will be overwritten by Layer 1.45
+    ctx.fillStyle = gradient;
+    ctx.fillRect(offsetX, 0, viewW, viewH);
+}
+
 function render() {
     ctx.fillStyle = '#000'; 
     ctx.fillRect(0, 0, canvas.width, canvas.height);
@@ -739,26 +789,49 @@ const camY = game.camera.y;
                 }
 
                 // FOG OF WAR: Apply darkness overlay for remembered (not currently visible) tiles
+                // Note: Visible tile fading handled by radial gradient in Layer 1.4
                 if (tile.explored && !tile.visible) {
                     ctx.fillStyle = 'rgba(0, 0, 0, 0.65)';
                     ctx.fillRect(screenX, screenY, effectiveTileSize, effectiveTileSize);
                 }
-                // FOG OF WAR: Apply smooth falloff for visible tiles in the fade zone
-                // visibility: 1.0 = full light, 0.0 = edge of vision (nearly dark gray)
-                else if (tile.visible && tile.visibility < 1) {
-                    // Smooth fade: darkness increases as visibility decreases
-                    // At visibility 0, we want ~80% darkness to nearly match unexplored gray
-                    const darkness = (1 - tile.visibility) * 0.8;
-                    ctx.fillStyle = `rgba(0, 0, 0, ${darkness})`;
+            }
+        }
+
+        // LAYER 1.4: Apply radial gradient for smooth fade, then overlay shadows
+        if (typeof applyRadialFogOverlay === 'function') {
+            applyRadialFogOverlay(ctx, game.player, camX, camY, effectiveTileSize, TRACKER_WIDTH, viewW, viewH);
+        }
+
+        // LAYER 1.45: Overlay full darkness on shadowed tiles (respects shadowcasting)
+        for (let y = 0; y < GRID_HEIGHT; y++) {
+            for (let x = 0; x < GRID_WIDTH; x++) {
+                const tile = game.map[y][x];
+                if (!tile || !tile.explored) continue;
+
+                // Only overlay darkness on explored but not currently visible tiles
+                if (tile.explored && !tile.visible) {
+                    const screenX = (x - camX) * effectiveTileSize + TRACKER_WIDTH;
+                    const screenY = (y - camY) * effectiveTileSize;
+
+                    // Skip tiles that are off-screen
+                    if (screenX + effectiveTileSize < TRACKER_WIDTH || screenX > canvas.width ||
+                        screenY + effectiveTileSize < 0 || screenY > canvas.height) {
+                        continue;
+                    }
+
+                    // Apply shadow darkness (overwrites radial gradient in shadowed areas)
+                    ctx.fillStyle = 'rgba(0, 0, 0, 0.65)';
                     ctx.fillRect(screenX, screenY, effectiveTileSize, effectiveTileSize);
                 }
             }
         }
-        
+
         // LAYER 1.5: Draw room perimeter walls with proper corners/edges (NEW!)
-        if (typeof renderAllWalls === 'function') {
-            renderAllWalls(ctx, camX, camY, effectiveTileSize, TRACKER_WIDTH);
-        }
+        // DISABLED for blob-based dungeons - walls are rendered in Layer 1 based on game.map[y][x].type
+        // The renderAllWalls() function draws rectangular perimeters which don't work for organic blob shapes
+        // if (typeof renderAllWalls === 'function') {
+        //     renderAllWalls(ctx, camX, camY, effectiveTileSize, TRACKER_WIDTH);
+        // }
         
         // LAYER 2: Draw loot piles
         if (typeof renderLootPiles === 'function') {
@@ -804,11 +877,6 @@ const camY = game.camera.y;
         ctx.restore();
         drawTracker();
 
-        // Combat action bar (hotkeys 1-4)
-        if (typeof drawCombatActionBar === 'function') {
-            drawCombatActionBar(ctx, canvas.width, canvas.height);
-        }
-
         // DISABLED: Old skills action bar (replaced by combat action bar)
         // if (typeof drawActionBar === 'function') {
         //     drawActionBar();
@@ -818,14 +886,21 @@ const camY = game.camera.y;
             if (game.messageLog.length > 0 && Date.now() - game.lastMessageTime < 3000) { ctx.fillText(game.messageLog[game.messageLog.length - 1].text, msgX, msgY); }
         }
         drawNotification();
-        if (game.state === 'merchant') drawMerchant();
-        if (game.state === 'inventory') drawInventoryOverlay();
-        if (game.state === 'map') drawMapOverlay();
-        if (game.state === 'skills') drawSkillsOverlay();
-        if (game.state === 'moveset') drawMoveSetOverlay();
-        if (game.state === 'levelup') drawLevelUpScreen();
     } else if (game.state === 'gameover') {
         ctx.fillStyle = '#e74c3c'; ctx.font = '64px monospace'; ctx.textAlign = 'center'; ctx.fillText('GAME OVER', canvas.width / 2, 500); ctx.fillStyle = '#fff'; ctx.font = '32px monospace'; ctx.fillText('Press SPACE to Restart', canvas.width / 2, 600);
     }
     if (typeof renderUIOverlays === 'function') { renderUIOverlays(ctx); }
+
+    // Combat action bar (hotkeys 1-4) - Draw AFTER overlays so icons appear on top
+    if (typeof drawCombatActionBar === 'function') {
+        drawCombatActionBar(ctx, canvas.width, canvas.height);
+    }
+
+    // Draw popup menus LAST so they appear on top of action icons
+    if (game.state === 'merchant') drawMerchant();
+    if (game.state === 'inventory') drawInventoryOverlay();
+    if (game.state === 'map') drawMapOverlay();
+    if (game.state === 'skills') drawSkillsOverlay();
+    if (game.state === 'moveset') drawMoveSetOverlay();
+    if (game.state === 'levelup') drawLevelUpScreen();
 }

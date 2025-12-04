@@ -95,36 +95,20 @@ function resetGameState() {
  */
 function generateDungeon() {
     console.log('[Init] Generating dungeon...');
-    
-    // Generate map layout
-    if (typeof generateMap === 'function') {
-        generateMap();
-    } else {
-        console.error('[Init] generateMap function not found!');
-        return;
+
+    // ONLY use blob-based generator (no fallback to old system)
+    if (typeof generateBlobDungeon !== 'function') {
+        console.error('[Init] ❌ generateBlobDungeon not found! Check that dungeon-integration.js is loaded.');
+        console.error('[Init] Available functions:', Object.keys(window).filter(k => k.includes('generate')));
+        throw new Error('Blob dungeon generator not available');
     }
-    
-    // Assign elements to rooms (if not done by generator)
-    assignRoomElements();
-    
-    // Place decorations
-    if (typeof decorateAllRooms === 'function') {
-        decorateAllRooms();
-    }
-    
-    // Spawn hazards
+
+    console.log('[Init] ✅ Using blob-based dungeon generator');
+    generateBlobDungeon();
+
+    // Spawn hazards (blob generator doesn't handle this yet)
     if (typeof HazardSystem !== 'undefined') {
         HazardSystem.spawnForAllRooms();
-    }
-    
-    // Spawn enemies
-    if (typeof spawnEnemiesForAllRooms === 'function') {
-        spawnEnemiesForAllRooms();
-    } else if (typeof spawnEnemiesInRoom === 'function') {
-        // Fallback: spawn per room
-        for (const room of game.rooms) {
-            spawnEnemiesInRoom(room);
-        }
     }
 }
 

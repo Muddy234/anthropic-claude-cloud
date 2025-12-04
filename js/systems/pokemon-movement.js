@@ -1,45 +1,65 @@
 // === js/utils/pokemon-movement.js ===
-// Pokemon-style grid-locked movement system
+// Continuous sub-tile movement system with .125 precision
 // UPDATED: Registers with SystemManager
 
 /**
- * Start a move in the given direction
- * Called when player presses a direction key
- * Supports 8 directions: up, down, left, right, up-left, up-right, down-left, down-right
+ * Move player incrementally based on held direction
+ * Called each frame from input handler
+ * @param {string} direction - Direction to move (up, down, left, right, up-left, etc.)
+ * @param {number} deltaTime - Time since last frame in milliseconds
  */
-function startPlayerMove(direction) {
+function movePlayerContinuous(direction, deltaTime) {
     const player = game.player;
+    if (!player) return;
 
-    // Calculate target grid position
-    let targetX = player.gridX;
-    let targetY = player.gridY;
+    // Calculate movement delta based on speed and time
+    const moveSpeed = player.moveSpeed || 4; // tiles per second
+    const moveDelta = (moveSpeed * deltaTime) / 1000; // tiles to move this frame
+
+    // Calculate direction vector
+    let dx = 0, dy = 0;
 
     switch (direction) {
-        case 'up': targetY -= 1; break;
-        case 'down': targetY += 1; break;
-        case 'left': targetX -= 1; break;
-        case 'right': targetX += 1; break;
-        case 'up-left': targetX -= 1; targetY -= 1; break;
-        case 'up-right': targetX += 1; targetY -= 1; break;
-        case 'down-left': targetX -= 1; targetY += 1; break;
-        case 'down-right': targetX += 1; targetY += 1; break;
+        case 'up': dy = -moveDelta; break;
+        case 'down': dy = moveDelta; break;
+        case 'left': dx = -moveDelta; break;
+        case 'right': dx = moveDelta; break;
+        case 'up-left': dx = -moveDelta * 0.707; dy = -moveDelta * 0.707; break;
+        case 'up-right': dx = moveDelta * 0.707; dy = -moveDelta * 0.707; break;
+        case 'down-left': dx = -moveDelta * 0.707; dy = moveDelta * 0.707; break;
+        case 'down-right': dx = moveDelta * 0.707; dy = moveDelta * 0.707; break;
     }
 
-    // Check if target tile is walkable (includes diagonal collision check)
-    if (!canMoveToTile(targetX, targetY, player.gridX, player.gridY)) {
-        // Just turn to face that direction, don't move
+    // Calculate new position
+    const newX = player.gridX + dx;
+    const newY = player.gridY + dy;
+
+    // Check if new position is valid
+    if (canMoveToPosition(newX, newY, player.gridX, player.gridY)) {
+        // Update position
+        player.gridX = newX;
+        player.gridY = newY;
+        player.displayX = newX;
+        player.displayY = newY;
+        player.x = newX;
+        player.y = newY;
+
+        // Update facing direction
         player.facing = getCardinalFacing(direction);
-        return;
-    }
+        player.isMoving = true;
 
-    // Start the move!
-    player.isMoving = true;
-    player.moveProgress = 0;
-    player.targetGridX = targetX;
-    player.targetGridY = targetY;
-    player.facing = getCardinalFacing(direction);
-    player.diagonalDirection = isDiagonalDirection(direction) ? direction : null;
-    player.bufferedDirection = null;
+        // Check for tile interactions (only on whole tile boundaries)
+        const tileX = Math.floor(newX);
+        const tileY = Math.floor(newY);
+        const prevTileX = Math.floor(player.gridX - dx);
+        const prevTileY = Math.floor(player.gridY - dy);
+
+        if (tileX !== prevTileX || tileY !== prevTileY) {
+            if (typeof checkTileInteractions === 'function') {
+                checkTileInteractions(player);
+            }
+        }
+    }
 }
 
 /**
@@ -92,53 +112,79 @@ function isTileWalkable(gridX, gridY) {
 }
 
 /**
- * Tile-based collision check with diagonal support
- * For diagonal moves, checks destination AND both adjacent tiles to prevent corner-cutting
- * @param {number} targetX - Target grid X
- * @param {number} targetY - Target grid Y
- * @param {number} fromX - Current grid X (optional, needed for diagonal check)
- * @param {number} fromY - Current grid Y (optional, needed for diagonal check)
+ * Position-based collision check with sub-tile precision
+ * Supports diagonal movement with proper wall collision
+ * @param {number} newX - New X position (sub-tile like 10.375)
+ * @param {number} newY - New Y position (sub-tile like 5.625)
+ * @param {number} oldX - Current X position
+ * @param {number} oldY - Current Y position
  */
-function canMoveToTile(targetX, targetY, fromX, fromY) {
-    // Check destination tile is walkable
-    if (!isTileWalkable(targetX, targetY)) {
+function canMoveToPosition(newX, newY, oldX, oldY) {
+    const WALL_MARGIN = 0.125;
+
+    // Get the tile coordinates
+    const newTileX = Math.floor(newX);
+    const newTileY = Math.floor(newY);
+
+    // Check if the tile we're in is walkable
+    if (!isTileWalkable(newTileX, newTileY)) {
         return false;
     }
 
-    // Check for enemies at destination
-    const hasEnemy = game.enemies.some(e =>
-        Math.floor(e.gridX) === targetX && Math.floor(e.gridY) === targetY
-    );
-    if (hasEnemy) {
+    // Calculate fractional position within tile (0 to 1)
+    const fracX = newX - newTileX;
+    const fracY = newY - newTileY;
+
+    // Only check adjacent walls if we're close to the edge AND have a wall there
+    // Left edge - check if there's a wall to the left
+    if (fracX < WALL_MARGIN && !isTileWalkable(newTileX - 1, newTileY)) {
+        return false;
+    }
+    // Right edge - check if there's a wall to the right
+    if (fracX > (1 - WALL_MARGIN) && !isTileWalkable(newTileX + 1, newTileY)) {
+        return false;
+    }
+    // Top edge - check if there's a wall above
+    if (fracY < WALL_MARGIN && !isTileWalkable(newTileX, newTileY - 1)) {
+        return false;
+    }
+    // Bottom edge - check if there's a wall below
+    if (fracY > (1 - WALL_MARGIN) && !isTileWalkable(newTileX, newTileY + 1)) {
         return false;
     }
 
-    // If fromX/fromY provided, check for diagonal movement
-    if (fromX !== undefined && fromY !== undefined) {
-        const dx = targetX - fromX;
-        const dy = targetY - fromY;
+    // For diagonal movement, check corners to prevent wall clipping
+    const dx = newX - oldX;
+    const dy = newY - oldY;
 
-        // Diagonal move - must check both adjacent tiles to prevent corner-cutting
-        if (dx !== 0 && dy !== 0) {
-            // Check horizontal adjacent tile (same row, target column)
-            if (!isTileWalkable(fromX + dx, fromY)) {
-                return false;
-            }
-            // Check vertical adjacent tile (target row, same column)
-            if (!isTileWalkable(fromX, fromY + dy)) {
-                return false;
-            }
+    if (Math.abs(dx) > 0.001 && Math.abs(dy) > 0.001) {
+        // Moving diagonally - check the corner tile
+        const moveRight = dx > 0;
+        const moveDown = dy > 0;
 
-            // Also check for enemies in adjacent tiles (prevent squeezing between enemies)
-            const hasEnemyHorizontal = game.enemies.some(e =>
-                Math.floor(e.gridX) === fromX + dx && Math.floor(e.gridY) === fromY
-            );
-            const hasEnemyVertical = game.enemies.some(e =>
-                Math.floor(e.gridX) === fromX && Math.floor(e.gridY) === fromY + dy
-            );
-            if (hasEnemyHorizontal || hasEnemyVertical) {
-                return false;
-            }
+        const cornerX = moveRight ? newTileX + 1 : newTileX - 1;
+        const cornerY = moveDown ? newTileY + 1 : newTileY - 1;
+
+        // Check if moving into a diagonal corner with walls on both sides
+        const hasWallX = !isTileWalkable(cornerX, newTileY);
+        const hasWallY = !isTileWalkable(newTileX, cornerY);
+
+        // Block if both adjacent tiles are walls (corner cutting)
+        if (hasWallX && hasWallY) {
+            return false;
+        }
+    }
+
+    // Check for enemy collision using radius-based blocking
+    for (const enemy of game.enemies) {
+        const enemyRadius = enemy.blockingRadius || 0.75;
+        const dx = newX - enemy.gridX;
+        const dy = newY - enemy.gridY;
+        const distance = Math.sqrt(dx * dx + dy * dy);
+
+        // If player would be within enemy's blocking radius, block movement
+        if (distance < enemyRadius) {
+            return false;
         }
     }
 
@@ -146,49 +192,56 @@ function canMoveToTile(targetX, targetY, fromX, fromY) {
 }
 
 /**
- * Update player movement animation
+ * Legacy function for compatibility - redirects to canMoveToPosition
+ */
+function canMoveToTile(targetX, targetY, fromX, fromY) {
+    return canMoveToPosition(targetX, targetY, fromX || targetX, fromY || targetY);
+}
+
+/**
+ * Update player movement state
  * Called every frame from main update loop
+ * Now just ensures isMoving flag is properly managed
  */
 function updatePlayerMovement(deltaTime) {
+    // Movement is handled by movePlayerContinuous called from input handler
+    // This function is kept for compatibility but does minimal work
     const player = game.player;
+    if (!player) return;
 
-    if (!player.isMoving) return;
+    // Player positions are updated directly by movePlayerContinuous
+    // No interpolation needed anymore
+}
 
-    // Update move progress based on speed
-    player.moveProgress += player.moveSpeed * (deltaTime / 1000);
+/**
+ * Cancel current movement and snap player to nearest .125 tile increment
+ */
+function cancelPlayerMove() {
+    const player = game.player;
+    if (!player || !player.isMoving) return;
 
-    // Smooth easing for natural feel
-    const easeProgress = easeOutQuad(Math.min(player.moveProgress, 1));
+    // Snap to nearest .125 increment
+    const snapIncrement = 0.125;
+    const snappedX = Math.round(player.displayX / snapIncrement) * snapIncrement;
+    const snappedY = Math.round(player.displayY / snapIncrement) * snapIncrement;
 
-    // Interpolate display position
-    player.displayX = lerp(player.gridX, player.targetGridX, easeProgress);
-    player.displayY = lerp(player.gridY, player.targetGridY, easeProgress);
+    // Update all position values
+    player.gridX = snappedX;
+    player.gridY = snappedY;
+    player.displayX = snappedX;
+    player.displayY = snappedY;
+    player.x = snappedX;
+    player.y = snappedY;
+    player.targetGridX = snappedX;
+    player.targetGridY = snappedY;
 
-    // Update legacy x/y for compatibility
-    player.x = player.displayX;
-    player.y = player.displayY;
+    // Stop movement
+    player.isMoving = false;
+    player.moveProgress = 0;
 
-    // Check if move is complete
-    if (player.moveProgress >= 1.0) {
-        // Snap to target tile
-        player.gridX = player.targetGridX;
-        player.gridY = player.targetGridY;
-        player.displayX = player.gridX;
-        player.displayY = player.gridY;
-        player.x = player.gridX;
-        player.y = player.gridY;
-        player.isMoving = false;
-        player.moveProgress = 0;
-
-        // Check for tile interactions
+    // Check for tile interactions at new position
+    if (typeof checkTileInteractions === 'function') {
         checkTileInteractions(player);
-
-        // If there's a buffered direction, start moving that way
-        if (player.bufferedDirection) {
-            const nextDir = player.bufferedDirection;
-            player.bufferedDirection = null;
-            startPlayerMove(nextDir);
-        }
     }
 }
 
@@ -259,13 +312,14 @@ if (typeof SystemManager !== 'undefined') {
 // EXPORTS
 // ============================================================================
 
-window.startPlayerMove = startPlayerMove;
-window.canMoveToTile = canMoveToTile;
+window.movePlayerContinuous = movePlayerContinuous;
+window.cancelPlayerMove = cancelPlayerMove;
+window.canMoveToPosition = canMoveToPosition;
+window.canMoveToTile = canMoveToTile; // Legacy compatibility
 window.isTileWalkable = isTileWalkable;
 window.updatePlayerMovement = updatePlayerMovement;
 window.updateCameraForPokemon = updateCameraForPokemon;
-window.easeOutQuad = easeOutQuad;
 window.isDiagonalDirection = isDiagonalDirection;
 window.getCardinalFacing = getCardinalFacing;
 
-console.log('✅ Pokemon movement system loaded');
+console.log('✅ Continuous movement system loaded');

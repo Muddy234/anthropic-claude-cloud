@@ -26,15 +26,14 @@ function createPlayer() {
         y: startY,
 
         // ====================================================================
-        // MOVEMENT STATE (Pokemon-style)
+        // MOVEMENT STATE (Free movement with grid snapping)
         // ====================================================================
-        
+
         isMoving: false,
         moveProgress: 0,
-        moveSpeed: 5,                 // Tiles per second
+        moveSpeed: 4,                 // Tiles per second
         targetGridX: startX,
         targetGridY: startY,
-        bufferedDirection: null,
         facing: 'down',
 
         // ====================================================================

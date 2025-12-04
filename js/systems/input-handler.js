@@ -459,11 +459,12 @@ function getDirectionFromDelta(dx, dy) {
 }
 
 /**
- * Handle movement input - checks held keys and initiates movement
- * Supports 8-directional movement via simultaneous key presses
+ * Handle movement input - continuous movement based on held keys
+ * Supports 8-directional movement with .125 tile precision
+ * @param {number} deltaTime - Time since last frame in milliseconds
  */
-function handleMovementInput() {
-    if (!game.player || game.player.isMoving) return;
+function handleMovementInput(deltaTime) {
+    if (!game.player) return;
     if (game.state !== 'playing') return;
 
     // Check which directional keys are held
@@ -472,26 +473,41 @@ function handleMovementInput() {
     const left = keys['a'] || keys['A'] || keys['ArrowLeft'];
     const right = keys['d'] || keys['D'] || keys['ArrowRight'];
 
+    // If no movement keys are held, stop and snap to .125 increment
+    if (!up && !down && !left && !right) {
+        if (game.player.isMoving && typeof cancelPlayerMove === 'function') {
+            cancelPlayerMove();
+        }
+        return;
+    }
+
     // Determine direction based on held keys
+    let direction = null;
+
     // Check diagonals first (two keys held)
     if (up && left) {
-        startPlayerMove('up-left');
+        direction = 'up-left';
     } else if (up && right) {
-        startPlayerMove('up-right');
+        direction = 'up-right';
     } else if (down && left) {
-        startPlayerMove('down-left');
+        direction = 'down-left';
     } else if (down && right) {
-        startPlayerMove('down-right');
+        direction = 'down-right';
     }
     // Cardinal directions (single key)
     else if (up) {
-        startPlayerMove('up');
+        direction = 'up';
     } else if (down) {
-        startPlayerMove('down');
+        direction = 'down';
     } else if (left) {
-        startPlayerMove('left');
+        direction = 'left';
     } else if (right) {
-        startPlayerMove('right');
+        direction = 'right';
+    }
+
+    // Move player in the determined direction
+    if (direction && typeof movePlayerContinuous === 'function') {
+        movePlayerContinuous(direction, deltaTime || 16.67); // Default to ~60fps
     }
 }
 
@@ -784,14 +800,14 @@ function onPlayerHit() {
 
 const InputHandlerSystem = {
     name: 'input-handler',
-    
+
     // No init needed - event listeners set up on load
-    
+
     update(dt) {
-        // Handle continuous movement input each frame
-        handleMovementInput();
+        // Handle continuous movement input each frame with deltaTime
+        handleMovementInput(dt);
     }
-    
+
     // No cleanup needed - event listeners persist
 };
 
