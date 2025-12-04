@@ -230,9 +230,17 @@ function handleContextMenuClick(e) {
         if (optionIndex >= 0 && optionIndex < window.contextMenu.options.length) {
             const option = window.contextMenu.options[optionIndex];
             console.log('%c✓ SELECTED: ' + option.text + ' (action: ' + option.action + ')', 'color: lime; font-weight: bold');
-            
+
+            console.log('About to call executeContextAction...');
+            console.log('Target:', window.contextMenu.target);
+            console.log('TargetType:', window.contextMenu.targetType);
+
             // Execute action BEFORE closing menu
-            executeContextAction(option.action, window.contextMenu.target, window.contextMenu.targetType);
+            try {
+                executeContextAction(option.action, window.contextMenu.target, window.contextMenu.targetType);
+            } catch (error) {
+                console.error('ERROR calling executeContextAction:', error);
+            }
         } else {
             console.log('Invalid option index');
         }
