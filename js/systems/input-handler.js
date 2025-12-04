@@ -81,6 +81,27 @@ window.addEventListener('keydown', e => {
         return;
     }
 
+    // Close character overlay on ESC or C
+    if ((e.key === 'Escape' || e.key === 'c' || e.key === 'C') && game.state === 'character') {
+        game.state = 'playing';
+        window.sidebarState.activeOverlay = null;
+        return;
+    }
+
+    // Close map overlay on ESC or M
+    if ((e.key === 'Escape' || e.key === 'm' || e.key === 'M') && game.state === 'map') {
+        game.state = 'playing';
+        window.sidebarState.activeOverlay = null;
+        return;
+    }
+
+    // Close settings overlay on ESC or O
+    if ((e.key === 'Escape' || e.key === 'o' || e.key === 'O') && game.state === 'settings') {
+        game.state = 'playing';
+        window.sidebarState.activeOverlay = null;
+        return;
+    }
+
     // Start new game
     if (e.key === ' ') {
         if (game.state === 'menu') {
