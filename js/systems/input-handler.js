@@ -28,29 +28,29 @@ window.addEventListener('keydown', e => {
     keys[e.key] = true;
 
     // PRIORITY 1: Game state overlays (character, map, settings, skills) - check FIRST
-    // Close character overlay on ESC or C
-    if ((e.key === 'Escape' || e.key === 'c' || e.key === 'C') && game.state === 'character') {
+    // Close character overlay on ESC (hotkey 'C' handled by icon-sidebar)
+    if (e.key === 'Escape' && game.state === 'character') {
         game.state = 'playing';
         if (window.sidebarState) window.sidebarState.activeOverlay = null;
         return;
     }
 
-    // Close map overlay on ESC or M
-    if ((e.key === 'Escape' || e.key === 'm' || e.key === 'M') && game.state === 'map') {
+    // Close map overlay on ESC (hotkey 'M' handled by icon-sidebar)
+    if (e.key === 'Escape' && game.state === 'map') {
         game.state = 'playing';
         if (window.sidebarState) window.sidebarState.activeOverlay = null;
         return;
     }
 
-    // Close settings overlay on ESC or O
-    if ((e.key === 'Escape' || e.key === 'o' || e.key === 'O') && game.state === 'settings') {
+    // Close settings overlay on ESC (hotkey 'O' handled by icon-sidebar)
+    if (e.key === 'Escape' && game.state === 'settings') {
         game.state = 'playing';
         if (window.sidebarState) window.sidebarState.activeOverlay = null;
         return;
     }
 
-    // Close skills menu on ESC or K
-    if ((e.key === 'Escape' || e.key === 'k' || e.key === 'K') && game.state === 'skills') {
+    // Close skills menu on ESC (hotkey 'K' handled by icon-sidebar)
+    if (e.key === 'Escape' && game.state === 'skills') {
         game.state = 'playing';
         return;
     }
