@@ -58,6 +58,12 @@ const Debug = {
 ║   debug.listHazards()       - List all hazard types          ║
 ║   debug.clearHazards()      - Remove all hazards             ║
 ║                                                              ║
+║ MAP GENERATION                                               ║
+║   debug.regenMap()          - Regenerate entire dungeon      ║
+║   debug.mapStats()          - Show dungeon statistics        ║
+║   debug.testConnectivity()  - Validate floor connectivity    ║
+║   debug.toggleMapDebug()    - Toggle map generation logging  ║
+║                                                              ║
 ║ SYSTEMS                                                      ║
 ║   debug.systems()           - Show registered systems        ║
 ║   debug.fps()               - Toggle FPS display             ║
@@ -401,6 +407,149 @@ const Debug = {
         if (typeof HazardSystem === 'undefined') { console.log('HazardSystem not loaded'); return; }
         HazardSystem.cleanup();
         console.log('All hazards cleared');
+    },
+
+    // ========================================================================
+    // MAP GENERATION
+    // ========================================================================
+    regenMap() {
+        console.log('🗺️  Regenerating dungeon...');
+
+        // Clear existing enemies and hazards
+        game.enemies = [];
+        if (typeof HazardSystem !== 'undefined') HazardSystem.cleanup();
+
+        // Regenerate dungeon
+        if (typeof generateBlobDungeon === 'function') {
+            generateBlobDungeon();
+
+            // Respawn player at entrance
+            const entrance = game.rooms.find(r => r.type === 'entrance');
+            if (entrance && entrance.blob) {
+                game.player.gridX = entrance.blob.connectionPoint.x;
+                game.player.gridY = entrance.blob.connectionPoint.y;
+                game.player.x = entrance.blob.connectionPoint.x;
+                game.player.y = entrance.blob.connectionPoint.y;
+                game.player.displayX = entrance.blob.connectionPoint.x;
+                game.player.displayY = entrance.blob.connectionPoint.y;
+            }
+
+            console.log('✅ Dungeon regenerated');
+            console.log(`   Blobs: ${game.rooms.length}`);
+            console.log(`   Enemies: ${game.enemies.length}`);
+        } else {
+            console.error('❌ generateBlobDungeon not available');
+        }
+    },
+
+    mapStats() {
+        if (typeof DUNGEON_STATE === 'undefined') {
+            console.error('❌ DUNGEON_STATE not available');
+            return;
+        }
+
+        console.log('\n📊 DUNGEON STATISTICS');
+        console.log('═══════════════════════════════════');
+
+        if (DUNGEON_STATE.blobs && DUNGEON_STATE.blobs.length > 0) {
+            const blobSizes = DUNGEON_STATE.blobs.map(b => b.tiles.size);
+            const totalFloors = blobSizes.reduce((a, b) => a + b, 0);
+
+            console.log(`\n🫧 BLOBS:`);
+            console.log(`   Total: ${DUNGEON_STATE.blobs.length}`);
+            console.log(`   Avg size: ${(totalFloors / DUNGEON_STATE.blobs.length).toFixed(0)} tiles`);
+            console.log(`   Min size: ${Math.min(...blobSizes)} tiles`);
+            console.log(`   Max size: ${Math.max(...blobSizes)} tiles`);
+
+            const entranceCount = DUNGEON_STATE.blobs.filter(b => b.blobType === 'entrance').length;
+            const combatCount = DUNGEON_STATE.blobs.filter(b => b.blobType === 'combat').length;
+            const treasureCount = DUNGEON_STATE.blobs.filter(b => b.blobType === 'treasure').length;
+
+            console.log(`\n🎯 BLOB TYPES:`);
+            console.log(`   Entrance: ${entranceCount}`);
+            console.log(`   Combat: ${combatCount}`);
+            console.log(`   Treasure: ${treasureCount}`);
+        }
+
+        if (DUNGEON_STATE.corridors && DUNGEON_STATE.corridors.length > 0) {
+            const corridorLengths = DUNGEON_STATE.corridors.map(c => c.tiles.size);
+
+            console.log(`\n🚪 CORRIDORS:`);
+            console.log(`   Total: ${DUNGEON_STATE.corridors.length}`);
+            console.log(`   Avg length: ${(corridorLengths.reduce((a, b) => a + b, 0) / corridorLengths.length).toFixed(0)} tiles`);
+            console.log(`   Min length: ${Math.min(...corridorLengths)} tiles`);
+            console.log(`   Max length: ${Math.max(...corridorLengths)} tiles`);
+        }
+
+        console.log(`\n👹 ENEMIES: ${game.enemies.length}`);
+        console.log('═══════════════════════════════════\n');
+    },
+
+    testConnectivity() {
+        if (typeof DUNGEON_STATE === 'undefined' || !DUNGEON_STATE.entranceBlob) {
+            console.error('❌ DUNGEON_STATE not available');
+            return;
+        }
+
+        console.log('\n🔍 TESTING CONNECTIVITY...');
+        console.log('═══════════════════════════════════');
+
+        const entrance = DUNGEON_STATE.entranceBlob.connectionPoint;
+        const reachable = new Set();
+        const stack = [{ x: entrance.x, y: entrance.y }];
+
+        while (stack.length > 0) {
+            const { x, y } = stack.pop();
+            const key = `${x},${y}`;
+
+            if (reachable.has(key)) continue;
+            if (x < 0 || x >= GRID_WIDTH || y < 0 || y >= GRID_HEIGHT) continue;
+            if (!game.map[y] || !game.map[y][x]) continue;
+            if (game.map[y][x].type === 'wall' || game.map[y][x].type === 'void') continue;
+
+            reachable.add(key);
+
+            stack.push({ x: x + 1, y: y });
+            stack.push({ x: x - 1, y: y });
+            stack.push({ x: x, y: y + 1 });
+            stack.push({ x: x, y: y - 1 });
+        }
+
+        // Count total floor tiles
+        let totalFloors = 0;
+        for (let y = 0; y < GRID_HEIGHT; y++) {
+            for (let x = 0; x < GRID_WIDTH; x++) {
+                if (game.map[y] && game.map[y][x] &&
+                    (game.map[y][x].type === 'floor' || game.map[y][x].corridor)) {
+                    totalFloors++;
+                }
+            }
+        }
+
+        const reachableCount = reachable.size;
+        const unreachableCount = totalFloors - reachableCount;
+        const connectivityPercent = ((reachableCount / totalFloors) * 100).toFixed(2);
+
+        console.log(`   Total floor tiles: ${totalFloors}`);
+        console.log(`   Reachable from entrance: ${reachableCount} (${connectivityPercent}%)`);
+        console.log(`   Unreachable pockets: ${unreachableCount}`);
+
+        if (unreachableCount > 0) {
+            console.warn(`   ⚠️  Warning: ${unreachableCount} unreachable tiles detected!`);
+        } else {
+            console.log(`   ✅ All floor tiles are reachable!`);
+        }
+
+        console.log('═══════════════════════════════════\n');
+    },
+
+    toggleMapDebug() {
+        if (typeof DUNGEON_CONFIG !== 'undefined') {
+            DUNGEON_CONFIG.debugLogging = !DUNGEON_CONFIG.debugLogging;
+            console.log(`Map generation debug logging: ${DUNGEON_CONFIG.debugLogging ? 'ON' : 'OFF'}`);
+        } else {
+            console.error('❌ DUNGEON_CONFIG not available');
+        }
     },
 
     // ========================================================================
