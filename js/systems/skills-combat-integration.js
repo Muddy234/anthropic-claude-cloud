@@ -445,8 +445,8 @@ function handleDeathWithSkills(entity, killer) {
     addMessage(`Gained ${xpReward} XP!`);
     
     // Award SKILL XP based on weapon held
-    if (game.player.equipped?.MAIN?.specialty && typeof awardSkillXp === 'function') {
-        const weaponSpecialty = game.player.equipped.MAIN.specialty;
+    if (game.player.equipped?.MAIN?.weaponType && typeof awardSkillXp === 'function') {
+        const weaponSpecialty = game.player.equipped.MAIN.weaponType;
         awardSkillXp(game.player, weaponSpecialty, xpReward);
     } else if (typeof awardSkillXp === 'function') {
         // Default to unarmed if no weapon
