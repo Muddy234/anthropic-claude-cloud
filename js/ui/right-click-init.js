@@ -265,9 +265,13 @@ function executeContextAction(action, target, targetType) {
                 break;
 
             case 'pickup':
-                if (typeof pickupLootPile === 'function' && targetType === 'loot') {
-                    console.log('Picking up loot');
-                    pickupLootPile(target);
+                console.log('Pickup action triggered, targetType:', targetType);
+                console.log('pickupLootPile function exists:', typeof window.pickupLootPile);
+                if (typeof window.pickupLootPile === 'function' && targetType === 'loot') {
+                    console.log('Calling pickupLootPile with:', target);
+                    window.pickupLootPile(target);
+                } else {
+                    console.error('Cannot pickup: function not available or wrong target type');
                 }
                 break;
             case 'inspect':
