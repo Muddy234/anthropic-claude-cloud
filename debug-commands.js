@@ -63,6 +63,7 @@ const Debug = {
 ║   debug.mapStats()          - Show dungeon statistics        ║
 ║   debug.testConnectivity()  - Validate floor connectivity    ║
 ║   debug.testMaps(n)         - Test N maps with stats (10/50) ║
+║   debug.inspectTile(x, y)   - Show tile data at position     ║
 ║   debug.toggleMapDebug()    - Toggle map generation logging  ║
 ║                                                              ║
 ║ SYSTEMS                                                      ║
@@ -679,6 +680,69 @@ const Debug = {
 
         if (stats.failures > 0) {
             console.error(`\n❌ ${stats.failures} generation failures`);
+        }
+
+        console.log('\n═══════════════════════════════════\n');
+    },
+
+    inspectTile(x, y) {
+        x = x ?? game.player.gridX;
+        y = y ?? game.player.gridY;
+
+        console.log(`\n🔍 INSPECTING TILE (${x}, ${y})`);
+        console.log('═══════════════════════════════════');
+
+        // Check game.map
+        if (game.map && game.map[y] && game.map[y][x]) {
+            const tile = game.map[y][x];
+            console.log('\n📍 game.map data:');
+            console.log(`   type: ${tile.type}`);
+            console.log(`   corridor: ${tile.corridor || false}`);
+            console.log(`   blocked: ${tile.blocked || false}`);
+            console.log(`   room: ${tile.room ? tile.room.id : 'none'}`);
+            console.log(`   element: ${tile.element || 'none'}`);
+        } else {
+            console.log('\n❌ Tile not in game.map');
+        }
+
+        // Check DUNGEON_STATE.grid
+        if (typeof DUNGEON_STATE !== 'undefined' && DUNGEON_STATE.grid) {
+            const gridValue = DUNGEON_STATE.grid[y] ? DUNGEON_STATE.grid[y][x] : undefined;
+            console.log('\n🗺️  DUNGEON_STATE.grid:');
+            console.log(`   value: ${gridValue} (${gridValue === 0 ? 'floor' : gridValue === 1 ? 'wall' : 'unknown'})`);
+        }
+
+        // Check if in a blob
+        if (typeof DUNGEON_STATE !== 'undefined' && DUNGEON_STATE.blobs) {
+            const inBlob = DUNGEON_STATE.blobs.find(b => b.tiles.has(`${x},${y}`));
+            if (inBlob) {
+                console.log('\n🫧 In blob:');
+                console.log(`   type: ${inBlob.blobType}`);
+                console.log(`   element: ${inBlob.element}`);
+                console.log(`   theme: ${inBlob.theme}`);
+                console.log(`   size: ${inBlob.tiles.size} tiles`);
+            }
+        }
+
+        // Check if in a corridor
+        if (typeof DUNGEON_STATE !== 'undefined' && DUNGEON_STATE.corridors) {
+            const inCorridor = DUNGEON_STATE.corridors.find(c => c.tiles.has(`${x},${y}`));
+            if (inCorridor) {
+                console.log('\n🚪 In corridor:');
+                console.log(`   length: ${inCorridor.tiles.size} tiles`);
+                console.log(`   connects: ${inCorridor.startBlob.blobType} ↔ ${inCorridor.endBlob.blobType}`);
+            }
+        }
+
+        // Check if it's a connection point
+        if (typeof DUNGEON_STATE !== 'undefined' && DUNGEON_STATE.blobs) {
+            const isConnectionPoint = DUNGEON_STATE.blobs.find(b =>
+                b.connectionPoint && b.connectionPoint.x === x && b.connectionPoint.y === y
+            );
+            if (isConnectionPoint) {
+                console.log('\n⭐ This is a blob connection point!');
+                console.log(`   blob type: ${isConnectionPoint.blobType}`);
+            }
         }
 
         console.log('\n═══════════════════════════════════\n');
