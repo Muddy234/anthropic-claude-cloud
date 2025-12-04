@@ -756,9 +756,11 @@ const camY = game.camera.y;
         }
         
         // LAYER 1.5: Draw room perimeter walls with proper corners/edges (NEW!)
-        if (typeof renderAllWalls === 'function') {
-            renderAllWalls(ctx, camX, camY, effectiveTileSize, TRACKER_WIDTH);
-        }
+        // DISABLED for blob-based dungeons - walls are rendered in Layer 1 based on game.map[y][x].type
+        // The renderAllWalls() function draws rectangular perimeters which don't work for organic blob shapes
+        // if (typeof renderAllWalls === 'function') {
+        //     renderAllWalls(ctx, camX, camY, effectiveTileSize, TRACKER_WIDTH);
+        // }
         
         // LAYER 2: Draw loot piles
         if (typeof renderLootPiles === 'function') {
