@@ -62,6 +62,7 @@ const Debug = {
 ║   debug.regenMap()          - Regenerate entire dungeon      ║
 ║   debug.mapStats()          - Show dungeon statistics        ║
 ║   debug.testConnectivity()  - Validate floor connectivity    ║
+║   debug.testMaps(n)         - Test N maps with stats (10/50) ║
 ║   debug.toggleMapDebug()    - Toggle map generation logging  ║
 ║                                                              ║
 ║ SYSTEMS                                                      ║
@@ -541,6 +542,146 @@ const Debug = {
         }
 
         console.log('═══════════════════════════════════\n');
+    },
+
+    testMaps(count = 10) {
+        console.log(`\n🧪 TESTING ${count} DUNGEON GENERATIONS`);
+        console.log('═══════════════════════════════════');
+
+        // Store original debug setting
+        const originalDebug = typeof DUNGEON_CONFIG !== 'undefined' ? DUNGEON_CONFIG.debugLogging : false;
+        if (typeof DUNGEON_CONFIG !== 'undefined') {
+            DUNGEON_CONFIG.debugLogging = false; // Disable for batch testing
+        }
+
+        const stats = {
+            blobCounts: [],
+            corridorCounts: [],
+            blobSizes: [],
+            corridorLengths: [],
+            entranceCounts: [],
+            combatCounts: [],
+            treasureCounts: [],
+            connectivity: [],
+            failures: 0
+        };
+
+        for (let i = 0; i < count; i++) {
+            try {
+                // Generate dungeon
+                if (typeof generateBlobDungeonMap === 'function') {
+                    generateBlobDungeonMap();
+                } else {
+                    console.error('❌ generateBlobDungeonMap not available');
+                    break;
+                }
+
+                // Collect blob stats
+                if (DUNGEON_STATE.blobs && DUNGEON_STATE.blobs.length > 0) {
+                    stats.blobCounts.push(DUNGEON_STATE.blobs.length);
+
+                    const sizes = DUNGEON_STATE.blobs.map(b => b.tiles.size);
+                    stats.blobSizes.push(...sizes);
+
+                    stats.entranceCounts.push(DUNGEON_STATE.blobs.filter(b => b.blobType === 'entrance').length);
+                    stats.combatCounts.push(DUNGEON_STATE.blobs.filter(b => b.blobType === 'combat').length);
+                    stats.treasureCounts.push(DUNGEON_STATE.blobs.filter(b => b.blobType === 'treasure').length);
+                }
+
+                // Collect corridor stats
+                if (DUNGEON_STATE.corridors && DUNGEON_STATE.corridors.length > 0) {
+                    stats.corridorCounts.push(DUNGEON_STATE.corridors.length);
+
+                    const lengths = DUNGEON_STATE.corridors.map(c => c.tiles.size);
+                    stats.corridorLengths.push(...lengths);
+                }
+
+                // Test connectivity
+                if (DUNGEON_STATE.grid && DUNGEON_STATE.entranceBlob) {
+                    const entrance = DUNGEON_STATE.entranceBlob.connectionPoint;
+                    const reachable = new Set();
+                    const stack = [{ x: entrance.x, y: entrance.y }];
+
+                    while (stack.length > 0) {
+                        const { x, y } = stack.pop();
+                        const key = `${x},${y}`;
+
+                        if (reachable.has(key)) continue;
+                        if (x < 0 || x >= DUNGEON_CONFIG.mapWidth || y < 0 || y >= DUNGEON_CONFIG.mapHeight) continue;
+                        if (DUNGEON_STATE.grid[y][x] === 1) continue; // Wall
+
+                        reachable.add(key);
+
+                        stack.push({ x: x + 1, y: y });
+                        stack.push({ x: x - 1, y: y });
+                        stack.push({ x: x, y: y + 1 });
+                        stack.push({ x: x, y: y - 1 });
+                    }
+
+                    // Count total floor tiles
+                    let totalFloors = 0;
+                    for (let y = 0; y < DUNGEON_CONFIG.mapHeight; y++) {
+                        for (let x = 0; x < DUNGEON_CONFIG.mapWidth; x++) {
+                            if (DUNGEON_STATE.grid[y][x] === 0) totalFloors++;
+                        }
+                    }
+
+                    const connectivityPercent = totalFloors > 0 ? (reachable.size / totalFloors) * 100 : 0;
+                    stats.connectivity.push(connectivityPercent);
+                }
+
+            } catch (error) {
+                stats.failures++;
+                console.error(`Test ${i + 1} failed:`, error.message);
+            }
+        }
+
+        // Restore debug setting
+        if (typeof DUNGEON_CONFIG !== 'undefined') {
+            DUNGEON_CONFIG.debugLogging = originalDebug;
+        }
+
+        // Calculate and display statistics
+        const avg = arr => arr.length > 0 ? (arr.reduce((a, b) => a + b, 0) / arr.length).toFixed(2) : 0;
+        const min = arr => arr.length > 0 ? Math.min(...arr) : 0;
+        const max = arr => arr.length > 0 ? Math.max(...arr) : 0;
+
+        console.log(`\n📊 RESULTS (${count - stats.failures} successful):`);
+        console.log('───────────────────────────────────');
+
+        console.log(`\n🫧 BLOBS:`);
+        console.log(`   Avg per map: ${avg(stats.blobCounts)}`);
+        console.log(`   Avg size: ${avg(stats.blobSizes)} tiles`);
+        console.log(`   Size range: ${min(stats.blobSizes)} - ${max(stats.blobSizes)}`);
+
+        console.log(`\n🎯 BLOB TYPES (avg per map):`);
+        console.log(`   Entrance: ${avg(stats.entranceCounts)}`);
+        console.log(`   Combat: ${avg(stats.combatCounts)}`);
+        console.log(`   Treasure: ${avg(stats.treasureCounts)}`);
+
+        console.log(`\n🚪 CORRIDORS:`);
+        console.log(`   Avg per map: ${avg(stats.corridorCounts)}`);
+        console.log(`   Avg length: ${avg(stats.corridorLengths)} tiles`);
+        console.log(`   Length range: ${min(stats.corridorLengths)} - ${max(stats.corridorLengths)}`);
+
+        console.log(`\n🔍 CONNECTIVITY:`);
+        console.log(`   Avg: ${avg(stats.connectivity)}%`);
+        console.log(`   Min: ${min(stats.connectivity).toFixed(2)}%`);
+        console.log(`   Max: ${max(stats.connectivity).toFixed(2)}%`);
+
+        const allConnected = stats.connectivity.every(c => c >= 99.9);
+        if (allConnected) {
+            console.log(`   ✅ All ${count} maps fully connected!`);
+        } else {
+            const disconnected = stats.connectivity.filter(c => c < 99.9).length;
+            console.warn(`   ⚠️  ${disconnected}/${count} maps had connectivity issues!`);
+        }
+
+        if (stats.failures > 0) {
+            console.error(`\n❌ ${stats.failures} generation failures`);
+        }
+
+        console.log('\n═══════════════════════════════════\n');
     },
 
     toggleMapDebug() {
