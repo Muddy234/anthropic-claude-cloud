@@ -121,8 +121,8 @@ function handleRightClick(e) {
     }
 
     // Check for loot
-    if (!target && game.loot) {
-        const clickedLoot = game.loot.find(pile =>
+    if (!target && game.groundLoot) {
+        const clickedLoot = game.groundLoot.find(pile =>
             Math.floor(pile.x) === gridX && Math.floor(pile.y) === gridY
         );
 
@@ -265,9 +265,9 @@ function executeContextAction(action, target, targetType) {
                 break;
 
             case 'pickup':
-                if (typeof pickupLoot === 'function' && targetType === 'loot') {
+                if (typeof pickupLootPile === 'function' && targetType === 'loot') {
                     console.log('Picking up loot');
-                    pickupLoot(target);
+                    pickupLootPile(target);
                 }
                 break;
             case 'inspect':
