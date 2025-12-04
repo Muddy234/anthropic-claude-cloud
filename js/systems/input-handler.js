@@ -326,9 +326,10 @@ function handleMerchantInput(e) {
  * Handle inventory screen input
  */
 function handleInventoryInput(e) {
-    // ESC or 'i'/'I' to close inventory
-    if (e.key === 'Escape' || e.key === 'i' || e.key === 'I' || e.key === 'e' || e.key === 'E') {
+    // ESC to close inventory (hotkey 'E' handled by icon-sidebar)
+    if (e.key === 'Escape') {
         game.state = 'playing';
+        if (window.sidebarState) window.sidebarState.activeOverlay = null;
         return;
     }
 
