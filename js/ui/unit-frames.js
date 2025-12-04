@@ -325,6 +325,78 @@ function drawStatusIcon(ctx, x, y, size, effect) {
     ctx.fillText(icon, x + size / 2, y + size / 2);
 }
 
+/**
+ * Initialize unit frame event handlers
+ */
+function initUnitFrameHandlers() {
+    if (typeof canvas === 'undefined') return;
+
+    // Right-click on enemy frame to inspect
+    canvas.addEventListener('contextmenu', (e) => {
+        if (game.state !== 'playing') return;
+        if (!game.player?.combat?.currentTarget) return;
+
+        const rect = canvas.getBoundingClientRect();
+        const clickX = e.clientX - rect.left;
+        const clickY = e.clientY - rect.top;
+
+        const cfg = UNIT_FRAME_CONFIG;
+        const frame = cfg.enemy;
+
+        // Check if click is within enemy frame
+        if (clickX >= frame.x && clickX <= frame.x + frame.width &&
+            clickY >= frame.y && clickY <= frame.y + frame.height) {
+
+            e.preventDefault();
+
+            // Open inspect popup for current target
+            const target = game.player.combat.currentTarget;
+            if (window.inspectPopup) {
+                window.inspectPopup.visible = true;
+                window.inspectPopup.target = target;
+                window.inspectPopup.targetType = 'enemy';
+                window.inspectPopup.tab = 0;
+            }
+        }
+    });
+
+    // Left-click anywhere to clear target (if not clicking UI elements)
+    canvas.addEventListener('click', (e) => {
+        if (game.state !== 'playing') return;
+        if (!game.player?.combat?.currentTarget) return;
+
+        const rect = canvas.getBoundingClientRect();
+        const clickX = e.clientX - rect.left;
+        const clickY = e.clientY - rect.top;
+
+        // Check if clicking in game world area (not sidebar, not action bar, not other UI)
+        const cfg = UNIT_FRAME_CONFIG;
+        const inSidebar = clickX < TRACKER_WIDTH;
+        const inPlayerFrame = clickX >= cfg.player.x && clickX <= cfg.player.x + cfg.player.width &&
+                              clickY >= cfg.player.y && clickY <= cfg.player.y + cfg.player.height;
+        const inEnemyFrame = clickX >= cfg.enemy.x && clickX <= cfg.enemy.x + cfg.enemy.width &&
+                             clickY >= cfg.enemy.y && clickY <= cfg.enemy.y + cfg.enemy.height;
+
+        // Action bar area (bottom-right)
+        const actionBarY = canvas.height - 100;
+        const inActionBar = clickY >= actionBarY && clickX >= canvas.width - 300;
+
+        // If clicking in game world (not UI), clear target
+        if (!inSidebar && !inPlayerFrame && !inEnemyFrame && !inActionBar) {
+            if (game.player.combat) {
+                game.player.combat.currentTarget = null;
+            }
+        }
+    });
+
+    console.log('✅ Unit frame handlers initialized');
+}
+
+// Initialize on load
+if (typeof window !== 'undefined') {
+    window.addEventListener('load', initUnitFrameHandlers);
+}
+
 // Export
 window.renderUnitFrames = renderUnitFrames;
 window.UNIT_FRAME_CONFIG = UNIT_FRAME_CONFIG;

@@ -119,7 +119,28 @@ function handleRightClick(e) {
             ];
         }
     }
-    
+
+    // Check for loot
+    if (!target && game.loot) {
+        const clickedLoot = game.loot.find(pile =>
+            Math.floor(pile.x) === gridX && Math.floor(pile.y) === gridY
+        );
+
+        if (clickedLoot) {
+            const tile = game.map?.[gridY]?.[gridX];
+            if (tile && tile.visible) {
+                console.log('Clicked on loot pile');
+                target = clickedLoot;
+                targetType = 'loot';
+                options = [
+                    { text: 'Pick up', action: 'pickup' },
+                    { text: 'Inspect', action: 'inspect' },
+                    { text: 'Cancel', action: 'cancel' }
+                ];
+            }
+        }
+    }
+
     if (!target) {
         target = { x: gridX, y: gridY };
         targetType = 'tile';
@@ -240,6 +261,13 @@ function executeContextAction(action, target, targetType) {
                 if (typeof engageCombat === 'function' && targetType === 'enemy') {
                     console.log('Engaging combat with', target.name);
                     engageCombat(game.player, target);
+                }
+                break;
+
+            case 'pickup':
+                if (typeof pickupLoot === 'function' && targetType === 'loot') {
+                    console.log('Picking up loot');
+                    pickupLoot(target);
                 }
                 break;
             case 'inspect':

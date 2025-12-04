@@ -27,8 +27,37 @@ const inspectPopup = {
 window.addEventListener('keydown', e => {
     keys[e.key] = true;
 
+    // PRIORITY 1: Game state overlays (character, map, settings, skills) - check FIRST
+    // Close character overlay on ESC or C
+    if ((e.key === 'Escape' || e.key === 'c' || e.key === 'C') && game.state === 'character') {
+        game.state = 'playing';
+        if (window.sidebarState) window.sidebarState.activeOverlay = null;
+        return;
+    }
+
+    // Close map overlay on ESC or M
+    if ((e.key === 'Escape' || e.key === 'm' || e.key === 'M') && game.state === 'map') {
+        game.state = 'playing';
+        if (window.sidebarState) window.sidebarState.activeOverlay = null;
+        return;
+    }
+
+    // Close settings overlay on ESC or O
+    if ((e.key === 'Escape' || e.key === 'o' || e.key === 'O') && game.state === 'settings') {
+        game.state = 'playing';
+        if (window.sidebarState) window.sidebarState.activeOverlay = null;
+        return;
+    }
+
+    // Close skills menu on ESC or K
+    if ((e.key === 'Escape' || e.key === 'k' || e.key === 'K') && game.state === 'skills') {
+        game.state = 'playing';
+        return;
+    }
+
+    // PRIORITY 2: Context menu and inspect popup (only if game.state === 'playing')
     // Close inspect popup on ESC
-    if (e.key === 'Escape' && inspectPopup.visible) {
+    if (e.key === 'Escape' && inspectPopup.visible && game.state === 'playing') {
         inspectPopup.visible = false;
         inspectPopup.target = null;
         inspectPopup.tab = 0;
@@ -72,33 +101,6 @@ window.addEventListener('keydown', e => {
     if (e.key === 'Escape' && contextMenu.visible) {
         contextMenu.visible = false;
         contextMenu.target = null;
-        return;
-    }
-
-    // Close skills menu on ESC or K
-    if ((e.key === 'Escape' || e.key === 'k' || e.key === 'K') && game.state === 'skills') {
-        game.state = 'playing';
-        return;
-    }
-
-    // Close character overlay on ESC or C
-    if ((e.key === 'Escape' || e.key === 'c' || e.key === 'C') && game.state === 'character') {
-        game.state = 'playing';
-        window.sidebarState.activeOverlay = null;
-        return;
-    }
-
-    // Close map overlay on ESC or M
-    if ((e.key === 'Escape' || e.key === 'm' || e.key === 'M') && game.state === 'map') {
-        game.state = 'playing';
-        window.sidebarState.activeOverlay = null;
-        return;
-    }
-
-    // Close settings overlay on ESC or O
-    if ((e.key === 'Escape' || e.key === 'o' || e.key === 'O') && game.state === 'settings') {
-        game.state = 'playing';
-        window.sidebarState.activeOverlay = null;
         return;
     }
 
