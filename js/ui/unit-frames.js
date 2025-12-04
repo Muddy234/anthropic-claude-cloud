@@ -360,16 +360,19 @@ function initUnitFrameHandlers() {
         }
     });
 
-    // Left-click anywhere to clear target (if not clicking UI elements)
+    // Left-click anywhere to clear target (if not clicking UI elements or interactables)
     canvas.addEventListener('click', (e) => {
         if (game.state !== 'playing') return;
         if (!game.player?.combat?.currentTarget) return;
 
         const rect = canvas.getBoundingClientRect();
-        const clickX = e.clientX - rect.left;
-        const clickY = e.clientY - rect.top;
+        const scaleX = canvas.width / rect.width;
+        const scaleY = canvas.height / rect.height;
 
-        // Check if clicking in game world area (not sidebar, not action bar, not other UI)
+        const clickX = (e.clientX - rect.left) * scaleX;
+        const clickY = (e.clientY - rect.top) * scaleY;
+
+        // Check if clicking in UI areas
         const cfg = UNIT_FRAME_CONFIG;
         const inSidebar = clickX < TRACKER_WIDTH;
         const inPlayerFrame = clickX >= cfg.player.x && clickX <= cfg.player.x + cfg.player.width &&
@@ -381,11 +384,49 @@ function initUnitFrameHandlers() {
         const actionBarY = canvas.height - 100;
         const inActionBar = clickY >= actionBarY && clickX >= canvas.width - 300;
 
-        // If clicking in game world (not UI), clear target
-        if (!inSidebar && !inPlayerFrame && !inEnemyFrame && !inActionBar) {
-            if (game.player.combat) {
-                game.player.combat.currentTarget = null;
+        // If clicking UI, don't clear target
+        if (inSidebar || inPlayerFrame || inEnemyFrame || inActionBar) {
+            return;
+        }
+
+        // Calculate grid position to check for interactables
+        const tileSize = (typeof TILE_SIZE !== 'undefined') ? TILE_SIZE : 32;
+        const zoomLevel = (typeof ZOOM_LEVEL !== 'undefined') ? ZOOM_LEVEL : 2;
+        const effectiveTileSize = tileSize * zoomLevel;
+
+        const viewX = clickX - TRACKER_WIDTH;
+        const viewY = clickY;
+
+        const camX = game.camera ? game.camera.x : 0;
+        const camY = game.camera ? game.camera.y : 0;
+
+        const gridX = Math.floor(viewX / effectiveTileSize + camX);
+        const gridY = Math.floor(viewY / effectiveTileSize + camY);
+
+        // Check if clicking on an enemy
+        if (game.enemies) {
+            const clickedEnemy = game.enemies.find(e =>
+                Math.floor(e.gridX) === gridX && Math.floor(e.gridY) === gridY
+            );
+            if (clickedEnemy) {
+                // Clicking on enemy - don't clear target (let left-click-init handle it)
+                return;
             }
+        }
+
+        // Check if clicking on merchant/NPC
+        if (game.merchant) {
+            const mx = game.merchant.x !== undefined ? game.merchant.x : game.merchant.gridX;
+            const my = game.merchant.y !== undefined ? game.merchant.y : game.merchant.gridY;
+            if (gridX === mx && gridY === my) {
+                // Clicking on NPC - don't clear
+                return;
+            }
+        }
+
+        // Clicking on empty game world - clear target
+        if (game.player.combat) {
+            game.player.combat.currentTarget = null;
         }
     });
 
