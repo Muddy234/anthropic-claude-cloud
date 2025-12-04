@@ -693,7 +693,7 @@ function render() {
 
 if (game.state === 'menu') {
         ctx.fillStyle = '#fff'; ctx.font = '64px monospace'; ctx.textAlign = 'center'; ctx.fillText('THE SHIFTING CHASM', canvas.width / 2, 400); ctx.font = '32px monospace'; ctx.fillText('Press SPACE to Start', canvas.width / 2, 500);
-    } else if (game.state === 'playing' || game.state === 'merchant' || game.state === 'inventory' || game.state === 'map' || game.state === 'skills' || game.state === 'moveset' || game.state === 'levelup') {
+    } else if (game.state === 'playing' || game.state === 'merchant' || game.state === 'inventory' || game.state === 'map' || game.state === 'skills' || game.state === 'moveset' || game.state === 'levelup' || game.state === 'character' || game.state === 'settings') {
 
 const effectiveTileSize = TILE_SIZE * ZOOM_LEVEL;
 const viewW = canvas.width - TRACKER_WIDTH;
@@ -875,7 +875,21 @@ const camY = game.camera.y;
 
         if (typeof renderDamageNumbers === 'function') { renderDamageNumbers(camX, camY, effectiveTileSize, TRACKER_WIDTH); }
         ctx.restore();
-        drawTracker();
+
+        // NEW UI: Icon sidebar (replaces old tracker)
+        if (typeof renderIconSidebar === 'function') {
+            renderIconSidebar(ctx, canvas.height);
+        }
+
+        // NEW UI: Unit frames (player + enemy)
+        if (typeof renderUnitFrames === 'function') {
+            renderUnitFrames(ctx);
+        }
+
+        // NEW UI: Mini-map (top-right)
+        if (typeof renderMiniMap === 'function') {
+            renderMiniMap(ctx, canvas.width);
+        }
 
         // DISABLED: Old skills action bar (replaced by combat action bar)
         // if (typeof drawActionBar === 'function') {
@@ -898,6 +912,7 @@ const camY = game.camera.y;
 
     // Draw popup menus LAST so they appear on top of action icons
     if (game.state === 'merchant') drawMerchant();
+    if (game.state === 'character' && typeof drawCharacterOverlay === 'function') drawCharacterOverlay();
     if (game.state === 'inventory') drawInventoryOverlay();
     if (game.state === 'map') drawMapOverlay();
     if (game.state === 'skills') drawSkillsOverlay();
