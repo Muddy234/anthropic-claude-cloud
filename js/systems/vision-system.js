@@ -251,8 +251,15 @@ const VisionSystem = {
                 const mapX = originX + delta.x;
                 const mapY = originY + delta.y;
 
-                // Calculate distance for visibility falloff
-                const distance = Math.sqrt(currentRow * currentRow + col * col);
+                // Calculate distance for visibility falloff using sub-pixel accuracy
+                // Use player's exact fractional position for smooth gradient
+                const exactPlayerX = game.player.gridX || originX;
+                const exactPlayerY = game.player.gridY || originY;
+
+                // Calculate distance from player's exact position to tile center
+                const dx = (mapX + 0.5) - exactPlayerX;
+                const dy = (mapY + 0.5) - exactPlayerY;
+                const distance = Math.sqrt(dx * dx + dy * dy);
 
                 if (distance > totalRange) continue;
 
@@ -261,10 +268,13 @@ const VisionSystem = {
                 let visibility = 1;
                 if (distance > fullVisionRange) {
                     // In the fade zone - calculate smooth falloff
-                    // Linear interpolation from 1.0 at fullVisionRange to 0 at totalRange
+                    // Smoothstep interpolation from 1.0 at fullVisionRange to 0 at totalRange
                     const fadeProgress = (distance - fullVisionRange) / fadeDistance;
-                    visibility = 1 - fadeProgress;
-                    visibility = Math.max(0, Math.min(1, visibility)); // Clamp to 0-1
+                    const clampedProgress = Math.max(0, Math.min(1, fadeProgress));
+
+                    // Apply smoothstep function for natural ease-in-ease-out
+                    const smoothProgress = clampedProgress * clampedProgress * (3 - 2 * clampedProgress);
+                    visibility = 1 - smoothProgress;
                 }
 
                 const leftSlope = (col + 0.5) / (currentRow - 0.5);
