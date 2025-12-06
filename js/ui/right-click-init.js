@@ -119,7 +119,28 @@ function handleRightClick(e) {
             ];
         }
     }
-    
+
+    // Check for loot
+    if (!target && game.groundLoot) {
+        const clickedLoot = game.groundLoot.find(pile =>
+            Math.floor(pile.x) === gridX && Math.floor(pile.y) === gridY
+        );
+
+        if (clickedLoot) {
+            const tile = game.map?.[gridY]?.[gridX];
+            if (tile && tile.visible) {
+                console.log('Clicked on loot pile');
+                target = clickedLoot;
+                targetType = 'loot';
+                options = [
+                    { text: 'Pick up', action: 'pickup' },
+                    { text: 'Inspect', action: 'inspect' },
+                    { text: 'Cancel', action: 'cancel' }
+                ];
+            }
+        }
+    }
+
     if (!target) {
         target = { x: gridX, y: gridY };
         targetType = 'tile';
@@ -209,9 +230,21 @@ function handleContextMenuClick(e) {
         if (optionIndex >= 0 && optionIndex < window.contextMenu.options.length) {
             const option = window.contextMenu.options[optionIndex];
             console.log('%c✓ SELECTED: ' + option.text + ' (action: ' + option.action + ')', 'color: lime; font-weight: bold');
-            
+
+            console.log('About to call executeContextAction...');
+            console.log('Target:', window.contextMenu.target);
+            console.log('TargetType:', window.contextMenu.targetType);
+
             // Execute action BEFORE closing menu
-            executeContextAction(option.action, window.contextMenu.target, window.contextMenu.targetType);
+            try {
+                console.log('Calling function now...');
+                const result = executeContextAction(option.action, window.contextMenu.target, window.contextMenu.targetType);
+                console.log('Function returned:', result);
+            } catch (error) {
+                console.error('ERROR calling executeContextAction:', error);
+                console.error('Error stack:', error.stack);
+            }
+            console.log('After executeContextAction call');
         } else {
             console.log('Invalid option index');
         }
@@ -240,6 +273,17 @@ function executeContextAction(action, target, targetType) {
                 if (typeof engageCombat === 'function' && targetType === 'enemy') {
                     console.log('Engaging combat with', target.name);
                     engageCombat(game.player, target);
+                }
+                break;
+
+            case 'pickup':
+                console.log('Pickup action triggered, targetType:', targetType);
+                console.log('pickupLootPile function exists:', typeof window.pickupLootPile);
+                if (typeof window.pickupLootPile === 'function' && targetType === 'loot') {
+                    console.log('Calling pickupLootPile with:', target);
+                    window.pickupLootPile(target);
+                } else {
+                    console.error('Cannot pickup: function not available or wrong target type');
                 }
                 break;
             case 'inspect':

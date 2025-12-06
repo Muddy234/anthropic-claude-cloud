@@ -135,14 +135,82 @@ function rollMonsterLootInternal(monsterName) {
 /**
  * Roll for equipment drop (uses existing function if available)
  */
-function rollEquipmentDropInternal() {
-    // Use existing rollEquipmentDrop if available
-    if (typeof rollEquipmentDrop === 'function') {
-        return rollEquipmentDrop();
+/**
+ * Roll for equipment drop (weapons, armor, shields)
+ * @returns {object|null} - Equipment item or null
+ */
+function rollEquipmentDrop() {
+    // Rarity weights (higher number = more common)
+    const rarityWeights = {
+        'common': 50,      // 50% of drops
+        'uncommon': 35,    // 35% of drops
+        'rare': 13,        // 13% of drops
+        'epic': 2          // 2% of drops
+    };
+
+    // Roll for rarity
+    const totalWeight = Object.values(rarityWeights).reduce((a, b) => a + b, 0);
+    let roll = Math.random() * totalWeight;
+    let selectedRarity = 'common';
+
+    for (const [rarity, weight] of Object.entries(rarityWeights)) {
+        roll -= weight;
+        if (roll <= 0) {
+            selectedRarity = rarity;
+            break;
+        }
     }
-    
-    // Fallback - return null (no equipment system)
-    return null;
+
+    // Collect all equipment items of the selected rarity
+    const equipmentPool = [];
+
+    // Add melee weapons
+    if (typeof MELEE_WEAPONS !== 'undefined') {
+        for (const item of Object.values(MELEE_WEAPONS)) {
+            if (item.rarity === selectedRarity) {
+                equipmentPool.push({ ...item, type: 'weapon' });
+            }
+        }
+    }
+
+    // Add ranged weapons
+    if (typeof RANGED_WEAPONS !== 'undefined') {
+        for (const item of Object.values(RANGED_WEAPONS)) {
+            if (item.rarity === selectedRarity) {
+                equipmentPool.push({ ...item, type: 'weapon' });
+            }
+        }
+    }
+
+    // Add armor
+    if (typeof DEFENSE_ARMOR !== 'undefined') {
+        for (const item of Object.values(DEFENSE_ARMOR)) {
+            if (item.rarity === selectedRarity) {
+                equipmentPool.push({ ...item, type: 'armor' });
+            }
+        }
+    }
+
+    if (typeof MOBILITY_ARMOR !== 'undefined') {
+        for (const item of Object.values(MOBILITY_ARMOR)) {
+            if (item.rarity === selectedRarity) {
+                equipmentPool.push({ ...item, type: 'armor' });
+            }
+        }
+    }
+
+    // Select random item from pool
+    if (equipmentPool.length === 0) {
+        return null;
+    }
+
+    const selectedItem = equipmentPool[Math.floor(Math.random() * equipmentPool.length)];
+
+    // Return a copy with count property for inventory system
+    return {
+        ...selectedItem,
+        count: 1
+    };
 }
 
 // ============================================================================
