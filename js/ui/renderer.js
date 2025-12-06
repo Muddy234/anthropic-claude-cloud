@@ -693,7 +693,7 @@ function render() {
 
 if (game.state === 'menu') {
         ctx.fillStyle = '#fff'; ctx.font = '64px monospace'; ctx.textAlign = 'center'; ctx.fillText('THE SHIFTING CHASM', canvas.width / 2, 400); ctx.font = '32px monospace'; ctx.fillText('Press SPACE to Start', canvas.width / 2, 500);
-    } else if (game.state === 'playing' || game.state === 'merchant' || game.state === 'inventory' || game.state === 'map' || game.state === 'skills' || game.state === 'moveset' || game.state === 'levelup' || game.state === 'character' || game.state === 'settings') {
+    } else if (game.state === 'playing' || game.state === 'merchant' || game.state === 'inventory' || game.state === 'map' || game.state === 'skills' || game.state === 'moveset' || game.state === 'levelup' || game.state === 'character' || game.state === 'shift') {
 
 const effectiveTileSize = TILE_SIZE * ZOOM_LEVEL;
 const viewW = canvas.width - TRACKER_WIDTH;
@@ -915,7 +915,7 @@ const camY = game.camera.y;
     if (game.state === 'character' && typeof drawCharacterOverlay === 'function') drawCharacterOverlay();
     if (game.state === 'inventory') drawInventoryOverlay();
     if (game.state === 'map' && typeof drawMapOverlay === 'function') drawMapOverlay();
-    if (game.state === 'settings' && typeof drawSettingsOverlay === 'function') drawSettingsOverlay();
+    if (game.state === 'shift' && typeof drawShiftOverlay === 'function') drawShiftOverlay();
     if (game.state === 'skills') drawSkillsOverlay();
     if (game.state === 'moveset') drawMoveSetOverlay();
     if (game.state === 'levelup') drawLevelUpScreen();

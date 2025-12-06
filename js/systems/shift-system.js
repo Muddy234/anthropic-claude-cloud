@@ -2,6 +2,53 @@ const shiftScenarios = {
     'magma_collapse': {
         name: "Protocol: MELTDOWN",
         description: "Seismic instability detected! The outer edges are collapsing into the Chasm!",
+
+        // Floor lore - displayed in the shift overlay
+        lore: {
+            title: "The Molten Depths",
+            paragraphs: [
+                "Beneath the ancient fortress lies a network of tunnels carved by primordial magma flows. The dwarves who once mined these depths discovered something far more dangerous than ore—a sleeping fire that yearns to reclaim its domain.",
+                "The Chasm's heart beats with volcanic fury. Every ten minutes, the pressure builds until the outer tunnels collapse into rivers of molten rock, forcing everything within toward the center.",
+                "Those who have survived speak of treasures left behind by fleeing miners, now guarded by creatures born of flame and shadow. The desperate make their fortune here. The foolish become ash."
+            ]
+        },
+
+        // Mechanics description for overlay
+        mechanics: {
+            title: "The Meltdown",
+            description: "When the countdown reaches zero, lava begins consuming the dungeon from the edges inward. You have 90 seconds to reach the exit before everything is consumed.",
+            details: [
+                "Lava flows inward toward the exit",
+                "Standing in lava deals 20 damage per tick",
+                "All enemies become alert and aggressive",
+                "The exit appears in the farthest room from spawn"
+            ]
+        },
+
+        // Active bonuses during shift
+        bonuses: [
+            {
+                name: "Desperate Fortune",
+                description: "Epic equipment drop chance doubled",
+                icon: "💎",
+                multiplier: 2.0,
+                appliesTo: "epic_drops"
+            }
+        ],
+
+        // Win condition
+        winCondition: {
+            title: "Escape",
+            description: "Reach the exit portal before the lava consumes everything. The exit will appear when the shift begins.",
+            icon: "🚪"
+        },
+
+        // Countdown time in seconds (10 minutes)
+        countdownTime: 600,
+
+        // Lava duration in seconds
+        lavaDuration: 90,
+
         init: function (game) {
             // Find the farthest room from the entrance
             const entrance = game.rooms[0];
@@ -148,5 +195,22 @@ if (typeof SystemManager !== 'undefined') {
 } else {
     console.warn('⚠️ SystemManager not found - shift-system running standalone');
 }
+
+/**
+ * Get current shift scenario info for UI display
+ * @returns {object} Current shift scenario data or default magma_collapse
+ */
+function getCurrentShiftInfo() {
+    // Return active shift if one is running
+    if (game.activeShift) {
+        return game.activeShift;
+    }
+    // Default to magma_collapse scenario info
+    return shiftScenarios['magma_collapse'];
+}
+
+// Export for overlay use
+window.getCurrentShiftInfo = getCurrentShiftInfo;
+window.shiftScenarios = shiftScenarios;
 
 console.log('✅ Shift system loaded');
