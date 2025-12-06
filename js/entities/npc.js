@@ -1,8 +1,12 @@
 // ============================================================================
-// NPC SYSTEM - Non-enemy entities for shift scenarios
+// NPC SYSTEM - Non-enemy entities with quests, behaviors, and interactions
 // ============================================================================
-// Handles NPCs like spirits, prisoners, guides that can be interacted with,
-// followed, and escorted during shift scenarios.
+// Comprehensive NPC system with:
+// - Quest giving and tracking
+// - Modular behavior system
+// - Advanced movement patterns
+// - Dialogue trees
+// - State machines
 // ============================================================================
 
 const NPCSystem = {
@@ -13,7 +17,8 @@ const NPCSystem = {
         debugLogging: false,
         interactRange: 1.5,
         followDistance: 2,
-        pathfindingInterval: 500  // ms between pathfinding updates
+        pathfindingInterval: 500,
+        behaviorUpdateInterval: 100
     },
 
     // ========================================================================
@@ -21,6 +26,8 @@ const NPCSystem = {
     // ========================================================================
     npcs: new Map(),             // npcId -> NPC object
     activeEscorts: new Map(),    // npcId -> escort state
+    quests: new Map(),           // questId -> quest object
+    dialogueActive: null,        // Currently active dialogue
 
     // ========================================================================
     // NPC TYPES
@@ -31,21 +38,24 @@ const NPCSystem = {
         GUIDE: 'guide',
         MERCHANT: 'merchant',
         WOUNDED: 'wounded',
-        GHOST: 'ghost'
+        GHOST: 'ghost',
+        QUEST_GIVER: 'quest_giver',
+        VILLAGER: 'villager'
     },
 
-    // NPC configurations
+    // NPC base configurations
     NPC_CONFIGS: {
         'spirit': {
             name: 'Lost Spirit',
             moveSpeed: 2,
-            health: null,           // null = invulnerable
-            canPhase: true,         // Can pass through walls
+            health: null,
+            canPhase: true,
             glows: true,
             glowColor: '#88ccff',
             sprite: 'spirit',
             interactPrompt: 'Press F to commune',
-            states: ['bound', 'following', 'guiding', 'freed']
+            validStates: ['bound', 'following', 'guiding', 'freed'],
+            defaultBehavior: 'idle'
         },
         'prisoner': {
             name: 'Prisoner',
@@ -55,7 +65,8 @@ const NPCSystem = {
             glows: false,
             sprite: 'prisoner',
             interactPrompt: 'Press F to free',
-            states: ['bound', 'freed', 'following', 'rescued']
+            validStates: ['bound', 'freed', 'following', 'rescued'],
+            defaultBehavior: 'idle'
         },
         'guide': {
             name: 'Guide',
@@ -66,7 +77,30 @@ const NPCSystem = {
             glowColor: '#ffdd88',
             sprite: 'guide',
             interactPrompt: 'Press F to follow',
-            states: ['idle', 'guiding', 'waiting', 'arrived']
+            validStates: ['idle', 'guiding', 'waiting', 'arrived'],
+            defaultBehavior: 'wait_for_player'
+        },
+        'quest_giver': {
+            name: 'Quest Giver',
+            moveSpeed: 1,
+            health: null,
+            canPhase: false,
+            glows: false,
+            sprite: 'npc',
+            interactPrompt: 'Press F to talk',
+            validStates: ['idle', 'talking', 'quest_active', 'quest_complete'],
+            defaultBehavior: 'stationary'
+        },
+        'merchant': {
+            name: 'Merchant',
+            moveSpeed: 0,
+            health: null,
+            canPhase: false,
+            glows: false,
+            sprite: 'merchant',
+            interactPrompt: 'Press F to trade',
+            validStates: ['idle', 'trading'],
+            defaultBehavior: 'stationary'
         },
         'wounded': {
             name: 'Wounded Adventurer',
@@ -76,7 +110,8 @@ const NPCSystem = {
             glows: false,
             sprite: 'wounded',
             interactPrompt: 'Press F to help',
-            states: ['wounded', 'healing', 'following', 'rescued']
+            validStates: ['wounded', 'healing', 'following', 'rescued'],
+            defaultBehavior: 'cower'
         },
         'ghost': {
             name: 'Vengeful Ghost',
@@ -87,12 +122,637 @@ const NPCSystem = {
             glowColor: '#aaddff',
             sprite: 'ghost',
             interactPrompt: 'Press F to appease',
-            states: ['hostile', 'neutral', 'friendly', 'departed']
+            validStates: ['hostile', 'neutral', 'friendly', 'departed'],
+            defaultBehavior: 'haunt'
+        },
+        'villager': {
+            name: 'Villager',
+            moveSpeed: 2,
+            health: 20,
+            canPhase: false,
+            glows: false,
+            sprite: 'villager',
+            interactPrompt: 'Press F to talk',
+            validStates: ['idle', 'talking', 'fleeing', 'dead'],
+            defaultBehavior: 'wander'
         }
     },
 
     // ========================================================================
-    // CORE METHODS
+    // BEHAVIOR DEFINITIONS
+    // ========================================================================
+    BEHAVIORS: {
+        // Stationary - doesn't move at all
+        'stationary': {
+            update: (npc, dt) => { npc.isMoving = false; }
+        },
+
+        // Idle - stands still, occasionally looks around
+        'idle': {
+            update: (npc, dt) => {
+                npc.isMoving = false;
+                npc.behaviorTimer = (npc.behaviorTimer || 0) + dt;
+                if (npc.behaviorTimer > 3000) {
+                    npc.behaviorTimer = 0;
+                    const dirs = ['up', 'down', 'left', 'right'];
+                    npc.facingDirection = dirs[Math.floor(Math.random() * 4)];
+                }
+            }
+        },
+
+        // Wander - moves randomly within an area
+        'wander': {
+            init: (npc) => {
+                npc.wanderCenter = { x: npc.gridX, y: npc.gridY };
+                npc.wanderRadius = npc.wanderRadius || 5;
+                npc.wanderTarget = null;
+                npc.wanderPauseTimer = 0;
+            },
+            update: (npc, dt) => {
+                npc.wanderPauseTimer -= dt;
+
+                if (npc.wanderPauseTimer <= 0 && !npc.wanderTarget) {
+                    // Pick new target
+                    const angle = Math.random() * Math.PI * 2;
+                    const dist = Math.random() * npc.wanderRadius;
+                    npc.wanderTarget = {
+                        x: npc.wanderCenter.x + Math.cos(angle) * dist,
+                        y: npc.wanderCenter.y + Math.sin(angle) * dist
+                    };
+                }
+
+                if (npc.wanderTarget) {
+                    const arrived = NPCSystem.moveToward(npc, npc.wanderTarget.x, npc.wanderTarget.y, dt);
+                    if (arrived || !NPCSystem.canMoveTo(npc.wanderTarget.x, npc.wanderTarget.y)) {
+                        npc.wanderTarget = null;
+                        npc.wanderPauseTimer = 1000 + Math.random() * 3000;
+                        npc.isMoving = false;
+                    }
+                }
+            }
+        },
+
+        // Patrol - follows a set path repeatedly
+        'patrol': {
+            init: (npc) => {
+                npc.patrolPath = npc.patrolPath || [];
+                npc.patrolIndex = 0;
+                npc.patrolReverse = false;
+                npc.patrolPauseTimer = 0;
+            },
+            update: (npc, dt) => {
+                if (!npc.patrolPath || npc.patrolPath.length === 0) return;
+
+                npc.patrolPauseTimer -= dt;
+                if (npc.patrolPauseTimer > 0) return;
+
+                const target = npc.patrolPath[npc.patrolIndex];
+                const arrived = NPCSystem.moveToward(npc, target.x, target.y, dt);
+
+                if (arrived) {
+                    npc.patrolPauseTimer = target.pauseTime || 500;
+
+                    // Move to next point
+                    if (npc.patrolReverse) {
+                        npc.patrolIndex--;
+                        if (npc.patrolIndex < 0) {
+                            npc.patrolIndex = 1;
+                            npc.patrolReverse = false;
+                        }
+                    } else {
+                        npc.patrolIndex++;
+                        if (npc.patrolIndex >= npc.patrolPath.length) {
+                            npc.patrolIndex = npc.patrolPath.length - 2;
+                            npc.patrolReverse = true;
+                        }
+                    }
+                }
+            }
+        },
+
+        // Follow player - follows at a distance
+        'follow_player': {
+            update: (npc, dt) => {
+                if (!game.player) return;
+
+                const dist = Math.sqrt(
+                    (npc.gridX - game.player.gridX) ** 2 +
+                    (npc.gridY - game.player.gridY) ** 2
+                );
+
+                if (dist > npc.followDistance) {
+                    NPCSystem.moveToward(npc, game.player.gridX, game.player.gridY, dt);
+                } else {
+                    npc.isMoving = false;
+                }
+            }
+        },
+
+        // Wait for player - stays put until player is nearby, then follows
+        'wait_for_player': {
+            update: (npc, dt) => {
+                if (!game.player) return;
+
+                const dist = Math.sqrt(
+                    (npc.gridX - game.player.gridX) ** 2 +
+                    (npc.gridY - game.player.gridY) ** 2
+                );
+
+                if (dist < 3) {
+                    // Player is close, start following
+                    NPCSystem.setBehavior(npc.id, 'follow_player');
+                } else {
+                    npc.isMoving = false;
+                    // Face toward player
+                    const dx = game.player.gridX - npc.gridX;
+                    const dy = game.player.gridY - npc.gridY;
+                    if (Math.abs(dx) > Math.abs(dy)) {
+                        npc.facingDirection = dx > 0 ? 'right' : 'left';
+                    } else {
+                        npc.facingDirection = dy > 0 ? 'down' : 'up';
+                    }
+                }
+            }
+        },
+
+        // Flee - runs away from threats
+        'flee': {
+            init: (npc) => {
+                npc.fleeFrom = npc.fleeFrom || null;
+                npc.fleeDistance = npc.fleeDistance || 8;
+            },
+            update: (npc, dt) => {
+                let threatX = npc.fleeFrom?.gridX ?? game.player?.gridX;
+                let threatY = npc.fleeFrom?.gridY ?? game.player?.gridY;
+
+                if (threatX === undefined) return;
+
+                const dist = Math.sqrt(
+                    (npc.gridX - threatX) ** 2 + (npc.gridY - threatY) ** 2
+                );
+
+                if (dist < npc.fleeDistance) {
+                    // Run away
+                    const dx = npc.gridX - threatX;
+                    const dy = npc.gridY - threatY;
+                    const len = Math.sqrt(dx * dx + dy * dy);
+                    const fleeX = npc.gridX + (dx / len) * 3;
+                    const fleeY = npc.gridY + (dy / len) * 3;
+                    NPCSystem.moveToward(npc, fleeX, fleeY, dt);
+                } else {
+                    npc.isMoving = false;
+                    // Return to idle after fleeing far enough
+                    NPCSystem.setBehavior(npc.id, 'idle');
+                }
+            }
+        },
+
+        // Cower - stays still, trembles
+        'cower': {
+            update: (npc, dt) => {
+                npc.isMoving = false;
+                npc.animationState = 'cowering';
+            }
+        },
+
+        // Haunt - ghostly behavior, teleports around
+        'haunt': {
+            init: (npc) => {
+                npc.hauntTimer = 0;
+                npc.hauntInterval = 3000 + Math.random() * 5000;
+            },
+            update: (npc, dt) => {
+                npc.hauntTimer += dt;
+
+                if (npc.hauntTimer >= npc.hauntInterval) {
+                    npc.hauntTimer = 0;
+                    npc.hauntInterval = 3000 + Math.random() * 5000;
+
+                    // Teleport to random nearby location
+                    const angle = Math.random() * Math.PI * 2;
+                    const dist = 3 + Math.random() * 5;
+                    const newX = npc.gridX + Math.cos(angle) * dist;
+                    const newY = npc.gridY + Math.sin(angle) * dist;
+
+                    if (NPCSystem.canMoveTo(newX, newY) || npc.canPhase) {
+                        NPCSystem.teleport(npc.id, newX, newY);
+                    }
+                }
+            }
+        },
+
+        // Guide to destination - leads player along a path
+        'guide_to_destination': {
+            init: (npc) => {
+                npc.guidePath = npc.guidePath || [];
+                npc.guideIndex = 0;
+                npc.waitingForPlayer = false;
+            },
+            update: (npc, dt) => {
+                if (!npc.guidePath || npc.guidePath.length === 0) return;
+                if (!game.player) return;
+
+                // Check if player is close enough
+                const playerDist = Math.sqrt(
+                    (npc.gridX - game.player.gridX) ** 2 +
+                    (npc.gridY - game.player.gridY) ** 2
+                );
+
+                if (playerDist > 5) {
+                    // Wait for player to catch up
+                    npc.waitingForPlayer = true;
+                    npc.isMoving = false;
+                    return;
+                }
+
+                npc.waitingForPlayer = false;
+
+                // Move toward next waypoint
+                const target = npc.guidePath[npc.guideIndex];
+                const arrived = NPCSystem.moveToward(npc, target.x, target.y, dt);
+
+                if (arrived) {
+                    npc.guideIndex++;
+                    if (npc.guideIndex >= npc.guidePath.length) {
+                        // Reached destination
+                        if (npc.onReachDestination) {
+                            npc.onReachDestination(npc);
+                        }
+                        NPCSystem.setBehavior(npc.id, 'idle');
+                    }
+                }
+            }
+        }
+    },
+
+    // ========================================================================
+    // QUEST SYSTEM
+    // ========================================================================
+
+    QUEST_STATES: {
+        UNAVAILABLE: 'unavailable',    // Prerequisites not met
+        AVAILABLE: 'available',        // Can be accepted
+        ACTIVE: 'active',              // In progress
+        READY: 'ready',                // Objectives complete, return to NPC
+        COMPLETE: 'complete',          // Turned in
+        FAILED: 'failed'               // Failed
+    },
+
+    /**
+     * Define a quest for an NPC
+     * @param {object} questDef - Quest definition
+     * @returns {string} - Quest ID
+     */
+    defineQuest(questDef) {
+        const quest = {
+            id: questDef.id || `quest_${Date.now()}`,
+            npcId: questDef.npcId,
+            name: questDef.name || 'Unnamed Quest',
+            description: questDef.description || '',
+
+            // State
+            state: this.QUEST_STATES.UNAVAILABLE,
+
+            // Prerequisites
+            prerequisites: questDef.prerequisites || {
+                quests: [],          // Quest IDs that must be complete
+                items: [],           // Items player must have
+                level: 1,            // Minimum player level
+                custom: null         // Custom check function
+            },
+
+            // Objectives
+            objectives: (questDef.objectives || []).map(obj => ({
+                type: obj.type,      // 'kill', 'collect', 'deliver', 'escort', 'explore', 'interact', 'custom'
+                target: obj.target,  // Target ID or type
+                required: obj.required || 1,
+                current: 0,
+                description: obj.description || '',
+                optional: obj.optional || false
+            })),
+
+            // Rewards
+            rewards: questDef.rewards || {
+                gold: 0,
+                xp: 0,
+                items: [],
+                custom: null         // Custom reward function
+            },
+
+            // Dialogue
+            dialogue: {
+                available: questDef.dialogue?.available || ["I have a task for you."],
+                active: questDef.dialogue?.active || ["How goes your progress?"],
+                ready: questDef.dialogue?.ready || ["Excellent work!"],
+                complete: questDef.dialogue?.complete || ["Thank you for your help."]
+            },
+
+            // Callbacks
+            onAccept: questDef.onAccept || null,
+            onProgress: questDef.onProgress || null,
+            onComplete: questDef.onComplete || null,
+            onFail: questDef.onFail || null,
+
+            // Flags
+            repeatable: questDef.repeatable || false,
+            timeLimit: questDef.timeLimit || null,  // ms, null = no limit
+            timer: 0
+        };
+
+        this.quests.set(quest.id, quest);
+
+        // Link to NPC
+        const npc = this.npcs.get(quest.npcId);
+        if (npc) {
+            npc.quests = npc.quests || [];
+            npc.quests.push(quest.id);
+        }
+
+        if (this.config.debugLogging) {
+            console.log(`[NPC] Defined quest: ${quest.id} for NPC ${quest.npcId}`);
+        }
+
+        return quest.id;
+    },
+
+    /**
+     * Check and update quest availability
+     * @param {string} questId - Quest ID
+     */
+    checkQuestAvailability(questId) {
+        const quest = this.quests.get(questId);
+        if (!quest) return;
+
+        if (quest.state !== this.QUEST_STATES.UNAVAILABLE &&
+            quest.state !== this.QUEST_STATES.COMPLETE) return;
+
+        const prereqs = quest.prerequisites;
+
+        // Check quest prerequisites
+        if (prereqs.quests && prereqs.quests.length > 0) {
+            for (const reqQuestId of prereqs.quests) {
+                const reqQuest = this.quests.get(reqQuestId);
+                if (!reqQuest || reqQuest.state !== this.QUEST_STATES.COMPLETE) {
+                    return; // Prerequisite not met
+                }
+            }
+        }
+
+        // Check item prerequisites
+        if (prereqs.items && prereqs.items.length > 0) {
+            for (const itemId of prereqs.items) {
+                const hasItem = game.player?.inventory?.some(i => i.name === itemId);
+                if (!hasItem) return;
+            }
+        }
+
+        // Check level
+        if (prereqs.level && game.player?.level < prereqs.level) {
+            return;
+        }
+
+        // Check custom
+        if (prereqs.custom && !prereqs.custom(quest, game.player)) {
+            return;
+        }
+
+        // All prerequisites met
+        quest.state = this.QUEST_STATES.AVAILABLE;
+    },
+
+    /**
+     * Accept a quest
+     * @param {string} questId - Quest ID
+     * @returns {boolean} - Success
+     */
+    acceptQuest(questId) {
+        const quest = this.quests.get(questId);
+        if (!quest || quest.state !== this.QUEST_STATES.AVAILABLE) return false;
+
+        quest.state = this.QUEST_STATES.ACTIVE;
+        quest.timer = 0;
+
+        // Reset objectives
+        quest.objectives.forEach(obj => obj.current = 0);
+
+        if (quest.onAccept) {
+            quest.onAccept(quest);
+        }
+
+        addMessage(`Quest accepted: ${quest.name}`);
+
+        if (this.config.debugLogging) {
+            console.log(`[NPC] Quest accepted: ${questId}`);
+        }
+
+        return true;
+    },
+
+    /**
+     * Update quest progress
+     * @param {string} questId - Quest ID
+     * @param {string} objectiveType - Type of objective
+     * @param {string} target - Target ID/type
+     * @param {number} amount - Progress amount
+     */
+    updateQuestProgress(questId, objectiveType, target, amount = 1) {
+        const quest = this.quests.get(questId);
+        if (!quest || quest.state !== this.QUEST_STATES.ACTIVE) return;
+
+        let updated = false;
+        for (const obj of quest.objectives) {
+            if (obj.type === objectiveType && obj.target === target && obj.current < obj.required) {
+                obj.current = Math.min(obj.required, obj.current + amount);
+                updated = true;
+
+                addMessage(`Quest progress: ${obj.description} (${obj.current}/${obj.required})`);
+            }
+        }
+
+        if (updated && quest.onProgress) {
+            quest.onProgress(quest);
+        }
+
+        // Check if all required objectives complete
+        this.checkQuestCompletion(questId);
+    },
+
+    /**
+     * Update all active quests for a global event
+     * @param {string} objectiveType - Type of objective
+     * @param {string} target - Target ID/type
+     * @param {number} amount - Progress amount
+     */
+    updateAllQuests(objectiveType, target, amount = 1) {
+        this.quests.forEach((quest, questId) => {
+            if (quest.state === this.QUEST_STATES.ACTIVE) {
+                this.updateQuestProgress(questId, objectiveType, target, amount);
+            }
+        });
+    },
+
+    /**
+     * Check if quest objectives are complete
+     * @param {string} questId - Quest ID
+     */
+    checkQuestCompletion(questId) {
+        const quest = this.quests.get(questId);
+        if (!quest || quest.state !== this.QUEST_STATES.ACTIVE) return;
+
+        const allComplete = quest.objectives
+            .filter(obj => !obj.optional)
+            .every(obj => obj.current >= obj.required);
+
+        if (allComplete) {
+            quest.state = this.QUEST_STATES.READY;
+            addMessage(`Quest ready to turn in: ${quest.name}`);
+        }
+    },
+
+    /**
+     * Turn in a completed quest
+     * @param {string} questId - Quest ID
+     * @returns {boolean} - Success
+     */
+    turnInQuest(questId) {
+        const quest = this.quests.get(questId);
+        if (!quest || quest.state !== this.QUEST_STATES.READY) return false;
+
+        // Grant rewards
+        const rewards = quest.rewards;
+        if (rewards.gold) {
+            game.gold = (game.gold || 0) + rewards.gold;
+            addMessage(`Received ${rewards.gold} gold`);
+        }
+
+        if (rewards.xp && game.player) {
+            // Apply XP (implement based on your leveling system)
+        }
+
+        if (rewards.items && game.player?.inventory) {
+            rewards.items.forEach(item => {
+                game.player.inventory.push(item);
+                addMessage(`Received ${item.name}`);
+            });
+        }
+
+        if (rewards.custom) {
+            rewards.custom(quest, game.player);
+        }
+
+        quest.state = this.QUEST_STATES.COMPLETE;
+
+        if (quest.onComplete) {
+            quest.onComplete(quest);
+        }
+
+        addMessage(`Quest complete: ${quest.name}`);
+
+        // Check for newly available quests
+        this.quests.forEach((q, qId) => this.checkQuestAvailability(qId));
+
+        return true;
+    },
+
+    /**
+     * Fail a quest
+     * @param {string} questId - Quest ID
+     */
+    failQuest(questId) {
+        const quest = this.quests.get(questId);
+        if (!quest || quest.state !== this.QUEST_STATES.ACTIVE) return;
+
+        quest.state = this.QUEST_STATES.FAILED;
+
+        if (quest.onFail) {
+            quest.onFail(quest);
+        }
+
+        addMessage(`Quest failed: ${quest.name}`);
+    },
+
+    /**
+     * Get quest state info for UI
+     * @param {string} questId - Quest ID
+     * @returns {object}
+     */
+    getQuestInfo(questId) {
+        const quest = this.quests.get(questId);
+        if (!quest) return null;
+
+        return {
+            id: quest.id,
+            name: quest.name,
+            description: quest.description,
+            state: quest.state,
+            objectives: quest.objectives.map(obj => ({
+                description: obj.description,
+                current: obj.current,
+                required: obj.required,
+                complete: obj.current >= obj.required,
+                optional: obj.optional
+            })),
+            rewards: quest.rewards,
+            timeRemaining: quest.timeLimit ? Math.max(0, quest.timeLimit - quest.timer) : null
+        };
+    },
+
+    /**
+     * Get all active quests
+     * @returns {Array}
+     */
+    getActiveQuests() {
+        const active = [];
+        this.quests.forEach(quest => {
+            if (quest.state === this.QUEST_STATES.ACTIVE ||
+                quest.state === this.QUEST_STATES.READY) {
+                active.push(this.getQuestInfo(quest.id));
+            }
+        });
+        return active;
+    },
+
+    // ========================================================================
+    // DIALOGUE SYSTEM
+    // ========================================================================
+
+    /**
+     * Get appropriate dialogue for NPC based on quest state
+     * @param {string} npcId - NPC ID
+     * @returns {Array} - Dialogue lines
+     */
+    getDialogueForNPC(npcId) {
+        const npc = this.npcs.get(npcId);
+        if (!npc) return [];
+
+        // Check for quest-based dialogue
+        if (npc.quests && npc.quests.length > 0) {
+            for (const questId of npc.quests) {
+                const quest = this.quests.get(questId);
+                if (!quest) continue;
+
+                switch (quest.state) {
+                    case this.QUEST_STATES.AVAILABLE:
+                        return quest.dialogue.available;
+                    case this.QUEST_STATES.ACTIVE:
+                        return quest.dialogue.active;
+                    case this.QUEST_STATES.READY:
+                        return quest.dialogue.ready;
+                    case this.QUEST_STATES.COMPLETE:
+                        if (npc.quests.indexOf(questId) === npc.quests.length - 1) {
+                            return quest.dialogue.complete;
+                        }
+                        break;
+                }
+            }
+        }
+
+        // Default dialogue
+        return npc.dialogue || [];
+    },
+
+    // ========================================================================
+    // CORE NPC METHODS
     // ========================================================================
 
     /**
@@ -123,16 +783,26 @@ const NPCSystem = {
             isMoving: false,
             targetGridX: null,
             targetGridY: null,
-            path: config.path ?? [],      // For guides with predetermined paths
-            pathIndex: 0,
             canPhase: config.canPhase ?? defaults.canPhase,
             pathfindTimer: 0,
+            followDistance: config.followDistance ?? this.config.followDistance,
 
             // State
-            state: config.initialState ?? defaults.states[0],
-            validStates: defaults.states,
+            state: config.initialState ?? defaults.validStates[0],
+            validStates: defaults.validStates,
             health: config.health ?? defaults.health,
             maxHealth: config.health ?? defaults.health,
+
+            // Behavior
+            behavior: config.behavior ?? defaults.defaultBehavior,
+            behaviorTimer: 0,
+            previousBehavior: null,
+
+            // Behavior-specific data
+            wanderRadius: config.wanderRadius ?? 5,
+            patrolPath: config.patrolPath ?? [],
+            guidePath: config.guidePath ?? [],
+            fleeDistance: config.fleeDistance ?? 8,
 
             // Interaction
             interactable: config.interactable ?? true,
@@ -143,13 +813,15 @@ const NPCSystem = {
             glows: config.glows ?? defaults.glows,
             glowColor: config.glowColor ?? defaults.glowColor,
             visible: true,
-            facingDirection: 'down',
+            facingDirection: config.facingDirection ?? 'down',
             animationState: 'idle',
 
-            // Escort/Following
-            isFollowing: false,
-            followTarget: null,
-            followDistance: config.followDistance ?? this.config.followDistance,
+            // Quests
+            quests: config.quests ?? [],
+
+            // Dialogue
+            dialogue: config.dialogue ?? [],
+            currentDialogueIndex: 0,
 
             // Callbacks
             onInteract: config.onInteract ?? null,
@@ -158,12 +830,20 @@ const NPCSystem = {
             onReachDestination: config.onReachDestination ?? null,
             onDamage: config.onDamage ?? null,
 
-            // Dialogue
-            dialogue: config.dialogue ?? [],
-            currentDialogueIndex: 0
+            // Combat (for hostile NPCs)
+            hostile: config.hostile ?? false,
+            damage: config.damage ?? 5,
+            attackRange: config.attackRange ?? 1,
+            attackCooldown: 0
         };
 
         this.npcs.set(npc.id, npc);
+
+        // Initialize behavior
+        const behaviorDef = this.BEHAVIORS[npc.behavior];
+        if (behaviorDef?.init) {
+            behaviorDef.init(npc);
+        }
 
         // Mark on map
         if (game.map[Math.floor(npc.gridY)]?.[Math.floor(npc.gridX)]) {
@@ -192,9 +872,7 @@ const NPCSystem = {
             delete game.map[mapY][mapX].npc;
         }
 
-        // Clear escort state
         this.activeEscorts.delete(npcId);
-
         this.npcs.delete(npcId);
 
         if (this.config.debugLogging) {
@@ -209,6 +887,54 @@ const NPCSystem = {
      */
     get(npcId) {
         return this.npcs.get(npcId) || null;
+    },
+
+    // ========================================================================
+    // BEHAVIOR MANAGEMENT
+    // ========================================================================
+
+    /**
+     * Set NPC behavior
+     * @param {string} npcId - The NPC ID
+     * @param {string} behaviorId - The behavior ID
+     * @param {object} params - Optional behavior parameters
+     */
+    setBehavior(npcId, behaviorId, params = {}) {
+        const npc = this.npcs.get(npcId);
+        if (!npc) return;
+
+        const behaviorDef = this.BEHAVIORS[behaviorId];
+        if (!behaviorDef) {
+            console.warn(`[NPC] Unknown behavior: ${behaviorId}`);
+            return;
+        }
+
+        npc.previousBehavior = npc.behavior;
+        npc.behavior = behaviorId;
+        npc.behaviorTimer = 0;
+
+        // Apply parameters
+        Object.assign(npc, params);
+
+        // Initialize behavior
+        if (behaviorDef.init) {
+            behaviorDef.init(npc);
+        }
+
+        if (this.config.debugLogging) {
+            console.log(`[NPC] ${npcId} behavior: ${npc.previousBehavior} -> ${behaviorId}`);
+        }
+    },
+
+    /**
+     * Revert to previous behavior
+     * @param {string} npcId - The NPC ID
+     */
+    revertBehavior(npcId) {
+        const npc = this.npcs.get(npcId);
+        if (!npc || !npc.previousBehavior) return;
+
+        this.setBehavior(npcId, npc.previousBehavior);
     },
 
     // ========================================================================
@@ -232,14 +958,16 @@ const NPCSystem = {
         const oldState = npc.state;
         npc.state = newState;
 
-        // Handle state-specific behavior
+        // Handle state-specific behaviors
         switch (newState) {
             case 'following':
-                npc.isFollowing = true;
-                npc.followTarget = game.player;
+                this.setBehavior(npcId, 'follow_player');
                 break;
             case 'guiding':
-                npc.isFollowing = false;
+                this.setBehavior(npcId, 'guide_to_destination');
+                break;
+            case 'fleeing':
+                this.setBehavior(npcId, 'flee');
                 break;
             case 'freed':
             case 'rescued':
@@ -248,7 +976,6 @@ const NPCSystem = {
                 break;
         }
 
-        // Callback
         if (npc.onStateChange) {
             npc.onStateChange(npc, oldState, newState);
         }
@@ -280,16 +1007,53 @@ const NPCSystem = {
             if (dist > npc.interactRange) return false;
         }
 
+        // Handle quest interactions
+        if (npc.quests && npc.quests.length > 0) {
+            for (const questId of npc.quests) {
+                const quest = this.quests.get(questId);
+                if (!quest) continue;
+
+                switch (quest.state) {
+                    case this.QUEST_STATES.AVAILABLE:
+                        // Show quest dialogue, offer accept
+                        const dialogue = quest.dialogue.available;
+                        if (dialogue.length > 0) {
+                            addMessage(`${npc.name}: "${dialogue[0]}"`);
+                        }
+                        addMessage(`[Accept quest: ${quest.name}? Press F again]`);
+                        npc.pendingQuestAccept = questId;
+                        return true;
+
+                    case this.QUEST_STATES.READY:
+                        // Turn in quest
+                        const readyDialogue = quest.dialogue.ready;
+                        if (readyDialogue.length > 0) {
+                            addMessage(`${npc.name}: "${readyDialogue[0]}"`);
+                        }
+                        this.turnInQuest(questId);
+                        return true;
+                }
+            }
+
+            // Handle pending quest accept
+            if (npc.pendingQuestAccept) {
+                this.acceptQuest(npc.pendingQuestAccept);
+                npc.pendingQuestAccept = null;
+                return true;
+            }
+        }
+
         // Custom callback
         if (npc.onInteract) {
             npc.onInteract(npc, game.player);
         }
 
-        // Show dialogue if available
-        if (npc.dialogue.length > 0) {
-            const line = npc.dialogue[npc.currentDialogueIndex];
+        // Show dialogue
+        const dialogue = this.getDialogueForNPC(npcId);
+        if (dialogue.length > 0) {
+            const line = dialogue[npc.currentDialogueIndex % dialogue.length];
             addMessage(`${npc.name}: "${line}"`);
-            npc.currentDialogueIndex = (npc.currentDialogueIndex + 1) % npc.dialogue.length;
+            npc.currentDialogueIndex++;
         }
 
         if (this.config.debugLogging) {
@@ -322,47 +1086,8 @@ const NPCSystem = {
     },
 
     // ========================================================================
-    // MOVEMENT & PATHFINDING
+    // MOVEMENT
     // ========================================================================
-
-    /**
-     * Start guiding along a path
-     * @param {string} npcId - The NPC ID
-     * @param {Array} path - Array of {x, y} positions
-     */
-    startGuiding(npcId, path) {
-        const npc = this.npcs.get(npcId);
-        if (!npc) return;
-
-        npc.path = path;
-        npc.pathIndex = 0;
-        this.setState(npcId, 'guiding');
-    },
-
-    /**
-     * Start following the player
-     * @param {string} npcId - The NPC ID
-     */
-    startFollowing(npcId) {
-        const npc = this.npcs.get(npcId);
-        if (!npc) return;
-
-        npc.followTarget = game.player;
-        this.setState(npcId, 'following');
-    },
-
-    /**
-     * Stop following
-     * @param {string} npcId - The NPC ID
-     */
-    stopFollowing(npcId) {
-        const npc = this.npcs.get(npcId);
-        if (!npc) return;
-
-        npc.isFollowing = false;
-        npc.followTarget = null;
-        npc.isMoving = false;
-    },
 
     /**
      * Move NPC toward target position
@@ -370,6 +1095,7 @@ const NPCSystem = {
      * @param {number} targetX - Target grid X
      * @param {number} targetY - Target grid Y
      * @param {number} dt - Delta time
+     * @returns {boolean} - True if arrived
      */
     moveToward(npc, targetX, targetY, dt) {
         const dx = targetX - npc.gridX;
@@ -378,14 +1104,13 @@ const NPCSystem = {
 
         if (dist < 0.1) {
             npc.isMoving = false;
-            return;
+            return true;
         }
 
         const speed = npc.moveSpeed * (dt / 1000);
         const moveX = (dx / dist) * Math.min(speed, dist);
         const moveY = (dy / dist) * Math.min(speed, dist);
 
-        // Check collision (unless can phase)
         const newX = npc.gridX + moveX;
         const newY = npc.gridY + moveY;
 
@@ -418,6 +1143,39 @@ const NPCSystem = {
                 game.map[newMapY][newMapX].npc = npc.id;
             }
         }
+
+        return false;
+    },
+
+    /**
+     * Teleport NPC to position
+     * @param {string} npcId - NPC ID
+     * @param {number} x - Target X
+     * @param {number} y - Target Y
+     */
+    teleport(npcId, x, y) {
+        const npc = this.npcs.get(npcId);
+        if (!npc) return;
+
+        // Clear old position
+        const oldX = Math.floor(npc.gridX);
+        const oldY = Math.floor(npc.gridY);
+        if (game.map[oldY]?.[oldX]?.npc === npc.id) {
+            delete game.map[oldY][oldX].npc;
+        }
+
+        // Set new position
+        npc.gridX = x;
+        npc.gridY = y;
+        npc.displayX = x;
+        npc.displayY = y;
+
+        // Mark new position
+        const newX = Math.floor(x);
+        const newY = Math.floor(y);
+        if (game.map[newY]?.[newX]) {
+            game.map[newY][newX].npc = npc.id;
+        }
     },
 
     /**
@@ -440,50 +1198,24 @@ const NPCSystem = {
         return tile.type === 'floor' || tile.type === 'doorway' || tile.type === 'exit';
     },
 
-    /**
-     * Find path from NPC to target
-     * @param {object} npc - The NPC
-     * @param {number} targetX - Target grid X
-     * @param {number} targetY - Target grid Y
-     * @returns {Array} - Path array or empty
-     */
-    findPath(npc, targetX, targetY) {
-        // Use existing pathfinding if available
-        if (typeof findPath === 'function') {
-            return findPath(
-                Math.floor(npc.gridX),
-                Math.floor(npc.gridY),
-                Math.floor(targetX),
-                Math.floor(targetY),
-                game.map,
-                npc.canPhase
-            );
-        }
-
-        // Simple direct path fallback
-        return [{ x: targetX, y: targetY }];
-    },
-
     // ========================================================================
     // DAMAGE & DEATH
     // ========================================================================
 
-    /**
-     * Damage an NPC
-     * @param {string} npcId - The NPC ID
-     * @param {number} amount - Damage amount
-     * @param {object} source - Damage source
-     * @returns {boolean} - True if NPC died
-     */
     damage(npcId, amount, source = null) {
         const npc = this.npcs.get(npcId);
         if (!npc || npc.health === null) return false;
 
         npc.health -= amount;
 
-        // Callback
         if (npc.onDamage) {
             npc.onDamage(npc, amount, source);
+        }
+
+        // Trigger flee behavior if not hostile
+        if (!npc.hostile && npc.health > 0) {
+            npc.fleeFrom = source;
+            this.setBehavior(npcId, 'flee');
         }
 
         if (npc.health <= 0) {
@@ -494,10 +1226,6 @@ const NPCSystem = {
         return false;
     },
 
-    /**
-     * Kill an NPC
-     * @param {string} npcId - The NPC ID
-     */
     kill(npcId) {
         const npc = this.npcs.get(npcId);
         if (!npc) return;
@@ -506,23 +1234,23 @@ const NPCSystem = {
         npc.visible = false;
         npc.interactable = false;
 
-        // Callback
+        // Fail any active quests from this NPC
+        if (npc.quests) {
+            npc.quests.forEach(questId => {
+                const quest = this.quests.get(questId);
+                if (quest && quest.state === this.QUEST_STATES.ACTIVE) {
+                    this.failQuest(questId);
+                }
+            });
+        }
+
         if (npc.onDeath) {
             npc.onDeath(npc);
         }
 
         addMessage(`${npc.name} has died!`);
-
-        if (this.config.debugLogging) {
-            console.log(`[NPC] ${npcId} died`);
-        }
     },
 
-    /**
-     * Heal an NPC
-     * @param {string} npcId - The NPC ID
-     * @param {number} amount - Heal amount
-     */
     heal(npcId, amount) {
         const npc = this.npcs.get(npcId);
         if (!npc || npc.health === null) return;
@@ -534,83 +1262,25 @@ const NPCSystem = {
     // UPDATE & LIFECYCLE
     // ========================================================================
 
-    /**
-     * Update all NPCs
-     * @param {number} dt - Delta time in ms
-     */
     update(dt) {
+        // Update quest timers
+        this.quests.forEach(quest => {
+            if (quest.state === this.QUEST_STATES.ACTIVE && quest.timeLimit) {
+                quest.timer += dt;
+                if (quest.timer >= quest.timeLimit) {
+                    this.failQuest(quest.id);
+                }
+            }
+        });
+
+        // Update NPCs
         this.npcs.forEach((npc, id) => {
             if (npc.state === 'dead') return;
 
-            // Update pathfinding timer
-            npc.pathfindTimer += dt;
-
-            // Handle following behavior
-            if (npc.isFollowing && npc.followTarget) {
-                const target = npc.followTarget;
-                const dist = Math.sqrt(
-                    (npc.gridX - target.gridX) ** 2 +
-                    (npc.gridY - target.gridY) ** 2
-                );
-
-                // Only move if far enough from target
-                if (dist > npc.followDistance) {
-                    // Pathfind periodically
-                    if (npc.pathfindTimer >= this.config.pathfindingInterval) {
-                        npc.pathfindTimer = 0;
-                        npc.path = this.findPath(npc, target.gridX, target.gridY);
-                        npc.pathIndex = 0;
-                    }
-
-                    // Follow path
-                    if (npc.path && npc.path.length > 0 && npc.pathIndex < npc.path.length) {
-                        const waypoint = npc.path[npc.pathIndex];
-                        this.moveToward(npc, waypoint.x, waypoint.y, dt);
-
-                        // Check if reached waypoint
-                        const wpDist = Math.sqrt(
-                            (npc.gridX - waypoint.x) ** 2 +
-                            (npc.gridY - waypoint.y) ** 2
-                        );
-                        if (wpDist < 0.3) {
-                            npc.pathIndex++;
-                        }
-                    } else {
-                        // Direct movement if no path
-                        this.moveToward(npc, target.gridX, target.gridY, dt);
-                    }
-                } else {
-                    npc.isMoving = false;
-                }
-            }
-
-            // Handle guiding behavior
-            if (npc.state === 'guiding' && npc.path && npc.path.length > 0) {
-                if (npc.pathIndex < npc.path.length) {
-                    const waypoint = npc.path[npc.pathIndex];
-                    this.moveToward(npc, waypoint.x, waypoint.y, dt);
-
-                    // Check if reached waypoint
-                    const wpDist = Math.sqrt(
-                        (npc.gridX - waypoint.x) ** 2 +
-                        (npc.gridY - waypoint.y) ** 2
-                    );
-                    if (wpDist < 0.3) {
-                        npc.pathIndex++;
-
-                        // Reveal path for spirit guides
-                        if (npc.canPhase) {
-                            this.revealTile(npc, Math.floor(waypoint.x), Math.floor(waypoint.y));
-                        }
-                    }
-                } else {
-                    // Reached destination
-                    npc.isMoving = false;
-                    if (npc.onReachDestination) {
-                        npc.onReachDestination(npc);
-                    }
-                    this.setState(id, 'arrived');
-                }
+            // Update behavior
+            const behaviorDef = this.BEHAVIORS[npc.behavior];
+            if (behaviorDef?.update) {
+                behaviorDef.update(npc, dt);
             }
 
             // Update animation state
@@ -618,26 +1288,7 @@ const NPCSystem = {
         });
     },
 
-    /**
-     * Reveal a tile (for spirit guides passing through walls)
-     * @param {object} npc - The NPC
-     * @param {number} x - Grid X
-     * @param {number} y - Grid Y
-     */
-    revealTile(npc, x, y) {
-        const tile = game.map[y]?.[x];
-        if (tile?.type === 'wall' && npc.canPhase) {
-            tile.spiritRevealed = true;
-            tile.passable = true;
-            // Could trigger visual effect here
-        }
-    },
-
-    /**
-     * Cleanup all NPCs
-     */
     cleanup() {
-        // Clear map markers
         this.npcs.forEach(npc => {
             const mapX = Math.floor(npc.gridX);
             const mapY = Math.floor(npc.gridY);
@@ -648,6 +1299,8 @@ const NPCSystem = {
 
         this.npcs.clear();
         this.activeEscorts.clear();
+        this.quests.clear();
+        this.dialogueActive = null;
 
         if (this.config.debugLogging) {
             console.log('[NPC] System cleaned up');
@@ -658,46 +1311,18 @@ const NPCSystem = {
     // QUERY METHODS
     // ========================================================================
 
-    /**
-     * Get all NPCs
-     * @returns {Array}
-     */
     getAll() {
         return Array.from(this.npcs.values());
     },
 
-    /**
-     * Get NPCs by type
-     * @param {string} type - NPC type
-     * @returns {Array}
-     */
     getByType(type) {
-        const result = [];
-        this.npcs.forEach(npc => {
-            if (npc.type === type) result.push(npc);
-        });
-        return result;
+        return Array.from(this.npcs.values()).filter(npc => npc.type === type);
     },
 
-    /**
-     * Get NPCs by state
-     * @param {string} state - NPC state
-     * @returns {Array}
-     */
     getByState(state) {
-        const result = [];
-        this.npcs.forEach(npc => {
-            if (npc.state === state) result.push(npc);
-        });
-        return result;
+        return Array.from(this.npcs.values()).filter(npc => npc.state === state);
     },
 
-    /**
-     * Get NPC at position
-     * @param {number} x - Grid X
-     * @param {number} y - Grid Y
-     * @returns {object|null}
-     */
     getAtPosition(x, y) {
         for (const [id, npc] of this.npcs) {
             const dist = Math.sqrt((npc.gridX - x) ** 2 + (npc.gridY - y) ** 2);
@@ -713,17 +1338,26 @@ const NPCSystem = {
     getStatus() {
         const byType = {};
         const byState = {};
+        const byBehavior = {};
 
         this.npcs.forEach(npc => {
             byType[npc.type] = (byType[npc.type] || 0) + 1;
             byState[npc.state] = (byState[npc.state] || 0) + 1;
+            byBehavior[npc.behavior] = (byBehavior[npc.behavior] || 0) + 1;
+        });
+
+        const questsByState = {};
+        this.quests.forEach(quest => {
+            questsByState[quest.state] = (questsByState[quest.state] || 0) + 1;
         });
 
         return {
-            total: this.npcs.size,
+            totalNPCs: this.npcs.size,
             byType,
             byState,
-            activeEscorts: this.activeEscorts.size
+            byBehavior,
+            totalQuests: this.quests.size,
+            questsByState
         };
     }
 };
@@ -750,7 +1384,6 @@ const NPCSystemDef = {
     }
 };
 
-// Register with SystemManager (priority 41 - before enemy AI)
 if (typeof SystemManager !== 'undefined') {
     SystemManager.register('npc-system', NPCSystemDef, 41);
 } else {
@@ -762,4 +1395,4 @@ if (typeof SystemManager !== 'undefined') {
 // ============================================================================
 window.NPCSystem = NPCSystem;
 
-console.log('✅ NPC System loaded');
+console.log('✅ NPC System loaded (with quests and behaviors)');
