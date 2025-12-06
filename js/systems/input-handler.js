@@ -27,8 +27,37 @@ const inspectPopup = {
 window.addEventListener('keydown', e => {
     keys[e.key] = true;
 
+    // PRIORITY 1: Game state overlays (character, map, settings, skills) - check FIRST
+    // Close character overlay on ESC (hotkey 'C' handled by icon-sidebar)
+    if (e.key === 'Escape' && game.state === 'character') {
+        game.state = 'playing';
+        if (window.sidebarState) window.sidebarState.activeOverlay = null;
+        return;
+    }
+
+    // Close map overlay on ESC (hotkey 'M' handled by icon-sidebar)
+    if (e.key === 'Escape' && game.state === 'map') {
+        game.state = 'playing';
+        if (window.sidebarState) window.sidebarState.activeOverlay = null;
+        return;
+    }
+
+    // Close settings overlay on ESC (hotkey 'O' handled by icon-sidebar)
+    if (e.key === 'Escape' && game.state === 'settings') {
+        game.state = 'playing';
+        if (window.sidebarState) window.sidebarState.activeOverlay = null;
+        return;
+    }
+
+    // Close skills menu on ESC (hotkey 'K' handled by icon-sidebar)
+    if (e.key === 'Escape' && game.state === 'skills') {
+        game.state = 'playing';
+        return;
+    }
+
+    // PRIORITY 2: Context menu and inspect popup (only if game.state === 'playing')
     // Close inspect popup on ESC
-    if (e.key === 'Escape' && inspectPopup.visible) {
+    if (e.key === 'Escape' && inspectPopup.visible && game.state === 'playing') {
         inspectPopup.visible = false;
         inspectPopup.target = null;
         inspectPopup.tab = 0;
@@ -72,12 +101,6 @@ window.addEventListener('keydown', e => {
     if (e.key === 'Escape' && contextMenu.visible) {
         contextMenu.visible = false;
         contextMenu.target = null;
-        return;
-    }
-
-    // Close skills menu on ESC or K
-    if ((e.key === 'Escape' || e.key === 'k' || e.key === 'K') && game.state === 'skills') {
-        game.state = 'playing';
         return;
     }
 
@@ -303,9 +326,10 @@ function handleMerchantInput(e) {
  * Handle inventory screen input
  */
 function handleInventoryInput(e) {
-    // ESC or 'i'/'I' to close inventory
-    if (e.key === 'Escape' || e.key === 'i' || e.key === 'I' || e.key === 'e' || e.key === 'E') {
+    // ESC to close inventory (hotkey 'E' handled by icon-sidebar)
+    if (e.key === 'Escape') {
         game.state = 'playing';
+        if (window.sidebarState) window.sidebarState.activeOverlay = null;
         return;
     }
 
@@ -744,6 +768,13 @@ function executeContextAction(action, target, targetType) {
         case 'attack':
             if (targetType === 'enemy') {
                 engageCombat(game.player, target);
+            }
+            break;
+
+        case 'pickup':
+            if (typeof window.pickupLootPile === 'function' && targetType === 'loot') {
+                console.log('Picking up loot pile');
+                window.pickupLootPile(target);
             }
             break;
 
