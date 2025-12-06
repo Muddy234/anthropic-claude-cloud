@@ -3,18 +3,50 @@ const shiftScenarios = {
         name: "Protocol: MELTDOWN",
         description: "Seismic instability detected! The outer edges are collapsing into the Chasm!",
         init: function (game) {
+            // Find the farthest room from the entrance
             const entrance = game.rooms[0];
-            game.exitPosition = { x: entrance.x + 2, y: entrance.y + 2 };
-            game.map[game.exitPosition.y][game.exitPosition.x] = { type: 'exit', discovered: true, room: entrance };
-            addMessage("THE SHIFT HAS BEGUN! ESCAPE TO THE ENTRANCE!");
+            let farthestRoom = entrance;
+            let maxDist = 0;
 
-            // Calculate distance from center to corner for the starting radius
-            const cx = GRID_WIDTH / 2;
-            const cy = GRID_HEIGHT / 2;
-            const maxDist = Math.sqrt(cx * cx + cy * cy);
+            for (const room of game.rooms) {
+                if (room === entrance) continue;
+                const dist = Math.abs(room.x - entrance.x) + Math.abs(room.y - entrance.y);
+                if (dist > maxDist) {
+                    maxDist = dist;
+                    farthestRoom = room;
+                }
+            }
 
-            // Timer: 0.5s, Step: 1 tile. This doubles the speed (approx 56s to clear).
-            game.shiftState = { timer: 0.5, maxTimer: 0.5, currentRadius: maxDist, stepSize: 1, active: true };
+            // Place exit in the center of the farthest room
+            const exitX = farthestRoom.floorX + Math.floor(farthestRoom.floorWidth / 2);
+            const exitY = farthestRoom.floorY + Math.floor(farthestRoom.floorHeight / 2);
+            game.exitPosition = { x: exitX, y: exitY };
+            game.map[exitY][exitX] = { type: 'exit', discovered: true, room: farthestRoom };
+            addMessage("THE SHIFT HAS BEGUN! REACH THE EXIT!");
+
+            // Calculate max distance from exit to any corner for the starting radius
+            const corners = [
+                { x: 0, y: 0 },
+                { x: GRID_WIDTH, y: 0 },
+                { x: 0, y: GRID_HEIGHT },
+                { x: GRID_WIDTH, y: GRID_HEIGHT }
+            ];
+            let startRadius = 0;
+            for (const corner of corners) {
+                const d = Math.sqrt((corner.x - exitX) ** 2 + (corner.y - exitY) ** 2);
+                if (d > startRadius) startRadius = d;
+            }
+
+            // Store exit position as lava center point
+            game.shiftState = {
+                timer: 0.5,
+                maxTimer: 0.5,
+                currentRadius: startRadius,
+                stepSize: 1,
+                active: true,
+                centerX: exitX,
+                centerY: exitY
+            };
         },
         update: function (game, dt) {
             if (!game.shiftState.active) return;
@@ -28,8 +60,9 @@ const shiftScenarios = {
                     addMessage(`WARNING: SECTOR COLLAPSE! RADIUS: ${Math.floor(game.shiftState.currentRadius)}`);
                 }
 
-                const cx = GRID_WIDTH / 2;
-                const cy = GRID_HEIGHT / 2;
+                // Lava flows towards the EXIT position
+                const cx = game.shiftState.centerX;
+                const cy = game.shiftState.centerY;
                 const rSq = game.shiftState.currentRadius ** 2;
 
                 // Iterate through all tiles to check if they are outside the safe zone
@@ -50,7 +83,7 @@ const shiftScenarios = {
                 const pDistSq = (game.player.x - cx) ** 2 + (game.player.y - cy) ** 2;
                 if (pDistSq > rSq) {
                     game.player.hp -= 20;
-                    addMessage("YOU ARE BURNING! RUN!");
+                    addMessage("YOU ARE BURNING! RUN TO THE EXIT!");
                     if (game.player.hp <= 0) game.state = 'gameover';
                 }
             }
