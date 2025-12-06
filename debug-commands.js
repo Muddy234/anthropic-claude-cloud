@@ -70,6 +70,29 @@ const Debug = {
 ║   debug.systems()           - Show registered systems        ║
 ║   debug.fps()               - Toggle FPS display             ║
 ║   debug.logging(bool)       - Toggle debug logging           ║
+║                                                              ║
+║ SHIFT MECHANICS                                              ║
+║   debug.triggerShift(id)    - Trigger a shift immediately    ║
+║   debug.setCountdown(s)     - Set countdown seconds          ║
+║   debug.endShift()          - End current shift              ║
+║   debug.shiftStatus()       - Show shift state               ║
+║   debug.shiftSystems()      - Show ALL shift systems         ║
+║                                                              ║
+║ DYNAMIC TILES                                                ║
+║   debug.convertTile(x,y,t)  - Convert tile to type           ║
+║   debug.spreadTiles(t,r)    - Start tile spread              ║
+║                                                              ║
+║ ENVIRONMENT                                                  ║
+║   debug.createMeter(id)     - Create env meter               ║
+║   debug.setMeterValue(id,v) - Set meter value                ║
+║   debug.setDarkness(level)  - Set global darkness (0-1)      ║
+║   debug.addLight(type,x,y)  - Add light source               ║
+║                                                              ║
+║ SPAWN/QUEST/NPC/BOSS                                         ║
+║   debug.createSpawnPoint()  - Create spawn point             ║
+║   debug.startQuest(type,n)  - Start collection quest         ║
+║   debug.spawnNPC(type,x,y)  - Spawn NPC                      ║
+║   debug.spawnBoss(type,x,y) - Spawn boss                     ║
 ╚══════════════════════════════════════════════════════════════╝
         `);
     },
@@ -778,6 +801,318 @@ const Debug = {
         if (typeof HazardSystem !== 'undefined') HazardSystem.config.debugLogging = enabled;
         if (typeof MonsterSocialSystem !== 'undefined') MonsterSocialSystem.config.debugLogging = enabled;
         console.log(`Debug logging: ${enabled ? 'ON' : 'OFF'}`);
+    },
+
+    // ========================================================================
+    // SHIFT SYSTEMS
+    // ========================================================================
+    triggerShift(shiftId = 'magma_collapse') {
+        if (typeof triggerShift === 'function') {
+            game.shiftCountdown = 0;
+            triggerShift(shiftId);
+            console.log(`Triggered shift: ${shiftId}`);
+        } else {
+            console.error('triggerShift function not found');
+        }
+    },
+
+    setCountdown(seconds) {
+        game.shiftCountdown = seconds;
+        console.log(`Shift countdown set to ${seconds}s`);
+    },
+
+    endShift() {
+        game.shiftActive = false;
+        game.activeShift = null;
+        game.shiftState = null;
+        console.log('Shift ended');
+    },
+
+    shiftStatus() {
+        console.log('=== SHIFT STATUS ===');
+        console.log(`Active: ${game.shiftActive}`);
+        console.log(`Countdown: ${game.shiftCountdown?.toFixed(1)}s`);
+        console.log(`Shift: ${game.activeShift?.name || 'none'}`);
+        if (typeof ShiftBonusSystem !== 'undefined') {
+            console.log('Bonuses:', ShiftBonusSystem.getStatus());
+        }
+    },
+
+    // ========================================================================
+    // DYNAMIC TILES
+    // ========================================================================
+    convertTile(x, y, type = 'lava') {
+        if (typeof DynamicTileSystem === 'undefined') {
+            console.error('DynamicTileSystem not loaded');
+            return;
+        }
+        x = x ?? Math.floor(game.player.gridX);
+        y = y ?? Math.floor(game.player.gridY);
+        DynamicTileSystem.convertTile(x, y, type);
+        console.log(`Converted (${x}, ${y}) to ${type}`);
+    },
+
+    spreadTiles(type = 'corrupted', radius = 5) {
+        if (typeof DynamicTileSystem === 'undefined') {
+            console.error('DynamicTileSystem not loaded');
+            return;
+        }
+        const x = Math.floor(game.player.gridX);
+        const y = Math.floor(game.player.gridY);
+        DynamicTileSystem.startSpreadFrom(`debug_${Date.now()}`, x, y, type, {
+            maxRadius: radius,
+            spreadRate: 5
+        });
+        console.log(`Started ${type} spread from (${x}, ${y})`);
+    },
+
+    dynamicTileStatus() {
+        if (typeof DynamicTileSystem === 'undefined') {
+            console.error('DynamicTileSystem not loaded');
+            return;
+        }
+        console.log('Dynamic Tiles:', DynamicTileSystem.getStatus());
+    },
+
+    // ========================================================================
+    // ENVIRONMENTAL METERS
+    // ========================================================================
+    createMeter(id = 'warmth') {
+        if (typeof EnvironmentalMeterSystem === 'undefined') {
+            console.error('EnvironmentalMeterSystem not loaded');
+            return;
+        }
+        EnvironmentalMeterSystem.createMeter(id);
+        console.log(`Created meter: ${id}`);
+    },
+
+    setMeterValue(id, value) {
+        if (typeof EnvironmentalMeterSystem === 'undefined') {
+            console.error('EnvironmentalMeterSystem not loaded');
+            return;
+        }
+        EnvironmentalMeterSystem.setValue(id, value);
+        console.log(`Set ${id} to ${value}`);
+    },
+
+    setMeterDrain(id, rate) {
+        if (typeof EnvironmentalMeterSystem === 'undefined') {
+            console.error('EnvironmentalMeterSystem not loaded');
+            return;
+        }
+        EnvironmentalMeterSystem.setDrainRate(id, rate);
+        console.log(`Set ${id} drain rate to ${rate}/s`);
+    },
+
+    meterStatus() {
+        if (typeof EnvironmentalMeterSystem === 'undefined') {
+            console.error('EnvironmentalMeterSystem not loaded');
+            return;
+        }
+        console.log('Meters:', EnvironmentalMeterSystem.getStatus());
+    },
+
+    // ========================================================================
+    // LIGHT SOURCES
+    // ========================================================================
+    setDarkness(level = 0.8) {
+        if (typeof LightSourceSystem === 'undefined') {
+            console.error('LightSourceSystem not loaded');
+            return;
+        }
+        LightSourceSystem.setGlobalDarkness(level, true);
+        console.log(`Darkness set to ${level}`);
+    },
+
+    addLight(type = 'brazier', x, y) {
+        if (typeof LightSourceSystem === 'undefined') {
+            console.error('LightSourceSystem not loaded');
+            return;
+        }
+        x = x ?? Math.floor(game.player.gridX);
+        y = y ?? Math.floor(game.player.gridY);
+        const id = LightSourceSystem.addSource({ type, gridX: x, gridY: y });
+        console.log(`Added ${type} light at (${x}, ${y}): ${id}`);
+    },
+
+    lightStatus() {
+        if (typeof LightSourceSystem === 'undefined') {
+            console.error('LightSourceSystem not loaded');
+            return;
+        }
+        console.log('Lights:', LightSourceSystem.getStatus());
+    },
+
+    // ========================================================================
+    // SPAWN POINTS
+    // ========================================================================
+    createSpawnPoint(type = 'rift', x, y) {
+        if (typeof SpawnPointSystem === 'undefined') {
+            console.error('SpawnPointSystem not loaded');
+            return;
+        }
+        x = x ?? Math.floor(game.player.gridX) + 5;
+        y = y ?? Math.floor(game.player.gridY);
+        const id = SpawnPointSystem.create({
+            type,
+            gridX: x,
+            gridY: y,
+            enemyPool: ['skeleton']  // Use existing enemy type
+        });
+        console.log(`Created ${type} spawn point at (${x}, ${y}): ${id}`);
+    },
+
+    spawnPointStatus() {
+        if (typeof SpawnPointSystem === 'undefined') {
+            console.error('SpawnPointSystem not loaded');
+            return;
+        }
+        console.log('Spawn Points:', SpawnPointSystem.getStatus());
+    },
+
+    // ========================================================================
+    // QUEST ITEMS
+    // ========================================================================
+    startQuest(type = 'seal_fragment', count = 3) {
+        if (typeof QuestItemSystem === 'undefined') {
+            console.error('QuestItemSystem not loaded');
+            return;
+        }
+        QuestItemSystem.startQuest({
+            itemType: type,
+            totalRequired: count,
+            deliveryRequired: false
+        });
+        QuestItemSystem.spawnItemsInRooms(type, count);
+        console.log(`Started quest: collect ${count} ${type}s`);
+    },
+
+    collectAllQuestItems() {
+        if (typeof QuestItemSystem === 'undefined') {
+            console.error('QuestItemSystem not loaded');
+            return;
+        }
+        const items = QuestItemSystem.getUncollectedItems();
+        items.forEach(item => QuestItemSystem.collectItem(item.id));
+        console.log(`Collected ${items.length} quest items`);
+    },
+
+    questStatus() {
+        if (typeof QuestItemSystem === 'undefined') {
+            console.error('QuestItemSystem not loaded');
+            return;
+        }
+        console.log('Quest:', QuestItemSystem.getStatus());
+    },
+
+    // ========================================================================
+    // NPCs
+    // ========================================================================
+    spawnNPC(type = 'spirit', x, y) {
+        if (typeof NPCSystem === 'undefined') {
+            console.error('NPCSystem not loaded');
+            return;
+        }
+        x = x ?? Math.floor(game.player.gridX) + 2;
+        y = y ?? Math.floor(game.player.gridY);
+        const id = NPCSystem.spawn({
+            type,
+            gridX: x,
+            gridY: y,
+            dialogue: ["Hello, adventurer.", "Follow me to safety."]
+        });
+        console.log(`Spawned ${type} NPC at (${x}, ${y}): ${id}`);
+    },
+
+    interactNPC() {
+        if (typeof NPCSystem === 'undefined') {
+            console.error('NPCSystem not loaded');
+            return;
+        }
+        const npc = NPCSystem.getNearPlayer();
+        if (npc) {
+            NPCSystem.interact(npc.id);
+        } else {
+            console.log('No NPC nearby');
+        }
+    },
+
+    npcStatus() {
+        if (typeof NPCSystem === 'undefined') {
+            console.error('NPCSystem not loaded');
+            return;
+        }
+        console.log('NPCs:', NPCSystem.getStatus());
+    },
+
+    // ========================================================================
+    // BOSSES
+    // ========================================================================
+    spawnBoss(template = 'warden', x, y) {
+        if (typeof BossSystem === 'undefined') {
+            console.error('BossSystem not loaded');
+            return;
+        }
+        x = x ?? Math.floor(game.player.gridX) + 5;
+        y = y ?? Math.floor(game.player.gridY);
+        const id = BossSystem.spawn(template, x, y);
+        console.log(`Spawned ${template} boss at (${x}, ${y}): ${id}`);
+    },
+
+    damageBoss(amount = 100) {
+        if (typeof BossSystem === 'undefined') {
+            console.error('BossSystem not loaded');
+            return;
+        }
+        const bosses = BossSystem.getAll();
+        if (bosses.length > 0) {
+            BossSystem.damage(bosses[0].id, amount);
+            console.log(`Damaged ${bosses[0].name} for ${amount}`);
+        } else {
+            console.log('No active bosses');
+        }
+    },
+
+    bossStatus() {
+        if (typeof BossSystem === 'undefined') {
+            console.error('BossSystem not loaded');
+            return;
+        }
+        console.log('Bosses:', BossSystem.getStatus());
+    },
+
+    // ========================================================================
+    // ALL SHIFT SYSTEMS STATUS
+    // ========================================================================
+    shiftSystems() {
+        console.log('\n=== SHIFT SYSTEMS STATUS ===\n');
+
+        if (typeof ShiftBonusSystem !== 'undefined') {
+            console.log('BONUSES:', ShiftBonusSystem.getStatus());
+        }
+        if (typeof DynamicTileSystem !== 'undefined') {
+            console.log('TILES:', DynamicTileSystem.getStatus());
+        }
+        if (typeof EnvironmentalMeterSystem !== 'undefined') {
+            console.log('METERS:', EnvironmentalMeterSystem.getStatus());
+        }
+        if (typeof LightSourceSystem !== 'undefined') {
+            console.log('LIGHTS:', LightSourceSystem.getStatus());
+        }
+        if (typeof SpawnPointSystem !== 'undefined') {
+            console.log('SPAWNS:', SpawnPointSystem.getStatus());
+        }
+        if (typeof QuestItemSystem !== 'undefined') {
+            console.log('QUEST:', QuestItemSystem.getStatus());
+        }
+        if (typeof NPCSystem !== 'undefined') {
+            console.log('NPCS:', NPCSystem.getStatus());
+        }
+        if (typeof BossSystem !== 'undefined') {
+            console.log('BOSSES:', BossSystem.getStatus());
+        }
+
+        console.log('\n============================\n');
     }
 };
 
