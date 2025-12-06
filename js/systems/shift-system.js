@@ -37,12 +37,19 @@ const shiftScenarios = {
                 if (d > startRadius) startRadius = d;
             }
 
+            // Calculate step size to reach exit in exactly 90 seconds
+            // With timer interval of 0.5s, we have 180 ticks in 90 seconds
+            const totalTime = 90; // seconds
+            const timerInterval = 0.5; // seconds per tick
+            const totalTicks = totalTime / timerInterval; // 180 ticks
+            const stepSize = startRadius / totalTicks;
+
             // Store exit position as lava center point
             game.shiftState = {
-                timer: 0.5,
-                maxTimer: 0.5,
+                timer: timerInterval,
+                maxTimer: timerInterval,
                 currentRadius: startRadius,
-                stepSize: 1,
+                stepSize: stepSize,
                 active: true,
                 centerX: exitX,
                 centerY: exitY
@@ -107,19 +114,31 @@ function triggerShift(shiftId) {
 
 const ShiftSystemDef = {
     name: 'shift-system',
-    
+
     update(dt) {
+        // Countdown timer before shift triggers
+        if (!game.shiftActive && game.shiftCountdown > 0) {
+            game.shiftCountdown -= dt / 1000;
+
+            // Trigger shift when countdown reaches 0
+            if (game.shiftCountdown <= 0) {
+                game.shiftCountdown = 0;
+                triggerShift('magma_collapse');
+            }
+        }
+
         // Update active shift scenario
         if (game.shiftActive && game.activeShift && game.activeShift.update) {
             game.activeShift.update(game, dt);
         }
     },
-    
+
     cleanup() {
         // Reset shift state on floor transition
         game.shiftMeter = 0;
         game.shiftActive = false;
         game.activeShift = null;
+        game.shiftCountdown = 600; // Reset to 10 minutes for next floor
     }
 };
 

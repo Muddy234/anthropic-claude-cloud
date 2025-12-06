@@ -19,6 +19,7 @@ let game = {
     activeShift: null,
     shiftState: null,
     exitPosition: null,
+    shiftCountdown: 600, // 10 minutes in seconds
     eruption: { timer: 180, lastDamage: 0 },
     keys: {},
     lastMoveTime: 0,
