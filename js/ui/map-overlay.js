@@ -44,13 +44,13 @@ const MAP_OVERLAY_CONFIG = {
 function drawMapOverlay() {
     const cfg = MAP_OVERLAY_CONFIG;
 
-    // Get panel dimensions
+    // Get panel dimensions - use nearly all available space
     const sidebarWidth = typeof SIDEBAR_CONFIG !== 'undefined' ? SIDEBAR_CONFIG.width : 70;
-    const panelPadding = 40;
-    const panelWidth = Math.min(800, canvas.width - sidebarWidth - panelPadding * 2);
-    const panelHeight = Math.min(600, canvas.height - panelPadding * 2);
-    const panelX = sidebarWidth + (canvas.width - sidebarWidth - panelWidth) / 2;
-    const panelY = (canvas.height - panelHeight) / 2;
+    const panelPadding = 20; // Minimal padding
+    const panelX = sidebarWidth + panelPadding;
+    const panelY = panelPadding;
+    const panelWidth = canvas.width - sidebarWidth - panelPadding * 2;
+    const panelHeight = canvas.height - panelPadding * 2;
 
     // Background overlay (darken game area)
     ctx.fillStyle = cfg.bgColor;
@@ -71,11 +71,11 @@ function drawMapOverlay() {
     ctx.textAlign = 'center';
     ctx.fillText('DUNGEON MAP', panelX + panelWidth / 2, panelY + 35);
 
-    // Map area (inside panel, below title)
-    const mapAreaY = panelY + 50;
-    const mapAreaHeight = panelHeight - 100; // Leave room for title and controls
-    const mapAreaWidth = panelWidth - 20;
+    // Map area (inside panel, below title) - maximize space
     const mapAreaX = panelX + 10;
+    const mapAreaY = panelY + 50;
+    const mapAreaWidth = panelWidth - 20;
+    const mapAreaHeight = panelHeight - 90; // Leave room for title and controls
 
     // Clip to map area
     ctx.save();
@@ -478,12 +478,14 @@ function handleMapOverlayMouseMove(e) {
     const mouseX = e.clientX - rect.left;
     const mouseY = e.clientY - rect.top;
 
-    // Calculate pan delta based on zoom level
+    // Calculate pan delta based on zoom level - match drawMapOverlay dimensions
     const mapHeight = game.map?.length || 200;
     const mapWidth = game.map?.[0]?.length || 200;
-    const panelWidth = Math.min(800, canvas.width - 70 - 80);
-    const panelHeight = Math.min(600, canvas.height - 80);
-    const baseTileSize = Math.min(panelWidth / mapWidth, panelHeight / mapHeight);
+    const sidebarWidth = typeof SIDEBAR_CONFIG !== 'undefined' ? SIDEBAR_CONFIG.width : 70;
+    const panelPadding = 20;
+    const mapAreaWidth = canvas.width - sidebarWidth - panelPadding * 2 - 20;
+    const mapAreaHeight = canvas.height - panelPadding * 2 - 90;
+    const baseTileSize = Math.min(mapAreaWidth / mapWidth, mapAreaHeight / mapHeight);
     const tileSize = baseTileSize * mapOverlayState.zoom;
 
     const deltaX = (mouseX - mapOverlayState.dragStartX) / tileSize;
