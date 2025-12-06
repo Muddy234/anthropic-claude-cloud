@@ -274,7 +274,99 @@ function generateBlobDungeon() {
 
     // Note: Player spawning is handled by game-init.js::initializePlayer()
 
+    // Place exit in farthest room from entrance
+    placeExitInFarthestRoom();
+
     console.log(`✅ Blob dungeon generated: ${game.rooms.length} blobs, ${game.enemies.length} enemies`);
+}
+
+/**
+ * Place the exit/safe room in the farthest accessible room from the entrance
+ */
+function placeExitInFarthestRoom() {
+    if (!DUNGEON_STATE.blobs || DUNGEON_STATE.blobs.length === 0) {
+        console.warn('No blobs available for exit placement');
+        return;
+    }
+
+    const entranceBlob = DUNGEON_STATE.entranceBlob;
+    if (!entranceBlob) {
+        console.warn('No entrance blob found for exit placement');
+        return;
+    }
+
+    // Find the farthest blob from entrance (highest difficulty, excluding entrance)
+    let farthestBlob = null;
+    let maxDifficulty = 0;
+
+    for (const blob of DUNGEON_STATE.blobs) {
+        if (blob === entranceBlob) continue;
+        if (blob.difficulty > maxDifficulty) {
+            maxDifficulty = blob.difficulty;
+            farthestBlob = blob;
+        }
+    }
+
+    // Fallback: if no blob found, use the last blob in the array (sorted by distance)
+    if (!farthestBlob) {
+        farthestBlob = DUNGEON_STATE.blobs[DUNGEON_STATE.blobs.length - 1];
+        if (farthestBlob === entranceBlob && DUNGEON_STATE.blobs.length > 1) {
+            farthestBlob = DUNGEON_STATE.blobs[DUNGEON_STATE.blobs.length - 2];
+        }
+    }
+
+    if (!farthestBlob) {
+        console.warn('Could not find suitable blob for exit placement');
+        return;
+    }
+
+    // Get exit position - use connection point (guaranteed floor tile)
+    let exitX = farthestBlob.connectionPoint.x;
+    let exitY = farthestBlob.connectionPoint.y;
+
+    // Verify the exit position is reachable from entrance using pathfinding
+    if (typeof findPath === 'function') {
+        const entranceX = entranceBlob.connectionPoint.x;
+        const entranceY = entranceBlob.connectionPoint.y;
+
+        const path = findPath(entranceX, entranceY, exitX, exitY, { ignoreEnemies: true });
+
+        if (!path || path.length === 0) {
+            console.warn(`Exit at (${exitX}, ${exitY}) not reachable from entrance. Trying alternate position...`);
+
+            // Try to find an alternate floor tile in the farthest blob
+            const tiles = Array.from(farthestBlob.tiles);
+            for (const tileKey of tiles) {
+                const [tx, ty] = tileKey.split(',').map(Number);
+                const alternatePath = findPath(entranceX, entranceY, tx, ty, { ignoreEnemies: true });
+                if (alternatePath && alternatePath.length > 0) {
+                    exitX = tx;
+                    exitY = ty;
+                    console.log(`Found alternate exit position at (${exitX}, ${exitY})`);
+                    break;
+                }
+            }
+        }
+    }
+
+    // Set exit position in game state
+    game.exitPosition = { x: exitX, y: exitY };
+
+    // Create exit tile on the map
+    if (game.map[exitY] && game.map[exitY][exitX]) {
+        game.map[exitY][exitX] = {
+            type: 'exit',
+            explored: false,
+            visible: false,
+            room: game.rooms.find(r => r.blob === farthestBlob) || null
+        };
+    }
+
+    // Calculate distance from entrance for logging
+    const distFromEntrance = Math.abs(exitX - entranceBlob.connectionPoint.x) +
+                             Math.abs(exitY - entranceBlob.connectionPoint.y);
+
+    console.log(`🚪 Exit placed at (${exitX}, ${exitY}) - Distance from entrance: ${distFromEntrance} tiles, Room difficulty: ${farthestBlob.difficulty}`);
 }
 
 // ============================================================================
@@ -286,6 +378,7 @@ if (typeof window !== 'undefined') {
     window.applyDungeonToGame = applyDungeonToGame;
     window.spawnPlayerInDungeon = spawnPlayerInDungeon;
     window.spawnEnemiesInDungeon = spawnEnemiesInDungeon;
+    window.placeExitInFarthestRoom = placeExitInFarthestRoom;
 }
 
 console.log('✅ Dungeon integration adapter loaded');
