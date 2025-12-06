@@ -201,6 +201,11 @@ function toggleSidebarOverlay(overlayId) {
     // Open the overlay
     window.sidebarState.activeOverlay = overlayId;
 
+    // Reset map overlay state when opening the map
+    if (overlayId === 'map' && typeof resetMapOverlayState === 'function') {
+        resetMapOverlayState();
+    }
+
     // Map to game state
     const stateMap = {
         'character': 'character',
