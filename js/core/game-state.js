@@ -19,6 +19,8 @@ let game = {
     activeShift: null,
     shiftState: null,
     exitPosition: null,
+    shiftCountdown: 600, // 10 minutes in seconds
+    shiftLootMultiplier: 2.0, // Legendary drop chance multiplier during shift
     eruption: { timer: 180, lastDamage: 0 },
     keys: {},
     lastMoveTime: 0,

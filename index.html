@@ -61,6 +61,8 @@
     <script src="js/entities/equipment-loader.js"></script>
     <script src="js/entities/player.js"></script>
     <script src="js/entities/enemy.js"></script>
+    <script src="js/entities/npc.js"></script>
+    <script src="js/entities/boss.js"></script>
     
     <!-- ==================== -->
     <!-- GENERATION: Map building (no registration) -->
@@ -100,7 +102,7 @@
     <script src="js/ui/mini-map.js"></script>
     <script src="js/ui/character-overlay.js"></script>
     <script src="js/ui/map-overlay.js"></script>
-    <script src="js/ui/settings-overlay.js"></script>
+    <script src="js/ui/shift-overlay.js"></script>
 
     <!-- DISABLED FOR ACTIVE COMBAT: Auto-walk no longer used -->
     <!-- <script src="js/ui/auto-walk.js"></script> -->
@@ -111,12 +113,23 @@
     <!-- SYSTEMS: Register with SystemManager -->
     <!-- Order doesn't matter - priority handles execution order -->
     <!-- ==================== -->
+
+    <!-- NEW: Shift shared systems (load early, low priorities) -->
+    <script src="js/systems/light-source-system.js"></script>       <!-- Priority 4 (before vision) -->
+    <script src="js/systems/shift-bonus-system.js"></script>        <!-- Priority 5 (bonuses) -->
+
     <script src="js/systems/vision-system.js"></script>             <!-- Priority 5 (Fog of War) -->
     <script src="js/systems/input-handler.js"></script>             <!-- Priority 10 -->
     <script src="js/systems/pokemon-movement.js"></script>          <!-- Priority 20 -->
     <script src="js/systems/player-animation.js"></script>          <!-- Priority 25 -->
     <script src="js/systems/noise-system.js"></script>              <!-- Priority 30 -->
     <script src="js/systems/hazard-system.js"></script>             <!-- Priority 35 -->
+
+    <!-- NEW: Dynamic shift systems (mid-priority) -->
+    <script src="js/systems/dynamic-tile-system.js"></script>       <!-- Priority 36 -->
+    <script src="js/systems/environmental-meter-system.js"></script><!-- Priority 37 -->
+    <script src="js/systems/spawn-point-system.js"></script>        <!-- Priority 38 -->
+
     <script src="js/systems/enemy-ai.js"></script>                  <!-- Priority 40 -->
     <script src="js/systems/monster-social-system.js"></script>     <!-- Priority 42 -->
     <script src="js/systems/monster-animation-system.js"></script>  <!-- Priority 43 -->
@@ -128,6 +141,7 @@
     <script src="js/systems/status-effect-system.js"></script>      <!-- Priority 56 -->
     <script src="js/systems/skill-system.js"></script>              <!-- Priority 60 -->
     <script src="js/systems/inventory-system.js"></script>          <!-- Priority 65 -->
+    <script src="js/systems/quest-item-system.js"></script>         <!-- Priority 66 (quest items) -->
     <script src="js/systems/loot-system.js"></script>               <!-- Priority 70 -->
     <script src="js/systems/shift-system.js"></script>              <!-- Priority 80 -->
     <script src="js/systems/merchant-shop.js"></script>             <!-- Priority 90 -->
