@@ -26,10 +26,10 @@ const WEAPON_ARC_CONFIG = {
         slashStyle: 'alternate'  // Alternates left/right on each attack
     },
     axe: {
-        arcAngle: 100,
+        arcAngle: 80,       // Wider arc for chopping swing
         arcRange: 1.69,     // was 1.3
         isRanged: false,
-        slashStyle: 'sweep'
+        slashStyle: 'chop'  // Angled swing ending in sharp cut mark
     },
 
     // Blunt weapons (ranges increased by 30%)
@@ -607,6 +607,9 @@ function drawSlashEffects(ctx, camX, camY, tileSize, offsetX) {
         } else if (slash.slashStyle === 'slam') {
             // SLAM STYLE - Angled swing ending in impact burst (mace/hammer)
             drawSlamEffect(ctx, screenX, screenY, slash, tileSize, alpha);
+        } else if (slash.slashStyle === 'chop') {
+            // CHOP STYLE - Angled swing ending in sharp cut mark (axe)
+            drawChopEffect(ctx, screenX, screenY, slash, tileSize, alpha);
         } else {
             // SWEEP STYLE - Horizontal arc sweep (sword, axe, etc.)
             drawSweepEffect(ctx, screenX, screenY, slash, tileSize, alpha);
@@ -1084,6 +1087,181 @@ function drawSlamEffect(ctx, screenX, screenY, slash, tileSize, alpha) {
                     impactY + Math.sin(angle) * (shockwaveSize * 0.5 + lineLength)
                 );
                 ctx.stroke();
+            }
+        }
+    }
+}
+
+/**
+ * Draw chop effect - angled swing ending in sharp cut mark (axe)
+ */
+function drawChopEffect(ctx, screenX, screenY, slash, tileSize, alpha) {
+    const direction = slash.angle;
+    const progress = slash.progress;
+    const isSpecial = slash.isSpecial;
+    const range = slash.range * tileSize;
+    const halfArc = slash.arcAngle / 2;
+
+    // Animation phases with windup (similar to slam):
+    // Windup (0-0.15): Pull back/raise weapon
+    // Swing down (0.15-0.4): Fast angled swing
+    // Impact (0.4-0.55): Sharp cut effect
+    // Fade (0.55-1.0): Effect fades out
+
+    let swingProgress = 0;
+    let pullbackOffset = 0;
+
+    if (progress < 0.15) {
+        // Windup - pull back
+        const windupProgress = progress / 0.15;
+        pullbackOffset = range * 0.25 * windupProgress;
+        swingProgress = 0;
+    } else if (progress < 0.4) {
+        // Swing phase - fast arc swing
+        swingProgress = (progress - 0.15) / 0.25;
+        pullbackOffset = range * 0.25 * (1 - swingProgress);
+    } else {
+        // Impact and fade phase
+        swingProgress = 1;
+        pullbackOffset = 0;
+    }
+
+    // Calculate swing arc - wider than mace (80° vs 60°)
+    // Starts from one side, ends at target
+    const startAngle = direction - halfArc;
+    const endAngle = direction;  // Chop ends at center/target
+
+    // Apply pullback to start position
+    const windupStartAngle = startAngle - (halfArc * 0.25 * (1 - swingProgress));
+
+    // Current swing position
+    const currentAngle = windupStartAngle + (endAngle - windupStartAngle) * swingProgress;
+
+    // Calculate impact point (where the chop lands)
+    const impactX = screenX + Math.cos(direction) * range;
+    const impactY = screenY + Math.sin(direction) * range;
+
+    ctx.lineCap = 'round';
+
+    // Draw the swing arc trail (only during and after swing)
+    if (swingProgress > 0) {
+        const arcThickness = 5;
+        const numArcs = 3;
+
+        // Trail for chop
+        const trailLength = 0.5;
+        const trailStart = Math.max(windupStartAngle, currentAngle - (endAngle - windupStartAngle) * trailLength);
+
+        for (let i = 0; i < numArcs; i++) {
+            const r = range * (0.5 + i * 0.2);
+            const arcAlpha = alpha * (1 - i * 0.25);
+
+            ctx.strokeStyle = `rgba(255, 255, 255, ${arcAlpha})`;
+            ctx.lineWidth = arcThickness - i;
+
+            ctx.beginPath();
+            ctx.arc(screenX, screenY, r, trailStart, currentAngle);
+            ctx.stroke();
+        }
+
+        // Draw leading edge (axe blade)
+        if (swingProgress < 1) {
+            const edgeAlpha = alpha * 1.3;
+            ctx.strokeStyle = `rgba(255, 255, 255, ${edgeAlpha})`;
+            ctx.lineWidth = 4;
+
+            ctx.beginPath();
+            ctx.moveTo(
+                screenX + Math.cos(currentAngle) * range * 0.4,
+                screenY + Math.sin(currentAngle) * range * 0.4
+            );
+            ctx.lineTo(
+                screenX + Math.cos(currentAngle) * range,
+                screenY + Math.sin(currentAngle) * range
+            );
+            ctx.stroke();
+
+            // Axe blade glow (slightly smaller than hammer)
+            ctx.fillStyle = `rgba(255, 255, 255, ${edgeAlpha * 0.6})`;
+            ctx.beginPath();
+            ctx.arc(
+                screenX + Math.cos(currentAngle) * range,
+                screenY + Math.sin(currentAngle) * range,
+                6, 0, Math.PI * 2
+            );
+            ctx.fill();
+        }
+    }
+
+    // Impact effect - sharp cut mark instead of shockwave
+    if (progress >= 0.4) {
+        const impactProgress = Math.min((progress - 0.4) / 0.25, 1);
+        const cutAlpha = alpha * (1 - impactProgress * 0.6);
+
+        // Sharp impact burst (smaller, sharper than slam)
+        const burstSize = isSpecial ? tileSize * 0.35 : tileSize * 0.25;
+
+        if (impactProgress < 0.4) {
+            const burstAlpha = cutAlpha * (1 - impactProgress / 0.4);
+            ctx.fillStyle = `rgba(255, 255, 255, ${burstAlpha * 0.7})`;
+            ctx.beginPath();
+            ctx.arc(impactX, impactY, burstSize * (0.8 + impactProgress * 0.5), 0, Math.PI * 2);
+            ctx.fill();
+        }
+
+        // Cut/slash mark - diagonal line at impact point
+        const cutLength = isSpecial ? tileSize * 0.5 : tileSize * 0.35;
+        const cutAngle = direction + Math.PI / 4;  // 45° offset for diagonal cut
+
+        ctx.strokeStyle = `rgba(255, 255, 255, ${cutAlpha})`;
+        ctx.lineWidth = isSpecial ? 4 : 3;
+        ctx.beginPath();
+        ctx.moveTo(
+            impactX - Math.cos(cutAngle) * cutLength * 0.5,
+            impactY - Math.sin(cutAngle) * cutLength * 0.5
+        );
+        ctx.lineTo(
+            impactX + Math.cos(cutAngle) * cutLength * 0.5,
+            impactY + Math.sin(cutAngle) * cutLength * 0.5
+        );
+        ctx.stroke();
+
+        // Secondary cut line for special attack (X mark)
+        if (isSpecial) {
+            const cutAngle2 = direction - Math.PI / 4;
+            ctx.strokeStyle = `rgba(255, 255, 255, ${cutAlpha * 0.8})`;
+            ctx.lineWidth = 3;
+            ctx.beginPath();
+            ctx.moveTo(
+                impactX - Math.cos(cutAngle2) * cutLength * 0.4,
+                impactY - Math.sin(cutAngle2) * cutLength * 0.4
+            );
+            ctx.lineTo(
+                impactX + Math.cos(cutAngle2) * cutLength * 0.4,
+                impactY + Math.sin(cutAngle2) * cutLength * 0.4
+            );
+            ctx.stroke();
+        }
+
+        // Small debris/spark particles
+        if (impactProgress < 0.5) {
+            const sparkAlpha = cutAlpha * (1 - impactProgress * 2);
+            const sparkCount = isSpecial ? 4 : 3;
+            const sparkSpread = tileSize * 0.3 * (1 + impactProgress);
+
+            ctx.fillStyle = `rgba(255, 255, 255, ${sparkAlpha})`;
+            for (let i = 0; i < sparkCount; i++) {
+                const sparkAngle = direction + (i / sparkCount) * Math.PI - Math.PI / 2;
+                const sparkDist = sparkSpread * (0.5 + Math.random() * 0.5);
+                const sparkSize = 2 + Math.random() * 2;
+
+                ctx.beginPath();
+                ctx.arc(
+                    impactX + Math.cos(sparkAngle) * sparkDist,
+                    impactY + Math.sin(sparkAngle) * sparkDist,
+                    sparkSize, 0, Math.PI * 2
+                );
+                ctx.fill();
             }
         }
     }
