@@ -34,10 +34,10 @@ const WEAPON_ARC_CONFIG = {
 
     // Blunt weapons (ranges increased by 30%)
     mace: {
-        arcAngle: 120,
-        arcRange: 1.95,     // was 1.5
+        arcAngle: 60,       // Narrow arc for overhead/angled slam
+        arcRange: 1.56,     // was 1.5, slightly reduced for slam feel
         isRanged: false,
-        slashStyle: 'sweep'
+        slashStyle: 'slam'  // Angled swing ending in impact burst
     },
     unarmed: {
         arcAngle: 60,
@@ -604,6 +604,9 @@ function drawSlashEffects(ctx, camX, camY, tileSize, offsetX) {
         } else if (slash.slashStyle === 'thrust') {
             // THRUST STYLE - Pull back then long thrust (polearm)
             drawThrustEffect(ctx, screenX, screenY, slash, tileSize, alpha);
+        } else if (slash.slashStyle === 'slam') {
+            // SLAM STYLE - Angled swing ending in impact burst (mace/hammer)
+            drawSlamEffect(ctx, screenX, screenY, slash, tileSize, alpha);
         } else {
             // SWEEP STYLE - Horizontal arc sweep (sword, axe, etc.)
             drawSweepEffect(ctx, screenX, screenY, slash, tileSize, alpha);
@@ -925,6 +928,164 @@ function drawThrustEffect(ctx, screenX, screenY, slash, tileSize, alpha) {
         ctx.beginPath();
         ctx.arc(endX, endY, burstSize, 0, Math.PI * 2);
         ctx.fill();
+    }
+}
+
+/**
+ * Draw slam effect - angled swing ending in impact burst (mace/hammer)
+ */
+function drawSlamEffect(ctx, screenX, screenY, slash, tileSize, alpha) {
+    const direction = slash.angle;
+    const progress = slash.progress;
+    const isSpecial = slash.isSpecial;
+    const range = slash.range * tileSize;
+    const halfArc = slash.arcAngle / 2;
+
+    // Animation phases with windup:
+    // Windup (0-0.15): Pull back/raise weapon
+    // Swing down (0.15-0.4): Fast angled swing
+    // Impact (0.4-0.55): Hit with shockwave burst
+    // Fade (0.55-1.0): Effect fades out
+
+    let swingProgress = 0;
+    let pullbackOffset = 0;
+    let impactPhase = false;
+
+    if (progress < 0.15) {
+        // Windup - pull back
+        const windupProgress = progress / 0.15;
+        pullbackOffset = range * 0.3 * windupProgress;
+        swingProgress = 0;
+    } else if (progress < 0.4) {
+        // Swing phase - fast arc swing
+        swingProgress = (progress - 0.15) / 0.25;
+        pullbackOffset = range * 0.3 * (1 - swingProgress);
+    } else if (progress < 0.55) {
+        // Impact phase - shockwave
+        swingProgress = 1;
+        pullbackOffset = 0;
+        impactPhase = true;
+    } else {
+        // Fade phase
+        swingProgress = 1;
+        pullbackOffset = 0;
+    }
+
+    // Calculate swing arc - starts high/back, ends at target
+    // The swing goes from (direction - halfArc) to direction (center)
+    const startAngle = direction - halfArc;
+    const endAngle = direction;  // Slam ends at center/target
+
+    // Apply pullback to start position
+    const windupStartAngle = startAngle - (halfArc * 0.3 * (1 - swingProgress));
+
+    // Current swing position
+    const currentAngle = windupStartAngle + (endAngle - windupStartAngle) * swingProgress;
+
+    // Calculate impact point (where the slam lands)
+    const impactX = screenX + Math.cos(direction) * range;
+    const impactY = screenY + Math.sin(direction) * range;
+
+    ctx.lineCap = 'round';
+
+    // Draw the swing arc trail (only during and after swing)
+    if (swingProgress > 0) {
+        const arcThickness = 5;
+        const numArcs = 3;
+
+        // Shorter trail for slam
+        const trailLength = 0.6;
+        const trailStart = Math.max(windupStartAngle, currentAngle - (endAngle - windupStartAngle) * trailLength);
+
+        for (let i = 0; i < numArcs; i++) {
+            const r = range * (0.5 + i * 0.2);
+            const arcAlpha = alpha * (1 - i * 0.25);
+
+            ctx.strokeStyle = `rgba(255, 255, 255, ${arcAlpha})`;
+            ctx.lineWidth = arcThickness - i;
+
+            ctx.beginPath();
+            ctx.arc(screenX, screenY, r, trailStart, currentAngle);
+            ctx.stroke();
+        }
+
+        // Draw leading edge (hammer head)
+        if (swingProgress < 1) {
+            const edgeAlpha = alpha * 1.3;
+            ctx.strokeStyle = `rgba(255, 255, 255, ${edgeAlpha})`;
+            ctx.lineWidth = 5;
+
+            ctx.beginPath();
+            ctx.moveTo(
+                screenX + Math.cos(currentAngle) * range * 0.5,
+                screenY + Math.sin(currentAngle) * range * 0.5
+            );
+            ctx.lineTo(
+                screenX + Math.cos(currentAngle) * range,
+                screenY + Math.sin(currentAngle) * range
+            );
+            ctx.stroke();
+
+            // Hammer head glow
+            ctx.fillStyle = `rgba(255, 255, 255, ${edgeAlpha * 0.7})`;
+            ctx.beginPath();
+            ctx.arc(
+                screenX + Math.cos(currentAngle) * range,
+                screenY + Math.sin(currentAngle) * range,
+                8, 0, Math.PI * 2
+            );
+            ctx.fill();
+        }
+    }
+
+    // Impact shockwave effect
+    if (progress >= 0.4) {
+        const impactProgress = Math.min((progress - 0.4) / 0.3, 1);
+        const shockwaveAlpha = alpha * (1 - impactProgress * 0.7);
+
+        // Expanding shockwave ring
+        const baseShockSize = isSpecial ? tileSize * 0.6 : tileSize * 0.4;
+        const shockwaveSize = baseShockSize * (1 + impactProgress * 0.8);
+
+        ctx.strokeStyle = `rgba(255, 255, 255, ${shockwaveAlpha})`;
+        ctx.lineWidth = 3 * (1 - impactProgress * 0.5);
+        ctx.beginPath();
+        ctx.arc(impactX, impactY, shockwaveSize, 0, Math.PI * 2);
+        ctx.stroke();
+
+        // Inner burst
+        if (impactProgress < 0.5) {
+            const burstAlpha = shockwaveAlpha * (1 - impactProgress * 2);
+            const burstSize = baseShockSize * 0.6 * (1 + impactProgress);
+
+            ctx.fillStyle = `rgba(255, 255, 255, ${burstAlpha * 0.6})`;
+            ctx.beginPath();
+            ctx.arc(impactX, impactY, burstSize, 0, Math.PI * 2);
+            ctx.fill();
+        }
+
+        // Impact lines radiating outward (special attack only)
+        if (isSpecial && impactProgress < 0.6) {
+            const lineAlpha = shockwaveAlpha * (1 - impactProgress / 0.6);
+            const lineLength = tileSize * 0.4 * (1 + impactProgress);
+
+            ctx.strokeStyle = `rgba(255, 255, 255, ${lineAlpha})`;
+            ctx.lineWidth = 2;
+
+            for (let i = 0; i < 6; i++) {
+                const angle = (i / 6) * Math.PI * 2;
+                ctx.beginPath();
+                ctx.moveTo(
+                    impactX + Math.cos(angle) * shockwaveSize * 0.5,
+                    impactY + Math.sin(angle) * shockwaveSize * 0.5
+                );
+                ctx.lineTo(
+                    impactX + Math.cos(angle) * (shockwaveSize * 0.5 + lineLength),
+                    impactY + Math.sin(angle) * (shockwaveSize * 0.5 + lineLength)
+                );
+                ctx.stroke();
+            }
+        }
     }
 }
 
