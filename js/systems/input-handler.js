@@ -164,26 +164,17 @@ window.addEventListener('keydown', e => {
             return;
         }
 
-        // Action hotkeys (1-4)
-        // 1 = Base attack toward mouse cursor
-        // 2 = Special attack toward mouse cursor (1.5x damage)
-        // 3-4 = Consumables (unchanged)
-        if (['1', '2', '3', '4'].includes(e.key)) {
+        // Action hotkeys (3-4) for consumables
+        // Attacks are triggered by left-click only (uses combo system: 1, 2, special)
+        if (['3', '4'].includes(e.key)) {
             e.preventDefault();
             // Clear this key from movement state to prevent conflicts
             keys[e.key] = false;
 
             const keyNum = parseInt(e.key);
 
-            // Hotkeys 1-2: Mouse-directed attacks
-            if (keyNum === 1 || keyNum === 2) {
-                if (typeof performMouseAttack === 'function') {
-                    const isSpecial = (keyNum === 2);
-                    performMouseAttack(game.player, isSpecial);
-                }
-            }
             // Hotkeys 3-4: Consumables (use existing system)
-            else if (typeof handleActiveCombatHotkey === 'function') {
+            if (typeof handleActiveCombatHotkey === 'function') {
                 handleActiveCombatHotkey(keyNum, game.player);
             } else if (typeof handleActionHotkey === 'function') {
                 handleActionHotkey(keyNum, game.player);
@@ -627,11 +618,9 @@ const setupCanvasHandlers = () => {
         if (clickX < trackerWidth) return;
 
         // Perform mouse attack toward cursor direction
-        // Shift + Left-click = Special attack (1.5x damage)
-        const isSpecial = e.shiftKey;
-
+        // Uses combo system: Attack 1 (left), Attack 2 (right), Attack 3 (special)
         if (typeof performMouseAttack === 'function') {
-            performMouseAttack(game.player, isSpecial);
+            performMouseAttack(game.player);
         }
     });
 

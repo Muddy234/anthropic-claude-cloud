@@ -2,7 +2,7 @@
 // MOUSE-DRIVEN ATTACK SYSTEM - The Shifting Chasm
 // ============================================================================
 // Left-click to attack toward mouse cursor
-// Shift + Left-click for special attack
+// Combo system: Attack 1 (left) -> Attack 2 (right) -> Attack 3 (special)
 // Melee weapons have swing arcs, ranged weapons shoot projectiles
 // ============================================================================
 
@@ -134,8 +134,8 @@ const mouseAttackState = {
     // Visual slash effect
     slashEffects: [],  // { x, y, angle, progress, arcAngle, range }
 
-    // Alternating attack side (for knife-style weapons)
-    alternateFromLeft: true,  // Toggles each attack: left->right->left
+    // Combo system: 1 (left) -> 2 (right) -> 3 (special/combo)
+    comboCount: 1,  // Current attack in combo (1, 2, or 3)
 
     // Pending damage (delayed until after windup)
     pendingDamage: null  // { player, direction, arcConfig, isSpecial, triggered: false }
@@ -240,10 +240,10 @@ function getAttackCooldown(player) {
 
 /**
  * Perform a base attack toward mouse cursor
+ * Uses combo system: Attack 1 (left) -> Attack 2 (right) -> Attack 3 (special)
  * @param {Object} player - The player object
- * @param {boolean} isSpecial - Whether this is a special attack (Shift+click)
  */
-function performMouseAttack(player, isSpecial = false) {
+function performMouseAttack(player) {
     if (!player) return false;
     if (game.state !== 'playing') return false;
 
@@ -257,16 +257,25 @@ function performMouseAttack(player, isSpecial = false) {
     const arcConfig = getWeaponArcConfig(player);
     const direction = getDirectionToMouse();
 
+    // Combo system: determine attack properties based on combo count
+    // 1 = left side attack, 2 = right side attack, 3 = special/combo finisher
+    const comboCount = mouseAttackState.comboCount;
+    const isSpecial = (comboCount === 3);
+    const attackFromLeft = (comboCount === 1);  // 1 = left, 2 = right, 3 = center/special
+
     // Update player facing based on attack direction
     updatePlayerFacingFromAngle(player, direction);
 
     if (arcConfig.isRanged) {
         // Ranged attack - fire projectile
-        performRangedAttack(player, direction, isSpecial);
+        performRangedAttack(player, direction, isSpecial, comboCount);
     } else {
         // Melee attack - swing arc
-        performMeleeSwing(player, direction, arcConfig, isSpecial);
+        performMeleeSwing(player, direction, arcConfig, isSpecial, attackFromLeft, comboCount);
     }
+
+    // Advance combo counter (1 -> 2 -> 3 -> 1)
+    mouseAttackState.comboCount = (comboCount % 3) + 1;
 
     // Set cooldown
     mouseAttackState.cooldown = getAttackCooldown(player);
@@ -283,7 +292,7 @@ function performMouseAttack(player, isSpecial = false) {
 /**
  * Perform a melee swing attack
  */
-function performMeleeSwing(player, direction, arcConfig, isSpecial) {
+function performMeleeSwing(player, direction, arcConfig, isSpecial, attackFromLeft, comboCount) {
     mouseAttackState.isSwinging = true;
     mouseAttackState.swingProgress = 0;
     mouseAttackState.swingDirection = direction;
@@ -292,8 +301,8 @@ function performMeleeSwing(player, direction, arcConfig, isSpecial) {
     mouseAttackState.swingStartTime = performance.now();
     mouseAttackState.hitEnemies.clear();
 
-    // Create visual slash effect
-    createSlashEffect(player, direction, arcConfig, isSpecial);
+    // Create visual slash effect with combo info
+    createSlashEffect(player, direction, arcConfig, isSpecial, attackFromLeft, comboCount);
 
     // Store pending damage - will be triggered after windup (15% of animation)
     mouseAttackState.pendingDamage = {
@@ -307,12 +316,23 @@ function performMeleeSwing(player, direction, arcConfig, isSpecial) {
 
 /**
  * Perform a ranged attack (projectile)
+ * Uses combo system for visual variety
  */
-function performRangedAttack(player, direction, isSpecial) {
+function performRangedAttack(player, direction, isSpecial, comboCount) {
     const weapon = player.equipped?.MAIN;
     const weaponType = weapon?.weaponType;
     const arcConfig = getWeaponArcConfig(player);
     const isMagic = arcConfig.isMagic || false;
+
+    // Add slight angle offset based on combo for visual variety
+    // Attack 1: slight left offset, Attack 2: slight right offset, Attack 3: straight
+    let angleOffset = 0;
+    if (comboCount === 1) {
+        angleOffset = -0.1;  // ~-6 degrees
+    } else if (comboCount === 2) {
+        angleOffset = 0.1;   // ~+6 degrees
+    }
+    const adjustedDirection = direction + angleOffset;
 
     // Check for ammo if bow/crossbow (magic weapons don't use ammo)
     if (!isMagic) {
@@ -337,9 +357,9 @@ function performRangedAttack(player, direction, isSpecial) {
     // Get player vision range for projectile distance
     const visionRange = typeof VISION_RADIUS !== 'undefined' ? VISION_RADIUS : 8;
 
-    // Calculate direction vector
-    const dirX = Math.cos(direction);
-    const dirY = Math.sin(direction);
+    // Calculate direction vector using adjusted direction for combo variety
+    const dirX = Math.cos(adjustedDirection);
+    const dirY = Math.sin(adjustedDirection);
 
     // Determine element for magic weapons
     const element = weapon?.element || (isMagic ? 'arcane' : 'physical');
@@ -540,16 +560,12 @@ function applyMeleeDamage(player, enemy, isSpecial) {
 /**
  * Create a visual slash effect
  */
-function createSlashEffect(player, direction, arcConfig, isSpecial = false) {
+function createSlashEffect(player, direction, arcConfig, isSpecial = false, attackFromLeft = true, comboCount = 1) {
     const slashStyle = arcConfig.slashStyle || 'sweep';
 
-    // For alternating style, capture which side to attack from
-    let fromLeft = true;
-    if (slashStyle === 'alternate') {
-        fromLeft = mouseAttackState.alternateFromLeft;
-        // Toggle for next attack
-        mouseAttackState.alternateFromLeft = !mouseAttackState.alternateFromLeft;
-    }
+    // Use combo-based attack side for all weapons
+    // Attack 1: from left, Attack 2: from right, Attack 3: special (center/both)
+    const fromLeft = attackFromLeft;
 
     mouseAttackState.slashEffects.push({
         x: player.gridX,
@@ -562,7 +578,8 @@ function createSlashEffect(player, direction, arcConfig, isSpecial = false) {
         color: '#ffffff',  // White slash
         slashStyle: slashStyle,
         isSpecial: isSpecial,
-        fromLeft: fromLeft  // For alternating attacks
+        fromLeft: fromLeft,  // Attack side based on combo
+        comboCount: comboCount  // Current combo number (1, 2, or 3)
     });
 }
 
@@ -621,11 +638,25 @@ function drawSlashEffects(ctx, camX, camY, tileSize, offsetX) {
 
 /**
  * Draw jab/punch effect - linear thrust toward target with windup
+ * Respects fromLeft flag for combo system (slight angle offset for variety)
  */
 function drawJabEffect(ctx, screenX, screenY, slash, tileSize, alpha) {
-    const direction = slash.angle;
+    const baseDirection = slash.angle;
     const progress = slash.progress;
     const isSpecial = slash.isSpecial;
+    const fromLeft = slash.fromLeft;
+
+    // Add slight angle offset based on combo direction for visual variety
+    // Left attack: slight offset to the left (-15°), Right attack: slight offset to the right (+15°)
+    // Special (combo 3): straight ahead (no offset)
+    const comboCount = slash.comboCount || 1;
+    let angleOffset = 0;
+    if (comboCount === 1) {
+        angleOffset = -0.26;  // ~-15 degrees (from left)
+    } else if (comboCount === 2) {
+        angleOffset = 0.26;   // ~+15 degrees (from right)
+    }
+    const direction = baseDirection + angleOffset;
 
     // Jab size - larger for special attack
     const baseLength = isSpecial ? tileSize * 0.9 : tileSize * 0.5;
@@ -814,12 +845,26 @@ function drawAlternateEffect(ctx, screenX, screenY, slash, tileSize, alpha) {
 
 /**
  * Draw thrust effect - pull back then long thrust forward (polearm/spear)
+ * Respects fromLeft flag for combo system (slight angle offset for variety)
  */
 function drawThrustEffect(ctx, screenX, screenY, slash, tileSize, alpha) {
-    const direction = slash.angle;
+    const baseDirection = slash.angle;
     const progress = slash.progress;
     const isSpecial = slash.isSpecial;
     const maxRange = slash.range * tileSize;
+    const fromLeft = slash.fromLeft;
+
+    // Add slight angle offset based on combo direction for visual variety
+    // Left attack: slight offset to the left (-10°), Right attack: slight offset to the right (+10°)
+    // Special (combo 3): straight ahead (no offset)
+    const comboCount = slash.comboCount || 1;
+    let angleOffset = 0;
+    if (comboCount === 1) {
+        angleOffset = -0.17;  // ~-10 degrees (from left)
+    } else if (comboCount === 2) {
+        angleOffset = 0.17;   // ~+10 degrees (from right)
+    }
+    const direction = baseDirection + angleOffset;
 
     // Thrust animation phases:
     // Pull back (0-0.15): Retract slightly
@@ -936,6 +981,7 @@ function drawThrustEffect(ctx, screenX, screenY, slash, tileSize, alpha) {
 
 /**
  * Draw slam effect - angled swing ending in impact burst (mace/hammer)
+ * Respects fromLeft flag for combo system
  */
 function drawSlamEffect(ctx, screenX, screenY, slash, tileSize, alpha) {
     const direction = slash.angle;
@@ -943,6 +989,7 @@ function drawSlamEffect(ctx, screenX, screenY, slash, tileSize, alpha) {
     const isSpecial = slash.isSpecial;
     const range = slash.range * tileSize;
     const halfArc = slash.arcAngle / 2;
+    const fromLeft = slash.fromLeft;
 
     // Animation phases with windup:
     // Windup (0-0.15): Pull back/raise weapon
@@ -974,13 +1021,15 @@ function drawSlamEffect(ctx, screenX, screenY, slash, tileSize, alpha) {
         pullbackOffset = 0;
     }
 
-    // Calculate swing arc - starts high/back, ends at target
-    // The swing goes from (direction - halfArc) to direction (center)
-    const startAngle = direction - halfArc;
+    // Calculate swing arc - starts from side, ends at target (center)
+    // fromLeft: swing from left side, !fromLeft: swing from right side
+    const startAngle = fromLeft ? direction - halfArc : direction + halfArc;
     const endAngle = direction;  // Slam ends at center/target
 
     // Apply pullback to start position
-    const windupStartAngle = startAngle - (halfArc * 0.3 * (1 - swingProgress));
+    const windupStartAngle = fromLeft
+        ? startAngle - (halfArc * 0.3 * (1 - swingProgress))
+        : startAngle + (halfArc * 0.3 * (1 - swingProgress));
 
     // Current swing position
     const currentAngle = windupStartAngle + (endAngle - windupStartAngle) * swingProgress;
@@ -998,7 +1047,9 @@ function drawSlamEffect(ctx, screenX, screenY, slash, tileSize, alpha) {
 
         // Shorter trail for slam
         const trailLength = 0.6;
-        const trailStart = Math.max(windupStartAngle, currentAngle - (endAngle - windupStartAngle) * trailLength);
+        const trailStart = fromLeft
+            ? Math.max(windupStartAngle, currentAngle - (endAngle - windupStartAngle) * trailLength)
+            : Math.min(windupStartAngle, currentAngle - (endAngle - windupStartAngle) * trailLength);
 
         for (let i = 0; i < numArcs; i++) {
             const r = range * (0.5 + i * 0.2);
@@ -1008,7 +1059,12 @@ function drawSlamEffect(ctx, screenX, screenY, slash, tileSize, alpha) {
             ctx.lineWidth = arcThickness - i;
 
             ctx.beginPath();
-            ctx.arc(screenX, screenY, r, trailStart, currentAngle);
+            // Draw arc in correct direction
+            if (fromLeft) {
+                ctx.arc(screenX, screenY, r, trailStart, currentAngle);
+            } else {
+                ctx.arc(screenX, screenY, r, currentAngle, trailStart);
+            }
             ctx.stroke();
         }
 
@@ -1094,6 +1150,7 @@ function drawSlamEffect(ctx, screenX, screenY, slash, tileSize, alpha) {
 
 /**
  * Draw chop effect - angled swing ending in sharp cut mark (axe)
+ * Respects fromLeft flag for combo system
  */
 function drawChopEffect(ctx, screenX, screenY, slash, tileSize, alpha) {
     const direction = slash.angle;
@@ -1101,6 +1158,7 @@ function drawChopEffect(ctx, screenX, screenY, slash, tileSize, alpha) {
     const isSpecial = slash.isSpecial;
     const range = slash.range * tileSize;
     const halfArc = slash.arcAngle / 2;
+    const fromLeft = slash.fromLeft;
 
     // Animation phases with windup (similar to slam):
     // Windup (0-0.15): Pull back/raise weapon
@@ -1126,13 +1184,15 @@ function drawChopEffect(ctx, screenX, screenY, slash, tileSize, alpha) {
         pullbackOffset = 0;
     }
 
-    // Calculate swing arc - wider than mace (80° vs 60°)
-    // Starts from one side, ends at target
-    const startAngle = direction - halfArc;
+    // Calculate swing arc - starts from side, ends at target
+    // fromLeft: swing from left side, !fromLeft: swing from right side
+    const startAngle = fromLeft ? direction - halfArc : direction + halfArc;
     const endAngle = direction;  // Chop ends at center/target
 
     // Apply pullback to start position
-    const windupStartAngle = startAngle - (halfArc * 0.25 * (1 - swingProgress));
+    const windupStartAngle = fromLeft
+        ? startAngle - (halfArc * 0.25 * (1 - swingProgress))
+        : startAngle + (halfArc * 0.25 * (1 - swingProgress));
 
     // Current swing position
     const currentAngle = windupStartAngle + (endAngle - windupStartAngle) * swingProgress;
@@ -1150,7 +1210,9 @@ function drawChopEffect(ctx, screenX, screenY, slash, tileSize, alpha) {
 
         // Trail for chop
         const trailLength = 0.5;
-        const trailStart = Math.max(windupStartAngle, currentAngle - (endAngle - windupStartAngle) * trailLength);
+        const trailStart = fromLeft
+            ? Math.max(windupStartAngle, currentAngle - (endAngle - windupStartAngle) * trailLength)
+            : Math.min(windupStartAngle, currentAngle - (endAngle - windupStartAngle) * trailLength);
 
         for (let i = 0; i < numArcs; i++) {
             const r = range * (0.5 + i * 0.2);
@@ -1160,7 +1222,12 @@ function drawChopEffect(ctx, screenX, screenY, slash, tileSize, alpha) {
             ctx.lineWidth = arcThickness - i;
 
             ctx.beginPath();
-            ctx.arc(screenX, screenY, r, trailStart, currentAngle);
+            // Draw arc in correct direction
+            if (fromLeft) {
+                ctx.arc(screenX, screenY, r, trailStart, currentAngle);
+            } else {
+                ctx.arc(screenX, screenY, r, currentAngle, trailStart);
+            }
             ctx.stroke();
         }
 
@@ -1269,13 +1336,25 @@ function drawChopEffect(ctx, screenX, screenY, slash, tileSize, alpha) {
 
 /**
  * Draw sweep effect - horizontal arc that animates from start to end with windup
+ * Respects fromLeft flag for combo system (attack 1 = left, attack 2 = right)
  */
 function drawSweepEffect(ctx, screenX, screenY, slash, tileSize, alpha) {
     const range = slash.range * tileSize;
     const halfArc = slash.arcAngle / 2;
-    const baseStartAngle = slash.angle - halfArc;
-    const endAngle = slash.angle + halfArc;
     const progress = slash.progress;
+    const fromLeft = slash.fromLeft;
+
+    // Determine sweep direction based on fromLeft (combo system)
+    // fromLeft true: sweep from left to right
+    // fromLeft false: sweep from right to left
+    let baseStartAngle, baseEndAngle;
+    if (fromLeft) {
+        baseStartAngle = slash.angle - halfArc;
+        baseEndAngle = slash.angle + halfArc;
+    } else {
+        baseStartAngle = slash.angle + halfArc;
+        baseEndAngle = slash.angle - halfArc;
+    }
 
     // Animation phases with windup:
     // Windup (0-0.15): Pull back to starting angle
@@ -1299,15 +1378,20 @@ function drawSweepEffect(ctx, screenX, screenY, slash, tileSize, alpha) {
         windupOffset = 0;
     }
 
-    // Apply windup offset to start angle (pull back further)
-    const startAngle = baseStartAngle - windupOffset;
+    // Apply windup offset to start angle (pull back further in sweep direction)
+    const startAngle = fromLeft
+        ? baseStartAngle - windupOffset
+        : baseStartAngle + windupOffset;
+    const endAngle = baseEndAngle;
 
     // Current leading edge angle
     const currentAngle = startAngle + (endAngle - startAngle) * sweepProgress;
 
     // Trail start (fades behind the leading edge)
     const trailLength = 0.7;  // How much of the arc shows as trail
-    const trailStart = Math.max(startAngle, currentAngle - (endAngle - startAngle) * trailLength);
+    const trailStart = fromLeft
+        ? Math.max(startAngle, currentAngle - (endAngle - startAngle) * trailLength)
+        : Math.min(startAngle, currentAngle - (endAngle - startAngle) * trailLength);
 
     // Thick arc sweep effect
     ctx.lineCap = 'round';
@@ -1325,7 +1409,12 @@ function drawSweepEffect(ctx, screenX, screenY, slash, tileSize, alpha) {
             ctx.lineWidth = arcThickness - i;
 
             ctx.beginPath();
-            ctx.arc(screenX, screenY, r, trailStart, currentAngle);
+            // Draw arc in correct direction based on fromLeft
+            if (fromLeft) {
+                ctx.arc(screenX, screenY, r, trailStart, currentAngle);
+            } else {
+                ctx.arc(screenX, screenY, r, currentAngle, trailStart);
+            }
             ctx.stroke();
         }
     }
