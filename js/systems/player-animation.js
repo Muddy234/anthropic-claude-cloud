@@ -104,36 +104,95 @@ function updatePlayerAnimation(deltaTime) {
 }
 
 /**
- * Draw the player sprite
+ * Draw the player sprite (with dash effects support)
  */
 function drawPlayerSprite(ctx, screenX, screenY, tileSize) {
     if (!game.player) return;
-    
+
     const player = game.player;
     const config = PLAYER_SPRITE_CONFIG;
-    
+
+    // Check for dash state
+    const isDashing = typeof playerIsDashing === 'function' && playerIsDashing();
+    const hasIframes = typeof playerHasIframes === 'function' && playerHasIframes();
+
+    // Draw ghost trail first (behind player)
+    if (typeof dashState !== 'undefined' && dashState.ghosts && dashState.ghosts.length > 0) {
+        const camX = game.camera ? game.camera.x : 0;
+        const camY = game.camera ? game.camera.y : 0;
+        const trackerWidth = typeof TRACKER_WIDTH !== 'undefined' ? TRACKER_WIDTH : 250;
+
+        for (const ghost of dashState.ghosts) {
+            const ghostScreenX = (ghost.x - camX) * tileSize + trackerWidth;
+            const ghostScreenY = (ghost.y - camY) * tileSize;
+
+            ctx.save();
+            ctx.globalAlpha = ghost.alpha;
+
+            const ghostSheet = playerSpritesheets[ghost.facing || 'down'];
+            if (ghostSheet && ghostSheet.complete && config.loaded) {
+                const frame = player.currentFrame || 0;
+                const col = frame % config.columns;
+                const row = Math.floor(frame / config.columns);
+                const srcX = col * config.frameWidth;
+                const srcY = row * config.frameHeight;
+
+                const scale = 1.25;
+                const drawSize = tileSize * scale;
+                const offsetX = (tileSize - drawSize) / 2;
+                const offsetY = (tileSize - drawSize) / 2;
+
+                // Tint ghost blue
+                ctx.filter = 'hue-rotate(200deg) brightness(1.2)';
+
+                ctx.drawImage(
+                    ghostSheet,
+                    srcX, srcY,
+                    config.frameWidth, config.frameHeight,
+                    ghostScreenX + offsetX, ghostScreenY + offsetY,
+                    drawSize, drawSize
+                );
+
+                ctx.filter = 'none';
+            } else {
+                // Fallback ghost rectangle
+                ctx.fillStyle = 'rgba(100, 150, 255, 0.5)';
+                ctx.fillRect(ghostScreenX + 10, ghostScreenY + 10, tileSize - 20, tileSize - 20);
+            }
+
+            ctx.restore();
+        }
+    }
+
     const spritesheet = playerSpritesheets[player.facing || 'down'];
-    
+
+    // Apply transparency during dash/i-frames
+    if (isDashing || hasIframes) {
+        ctx.save();
+        ctx.globalAlpha = 0.5; // 50% transparency
+    }
+
     // Fallback if sprites not loaded
     if (!spritesheet || !spritesheet.complete || !config.loaded) {
         ctx.fillStyle = '#3498db';
         ctx.fillRect(screenX + 10, screenY + 10, tileSize - 20, tileSize - 20);
+        if (isDashing || hasIframes) ctx.restore();
         return;
     }
-    
+
     const frame = player.currentFrame || 0;
     const col = frame % config.columns;
     const row = Math.floor(frame / config.columns);
-    
+
     const srcX = col * config.frameWidth;
     const srcY = row * config.frameHeight;
-    
+
     // Scale and center
     const scale = 1.25;
     const drawSize = tileSize * scale;
     const offsetX = (tileSize - drawSize) / 2;
     const offsetY = (tileSize - drawSize) / 2;
-    
+
     ctx.drawImage(
         spritesheet,
         srcX, srcY,
@@ -141,6 +200,11 @@ function drawPlayerSprite(ctx, screenX, screenY, tileSize) {
         screenX + offsetX, screenY + offsetY,
         drawSize, drawSize
     );
+
+    // Restore alpha if was dashing
+    if (isDashing || hasIframes) {
+        ctx.restore();
+    }
 }
 
 // Initialize on load

@@ -163,7 +163,12 @@ function performAttack(attacker, defender) {
     }
 
     // Apply damage
-    applyDamage(defender, result.finalDamage, attacker);
+    applyDamage(defender, result.finalDamage, attacker, result);
+
+    // Combat enhancements hook (knockback, screen shake, stagger)
+    if (typeof onCombatHit === 'function') {
+        onCombatHit(attacker, defender, result);
+    }
 
     // Build message
     let message = `${attacker.name || 'You'} hit ${defender.name || 'target'} for ${result.finalDamage}!`;
@@ -211,7 +216,13 @@ function performAttack(attacker, defender) {
 /**
  * Apply damage to an entity
  */
-function applyDamage(entity, damage, source) {
+function applyDamage(entity, damage, source, damageResult) {
+    // Check for i-frames (dash invincibility)
+    if (entity === game.player && typeof playerHasIframes === 'function' && playerHasIframes()) {
+        console.log('[Combat] Player has i-frames - damage blocked');
+        return;
+    }
+
     // DEBUG: Skip damage for player if godMode is enabled
     if (entity === game.player && window.godMode) {
         console.log('[DEBUG] God mode: Player took no damage');

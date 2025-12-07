@@ -22,7 +22,7 @@ function drawCombatActionBar(ctx, canvasWidth, canvasHeight) {
     const slotSize = 60;
     const slotSpacing = 8;
     const barPadding = 20;
-    const numSlots = 4;
+    const numSlots = 5; // 4 action slots + 1 dash slot
 
     // Position at bottom-right corner
     const barWidth = (slotSize * numSlots) + (slotSpacing * (numSlots - 1));
@@ -30,14 +30,86 @@ function drawCombatActionBar(ctx, canvasWidth, canvasHeight) {
     const barX = canvasWidth - barWidth - barPadding;
     const barY = canvasHeight - barHeight - barPadding;
 
-    // Draw each slot
+    // Draw each slot (1-4 are actions, 5 is dash)
     for (let i = 0; i < numSlots; i++) {
         const slotX = barX + (i * (slotSize + slotSpacing));
         const slotY = barY;
-        const hotkey = i + 1;
 
-        drawActionSlot(ctx, slotX, slotY, slotSize, hotkey, player);
+        if (i < 4) {
+            // Action slots 1-4
+            const hotkey = i + 1;
+            drawActionSlot(ctx, slotX, slotY, slotSize, hotkey, player);
+        } else {
+            // Dash slot (Space)
+            drawDashSlot(ctx, slotX, slotY, slotSize);
+        }
     }
+}
+
+/**
+ * Draw the dash ability slot
+ */
+function drawDashSlot(ctx, x, y, size) {
+    // Save canvas state
+    ctx.save();
+
+    // Get dash state
+    const cooldown = typeof getDashCooldown === 'function' ? getDashCooldown() : 0;
+    const maxCooldown = typeof getDashCooldownMax === 'function' ? getDashCooldownMax() : 1;
+    const isDashing = typeof playerIsDashing === 'function' && playerIsDashing();
+    const hasIframes = typeof playerHasIframes === 'function' && playerHasIframes();
+
+    // LAYER 1: Black background for entire slot
+    ctx.fillStyle = '#1a1a1a';
+    ctx.fillRect(x, y, size, size);
+
+    // LAYER 2: Border based on state
+    let borderColor = '#555555'; // Default
+    let borderWidth = 2;
+
+    if (cooldown <= 0 && !isDashing) {
+        borderColor = '#00ffff'; // Cyan for ready
+        borderWidth = 3;
+    } else if (isDashing || hasIframes) {
+        borderColor = '#00ff00'; // Green during dash
+        borderWidth = 3;
+    } else {
+        borderColor = '#ffaa00'; // Orange for cooldown
+    }
+
+    ctx.strokeStyle = borderColor;
+    ctx.lineWidth = borderWidth;
+    ctx.strokeRect(x + 1, y + 1, size - 2, size - 2);
+
+    // LAYER 3: Icon text (centered in slot)
+    ctx.fillStyle = isDashing ? '#00ff00' : '#00ffff';
+    ctx.font = 'bold 18px Arial';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('DASH', x + size/2, y + size/2);
+
+    // LAYER 4: Hotkey (top-left corner) - SPACE
+    ctx.fillStyle = '#ffff00';
+    ctx.font = 'bold 10px Arial';
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'top';
+    ctx.fillText('SPC', x + 4, y + 4);
+
+    // LAYER 5: Cooldown text (if on cooldown)
+    if (cooldown > 0) {
+        const cdText = cooldown >= 10
+            ? Math.ceil(cooldown).toString()
+            : cooldown.toFixed(1);
+
+        ctx.fillStyle = '#ff00ff';
+        ctx.font = 'bold 16px Arial';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'bottom';
+        ctx.fillText(cdText + 's', x + size/2, y + size - 4);
+    }
+
+    // Restore canvas state
+    ctx.restore();
 }
 
 /**

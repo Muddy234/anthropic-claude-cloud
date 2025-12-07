@@ -682,10 +682,18 @@ function isEntityCC(entity) {
 }
 
 function canEntityAct(entity) {
+    // Check for stagger (from combat enhancements)
+    if (typeof isEnemyStaggered === 'function' && isEnemyStaggered(entity)) {
+        return false;
+    }
     return StatusEffectSystem.canAct(entity);
 }
 
 function canEntityMove(entity) {
+    // Check for stagger (from combat enhancements)
+    if (typeof isEnemyStaggered === 'function' && isEnemyStaggered(entity)) {
+        return false;
+    }
     return StatusEffectSystem.canMove(entity);
 }
 

@@ -740,8 +740,10 @@ game.camera.targetY = targetCamY;
 game.camera.x += (game.camera.targetX - game.camera.x) * CAMERA_SMOOTHING;
 game.camera.y += (game.camera.targetY - game.camera.y) * CAMERA_SMOOTHING;
 
-const camX = game.camera.x;
-const camY = game.camera.y;
+// Apply screen shake offset
+const shakeOffset = typeof getScreenShakeOffset === 'function' ? getScreenShakeOffset() : { x: 0, y: 0 };
+const camX = game.camera.x + (shakeOffset.x / (TILE_SIZE * ZOOM_LEVEL));
+const camY = game.camera.y + (shakeOffset.y / (TILE_SIZE * ZOOM_LEVEL));
 
         ctx.save(); ctx.beginPath(); ctx.rect(TRACKER_WIDTH, 0, viewW, canvas.height); ctx.clip();
         

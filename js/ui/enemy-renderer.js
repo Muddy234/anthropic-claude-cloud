@@ -155,10 +155,20 @@ function drawEnemyOverlays(ctx, enemy, ex, ey, cx, cy, tileSize) {
  * @param {number} offsetX - X offset (tracker width)
  */
 function drawEnemy(ctx, enemy, camX, camY, tileSize, offsetX) {
+    // Check if enemy is staggered (frozen) - skip rendering movement if so
+    const isStaggered = typeof isEnemyStaggered === 'function' && isEnemyStaggered(enemy);
+    const staggerFlash = typeof getEnemyStaggerFlash === 'function' && getEnemyStaggerFlash(enemy);
+
     const ex = (enemy.displayX - camX) * tileSize + offsetX;
     const ey = (enemy.displayY - camY) * tileSize;
     const cx = ex + tileSize / 2;
     const cy = ey + tileSize / 2;
+
+    // Apply stagger flash (white overlay)
+    if (staggerFlash) {
+        ctx.save();
+        ctx.globalCompositeOperation = 'source-over';
+    }
 
     // Try to draw sprite if available
     const spriteDrawn = tryDrawEnemySprite(ctx, enemy, ex, ey, cx, cy, tileSize);
@@ -166,6 +176,13 @@ function drawEnemy(ctx, enemy, camX, camY, tileSize, offsetX) {
     if (spriteDrawn) {
         // Sprite was drawn successfully, still draw overlays
         drawEnemyOverlays(ctx, enemy, ex, ey, cx, cy, tileSize);
+
+        // Draw stagger flash overlay
+        if (staggerFlash) {
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.7)';
+            ctx.fillRect(ex, ey, tileSize, tileSize);
+            ctx.restore();
+        }
         return;
     }
 
@@ -240,6 +257,15 @@ function drawEnemy(ctx, enemy, camX, camY, tileSize, offsetX) {
 
     // Draw overlays (tier, alerts, health bar)
     drawEnemyOverlays(ctx, enemy, ex, ey, cx, cy, tileSize);
+
+    // Draw stagger flash overlay for circle enemies
+    if (staggerFlash) {
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.7)';
+        ctx.beginPath();
+        ctx.arc(cx, cy, radius + 5, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+    }
 }
 
 /**
