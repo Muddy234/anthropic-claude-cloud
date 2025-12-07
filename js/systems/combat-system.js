@@ -383,10 +383,11 @@ function handleDeath(entity, killer) {
 }
 
 function calculateXPReward(entity) {
+    // Fallback XP calculation (matches enemy-spawner.js values)
     const tierXP = {
-        'TIER_3': 10,
-        'TIER_2': 25,
-        'TIER_1': 50,
+        'TIER_3': 15,   // Increased for smoother early leveling
+        'TIER_2': 30,
+        'TIER_1': 55,
         'ELITE': 100,
         'BOSS': 500
     };

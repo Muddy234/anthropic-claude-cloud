@@ -16,11 +16,19 @@ const SPAWNER_CONFIG = {
     maxEnemiesPerRoom: 8,
     elementMatchBonus: 3.0,       // 3x weight for matching element
     elementPenalty: 0.3,          // 0.3x weight for opposed element
+    // Floor-based tier weights (baseline)
     tierWeights: {
         1: { TIER_3: 0.6, TIER_2: 0.3, TIER_1: 0.1, ELITE: 0.0 },
         3: { TIER_3: 0.5, TIER_2: 0.35, TIER_1: 0.12, ELITE: 0.03 },
         5: { TIER_3: 0.4, TIER_2: 0.35, TIER_1: 0.18, ELITE: 0.07 },
         10: { TIER_3: 0.25, TIER_2: 0.35, TIER_1: 0.25, ELITE: 0.15 }
+    },
+    // Distance-based tier weights (applied on top of floor weights)
+    // Room difficulty 1-10: 1-3 = near entrance, 4-6 = mid, 7-10 = far
+    difficultyTierWeights: {
+        near:   { TIER_3: 0.80, TIER_2: 0.18, TIER_1: 0.02, ELITE: 0.00 },  // difficulty 1-3
+        mid:    { TIER_3: 0.50, TIER_2: 0.35, TIER_1: 0.12, ELITE: 0.03 },  // difficulty 4-6
+        far:    { TIER_3: 0.25, TIER_2: 0.35, TIER_1: 0.30, ELITE: 0.10 }   // difficulty 7-10
     },
     debugLogging: true
 };
@@ -123,12 +131,16 @@ function selectMonsterForRoom(room) {
         console.error('[Spawner] MONSTER_DATA not loaded');
         return null;
     }
-    
+
     const roomElement = room.element || 'physical';
     const floorNumber = game.floor || 1;
-    
-    // Get tier weights for current floor
-    const tierWeights = getTierWeightsForFloor(floorNumber);
+
+    // Get room difficulty (1-10, based on distance from entrance)
+    // Check blob difficulty first, then elementPower, then default to 5
+    const roomDifficulty = room.blob?.difficulty || room.elementPower || 5;
+
+    // Get tier weights based on room difficulty (distance from entrance)
+    const tierWeights = getTierWeightsForDifficulty(roomDifficulty, floorNumber);
     
     // Build weighted monster list
     const candidates = [];
@@ -200,14 +212,48 @@ function getTierWeightsForFloor(floor) {
     // Find closest floor threshold
     const thresholds = Object.keys(SPAWNER_CONFIG.tierWeights).map(Number).sort((a, b) => a - b);
     let weights = SPAWNER_CONFIG.tierWeights[1];
-    
+
     for (const threshold of thresholds) {
         if (floor >= threshold) {
             weights = SPAWNER_CONFIG.tierWeights[threshold];
         }
     }
-    
+
     return weights;
+}
+
+/**
+ * Get tier weights based on room difficulty (distance from entrance)
+ * Rooms near entrance spawn mostly weak enemies, far rooms spawn stronger ones
+ * @param {number} difficulty - Room difficulty 1-10 (from blob.difficulty)
+ * @param {number} floor - Current floor number (for additional scaling)
+ */
+function getTierWeightsForDifficulty(difficulty, floor) {
+    const cfg = SPAWNER_CONFIG.difficultyTierWeights;
+
+    // Determine difficulty bracket
+    let baseWeights;
+    if (difficulty <= 3) {
+        baseWeights = cfg.near;   // Near entrance: mostly TIER_3
+    } else if (difficulty <= 6) {
+        baseWeights = cfg.mid;    // Mid-range: balanced mix
+    } else {
+        baseWeights = cfg.far;    // Far from entrance: stronger enemies
+    }
+
+    // Apply floor scaling for higher floors (slight increase to stronger tiers)
+    if (floor > 1) {
+        const floorBonus = Math.min(0.15, (floor - 1) * 0.03); // Max 15% shift at floor 6+
+
+        return {
+            TIER_3: Math.max(0.1, baseWeights.TIER_3 - floorBonus),
+            TIER_2: baseWeights.TIER_2,
+            TIER_1: baseWeights.TIER_1 + floorBonus * 0.6,
+            ELITE: Math.min(0.2, baseWeights.ELITE + floorBonus * 0.4)
+        };
+    }
+
+    return { ...baseWeights };
 }
 
 // ============================================================================
@@ -342,18 +388,19 @@ function createEnemy(monsterType, x, y, room) {
  * Calculate XP reward for monster
  */
 function calculateMonsterXP(template) {
+    // Base XP by tier - increased TIER_3 for better early game progression
     const tierXP = {
-        'TIER_3': 10,
-        'TIER_2': 25,
-        'TIER_1': 50,
+        'TIER_3': 15,   // Was 10, now 15 for smoother early leveling
+        'TIER_2': 30,   // Was 25, slight bump
+        'TIER_1': 55,   // Was 50, slight bump
         'ELITE': 100,
         'BOSS': 500
     };
     const base = tierXP[template.tier] || 15;
-    
+
     // Bonus for stronger stats
     const healthBonus = Math.floor((template.stats?.health || 50) / 25);
-    
+
     return base + healthBonus;
 }
 
