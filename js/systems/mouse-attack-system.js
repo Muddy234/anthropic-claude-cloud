@@ -79,7 +79,8 @@ const WEAPON_ARC_CONFIG = {
     polearm: {
         arcAngle: 45,       // Narrow thrust
         arcRange: 2.6,      // Long reach (was 2.0)
-        isRanged: false
+        isRanged: false,
+        slashStyle: 'thrust'  // Pull back then thrust forward
     },
 
     // Ranged weapons
@@ -591,6 +592,9 @@ function drawSlashEffects(ctx, camX, camY, tileSize, offsetX) {
         } else if (slash.slashStyle === 'alternate') {
             // ALTERNATE STYLE - Smaller arc that alternates left/right (knife)
             drawAlternateEffect(ctx, screenX, screenY, slash, tileSize, alpha);
+        } else if (slash.slashStyle === 'thrust') {
+            // THRUST STYLE - Pull back then long thrust (polearm)
+            drawThrustEffect(ctx, screenX, screenY, slash, tileSize, alpha);
         } else {
             // SWEEP STYLE - Horizontal arc sweep (sword, axe, etc.)
             drawSweepEffect(ctx, screenX, screenY, slash, tileSize, alpha);
@@ -749,6 +753,128 @@ function drawAlternateEffect(ctx, screenX, screenY, slash, tileSize, alpha) {
             screenY + Math.sin(currentAngle) * range,
             4, 0, Math.PI * 2
         );
+        ctx.fill();
+    }
+}
+
+/**
+ * Draw thrust effect - pull back then long thrust forward (polearm/spear)
+ */
+function drawThrustEffect(ctx, screenX, screenY, slash, tileSize, alpha) {
+    const direction = slash.angle;
+    const progress = slash.progress;
+    const isSpecial = slash.isSpecial;
+    const maxRange = slash.range * tileSize;
+
+    // Thrust animation phases:
+    // Pull back (0-0.15): Retract slightly
+    // Thrust forward (0.15-0.45): Quick extension to full range
+    // Hold (0.45-0.65): Stay at full extension
+    // Retract (0.65-1.0): Pull back with fade
+
+    let extensionFactor;
+    let pullbackOffset = 0;
+
+    if (progress < 0.15) {
+        // Pull back phase - retract slightly
+        const pullbackProgress = progress / 0.15;
+        pullbackOffset = tileSize * 0.3 * pullbackProgress;
+        extensionFactor = 0;
+    } else if (progress < 0.45) {
+        // Thrust forward phase - quick extension
+        const thrustProgress = (progress - 0.15) / 0.3;
+        extensionFactor = thrustProgress;
+        pullbackOffset = tileSize * 0.3 * (1 - thrustProgress);  // Release pullback
+    } else if (progress < 0.65) {
+        // Hold at full extension
+        extensionFactor = 1;
+        pullbackOffset = 0;
+    } else {
+        // Retract with fade
+        extensionFactor = 1 - ((progress - 0.65) / 0.35);
+        pullbackOffset = 0;
+    }
+
+    // Calculate thrust line - starts closer to player, extends far out
+    const startOffset = tileSize * 0.15 - pullbackOffset;
+    const length = maxRange * extensionFactor;
+
+    const startX = screenX + Math.cos(direction) * startOffset;
+    const startY = screenY + Math.sin(direction) * startOffset;
+    const endX = screenX + Math.cos(direction) * (startOffset + length);
+    const endY = screenY + Math.sin(direction) * (startOffset + length);
+
+    // Polearm is thinner than sword but longer
+    const baseWidth = isSpecial ? 6 : 4;
+
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+
+    // Draw the shaft (slightly darker/thinner line behind)
+    if (extensionFactor > 0) {
+        ctx.strokeStyle = `rgba(200, 200, 200, ${alpha * 0.6})`;
+        ctx.lineWidth = baseWidth - 1;
+        ctx.beginPath();
+        ctx.moveTo(startX, startY);
+        ctx.lineTo(endX, endY);
+        ctx.stroke();
+    }
+
+    // Main thrust line
+    ctx.strokeStyle = `rgba(255, 255, 255, ${alpha})`;
+    ctx.lineWidth = baseWidth;
+    ctx.beginPath();
+    ctx.moveTo(startX, startY);
+    ctx.lineTo(endX, endY);
+    ctx.stroke();
+
+    // Bright core
+    ctx.strokeStyle = `rgba(255, 255, 255, ${alpha * 1.2})`;
+    ctx.lineWidth = baseWidth * 0.4;
+    ctx.beginPath();
+    ctx.moveTo(startX, startY);
+    ctx.lineTo(endX, endY);
+    ctx.stroke();
+
+    // Spear tip effect at the end (triangular point)
+    if (extensionFactor > 0.5) {
+        const tipAlpha = alpha * Math.min(1, (extensionFactor - 0.5) * 2);
+        const tipSize = isSpecial ? 8 : 6;
+
+        // Draw pointed tip
+        ctx.fillStyle = `rgba(255, 255, 255, ${tipAlpha})`;
+        ctx.beginPath();
+
+        // Triangle pointing in direction of thrust
+        const tipX = endX;
+        const tipY = endY;
+        const perpAngle = direction + Math.PI / 2;
+
+        ctx.moveTo(
+            tipX + Math.cos(direction) * tipSize,
+            tipY + Math.sin(direction) * tipSize
+        );
+        ctx.lineTo(
+            tipX + Math.cos(perpAngle) * tipSize * 0.5,
+            tipY + Math.sin(perpAngle) * tipSize * 0.5
+        );
+        ctx.lineTo(
+            tipX - Math.cos(perpAngle) * tipSize * 0.5,
+            tipY - Math.sin(perpAngle) * tipSize * 0.5
+        );
+        ctx.closePath();
+        ctx.fill();
+    }
+
+    // Impact burst for special attack at full extension
+    if (isSpecial && progress >= 0.45 && progress < 0.7) {
+        const burstProgress = (progress - 0.45) / 0.25;
+        const burstAlpha = alpha * (1 - burstProgress);
+        const burstSize = tileSize * 0.25 * (1 + burstProgress * 0.5);
+
+        ctx.fillStyle = `rgba(255, 255, 255, ${burstAlpha * 0.4})`;
+        ctx.beginPath();
+        ctx.arc(endX, endY, burstSize, 0, Math.PI * 2);
         ctx.fill();
     }
 }
