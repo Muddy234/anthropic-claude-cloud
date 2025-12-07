@@ -433,54 +433,102 @@ function renderProjectiles(ctx, camX, camY, tileSize, offsetX) {
 
         const screenX = (proj.displayX - camX) * tileSize + trackerWidth + tileSize / 2;
         const screenY = (proj.displayY - camY) * tileSize + tileSize / 2;
+        const angle = Math.atan2(proj.dirY || 0, proj.dirX || 1);
 
         ctx.save();
 
         // Apply fade alpha
-        ctx.globalAlpha = proj.alpha !== undefined ? proj.alpha : 1.0;
+        const alpha = proj.alpha !== undefined ? proj.alpha : 1.0;
+        ctx.globalAlpha = alpha;
 
         // Draw projectile based on type
         if (proj.isMagic) {
-            // Magic projectile (colored orb)
+            // Magic projectile - glowing bolt with trail
             const color = getElementColor(proj.element);
-            ctx.fillStyle = color;
-            ctx.beginPath();
-            ctx.arc(screenX, screenY, 4, 0, Math.PI * 2);
-            ctx.fill();
-
-            // Glow effect
-            ctx.fillStyle = color + '44';
-            ctx.beginPath();
-            ctx.arc(screenX, screenY, 8, 0, Math.PI * 2);
-            ctx.fill();
-        } else {
-            // Physical projectile (arrow/bolt) - draw as oriented arrow
-            const angle = Math.atan2(proj.dirY || 0, proj.dirX || 1);
 
             ctx.translate(screenX, screenY);
             ctx.rotate(angle);
 
-            // Arrow body
-            ctx.fillStyle = '#8B4513';  // Brown
-            ctx.fillRect(-8, -1, 16, 2);
+            // Trail effect (elongated glow behind)
+            const gradient = ctx.createLinearGradient(-20, 0, 6, 0);
+            gradient.addColorStop(0, 'transparent');
+            gradient.addColorStop(0.5, color + '44');
+            gradient.addColorStop(1, color);
 
-            // Arrow head
-            ctx.fillStyle = '#666666';
+            ctx.fillStyle = gradient;
             ctx.beginPath();
-            ctx.moveTo(8, 0);
-            ctx.lineTo(4, -3);
-            ctx.lineTo(4, 3);
+            ctx.moveTo(-20, 0);
+            ctx.lineTo(6, -4);
+            ctx.lineTo(6, 4);
+            ctx.closePath();
+            ctx.fill();
+
+            // Core bolt (bright white center)
+            ctx.fillStyle = '#ffffff';
+            ctx.beginPath();
+            ctx.ellipse(0, 0, 6, 3, 0, 0, Math.PI * 2);
+            ctx.fill();
+
+            // Outer glow
+            ctx.fillStyle = color;
+            ctx.globalAlpha = alpha * 0.7;
+            ctx.beginPath();
+            ctx.ellipse(0, 0, 10, 5, 0, 0, Math.PI * 2);
+            ctx.fill();
+
+            // Bright tip
+            ctx.globalAlpha = alpha;
+            ctx.fillStyle = '#ffffff';
+            ctx.beginPath();
+            ctx.arc(4, 0, 2, 0, Math.PI * 2);
+            ctx.fill();
+        } else {
+            // Physical projectile (arrow/bolt) - white bolt with trail
+            ctx.translate(screenX, screenY);
+            ctx.rotate(angle);
+
+            // Trail effect
+            const trailGradient = ctx.createLinearGradient(-16, 0, 0, 0);
+            trailGradient.addColorStop(0, 'transparent');
+            trailGradient.addColorStop(1, 'rgba(255, 255, 255, 0.5)');
+
+            ctx.fillStyle = trailGradient;
+            ctx.beginPath();
+            ctx.moveTo(-16, 0);
+            ctx.lineTo(0, -2);
+            ctx.lineTo(0, 2);
+            ctx.closePath();
+            ctx.fill();
+
+            // Arrow body (white/silver)
+            ctx.fillStyle = '#dddddd';
+            ctx.fillRect(-6, -1, 14, 2);
+
+            // Arrow head (bright white)
+            ctx.fillStyle = '#ffffff';
+            ctx.beginPath();
+            ctx.moveTo(10, 0);
+            ctx.lineTo(6, -3);
+            ctx.lineTo(6, 3);
             ctx.closePath();
             ctx.fill();
 
             // Fletching
-            ctx.fillStyle = '#ffffff';
+            ctx.fillStyle = '#aaaaaa';
             ctx.beginPath();
-            ctx.moveTo(-8, 0);
-            ctx.lineTo(-6, -3);
-            ctx.lineTo(-6, 3);
+            ctx.moveTo(-6, 0);
+            ctx.lineTo(-4, -3);
+            ctx.lineTo(-4, 3);
             ctx.closePath();
             ctx.fill();
+
+            // Bright glow around arrow
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.4)';
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.moveTo(-6, 0);
+            ctx.lineTo(10, 0);
+            ctx.stroke();
         }
 
         ctx.restore();

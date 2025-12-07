@@ -35,11 +35,6 @@ const WEAPON_ARC_CONFIG = {
         arcRange: 1.95,     // was 1.5
         isRanged: false
     },
-    staff: {
-        arcAngle: 90,
-        arcRange: 1.95,     // was 1.5
-        isRanged: false
-    },
     unarmed: {
         arcAngle: 60,
         arcRange: 0.78,     // was 0.6
@@ -49,6 +44,29 @@ const WEAPON_ARC_CONFIG = {
         arcAngle: 90,
         arcRange: 1.04,     // was 0.8
         isRanged: false
+    },
+
+    // Magic weapons - all shoot projectiles
+    staff: {
+        arcAngle: 0,
+        arcRange: 0,
+        isRanged: true,
+        isMagic: true,
+        projectileSpeed: 7
+    },
+    wand: {
+        arcAngle: 0,
+        arcRange: 0,
+        isRanged: true,
+        isMagic: true,
+        projectileSpeed: 9  // Wands are faster
+    },
+    tome: {
+        arcAngle: 0,
+        arcRange: 0,
+        isRanged: true,
+        isMagic: true,
+        projectileSpeed: 6  // Tomes are slower but more powerful
     },
 
     // Pierce melee (ranges increased by 30%)
@@ -272,34 +290,40 @@ function performMeleeSwing(player, direction, arcConfig, isSpecial) {
  * Perform a ranged attack (projectile)
  */
 function performRangedAttack(player, direction, isSpecial) {
-    // Check for ammo if bow/crossbow
     const weapon = player.equipped?.MAIN;
     const weaponType = weapon?.weaponType;
+    const arcConfig = getWeaponArcConfig(player);
+    const isMagic = arcConfig.isMagic || false;
 
-    if (weaponType === 'bow' && player.ammo?.arrows <= 0) {
-        if (typeof addMessage === 'function') {
-            addMessage('No arrows!');
+    // Check for ammo if bow/crossbow (magic weapons don't use ammo)
+    if (!isMagic) {
+        if (weaponType === 'bow' && player.ammo?.arrows <= 0) {
+            if (typeof addMessage === 'function') {
+                addMessage('No arrows!');
+            }
+            return;
         }
-        return;
-    }
-    if (weaponType === 'crossbow' && player.ammo?.bolts <= 0) {
-        if (typeof addMessage === 'function') {
-            addMessage('No bolts!');
+        if (weaponType === 'crossbow' && player.ammo?.bolts <= 0) {
+            if (typeof addMessage === 'function') {
+                addMessage('No bolts!');
+            }
+            return;
         }
-        return;
-    }
 
-    // Consume ammo
-    if (weaponType === 'bow') player.ammo.arrows--;
-    if (weaponType === 'crossbow') player.ammo.bolts--;
+        // Consume ammo
+        if (weaponType === 'bow') player.ammo.arrows--;
+        if (weaponType === 'crossbow') player.ammo.bolts--;
+    }
 
     // Get player vision range for projectile distance
     const visionRange = typeof VISION_RADIUS !== 'undefined' ? VISION_RADIUS : 8;
-    const arcConfig = getWeaponArcConfig(player);
 
     // Calculate direction vector
     const dirX = Math.cos(direction);
     const dirY = Math.sin(direction);
+
+    // Determine element for magic weapons
+    const element = weapon?.element || (isMagic ? 'arcane' : 'physical');
 
     // Create projectile using projectile system
     if (typeof createProjectile === 'function') {
@@ -312,9 +336,10 @@ function performRangedAttack(player, direction, isSpecial) {
             maxDistance: visionRange + 2,
             damage: calculateProjectileDamage(player, isSpecial),
             owner: player,
-            element: weapon?.element || 'physical',
+            element: element,
             fadeAfter: visionRange,  // Start fading after vision range
-            isSpecial: isSpecial
+            isSpecial: isSpecial,
+            isMagic: isMagic
         });
     } else {
         // Fallback: create simple projectile in game state
@@ -329,9 +354,10 @@ function performRangedAttack(player, direction, isSpecial) {
             distanceTraveled: 0,
             damage: calculateProjectileDamage(player, isSpecial),
             owner: player,
-            element: weapon?.element || 'physical',
+            element: element,
             fadeStart: visionRange,
-            isSpecial: isSpecial
+            isSpecial: isSpecial,
+            isMagic: isMagic
         });
     }
 }
@@ -341,14 +367,20 @@ function performRangedAttack(player, direction, isSpecial) {
  */
 function calculateProjectileDamage(player, isSpecial) {
     const weapon = player.equipped?.MAIN;
+    const weaponType = weapon?.weaponType;
     let baseDamage = weapon?.stats?.damage || 5;
 
-    // Add STR/AGI/INT scaling
+    // Add stat scaling based on weapon type
     const stats = player.stats || {};
-    if (weapon?.weaponType === 'bow' || weapon?.weaponType === 'crossbow') {
-        baseDamage += Math.floor(stats.AGI / 5);
+    if (weaponType === 'bow' || weaponType === 'crossbow') {
+        // Ranged physical: AGI scaling
+        baseDamage += Math.floor((stats.AGI || 10) / 5);
+    } else if (weaponType === 'staff' || weaponType === 'wand' || weaponType === 'tome') {
+        // Magic weapons: INT scaling (higher ratio for magic)
+        baseDamage += Math.floor((stats.INT || 10) / 3);
     } else {
-        baseDamage += Math.floor(stats.STR / 5);
+        // Default: STR scaling
+        baseDamage += Math.floor((stats.STR || 10) / 5);
     }
 
     // Special attack bonus

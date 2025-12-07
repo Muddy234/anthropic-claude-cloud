@@ -169,6 +169,10 @@ window.addEventListener('keydown', e => {
         // 2 = Special attack toward mouse cursor (1.5x damage)
         // 3-4 = Consumables (unchanged)
         if (['1', '2', '3', '4'].includes(e.key)) {
+            e.preventDefault();
+            // Clear this key from movement state to prevent conflicts
+            keys[e.key] = false;
+
             const keyNum = parseInt(e.key);
 
             // Hotkeys 1-2: Mouse-directed attacks
