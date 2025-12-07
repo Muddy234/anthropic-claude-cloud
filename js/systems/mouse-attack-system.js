@@ -129,12 +129,19 @@ window.addEventListener('mousemove', (e) => {
     if (!canvas || !game.camera) return;
 
     const rect = canvas.getBoundingClientRect();
-    const trackerWidth = typeof TRACKER_WIDTH !== 'undefined' ? TRACKER_WIDTH : 250;
+    const scaleX = canvas.width / rect.width;
+    const scaleY = canvas.height / rect.height;
+
+    // Get scaled mouse position
+    const scaledX = (e.clientX - rect.left) * scaleX;
+    const scaledY = (e.clientY - rect.top) * scaleY;
+
+    const trackerWidth = typeof TRACKER_WIDTH !== 'undefined' ? TRACKER_WIDTH : 70;
     const tileSize = (typeof TILE_SIZE !== 'undefined' ? TILE_SIZE : 32) *
                      (typeof ZOOM_LEVEL !== 'undefined' ? ZOOM_LEVEL : 2);
 
-    mouseWorldX = (e.clientX - rect.left - trackerWidth) / tileSize + game.camera.x;
-    mouseWorldY = (e.clientY - rect.top) / tileSize + game.camera.y;
+    mouseWorldX = (scaledX - trackerWidth) / tileSize + game.camera.x;
+    mouseWorldY = scaledY / tileSize + game.camera.y;
 });
 
 /**
@@ -206,22 +213,36 @@ function getAttackCooldown(player) {
  * @param {boolean} isSpecial - Whether this is a special attack (Shift+click)
  */
 function performMouseAttack(player, isSpecial = false) {
-    if (!player) return false;
-    if (game.state !== 'playing') return false;
+    console.log('[MouseAttack] performMouseAttack called', { player: !!player, isSpecial });
+
+    if (!player) {
+        console.log('[MouseAttack] No player');
+        return false;
+    }
+    if (game.state !== 'playing') {
+        console.log('[MouseAttack] Not in playing state:', game.state);
+        return false;
+    }
 
     // Check cooldown
     if (mouseAttackState.cooldown > 0) {
+        console.log('[MouseAttack] On cooldown:', mouseAttackState.cooldown);
         return false;
     }
 
     // Check if already swinging
     if (mouseAttackState.isSwinging) {
+        console.log('[MouseAttack] Already swinging');
         return false;
     }
 
     // Get weapon config
     const arcConfig = getWeaponArcConfig(player);
     const direction = getDirectionToMouse();
+
+    console.log('[MouseAttack] Mouse world pos:', { x: mouseWorldX.toFixed(2), y: mouseWorldY.toFixed(2) });
+    console.log('[MouseAttack] Direction to mouse:', (direction * 180 / Math.PI).toFixed(1) + '°');
+    console.log('[MouseAttack] Weapon config:', arcConfig);
 
     // Update player facing based on attack direction
     updatePlayerFacingFromAngle(player, direction);
@@ -386,11 +407,18 @@ function updatePlayerFacingFromAngle(player, angle) {
  * Check for melee hits in the swing arc
  */
 function checkMeleeHits(player, direction, arcConfig, isSpecial) {
-    if (!game.enemies) return;
+    if (!game.enemies) {
+        console.log('[MouseAttack] No enemies array found');
+        return;
+    }
 
     const halfArc = (arcConfig.arcAngle * (Math.PI / 180)) / 2;
     const range = arcConfig.arcRange;
 
+    console.log(`[MouseAttack] Checking hits: playerPos=(${player.gridX.toFixed(2)}, ${player.gridY.toFixed(2)}), direction=${(direction * 180 / Math.PI).toFixed(1)}°, range=${range}, arc=${arcConfig.arcAngle}°`);
+    console.log(`[MouseAttack] Enemies in game: ${game.enemies.length}`);
+
+    let enemiesInRange = 0;
     for (const enemy of game.enemies) {
         // Skip dead enemies or already hit
         if (enemy.hp <= 0) continue;
@@ -402,7 +430,11 @@ function checkMeleeHits(player, direction, arcConfig, isSpecial) {
         const distance = Math.sqrt(dx * dx + dy * dy);
 
         // Check range
-        if (distance > range) continue;
+        if (distance > range) {
+            continue;
+        }
+
+        enemiesInRange++;
 
         // Check angle
         const enemyAngle = Math.atan2(dy, dx);
@@ -412,12 +444,19 @@ function checkMeleeHits(player, direction, arcConfig, isSpecial) {
         while (angleDiff > Math.PI) angleDiff -= 2 * Math.PI;
         while (angleDiff < -Math.PI) angleDiff += 2 * Math.PI;
 
+        console.log(`[MouseAttack] ${enemy.name}: dist=${distance.toFixed(2)}, enemyAngle=${(enemyAngle * 180 / Math.PI).toFixed(1)}°, angleDiff=${(angleDiff * 180 / Math.PI).toFixed(1)}°, halfArc=${(halfArc * 180 / Math.PI).toFixed(1)}°`);
+
         // Check if within arc
         if (Math.abs(angleDiff) <= halfArc) {
             // HIT!
+            console.log(`[MouseAttack] HIT! ${enemy.name}`);
             mouseAttackState.hitEnemies.add(enemy);
             applyMeleeDamage(player, enemy, isSpecial);
         }
+    }
+
+    if (enemiesInRange === 0) {
+        console.log('[MouseAttack] No enemies in range');
     }
 }
 
