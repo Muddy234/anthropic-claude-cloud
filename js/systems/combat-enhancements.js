@@ -56,7 +56,7 @@ const COMBAT_ENHANCEMENTS_CONFIG = {
 
     // Stagger settings
     stagger: {
-        enabled: true,
+        enabled: false,          // Disabled - no ministun on hit
         duration: 0.1,           // 100ms freeze
         flashCount: 2,           // Number of flashes
         flashDuration: 0.05      // Duration of each flash
