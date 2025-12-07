@@ -873,7 +873,10 @@ const camY = game.camera.y + (shakeOffset.y / (TILE_SIZE * ZOOM_LEVEL));
             renderAllEnemies(ctx, camX, camY, effectiveTileSize, TRACKER_WIDTH);
         }
         // Projectiles (arrows, bolts, magic)
-        if (typeof renderProjectiles === 'function') { renderProjectiles(ctx, camX, camY, effectiveTileSize); }
+        if (typeof renderProjectiles === 'function') { renderProjectiles(ctx, camX, camY, effectiveTileSize, TRACKER_WIDTH); }
+
+        // Melee slash effects (mouse-driven combat)
+        if (typeof drawSlashEffects === 'function') { drawSlashEffects(ctx, camX, camY, effectiveTileSize, TRACKER_WIDTH); }
 
         if (typeof renderDamageNumbers === 'function') { renderDamageNumbers(camX, camY, effectiveTileSize, TRACKER_WIDTH); }
         ctx.restore();

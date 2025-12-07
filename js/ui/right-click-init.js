@@ -78,10 +78,13 @@ function handleRightClick(e) {
     console.log('Player actual grid:', game.player.gridX, game.player.gridY);
     console.log('===========================');
     
-    let target = null;
-    let targetType = null;
-    let options = [];
-    
+    // === DIRECT ACTIONS (no context menu) ===
+    // Right-click on enemy: Open inspect popup directly
+    // Right-click on loot: Pick up directly
+    // Right-click on NPC: Open dialog/inspect
+    // Right-click elsewhere: Context menu for walk (disabled)
+
+    // Check for enemy first
     if (game.enemies) {
         const clickedEnemy = game.enemies.find(e =>
             Math.floor(e.gridX) === gridX && Math.floor(e.gridY) === gridY
@@ -91,37 +94,34 @@ function handleRightClick(e) {
         if (clickedEnemy) {
             const tile = game.map?.[gridY]?.[gridX];
             if (tile && tile.visible) {
-                console.log('Clicked on enemy:', clickedEnemy.name);
-                target = clickedEnemy;
-                targetType = 'enemy';
-                options = [
-                    { text: 'Attack', action: 'attack' },
-                    { text: 'Inspect', action: 'inspect' },
-                    { text: 'Cancel', action: 'cancel' }
-                ];
+                console.log('Right-click: Inspecting enemy:', clickedEnemy.name);
+                // Direct action: Open inspect popup
+                window.inspectPopup.visible = true;
+                window.inspectPopup.target = clickedEnemy;
+                window.inspectPopup.targetType = 'enemy';
+                window.inspectPopup.tab = 0;
+                return; // Don't show context menu
             } else {
                 console.log('Enemy not visible - ignoring click');
             }
         }
     }
-    
-    if (!target && game.merchant) {
+
+    // Check for merchant
+    if (game.merchant) {
         const dx = Math.abs(gridX - game.merchant.gridX);
         const dy = Math.abs(gridY - game.merchant.gridY);
         if (dx <= 1 && dy <= 1) {
-            console.log('Clicked on merchant');
-            target = game.merchant;
-            targetType = 'npc';
-            options = [
-                { text: 'Talk', action: 'talk' },
-                { text: 'Inspect', action: 'inspect' },
-                { text: 'Cancel', action: 'cancel' }
-            ];
+            console.log('Right-click: Opening merchant dialog');
+            // Direct action: Open merchant dialog
+            game.state = 'merchant';
+            game.merchantMsg = "";
+            return; // Don't show context menu
         }
     }
 
     // Check for loot
-    if (!target && game.groundLoot) {
+    if (game.groundLoot) {
         const clickedLoot = game.groundLoot.find(pile =>
             Math.floor(pile.x) === gridX && Math.floor(pile.y) === gridY
         );
@@ -129,46 +129,19 @@ function handleRightClick(e) {
         if (clickedLoot) {
             const tile = game.map?.[gridY]?.[gridX];
             if (tile && tile.visible) {
-                console.log('Clicked on loot pile');
-                target = clickedLoot;
-                targetType = 'loot';
-                options = [
-                    { text: 'Pick up', action: 'pickup' },
-                    { text: 'Inspect', action: 'inspect' },
-                    { text: 'Cancel', action: 'cancel' }
-                ];
+                console.log('Right-click: Picking up loot pile');
+                // Direct action: Pick up loot
+                if (typeof window.pickupLootPile === 'function') {
+                    window.pickupLootPile(clickedLoot);
+                }
+                return; // Don't show context menu
             }
         }
     }
 
-    if (!target) {
-        target = { x: gridX, y: gridY };
-        targetType = 'tile';
-        options = [
-            { text: 'Walk here', action: 'walk' },
-            { text: 'Cancel', action: 'cancel' }
-        ];
-    }
-    
-    // Store UNSCALED menu position for click detection
-    // Menu is rendered at scaled position, clicks come in at raw position
-    window.contextMenu.visible = true;
-    window.contextMenu.x = clickX;  // Scaled position (internal canvas coords)
-    window.contextMenu.y = clickY;
-    window.contextMenu.target = target;
-    window.contextMenu.targetType = targetType;
-    window.contextMenu.options = options;
-    window.contextMenu.hoveredOption = -1;
-    
-    // DEBUG: Store raw position for comparison
-    window.contextMenu.rawX = e.clientX - rect.left;
-    window.contextMenu.rawY = e.clientY - rect.top;
-    window.contextMenu.scaleX = scaleX;
-    window.contextMenu.scaleY = scaleY;
-    
-    console.log('Menu opened at scaled:', Math.round(clickX), Math.round(clickY));
-    console.log('Menu raw position:', Math.round(window.contextMenu.rawX), Math.round(window.contextMenu.rawY));
-    console.log('Scale factors:', scaleX.toFixed(2), scaleY.toFixed(2));
+    // Empty tile - no action (walk disabled with new mouse combat)
+    // Could show context menu but walk is disabled anyway
+    console.log('Right-click on empty tile - no action');
 }
 
 function handleMouseMove(e) {
