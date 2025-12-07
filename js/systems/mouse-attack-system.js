@@ -16,34 +16,40 @@ const WEAPON_ARC_CONFIG = {
     sword: {
         arcAngle: 90,       // degrees
         arcRange: 1.56,     // tiles (was 1.2)
-        isRanged: false
+        isRanged: false,
+        slashStyle: 'sweep' // Horizontal sweeping arc
     },
     knife: {
         arcAngle: 60,
         arcRange: 1.04,     // was 0.8
-        isRanged: false
+        isRanged: false,
+        slashStyle: 'sweep'
     },
     axe: {
         arcAngle: 100,
         arcRange: 1.69,     // was 1.3
-        isRanged: false
+        isRanged: false,
+        slashStyle: 'sweep'
     },
 
     // Blunt weapons (ranges increased by 30%)
     mace: {
         arcAngle: 120,
         arcRange: 1.95,     // was 1.5
-        isRanged: false
+        isRanged: false,
+        slashStyle: 'sweep'
     },
     unarmed: {
         arcAngle: 60,
         arcRange: 0.78,     // was 0.6
-        isRanged: false
+        isRanged: false,
+        slashStyle: 'jab'   // Quick punch/jab
     },
     shield: {
         arcAngle: 90,
         arcRange: 1.04,     // was 0.8
-        isRanged: false
+        isRanged: false,
+        slashStyle: 'sweep'
     },
 
     // Magic weapons - all shoot projectiles
@@ -280,7 +286,7 @@ function performMeleeSwing(player, direction, arcConfig, isSpecial) {
     mouseAttackState.hitEnemies.clear();
 
     // Create visual slash effect
-    createSlashEffect(player, direction, arcConfig);
+    createSlashEffect(player, direction, arcConfig, isSpecial);
 
     // Check for hits immediately and during swing
     checkMeleeHits(player, direction, arcConfig, isSpecial);
@@ -521,16 +527,20 @@ function applyMeleeDamage(player, enemy, isSpecial) {
 /**
  * Create a visual slash effect
  */
-function createSlashEffect(player, direction, arcConfig) {
+function createSlashEffect(player, direction, arcConfig, isSpecial = false) {
+    const slashStyle = arcConfig.slashStyle || 'sweep';
+
     mouseAttackState.slashEffects.push({
         x: player.gridX,
         y: player.gridY,
         angle: direction,
         progress: 0,
-        duration: 0.15,
+        duration: 0.2,  // 200ms trail duration
         arcAngle: arcConfig.arcAngle * (Math.PI / 180),
         range: arcConfig.arcRange,
-        color: '#ffffff'  // White slash
+        color: '#ffffff',  // White slash
+        slashStyle: slashStyle,
+        isSpecial: isSpecial
     });
 }
 
@@ -551,50 +561,164 @@ function updateSlashEffects(deltaTime) {
 }
 
 /**
- * Draw slash effects
+ * Draw slash effects - renders different visuals based on slashStyle
  */
 function drawSlashEffects(ctx, camX, camY, tileSize, offsetX) {
     for (const slash of mouseAttackState.slashEffects) {
         const screenX = (slash.x - camX) * tileSize + offsetX + tileSize / 2;
         const screenY = (slash.y - camY) * tileSize + tileSize / 2;
 
-        const range = slash.range * tileSize;
-        const startAngle = slash.angle - slash.arcAngle / 2;
-        const endAngle = slash.angle + slash.arcAngle / 2;
-
-        // Animated sweep effect
-        const sweepProgress = slash.progress;
-        const currentEndAngle = startAngle + (endAngle - startAngle) * Math.min(sweepProgress * 2, 1);
-
-        // Fade out
+        // Fade out as effect progresses
         const alpha = 1 - slash.progress;
 
         ctx.save();
 
-        // Draw arc
-        ctx.strokeStyle = `rgba(255, 255, 255, ${alpha})`;
-        ctx.lineWidth = 4;
-        ctx.lineCap = 'round';
-
-        // Draw multiple arcs for thicker effect
-        for (let r = range * 0.6; r <= range; r += range * 0.15) {
-            ctx.beginPath();
-            ctx.arc(screenX, screenY, r, startAngle, currentEndAngle);
-            ctx.stroke();
-        }
-
-        // Draw slash line at the leading edge
-        if (sweepProgress < 0.5) {
-            const lineAngle = currentEndAngle;
-            ctx.strokeStyle = `rgba(255, 255, 255, ${alpha * 1.5})`;
-            ctx.lineWidth = 3;
-            ctx.beginPath();
-            ctx.moveTo(screenX + Math.cos(lineAngle) * range * 0.3, screenY + Math.sin(lineAngle) * range * 0.3);
-            ctx.lineTo(screenX + Math.cos(lineAngle) * range, screenY + Math.sin(lineAngle) * range);
-            ctx.stroke();
+        if (slash.slashStyle === 'jab') {
+            // JAB STYLE - Quick linear thrust (unarmed punch)
+            drawJabEffect(ctx, screenX, screenY, slash, tileSize, alpha);
+        } else {
+            // SWEEP STYLE - Horizontal arc sweep (sword, axe, etc.)
+            drawSweepEffect(ctx, screenX, screenY, slash, tileSize, alpha);
         }
 
         ctx.restore();
+    }
+}
+
+/**
+ * Draw jab/punch effect - linear thrust toward target
+ */
+function drawJabEffect(ctx, screenX, screenY, slash, tileSize, alpha) {
+    const direction = slash.angle;
+    const progress = slash.progress;
+    const isSpecial = slash.isSpecial;
+
+    // Jab size - larger for special attack
+    const baseLength = isSpecial ? tileSize * 0.9 : tileSize * 0.5;
+    const baseWidth = isSpecial ? 12 : 6;
+
+    // Animation: quick extend then retract
+    // Extend fast (0-0.3), hold (0.3-0.5), retract (0.5-1.0)
+    let extensionFactor;
+    if (progress < 0.3) {
+        // Quick extend
+        extensionFactor = progress / 0.3;
+    } else if (progress < 0.5) {
+        // Hold at full extension
+        extensionFactor = 1;
+    } else {
+        // Retract with fade
+        extensionFactor = 1 - ((progress - 0.5) / 0.5);
+    }
+
+    const length = baseLength * extensionFactor;
+    const startOffset = tileSize * 0.2;  // Start slightly away from center
+
+    // Calculate jab line endpoints
+    const startX = screenX + Math.cos(direction) * startOffset;
+    const startY = screenY + Math.sin(direction) * startOffset;
+    const endX = screenX + Math.cos(direction) * (startOffset + length);
+    const endY = screenY + Math.sin(direction) * (startOffset + length);
+
+    // Draw smear effect (multiple lines for thickness)
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+
+    // Main jab line
+    ctx.strokeStyle = `rgba(255, 255, 255, ${alpha})`;
+    ctx.lineWidth = baseWidth;
+    ctx.beginPath();
+    ctx.moveTo(startX, startY);
+    ctx.lineTo(endX, endY);
+    ctx.stroke();
+
+    // Bright core
+    ctx.strokeStyle = `rgba(255, 255, 255, ${alpha * 1.3})`;
+    ctx.lineWidth = baseWidth * 0.5;
+    ctx.beginPath();
+    ctx.moveTo(startX, startY);
+    ctx.lineTo(endX, endY);
+    ctx.stroke();
+
+    // Impact burst for special attack
+    if (isSpecial && progress < 0.4) {
+        const burstAlpha = alpha * (1 - progress / 0.4);
+        const burstSize = tileSize * 0.3 * (1 + progress);
+
+        ctx.fillStyle = `rgba(255, 255, 255, ${burstAlpha * 0.5})`;
+        ctx.beginPath();
+        ctx.arc(endX, endY, burstSize, 0, Math.PI * 2);
+        ctx.fill();
+    }
+}
+
+/**
+ * Draw sweep effect - horizontal arc that animates from start to end
+ */
+function drawSweepEffect(ctx, screenX, screenY, slash, tileSize, alpha) {
+    const range = slash.range * tileSize;
+    const halfArc = slash.arcAngle / 2;
+    const startAngle = slash.angle - halfArc;
+    const endAngle = slash.angle + halfArc;
+    const progress = slash.progress;
+
+    // Sweep animation: arc grows from start to end
+    // The leading edge sweeps across, leaving a fading trail
+    const sweepSpeed = 2.5;  // Complete sweep in first 40% of duration
+    const sweepProgress = Math.min(progress * sweepSpeed, 1);
+
+    // Current leading edge angle
+    const currentAngle = startAngle + (endAngle - startAngle) * sweepProgress;
+
+    // Trail start (fades behind the leading edge)
+    const trailLength = 0.7;  // How much of the arc shows as trail
+    const trailStart = Math.max(startAngle, currentAngle - (endAngle - startAngle) * trailLength);
+
+    // Thick arc sweep effect
+    ctx.lineCap = 'round';
+
+    // Draw the swept trail (multiple arcs for thickness)
+    const arcThickness = 6;
+    const numArcs = 4;
+
+    for (let i = 0; i < numArcs; i++) {
+        const r = range * (0.5 + i * 0.15);
+        const arcAlpha = alpha * (1 - i * 0.15);
+
+        ctx.strokeStyle = `rgba(255, 255, 255, ${arcAlpha})`;
+        ctx.lineWidth = arcThickness - i;
+
+        ctx.beginPath();
+        ctx.arc(screenX, screenY, r, trailStart, currentAngle);
+        ctx.stroke();
+    }
+
+    // Draw bright leading edge line
+    if (sweepProgress < 1) {
+        const edgeAlpha = alpha * 1.2;
+        ctx.strokeStyle = `rgba(255, 255, 255, ${edgeAlpha})`;
+        ctx.lineWidth = 4;
+
+        ctx.beginPath();
+        ctx.moveTo(
+            screenX + Math.cos(currentAngle) * range * 0.3,
+            screenY + Math.sin(currentAngle) * range * 0.3
+        );
+        ctx.lineTo(
+            screenX + Math.cos(currentAngle) * range,
+            screenY + Math.sin(currentAngle) * range
+        );
+        ctx.stroke();
+
+        // Glow at tip
+        ctx.fillStyle = `rgba(255, 255, 255, ${edgeAlpha * 0.6})`;
+        ctx.beginPath();
+        ctx.arc(
+            screenX + Math.cos(currentAngle) * range,
+            screenY + Math.sin(currentAngle) * range,
+            6, 0, Math.PI * 2
+        );
+        ctx.fill();
     }
 }
 
