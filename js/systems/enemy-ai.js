@@ -734,6 +734,24 @@ const AIManager = {
     
     update(dt) {
         if (!this.game) return;
+
+        // Force all enemies to alert/aggressive when shift is active
+        if (this.game.shiftActive) {
+            this.ais.forEach(ai => {
+                // Only change state if not already in combat-related states
+                if (ai.currentState === AI_STATES.IDLE ||
+                    ai.currentState === AI_STATES.WANDERING ||
+                    ai.currentState === AI_STATES.RETURNING) {
+                    ai._changeState(AI_STATES.ALERT);
+                    ai.target = this.game.player;
+                    ai.lastKnownTargetPos = {
+                        x: this.game.player.gridX,
+                        y: this.game.player.gridY
+                    };
+                }
+            });
+        }
+
         this.ais.forEach(ai => ai.update(dt, this.game));
     },
     

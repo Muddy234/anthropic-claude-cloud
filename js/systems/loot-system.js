@@ -148,6 +148,11 @@ function rollEquipmentDrop() {
         'epic': 2          // 2% of drops
     };
 
+    // Apply shift multiplier to epic drops when shift is active
+    if (game.shiftActive && game.shiftLootMultiplier) {
+        rarityWeights['epic'] *= game.shiftLootMultiplier;
+    }
+
     // Roll for rarity
     const totalWeight = Object.values(rarityWeights).reduce((a, b) => a + b, 0);
     let roll = Math.random() * totalWeight;

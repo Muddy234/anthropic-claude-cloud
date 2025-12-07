@@ -693,7 +693,7 @@ function render() {
 
 if (game.state === 'menu') {
         ctx.fillStyle = '#fff'; ctx.font = '64px monospace'; ctx.textAlign = 'center'; ctx.fillText('THE SHIFTING CHASM', canvas.width / 2, 400); ctx.font = '32px monospace'; ctx.fillText('Press SPACE to Start', canvas.width / 2, 500);
-    } else if (game.state === 'playing' || game.state === 'merchant' || game.state === 'inventory' || game.state === 'map' || game.state === 'skills' || game.state === 'moveset' || game.state === 'levelup' || game.state === 'character' || game.state === 'settings') {
+    } else if (game.state === 'playing' || game.state === 'merchant' || game.state === 'inventory' || game.state === 'map' || game.state === 'skills' || game.state === 'moveset' || game.state === 'levelup' || game.state === 'character' || game.state === 'shift') {
 
 const effectiveTileSize = TILE_SIZE * ZOOM_LEVEL;
 const viewW = canvas.width - TRACKER_WIDTH;
@@ -915,8 +915,83 @@ const camY = game.camera.y;
     if (game.state === 'character' && typeof drawCharacterOverlay === 'function') drawCharacterOverlay();
     if (game.state === 'inventory') drawInventoryOverlay();
     if (game.state === 'map' && typeof drawMapOverlay === 'function') drawMapOverlay();
-    if (game.state === 'settings' && typeof drawSettingsOverlay === 'function') drawSettingsOverlay();
+    if (game.state === 'shift' && typeof drawShiftOverlay === 'function') drawShiftOverlay();
     if (game.state === 'skills') drawSkillsOverlay();
     if (game.state === 'moveset') drawMoveSetOverlay();
     if (game.state === 'levelup') drawLevelUpScreen();
+
+    // Draw shift countdown timer at top of screen
+    drawShiftCountdown();
+}
+
+/**
+ * Draw the shift countdown timer at the top center of the screen
+ */
+function drawShiftCountdown() {
+    if (game.state !== 'playing') return;
+    if (typeof game.shiftCountdown === 'undefined') return;
+
+    const countdown = Math.max(0, game.shiftCountdown);
+    const minutes = Math.floor(countdown / 60);
+    const seconds = Math.floor(countdown % 60);
+    const timeStr = `${minutes}:${seconds.toString().padStart(2, '0')}`;
+
+    // Position at top center (accounting for tracker panel on left)
+    const gameAreaWidth = canvas.width - TRACKER_WIDTH;
+    const centerX = TRACKER_WIDTH + gameAreaWidth / 2;
+    const y = 40;
+
+    // Background bar
+    const barWidth = 200;
+    const barHeight = 40;
+    const barX = centerX - barWidth / 2;
+    const barY = y - 25;
+
+    // Color changes based on time remaining
+    let bgColor, textColor, borderColor;
+    if (game.shiftActive) {
+        // Shift active - red pulsing
+        const pulse = Math.sin(Date.now() / 200) * 0.3 + 0.7;
+        bgColor = `rgba(139, 0, 0, ${pulse})`;
+        textColor = '#ff4444';
+        borderColor = '#ff0000';
+    } else if (countdown <= 60) {
+        // Under 1 minute - warning red
+        bgColor = 'rgba(139, 0, 0, 0.9)';
+        textColor = '#ff4444';
+        borderColor = '#ff0000';
+    } else if (countdown <= 180) {
+        // Under 3 minutes - warning orange
+        bgColor = 'rgba(139, 69, 0, 0.9)';
+        textColor = '#ffa500';
+        borderColor = '#ff8c00';
+    } else {
+        // Normal - dark background
+        bgColor = 'rgba(20, 20, 30, 0.9)';
+        textColor = '#ffffff';
+        borderColor = '#444';
+    }
+
+    // Draw background
+    ctx.fillStyle = bgColor;
+    ctx.fillRect(barX, barY, barWidth, barHeight);
+    ctx.strokeStyle = borderColor;
+    ctx.lineWidth = 2;
+    ctx.strokeRect(barX, barY, barWidth, barHeight);
+
+    // Draw timer text
+    ctx.fillStyle = textColor;
+    ctx.font = 'bold 24px monospace';
+    ctx.textAlign = 'center';
+
+    if (game.shiftActive) {
+        ctx.fillText('MELTDOWN', centerX, y + 5);
+    } else {
+        ctx.fillText(timeStr, centerX, y + 5);
+    }
+
+    // Label above timer
+    ctx.fillStyle = '#888';
+    ctx.font = '12px monospace';
+    ctx.fillText(game.shiftActive ? 'ESCAPE NOW' : 'TIME REMAINING', centerX, barY - 5);
 }

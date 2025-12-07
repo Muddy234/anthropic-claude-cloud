@@ -6,7 +6,7 @@
 
 // Sidebar state
 window.sidebarState = {
-    activeOverlay: null, // 'character', 'inventory', 'skills', 'map', 'settings', null
+    activeOverlay: null, // 'character', 'inventory', 'skills', 'map', 'shift', null
     hoverIcon: null
 };
 
@@ -41,9 +41,9 @@ const SIDEBAR_ICONS = [
         hotkey: 'M'
     },
     {
-        id: 'settings',
-        label: 'Settings',
-        icon: '⚙️',
+        id: 'shift',
+        label: 'Shift',
+        icon: '⚠️',
         y: 290,
         hotkey: 'O'
     }
@@ -212,7 +212,7 @@ function toggleSidebarOverlay(overlayId) {
         'inventory': 'inventory',
         'skills': 'skills',
         'map': 'map',
-        'settings': 'settings'
+        'shift': 'shift'
     };
 
     game.state = stateMap[overlayId] || 'playing';
