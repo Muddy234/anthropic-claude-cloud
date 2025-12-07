@@ -246,6 +246,13 @@ const Debug = {
             console.warn('ITEMS_DATA not loaded');
         }
 
+        // Set ammo counters for ranged weapons
+        if (game.player.ammo) {
+            game.player.ammo.arrows = 99;
+            game.player.ammo.bolts = 99;
+            console.log('Set ammo: 99 arrows, 99 bolts');
+        }
+
         console.log(`✅ Total items added to inventory: ${count}`);
         console.log('Use inventory tabs (1-4) to browse: 1=Weapons, 2=Armor, 3=Consumables, 4=Materials');
     },
