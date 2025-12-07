@@ -240,27 +240,32 @@ function checkProjectileWallCollision(x, y) {
  * @returns {boolean} True if collision detected
  */
 function checkProjectileCollision(x, y) {
-    // Check bounds
-    if (!game.map || !game.currentRoom) return true;
+    // Check bounds - use global grid dimensions
+    const gridWidth = typeof GRID_WIDTH !== 'undefined' ? GRID_WIDTH : 100;
+    const gridHeight = typeof GRID_HEIGHT !== 'undefined' ? GRID_HEIGHT : 100;
 
-    const room = game.currentRoom;
-    const localX = x - room.x;
-    const localY = y - room.y;
-
-    // Out of bounds
-    if (localX < 0 || localY < 0 || localX >= room.width || localY >= room.height) {
+    if (x < 0 || x >= gridWidth || y < 0 || y >= gridHeight) {
         return true;
     }
 
-    // Check tile type
-    const tile = room.tiles[localY]?.[localX];
+    // Check tile directly from game.map (same as movement system)
+    if (!game.map) return true;
+
+    const tile = game.map[Math.floor(y)]?.[Math.floor(x)];
     if (!tile) return true;
 
-    // Walls block projectiles
-    if (tile.type === 'wall') return true;
+    // Walls and void block projectiles
+    if (tile.type === 'wall' || tile.type === 'void' || tile.type === 'interior_wall') {
+        return true;
+    }
 
     // Pillars block projectiles
     if (tile.decoration?.name === 'pillar') return true;
+
+    // Check decoration entity layer (same as movement)
+    if (typeof hasBlockingDecorationAt === 'function' && hasBlockingDecorationAt(Math.floor(x), Math.floor(y))) {
+        return true;
+    }
 
     // Closed doors block projectiles
     if (tile.type === 'door' && !tile.open) return true;
