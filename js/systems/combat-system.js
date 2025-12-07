@@ -663,9 +663,8 @@ if (typeof window !== 'undefined') {
     window.renderDamageNumbers = renderDamageNumbers;
     window.damageNumbers = damageNumbers;
 
-    // DEBUG: Enable god mode for testing (set to false for production)
-    window.godMode = true;
+    // DEBUG: God mode toggle (controlled via debug.godMode())
+    window.godMode = false;
 }
 
 console.log('✅ Combat system loaded (3-layer damage integration)');
-console.log('⚠️ GOD MODE ENABLED - Player takes no damage');

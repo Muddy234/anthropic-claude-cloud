@@ -158,18 +158,19 @@ const Debug = {
         console.log('Player fully healed');
     },
 
-    _godMode: false,
     godMode() {
-        this._godMode = !this._godMode;
-        if (this._godMode) {
+        // Toggle the global godMode flag that combat-system.js checks
+        window.godMode = !window.godMode;
+        if (window.godMode) {
             this._originalHp = game.player.hp;
+            this._originalMaxHp = game.player.maxHp;
             game.player.hp = 99999;
             game.player.maxHp = 99999;
         } else {
-            game.player.maxHp = 100;
-            game.player.hp = this._originalHp || 100;
+            game.player.maxHp = this._originalMaxHp || 100;
+            game.player.hp = Math.min(this._originalHp || 100, game.player.maxHp);
         }
-        console.log(`God mode: ${this._godMode ? 'ON' : 'OFF'}`);
+        console.log(`God mode: ${window.godMode ? 'ON ⚡' : 'OFF'}`);
     },
 
     teleport(x, y) {
