@@ -122,7 +122,7 @@ const mouseAttackState = {
     // Active swing state
     isSwinging: false,
     swingProgress: 0,
-    swingDuration: 0.15,    // Duration of swing animation
+    swingDuration: 0.2,     // Duration of swing animation (200ms)
     swingDirection: 0,      // Angle in radians toward mouse
     swingArcAngle: 90,      // Current weapon arc angle
     swingRange: 1.0,        // Current weapon range
@@ -135,7 +135,10 @@ const mouseAttackState = {
     slashEffects: [],  // { x, y, angle, progress, arcAngle, range }
 
     // Alternating attack side (for knife-style weapons)
-    alternateFromLeft: true  // Toggles each attack: left->right->left
+    alternateFromLeft: true,  // Toggles each attack: left->right->left
+
+    // Pending damage (delayed until after windup)
+    pendingDamage: null  // { player, direction, arcConfig, isSpecial, triggered: false }
 };
 
 // Track mouse position
@@ -292,8 +295,14 @@ function performMeleeSwing(player, direction, arcConfig, isSpecial) {
     // Create visual slash effect
     createSlashEffect(player, direction, arcConfig, isSpecial);
 
-    // Check for hits immediately and during swing
-    checkMeleeHits(player, direction, arcConfig, isSpecial);
+    // Store pending damage - will be triggered after windup (15% of animation)
+    mouseAttackState.pendingDamage = {
+        player: player,
+        direction: direction,
+        arcConfig: arcConfig,
+        isSpecial: isSpecial,
+        triggered: false
+    };
 }
 
 /**
@@ -605,7 +614,7 @@ function drawSlashEffects(ctx, camX, camY, tileSize, offsetX) {
 }
 
 /**
- * Draw jab/punch effect - linear thrust toward target
+ * Draw jab/punch effect - linear thrust toward target with windup
  */
 function drawJabEffect(ctx, screenX, screenY, slash, tileSize, alpha) {
     const direction = slash.angle;
@@ -616,22 +625,36 @@ function drawJabEffect(ctx, screenX, screenY, slash, tileSize, alpha) {
     const baseLength = isSpecial ? tileSize * 0.9 : tileSize * 0.5;
     const baseWidth = isSpecial ? 12 : 6;
 
-    // Animation: quick extend then retract
-    // Extend fast (0-0.3), hold (0.3-0.5), retract (0.5-1.0)
+    // Animation phases with windup:
+    // Windup/pullback (0-0.15): Pull fist back
+    // Extend fast (0.15-0.4): Quick punch forward
+    // Hold (0.4-0.55): Stay at full extension
+    // Retract (0.55-1.0): Pull back with fade
     let extensionFactor;
-    if (progress < 0.3) {
+    let pullbackOffset = 0;
+
+    if (progress < 0.15) {
+        // Windup - pull back fist
+        const windupProgress = progress / 0.15;
+        pullbackOffset = tileSize * 0.25 * windupProgress;
+        extensionFactor = 0;
+    } else if (progress < 0.4) {
         // Quick extend
-        extensionFactor = progress / 0.3;
-    } else if (progress < 0.5) {
+        const extendProgress = (progress - 0.15) / 0.25;
+        extensionFactor = extendProgress;
+        pullbackOffset = tileSize * 0.25 * (1 - extendProgress);
+    } else if (progress < 0.55) {
         // Hold at full extension
         extensionFactor = 1;
+        pullbackOffset = 0;
     } else {
         // Retract with fade
-        extensionFactor = 1 - ((progress - 0.5) / 0.5);
+        extensionFactor = 1 - ((progress - 0.55) / 0.45);
+        pullbackOffset = 0;
     }
 
     const length = baseLength * extensionFactor;
-    const startOffset = tileSize * 0.2;  // Start slightly away from center
+    const startOffset = tileSize * 0.2 - pullbackOffset;
 
     // Calculate jab line endpoints
     const startX = screenX + Math.cos(direction) * startOffset;
@@ -659,10 +682,11 @@ function drawJabEffect(ctx, screenX, screenY, slash, tileSize, alpha) {
     ctx.lineTo(endX, endY);
     ctx.stroke();
 
-    // Impact burst for special attack
-    if (isSpecial && progress < 0.4) {
-        const burstAlpha = alpha * (1 - progress / 0.4);
-        const burstSize = tileSize * 0.3 * (1 + progress);
+    // Impact burst for special attack (after windup)
+    if (isSpecial && progress >= 0.4 && progress < 0.6) {
+        const burstProgress = (progress - 0.4) / 0.2;
+        const burstAlpha = alpha * (1 - burstProgress);
+        const burstSize = tileSize * 0.3 * (1 + burstProgress);
 
         ctx.fillStyle = `rgba(255, 255, 255, ${burstAlpha * 0.5})`;
         ctx.beginPath();
@@ -672,7 +696,7 @@ function drawJabEffect(ctx, screenX, screenY, slash, tileSize, alpha) {
 }
 
 /**
- * Draw alternate effect - smaller arc that alternates left/right (knife)
+ * Draw alternate effect - smaller arc that alternates left/right (knife) with windup
  */
 function drawAlternateEffect(ctx, screenX, screenY, slash, tileSize, alpha) {
     const range = slash.range * tileSize;
@@ -692,40 +716,65 @@ function drawAlternateEffect(ctx, screenX, screenY, slash, tileSize, alpha) {
         endAngle = slash.angle - halfArc;
     }
 
-    // Fast sweep animation (complete in first 50% of duration)
-    const sweepSpeed = 2.0;
-    const sweepProgress = Math.min(progress * sweepSpeed, 1);
+    // Animation phases with windup:
+    // Windup (0-0.15): Pull back to starting side
+    // Sweep (0.15-0.55): Fast sweep across
+    // Fade (0.55-1.0): Trail fades out
+    let sweepProgress;
+    let windupOffset = 0;
+
+    if (progress < 0.15) {
+        // Windup - pull back to starting position
+        const windupProgress = progress / 0.15;
+        windupOffset = halfArc * 0.3 * windupProgress;  // Pull back past start
+        sweepProgress = 0;
+    } else if (progress < 0.55) {
+        // Fast sweep animation
+        sweepProgress = (progress - 0.15) / 0.4;
+        windupOffset = halfArc * 0.3 * (1 - Math.min(sweepProgress * 2, 1));  // Release windup
+    } else {
+        // Fade phase - sweep complete
+        sweepProgress = 1;
+        windupOffset = 0;
+    }
+
+    // Apply windup offset to start angle
+    const windupStartAngle = fromLeft
+        ? startAngle - windupOffset
+        : startAngle + windupOffset;
 
     // Current leading edge angle
-    const currentAngle = startAngle + (endAngle - startAngle) * sweepProgress;
+    const currentAngle = windupStartAngle + (endAngle - windupStartAngle) * sweepProgress;
 
     // Shorter trail for knife (quicker, snappier feel)
     const trailLength = 0.5;
     const trailStart = fromLeft
-        ? Math.max(startAngle, currentAngle - (endAngle - startAngle) * trailLength)
-        : Math.min(startAngle, currentAngle - (endAngle - startAngle) * trailLength);
+        ? Math.max(windupStartAngle, currentAngle - (endAngle - windupStartAngle) * trailLength)
+        : Math.min(windupStartAngle, currentAngle - (endAngle - windupStartAngle) * trailLength);
 
     // Thinner arc for knife
     ctx.lineCap = 'round';
     const arcThickness = 4;
     const numArcs = 3;
 
-    // Draw the swept trail
-    for (let i = 0; i < numArcs; i++) {
-        const r = range * (0.6 + i * 0.15);
-        const arcAlpha = alpha * (1 - i * 0.2);
+    // Draw the swept trail (only after windup)
+    if (sweepProgress > 0) {
+        for (let i = 0; i < numArcs; i++) {
+            const r = range * (0.6 + i * 0.15);
+            const arcAlpha = alpha * (1 - i * 0.2);
 
-        ctx.strokeStyle = `rgba(255, 255, 255, ${arcAlpha})`;
-        ctx.lineWidth = arcThickness - i;
+            ctx.strokeStyle = `rgba(255, 255, 255, ${arcAlpha})`;
+            ctx.lineWidth = arcThickness - i;
 
-        ctx.beginPath();
-        // Draw arc in correct direction
-        if (fromLeft) {
-            ctx.arc(screenX, screenY, r, trailStart, currentAngle);
-        } else {
-            ctx.arc(screenX, screenY, r, currentAngle, trailStart);
+            ctx.beginPath();
+            // Draw arc in correct direction
+            if (fromLeft) {
+                ctx.arc(screenX, screenY, r, trailStart, currentAngle);
+            } else {
+                ctx.arc(screenX, screenY, r, currentAngle, trailStart);
+            }
+            ctx.stroke();
         }
-        ctx.stroke();
     }
 
     // Draw bright leading edge line
@@ -880,19 +929,39 @@ function drawThrustEffect(ctx, screenX, screenY, slash, tileSize, alpha) {
 }
 
 /**
- * Draw sweep effect - horizontal arc that animates from start to end
+ * Draw sweep effect - horizontal arc that animates from start to end with windup
  */
 function drawSweepEffect(ctx, screenX, screenY, slash, tileSize, alpha) {
     const range = slash.range * tileSize;
     const halfArc = slash.arcAngle / 2;
-    const startAngle = slash.angle - halfArc;
+    const baseStartAngle = slash.angle - halfArc;
     const endAngle = slash.angle + halfArc;
     const progress = slash.progress;
 
-    // Sweep animation: arc grows from start to end
-    // The leading edge sweeps across, leaving a fading trail
-    const sweepSpeed = 2.5;  // Complete sweep in first 40% of duration
-    const sweepProgress = Math.min(progress * sweepSpeed, 1);
+    // Animation phases with windup:
+    // Windup (0-0.15): Pull back to starting angle
+    // Sweep (0.15-0.5): Fast sweep across
+    // Fade (0.5-1.0): Trail fades out
+    let sweepProgress;
+    let windupOffset = 0;
+
+    if (progress < 0.15) {
+        // Windup - pull back past starting angle
+        const windupProgress = progress / 0.15;
+        windupOffset = halfArc * 0.25 * windupProgress;
+        sweepProgress = 0;
+    } else if (progress < 0.5) {
+        // Sweep animation
+        sweepProgress = (progress - 0.15) / 0.35;
+        windupOffset = halfArc * 0.25 * (1 - Math.min(sweepProgress * 2, 1));
+    } else {
+        // Fade phase - sweep complete
+        sweepProgress = 1;
+        windupOffset = 0;
+    }
+
+    // Apply windup offset to start angle (pull back further)
+    const startAngle = baseStartAngle - windupOffset;
 
     // Current leading edge angle
     const currentAngle = startAngle + (endAngle - startAngle) * sweepProgress;
@@ -904,20 +973,22 @@ function drawSweepEffect(ctx, screenX, screenY, slash, tileSize, alpha) {
     // Thick arc sweep effect
     ctx.lineCap = 'round';
 
-    // Draw the swept trail (multiple arcs for thickness)
-    const arcThickness = 6;
-    const numArcs = 4;
+    // Draw the swept trail (multiple arcs for thickness) - only after windup
+    if (sweepProgress > 0) {
+        const arcThickness = 6;
+        const numArcs = 4;
 
-    for (let i = 0; i < numArcs; i++) {
-        const r = range * (0.5 + i * 0.15);
-        const arcAlpha = alpha * (1 - i * 0.15);
+        for (let i = 0; i < numArcs; i++) {
+            const r = range * (0.5 + i * 0.15);
+            const arcAlpha = alpha * (1 - i * 0.15);
 
-        ctx.strokeStyle = `rgba(255, 255, 255, ${arcAlpha})`;
-        ctx.lineWidth = arcThickness - i;
+            ctx.strokeStyle = `rgba(255, 255, 255, ${arcAlpha})`;
+            ctx.lineWidth = arcThickness - i;
 
-        ctx.beginPath();
-        ctx.arc(screenX, screenY, r, trailStart, currentAngle);
-        ctx.stroke();
+            ctx.beginPath();
+            ctx.arc(screenX, screenY, r, trailStart, currentAngle);
+            ctx.stroke();
+        }
     }
 
     // Draw bright leading edge line
@@ -968,9 +1039,19 @@ function updateMouseAttackSystem(deltaTime) {
     if (mouseAttackState.isSwinging) {
         mouseAttackState.swingProgress += dt / mouseAttackState.swingDuration;
 
+        // Check for pending damage after windup phase (15% of animation)
+        if (mouseAttackState.pendingDamage && !mouseAttackState.pendingDamage.triggered) {
+            if (mouseAttackState.swingProgress >= 0.15) {
+                const pd = mouseAttackState.pendingDamage;
+                checkMeleeHits(pd.player, pd.direction, pd.arcConfig, pd.isSpecial);
+                mouseAttackState.pendingDamage.triggered = true;
+            }
+        }
+
         if (mouseAttackState.swingProgress >= 1) {
             mouseAttackState.isSwinging = false;
             mouseAttackState.hitEnemies.clear();
+            mouseAttackState.pendingDamage = null;
         }
     }
 
@@ -998,6 +1079,7 @@ const MouseAttackSystem = {
         mouseAttackState.isSwinging = false;
         mouseAttackState.hitEnemies.clear();
         mouseAttackState.slashEffects = [];
+        mouseAttackState.pendingDamage = null;
     }
 };
 
