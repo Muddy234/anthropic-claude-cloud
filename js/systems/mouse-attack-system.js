@@ -23,7 +23,7 @@ const WEAPON_ARC_CONFIG = {
         arcAngle: 60,
         arcRange: 1.04,     // was 0.8
         isRanged: false,
-        slashStyle: 'sweep'
+        slashStyle: 'alternate'  // Alternates left/right on each attack
     },
     axe: {
         arcAngle: 100,
@@ -131,7 +131,10 @@ const mouseAttackState = {
     hitEnemies: new Set(),
 
     // Visual slash effect
-    slashEffects: []  // { x, y, angle, progress, arcAngle, range }
+    slashEffects: [],  // { x, y, angle, progress, arcAngle, range }
+
+    // Alternating attack side (for knife-style weapons)
+    alternateFromLeft: true  // Toggles each attack: left->right->left
 };
 
 // Track mouse position
@@ -530,6 +533,14 @@ function applyMeleeDamage(player, enemy, isSpecial) {
 function createSlashEffect(player, direction, arcConfig, isSpecial = false) {
     const slashStyle = arcConfig.slashStyle || 'sweep';
 
+    // For alternating style, capture which side to attack from
+    let fromLeft = true;
+    if (slashStyle === 'alternate') {
+        fromLeft = mouseAttackState.alternateFromLeft;
+        // Toggle for next attack
+        mouseAttackState.alternateFromLeft = !mouseAttackState.alternateFromLeft;
+    }
+
     mouseAttackState.slashEffects.push({
         x: player.gridX,
         y: player.gridY,
@@ -540,7 +551,8 @@ function createSlashEffect(player, direction, arcConfig, isSpecial = false) {
         range: arcConfig.arcRange,
         color: '#ffffff',  // White slash
         slashStyle: slashStyle,
-        isSpecial: isSpecial
+        isSpecial: isSpecial,
+        fromLeft: fromLeft  // For alternating attacks
     });
 }
 
@@ -576,6 +588,9 @@ function drawSlashEffects(ctx, camX, camY, tileSize, offsetX) {
         if (slash.slashStyle === 'jab') {
             // JAB STYLE - Quick linear thrust (unarmed punch)
             drawJabEffect(ctx, screenX, screenY, slash, tileSize, alpha);
+        } else if (slash.slashStyle === 'alternate') {
+            // ALTERNATE STYLE - Smaller arc that alternates left/right (knife)
+            drawAlternateEffect(ctx, screenX, screenY, slash, tileSize, alpha);
         } else {
             // SWEEP STYLE - Horizontal arc sweep (sword, axe, etc.)
             drawSweepEffect(ctx, screenX, screenY, slash, tileSize, alpha);
@@ -648,6 +663,92 @@ function drawJabEffect(ctx, screenX, screenY, slash, tileSize, alpha) {
         ctx.fillStyle = `rgba(255, 255, 255, ${burstAlpha * 0.5})`;
         ctx.beginPath();
         ctx.arc(endX, endY, burstSize, 0, Math.PI * 2);
+        ctx.fill();
+    }
+}
+
+/**
+ * Draw alternate effect - smaller arc that alternates left/right (knife)
+ */
+function drawAlternateEffect(ctx, screenX, screenY, slash, tileSize, alpha) {
+    const range = slash.range * tileSize;
+    const halfArc = slash.arcAngle / 2;
+    const progress = slash.progress;
+    const fromLeft = slash.fromLeft;
+
+    // Determine sweep direction based on fromLeft flag
+    // If fromLeft: sweep from left side to right side of the attack direction
+    // If !fromLeft: sweep from right side to left side
+    let startAngle, endAngle;
+    if (fromLeft) {
+        startAngle = slash.angle - halfArc;
+        endAngle = slash.angle + halfArc;
+    } else {
+        startAngle = slash.angle + halfArc;
+        endAngle = slash.angle - halfArc;
+    }
+
+    // Fast sweep animation (complete in first 50% of duration)
+    const sweepSpeed = 2.0;
+    const sweepProgress = Math.min(progress * sweepSpeed, 1);
+
+    // Current leading edge angle
+    const currentAngle = startAngle + (endAngle - startAngle) * sweepProgress;
+
+    // Shorter trail for knife (quicker, snappier feel)
+    const trailLength = 0.5;
+    const trailStart = fromLeft
+        ? Math.max(startAngle, currentAngle - (endAngle - startAngle) * trailLength)
+        : Math.min(startAngle, currentAngle - (endAngle - startAngle) * trailLength);
+
+    // Thinner arc for knife
+    ctx.lineCap = 'round';
+    const arcThickness = 4;
+    const numArcs = 3;
+
+    // Draw the swept trail
+    for (let i = 0; i < numArcs; i++) {
+        const r = range * (0.6 + i * 0.15);
+        const arcAlpha = alpha * (1 - i * 0.2);
+
+        ctx.strokeStyle = `rgba(255, 255, 255, ${arcAlpha})`;
+        ctx.lineWidth = arcThickness - i;
+
+        ctx.beginPath();
+        // Draw arc in correct direction
+        if (fromLeft) {
+            ctx.arc(screenX, screenY, r, trailStart, currentAngle);
+        } else {
+            ctx.arc(screenX, screenY, r, currentAngle, trailStart);
+        }
+        ctx.stroke();
+    }
+
+    // Draw bright leading edge line
+    if (sweepProgress < 1) {
+        const edgeAlpha = alpha * 1.3;
+        ctx.strokeStyle = `rgba(255, 255, 255, ${edgeAlpha})`;
+        ctx.lineWidth = 3;
+
+        ctx.beginPath();
+        ctx.moveTo(
+            screenX + Math.cos(currentAngle) * range * 0.4,
+            screenY + Math.sin(currentAngle) * range * 0.4
+        );
+        ctx.lineTo(
+            screenX + Math.cos(currentAngle) * range,
+            screenY + Math.sin(currentAngle) * range
+        );
+        ctx.stroke();
+
+        // Small glow at tip
+        ctx.fillStyle = `rgba(255, 255, 255, ${edgeAlpha * 0.5})`;
+        ctx.beginPath();
+        ctx.arc(
+            screenX + Math.cos(currentAngle) * range,
+            screenY + Math.sin(currentAngle) * range,
+            4, 0, Math.PI * 2
+        );
         ctx.fill();
     }
 }
