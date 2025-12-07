@@ -12,49 +12,49 @@
 // Arc properties by weapon type (weaponType field from weapon data)
 
 const WEAPON_ARC_CONFIG = {
-    // Blade weapons
+    // Blade weapons (ranges increased by 30%)
     sword: {
         arcAngle: 90,       // degrees
-        arcRange: 1.2,      // tiles
+        arcRange: 1.56,     // tiles (was 1.2)
         isRanged: false
     },
     knife: {
         arcAngle: 60,
-        arcRange: 0.8,
+        arcRange: 1.04,     // was 0.8
         isRanged: false
     },
     axe: {
         arcAngle: 100,
-        arcRange: 1.3,
+        arcRange: 1.69,     // was 1.3
         isRanged: false
     },
 
-    // Blunt weapons
+    // Blunt weapons (ranges increased by 30%)
     mace: {
         arcAngle: 120,
-        arcRange: 1.5,
+        arcRange: 1.95,     // was 1.5
         isRanged: false
     },
     staff: {
         arcAngle: 90,
-        arcRange: 1.5,
+        arcRange: 1.95,     // was 1.5
         isRanged: false
     },
     unarmed: {
         arcAngle: 60,
-        arcRange: 0.6,
+        arcRange: 0.78,     // was 0.6
         isRanged: false
     },
     shield: {
         arcAngle: 90,
-        arcRange: 0.8,
+        arcRange: 1.04,     // was 0.8
         isRanged: false
     },
 
-    // Pierce melee
+    // Pierce melee (ranges increased by 30%)
     polearm: {
         arcAngle: 45,       // Narrow thrust
-        arcRange: 2.0,      // Long reach
+        arcRange: 2.6,      // Long reach (was 2.0)
         isRanged: false
     },
 
@@ -79,10 +79,10 @@ const WEAPON_ARC_CONFIG = {
     }
 };
 
-// Default config for unknown weapon types
+// Default config for unknown weapon types (range increased by 30%)
 const DEFAULT_ARC_CONFIG = {
     arcAngle: 90,
-    arcRange: 1.0,
+    arcRange: 1.3,      // was 1.0
     isRanged: false
 };
 
@@ -213,36 +213,18 @@ function getAttackCooldown(player) {
  * @param {boolean} isSpecial - Whether this is a special attack (Shift+click)
  */
 function performMouseAttack(player, isSpecial = false) {
-    console.log('[MouseAttack] performMouseAttack called', { player: !!player, isSpecial });
-
-    if (!player) {
-        console.log('[MouseAttack] No player');
-        return false;
-    }
-    if (game.state !== 'playing') {
-        console.log('[MouseAttack] Not in playing state:', game.state);
-        return false;
-    }
+    if (!player) return false;
+    if (game.state !== 'playing') return false;
 
     // Check cooldown
-    if (mouseAttackState.cooldown > 0) {
-        console.log('[MouseAttack] On cooldown:', mouseAttackState.cooldown);
-        return false;
-    }
+    if (mouseAttackState.cooldown > 0) return false;
 
     // Check if already swinging
-    if (mouseAttackState.isSwinging) {
-        console.log('[MouseAttack] Already swinging');
-        return false;
-    }
+    if (mouseAttackState.isSwinging) return false;
 
     // Get weapon config
     const arcConfig = getWeaponArcConfig(player);
     const direction = getDirectionToMouse();
-
-    console.log('[MouseAttack] Mouse world pos:', { x: mouseWorldX.toFixed(2), y: mouseWorldY.toFixed(2) });
-    console.log('[MouseAttack] Direction to mouse:', (direction * 180 / Math.PI).toFixed(1) + '°');
-    console.log('[MouseAttack] Weapon config:', arcConfig);
 
     // Update player facing based on attack direction
     updatePlayerFacingFromAngle(player, direction);
@@ -284,8 +266,6 @@ function performMeleeSwing(player, direction, arcConfig, isSpecial) {
 
     // Check for hits immediately and during swing
     checkMeleeHits(player, direction, arcConfig, isSpecial);
-
-    console.log(`[MouseAttack] Melee swing: angle=${arcConfig.arcAngle}°, range=${arcConfig.arcRange}`);
 }
 
 /**
@@ -354,8 +334,6 @@ function performRangedAttack(player, direction, isSpecial) {
             isSpecial: isSpecial
         });
     }
-
-    console.log(`[MouseAttack] Ranged attack fired in direction ${(direction * 180 / Math.PI).toFixed(1)}°`);
 }
 
 /**
@@ -407,18 +385,11 @@ function updatePlayerFacingFromAngle(player, angle) {
  * Check for melee hits in the swing arc
  */
 function checkMeleeHits(player, direction, arcConfig, isSpecial) {
-    if (!game.enemies) {
-        console.log('[MouseAttack] No enemies array found');
-        return;
-    }
+    if (!game.enemies) return;
 
     const halfArc = (arcConfig.arcAngle * (Math.PI / 180)) / 2;
     const range = arcConfig.arcRange;
 
-    console.log(`[MouseAttack] Checking hits: playerPos=(${player.gridX.toFixed(2)}, ${player.gridY.toFixed(2)}), direction=${(direction * 180 / Math.PI).toFixed(1)}°, range=${range}, arc=${arcConfig.arcAngle}°`);
-    console.log(`[MouseAttack] Enemies in game: ${game.enemies.length}`);
-
-    let enemiesInRange = 0;
     for (const enemy of game.enemies) {
         // Skip dead enemies or already hit
         if (enemy.hp <= 0) continue;
@@ -430,11 +401,7 @@ function checkMeleeHits(player, direction, arcConfig, isSpecial) {
         const distance = Math.sqrt(dx * dx + dy * dy);
 
         // Check range
-        if (distance > range) {
-            continue;
-        }
-
-        enemiesInRange++;
+        if (distance > range) continue;
 
         // Check angle
         const enemyAngle = Math.atan2(dy, dx);
@@ -444,19 +411,12 @@ function checkMeleeHits(player, direction, arcConfig, isSpecial) {
         while (angleDiff > Math.PI) angleDiff -= 2 * Math.PI;
         while (angleDiff < -Math.PI) angleDiff += 2 * Math.PI;
 
-        console.log(`[MouseAttack] ${enemy.name}: dist=${distance.toFixed(2)}, enemyAngle=${(enemyAngle * 180 / Math.PI).toFixed(1)}°, angleDiff=${(angleDiff * 180 / Math.PI).toFixed(1)}°, halfArc=${(halfArc * 180 / Math.PI).toFixed(1)}°`);
-
         // Check if within arc
         if (Math.abs(angleDiff) <= halfArc) {
             // HIT!
-            console.log(`[MouseAttack] HIT! ${enemy.name}`);
             mouseAttackState.hitEnemies.add(enemy);
             applyMeleeDamage(player, enemy, isSpecial);
         }
-    }
-
-    if (enemiesInRange === 0) {
-        console.log('[MouseAttack] No enemies in range');
     }
 }
 
@@ -520,8 +480,6 @@ function applyMeleeDamage(player, enemy, isSpecial) {
         const critText = damageResult.isCrit ? ' CRITICAL!' : '';
         addMessage(`You hit ${enemy.name} for ${damageResult.finalDamage} damage!${critText}`);
     }
-
-    console.log(`[MouseAttack] Hit ${enemy.name} for ${damageResult.finalDamage} damage`);
 }
 
 // ============================================================================
