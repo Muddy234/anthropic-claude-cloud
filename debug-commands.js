@@ -1165,14 +1165,48 @@ const Debug = {
 
             if (!game.map) game.map = [];
 
+            // Create arena tiles with visibility flags
             for (let y = arenaY; y < arenaY + arenaHeight; y++) {
                 if (!game.map[y]) game.map[y] = [];
                 for (let x = arenaX; x < arenaX + arenaWidth; x++) {
                     if (x === arenaX || x === arenaX + arenaWidth - 1 ||
                         y === arenaY || y === arenaY + arenaHeight - 1) {
-                        game.map[y][x] = { type: 'wall', char: '#' };
+                        game.map[y][x] = {
+                            type: 'wall',
+                            char: '#',
+                            visible: true,
+                            explored: true,
+                            alwaysVisible: true
+                        };
                     } else {
-                        game.map[y][x] = { type: 'floor', char: '.', room: this._arenaRoom };
+                        game.map[y][x] = {
+                            type: 'floor',
+                            char: '.',
+                            room: this._arenaRoom,
+                            visible: true,
+                            explored: true,
+                            alwaysVisible: true
+                        };
+                    }
+                }
+            }
+
+            // Also update visibility array if it exists
+            if (game.visibility) {
+                for (let y = arenaY; y < arenaY + arenaHeight; y++) {
+                    if (!game.visibility[y]) game.visibility[y] = [];
+                    for (let x = arenaX; x < arenaX + arenaWidth; x++) {
+                        game.visibility[y][x] = 1; // Fully visible
+                    }
+                }
+            }
+
+            // Update explored array if it exists
+            if (game.explored) {
+                for (let y = arenaY; y < arenaY + arenaHeight; y++) {
+                    if (!game.explored[y]) game.explored[y] = [];
+                    for (let x = arenaX; x < arenaX + arenaWidth; x++) {
+                        game.explored[y][x] = true;
                     }
                 }
             }
@@ -1204,6 +1238,32 @@ const Debug = {
 
         this.clear();
 
+        // Force visibility update for arena area
+        for (let y = this._arenaRoom.y; y < this._arenaRoom.y + this._arenaRoom.height; y++) {
+            if (game.visibility && !game.visibility[y]) game.visibility[y] = [];
+            if (game.explored && !game.explored[y]) game.explored[y] = [];
+            for (let x = this._arenaRoom.x; x < this._arenaRoom.x + this._arenaRoom.width; x++) {
+                if (game.visibility) game.visibility[y][x] = 1;
+                if (game.explored) game.explored[y][x] = true;
+                if (game.map[y] && game.map[y][x]) {
+                    game.map[y][x].visible = true;
+                    game.map[y][x].explored = true;
+                }
+            }
+        }
+
+        // Disable fog of war/darkness while in arena
+        this._previousDarkness = game.globalDarkness;
+        game.globalDarkness = 0;
+
+        // Force FOV recalculation if available
+        if (typeof updateFOV === 'function') {
+            updateFOV(game.player.gridX, game.player.gridY);
+        }
+        if (typeof computeFOV === 'function') {
+            computeFOV(game.player.gridX, game.player.gridY);
+        }
+
         console.log('[Arena] Teleported to test arena');
         console.log('[Arena] Use debug.spawnMonster("name") or debug.spawnMonster("name", level)');
         console.log('[Arena] Use debug.listMonsters() to see available monsters');
@@ -1220,6 +1280,20 @@ const Debug = {
             game.player.y = this._originalPosition.y;
             game.player.displayX = this._originalPosition.x;
             game.player.displayY = this._originalPosition.y;
+
+            // Restore darkness setting
+            if (this._previousDarkness !== undefined) {
+                game.globalDarkness = this._previousDarkness;
+            }
+
+            // Force FOV recalculation
+            if (typeof updateFOV === 'function') {
+                updateFOV(game.player.gridX, game.player.gridY);
+            }
+            if (typeof computeFOV === 'function') {
+                computeFOV(game.player.gridX, game.player.gridY);
+            }
+
             console.log('[Arena] Returned to original position');
             if (typeof addMessage === 'function') {
                 addMessage('Returned from Test Arena');
