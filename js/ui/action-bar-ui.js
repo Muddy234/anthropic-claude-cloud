@@ -1,7 +1,8 @@
 // ============================================================================
-// ACTION BAR UI - Hotkey display (slots 1-4)
+// ACTION BAR UI - Hotkey display (slots 3-4 + Dash)
 // ============================================================================
-// Shows attack/consumable hotkeys with cooldowns, range indicators, and states
+// Shows consumable hotkeys with cooldowns and dash ability
+// Note: Slots 1-2 removed - combat uses mouse click combo system
 // ============================================================================
 
 // ============================================================================
@@ -22,7 +23,7 @@ function drawCombatActionBar(ctx, canvasWidth, canvasHeight) {
     const slotSize = 60;
     const slotSpacing = 8;
     const barPadding = 20;
-    const numSlots = 5; // 4 action slots + 1 dash slot
+    const numSlots = 3; // 2 consumable slots (3-4) + 1 dash slot
 
     // Position at bottom-right corner
     const barWidth = (slotSize * numSlots) + (slotSpacing * (numSlots - 1));
@@ -30,20 +31,17 @@ function drawCombatActionBar(ctx, canvasWidth, canvasHeight) {
     const barX = canvasWidth - barWidth - barPadding;
     const barY = canvasHeight - barHeight - barPadding;
 
-    // Draw each slot (1-4 are actions, 5 is dash)
-    for (let i = 0; i < numSlots; i++) {
+    // Draw consumable slots (hotkeys 3 and 4)
+    for (let i = 0; i < 2; i++) {
         const slotX = barX + (i * (slotSize + slotSpacing));
         const slotY = barY;
-
-        if (i < 4) {
-            // Action slots 1-4
-            const hotkey = i + 1;
-            drawActionSlot(ctx, slotX, slotY, slotSize, hotkey, player);
-        } else {
-            // Dash slot (Space)
-            drawDashSlot(ctx, slotX, slotY, slotSize);
-        }
+        const hotkey = i + 3; // Slots 3 and 4
+        drawActionSlot(ctx, slotX, slotY, slotSize, hotkey, player);
     }
+
+    // Draw dash slot
+    const dashSlotX = barX + (2 * (slotSize + slotSpacing));
+    drawDashSlot(ctx, dashSlotX, barY, slotSize);
 }
 
 /**
@@ -205,18 +203,15 @@ function getSlotInfo(hotkey, player) {
         return info;
     }
 
-    // Hotkey-specific logic
+    // Hotkey-specific logic (only slots 3-4 for consumables)
     switch(hotkey) {
-        case 1: // Base Attack
-            return getBaseAttackInfo(player);
-        case 2: // Skill Attack
-            return getSkillAttackInfo(player);
         case 3: // Consumable 1
             return getConsumableInfo(player, 'slot3');
         case 4: // Consumable 2
             return getConsumableInfo(player, 'slot4');
     }
 
+    // Slots 1-2 no longer used (combo system via mouse clicks)
     return info;
 }
 
@@ -535,21 +530,21 @@ function initActionBarClickHandler() {
         const slotSize = 60;
         const slotSpacing = 8;
         const barPadding = 20;
-        const numSlots = 4;
-        const barWidth = (slotSize * numSlots) + (slotSpacing * (numSlots - 1));
+        const numSlots = 2; // Only consumable slots 3 and 4
+        const barWidth = (slotSize * (numSlots + 1)) + (slotSpacing * numSlots); // +1 for dash
         const barHeight = slotSize;
         const barX = canvas.width - barWidth - barPadding;
         const barY = canvas.height - barHeight - barPadding;
 
-        // Check if click is within action bar area
+        // Check if click is within consumable slots (3 and 4)
         for (let i = 0; i < numSlots; i++) {
             const slotX = barX + (i * (slotSize + slotSpacing));
             const slotY = barY;
 
             if (clickX >= slotX && clickX <= slotX + slotSize &&
                 clickY >= slotY && clickY <= slotY + slotSize) {
-                // Clicked on slot i+1
-                const hotkey = i + 1;
+                // Clicked on consumable slot (hotkey 3 or 4)
+                const hotkey = i + 3;
                 if (typeof handleActiveCombatHotkey === 'function') {
                     handleActiveCombatHotkey(hotkey, game.player);
                 }
@@ -572,4 +567,4 @@ if (typeof window !== 'undefined') {
     window.drawCombatActionBar = drawCombatActionBar;
 }
 
-console.log('✅ Action bar UI loaded');
+console.log('✅ Action bar UI loaded (slots 3-4 + dash)');
