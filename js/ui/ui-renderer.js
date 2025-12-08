@@ -364,6 +364,30 @@ const INFO_CONTENT = {
             color: '#e67e22',
             description: 'Attacks in coordinated groups. Stronger with more allies.',
             traits: ['Pack bonuses', 'Coordinated attacks', 'Surround tactics']
+        },
+        pack_leader: {
+            title: 'Pack Leader',
+            color: '#f1c40f',
+            description: 'Commands a group of followers. Directs attacks and coordinates the pack.',
+            traits: ['Commands followers', 'Bonus when pack is nearby', 'Rally cry abilities']
+        },
+        cowardly: {
+            title: 'Cowardly',
+            color: '#95a5a6',
+            description: 'Flees when threatened. Only attacks when cornered or has allies.',
+            traits: ['Runs from combat', 'Attacks from safety', 'Calls for help']
+        },
+        wanderer: {
+            title: 'Wanderer',
+            color: '#1abc9c',
+            description: 'Roams the area aimlessly. May stumble upon players by accident.',
+            traits: ['Random movement', 'No fixed territory', 'Unpredictable paths']
+        },
+        stalker: {
+            title: 'Stalker',
+            color: '#8e44ad',
+            description: 'Follows targets from a distance, waiting for the perfect moment.',
+            traits: ['Keeps distance', 'Patient pursuit', 'Strikes when vulnerable']
         }
     }
 };
@@ -410,10 +434,18 @@ function renderInfoPopup(ctx) {
     const popupY = canvas.height - popupHeight - margin;
 
     // Get content based on type
-    const content = INFO_CONTENT[infoPopup.type]?.[infoPopup.data];
+    let content = INFO_CONTENT[infoPopup.type]?.[infoPopup.data];
+
+    // Fallback for unknown types
     if (!content) {
-        window.infoPopup.visible = false;
-        return;
+        // Create a generic fallback based on type
+        const fallbackContent = {
+            title: infoPopup.data ? infoPopup.data.charAt(0).toUpperCase() + infoPopup.data.slice(1) : 'Unknown',
+            color: '#888888',
+            description: `Information about "${infoPopup.data}" is not yet available in the database.`,
+            traits: ['Details coming soon']
+        };
+        content = fallbackContent;
     }
 
     // Background
@@ -692,6 +724,17 @@ function renderInspectPopup(ctx) {
     ctx.lineWidth = 1;
     ctx.strokeRect(popupX, tabY, popupWidth, tabHeight);
 
+    // Draw tab separators for visual clarity
+    ctx.strokeStyle = '#333';
+    ctx.lineWidth = 1;
+    for (let i = 1; i < tabs.length; i++) {
+        const separatorX = popupX + i * tabWidth;
+        ctx.beginPath();
+        ctx.moveTo(separatorX, tabY + 2);
+        ctx.lineTo(separatorX, tabY + tabHeight - 2);
+        ctx.stroke();
+    }
+
     // === CONTENT AREA ===
     const contentX = popupX + 10;
     const contentY = tabY + tabHeight + 15;
@@ -723,10 +766,7 @@ function renderInspectPopup(ctx) {
     ctx.font = '10px monospace';
     ctx.fillStyle = '#666';
     ctx.textAlign = 'center';
-    const footerText = inspectPopup.targetType === 'enemy'
-        ? 'ESC to close | TAB: next tab | SHIFT+TAB: next enemy'
-        : 'ESC to close | ←/→ switch tabs';
-    ctx.fillText(footerText, popupX + popupWidth / 2, popupY + popupHeight - 8);
+    ctx.fillText('ESC close | TAB/←/→ switch tabs | Click ⓘ for info', popupX + popupWidth / 2, popupY + popupHeight - 8);
 }
 
 /**
@@ -1235,29 +1275,64 @@ canvas.addEventListener('click', (e) => {
     }
 
     // Tab area (3 tabs: General, Combat, Behavior)
+    // Must match the values in renderInspectPopup
     const tabY = popupY + 40;
     const tabHeight = 22;
     const tabWidth = popupWidth / 3;
 
-    // Check if click is on tabs
-    if (clickY >= tabY && clickY <= tabY + tabHeight) {
-        const tabIndex = Math.floor((clickX - popupX) / tabWidth);
-        if (tabIndex >= 0 && tabIndex <= 2) {
-            window.inspectPopup.tab = tabIndex;
+    // Check if click is on tabs (with small tolerance for easier clicking)
+    const tabTolerance = 5;
+    if (clickY >= tabY - tabTolerance && clickY <= tabY + tabHeight + tabTolerance) {
+        // Calculate which tab was clicked
+        const relativeX = clickX - popupX;
+        if (relativeX >= 0 && relativeX <= popupWidth) {
+            const tabIndex = Math.floor(relativeX / tabWidth);
+            if (tabIndex >= 0 && tabIndex <= 2) {
+                window.inspectPopup.tab = tabIndex;
+                // Debug logging - can be removed later
+                console.log(`Tab clicked: ${tabIndex}, clickY: ${clickY}, tabY: ${tabY}, relativeX: ${relativeX}`);
+            }
         }
     }
 });
 
 /**
- * Handle ESC key to close info popup
+ * Handle keyboard controls for info popup and inspect panel
  */
 document.addEventListener('keydown', (e) => {
+    const infoPopup = getInfoPopup();
+    const inspectPopup = getInspectPopup();
+
+    // ESC closes info popup first, then inspect popup
     if (e.key === 'Escape') {
-        const infoPopup = getInfoPopup();
         if (infoPopup.visible) {
             window.infoPopup.visible = false;
             e.preventDefault();
             e.stopPropagation();
+            return;
+        }
+    }
+
+    // Tab key cycles through tabs on inspect panel (only when inspect is visible and info popup isn't)
+    if (e.key === 'Tab' && inspectPopup.visible && !infoPopup.visible) {
+        e.preventDefault();
+        e.stopPropagation();
+
+        // Shift+Tab goes backwards, Tab goes forwards
+        if (e.shiftKey) {
+            window.inspectPopup.tab = (inspectPopup.tab - 1 + 3) % 3;
+        } else {
+            window.inspectPopup.tab = (inspectPopup.tab + 1) % 3;
+        }
+    }
+
+    // Arrow keys also work for tab navigation
+    if ((e.key === 'ArrowLeft' || e.key === 'ArrowRight') && inspectPopup.visible && !infoPopup.visible) {
+        e.preventDefault();
+        if (e.key === 'ArrowLeft') {
+            window.inspectPopup.tab = (inspectPopup.tab - 1 + 3) % 3;
+        } else {
+            window.inspectPopup.tab = (inspectPopup.tab + 1) % 3;
         }
     }
 });
