@@ -117,7 +117,7 @@ const Debug = {
             hp: template.stats?.health || 50,
             maxHp: template.stats?.health || 50,
             ...template,
-            combat: { isInCombat: false, currentTarget: null, attackCooldown: 0, attackSpeed: 2.0, autoRetaliate: true, attackRange: 1 }
+            combat: { isInCombat: false, currentTarget: null, attackCooldown: 0, attackSpeed: 2.0, autoRetaliate: true, attackRange: 1, comboCount: 1 }
         };
         
         game.enemies.push(enemy);
@@ -158,18 +158,19 @@ const Debug = {
         console.log('Player fully healed');
     },
 
-    _godMode: false,
     godMode() {
-        this._godMode = !this._godMode;
-        if (this._godMode) {
+        // Toggle the global godMode flag that combat-system.js checks
+        window.godMode = !window.godMode;
+        if (window.godMode) {
             this._originalHp = game.player.hp;
+            this._originalMaxHp = game.player.maxHp;
             game.player.hp = 99999;
             game.player.maxHp = 99999;
         } else {
-            game.player.maxHp = 100;
-            game.player.hp = this._originalHp || 100;
+            game.player.maxHp = this._originalMaxHp || 100;
+            game.player.hp = Math.min(this._originalHp || 100, game.player.maxHp);
         }
-        console.log(`God mode: ${this._godMode ? 'ON' : 'OFF'}`);
+        console.log(`God mode: ${window.godMode ? 'ON ⚡' : 'OFF'}`);
     },
 
     teleport(x, y) {
@@ -243,6 +244,13 @@ const Debug = {
             console.log(`Added ${count - itemCount} consumables/materials/quest items`);
         } else {
             console.warn('ITEMS_DATA not loaded');
+        }
+
+        // Set ammo counters for ranged weapons
+        if (game.player.ammo) {
+            game.player.ammo.arrows = 99;
+            game.player.ammo.bolts = 99;
+            console.log('Set ammo: 99 arrows, 99 bolts');
         }
 
         console.log(`✅ Total items added to inventory: ${count}`);

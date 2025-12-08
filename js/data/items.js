@@ -178,62 +178,98 @@ const CONSUMABLES = {
 
 const AMMO = {
     // === ARROWS (for bows) ===
+    'stone_arrows': {
+        id: 'stone_arrows', name: 'Stone Arrows', type: 'ammo', subtype: 'arrow',
+        rarity: 'common', stackable: true, maxStack: 99,
+        bonusDamage: 0,
+        description: 'Crude arrows with stone tips. Basic but functional.',
+        goldValue: 1
+    },
+    'steel_arrows': {
+        id: 'steel_arrows', name: 'Steel Arrows', type: 'ammo', subtype: 'arrow',
+        rarity: 'uncommon', stackable: true, maxStack: 99,
+        bonusDamage: 3,
+        description: 'Well-crafted arrows with steel tips. +3 damage.',
+        goldValue: 3
+    },
     'arrows': {
         id: 'arrows', name: 'Arrows', type: 'ammo', subtype: 'arrow',
         rarity: 'common', stackable: true, maxStack: 99,
-        description: 'Standard metal-tipped arrows for bows.',
-        goldValue: 1
+        bonusDamage: 1,
+        description: 'Standard iron-tipped arrows for bows.',
+        goldValue: 2
     },
     'fire_arrows': {
         id: 'fire_arrows', name: 'Fire Arrows', type: 'ammo', subtype: 'arrow',
         rarity: 'uncommon', stackable: true, maxStack: 99,
+        bonusDamage: 2,
         element: 'fire', elementPower: 2,
-        description: 'Arrows tipped with flaming oil.',
+        description: 'Arrows tipped with flaming oil. +2 damage, fire element.',
         goldValue: 5
     },
     'ice_arrows': {
         id: 'ice_arrows', name: 'Ice Arrows', type: 'ammo', subtype: 'arrow',
         rarity: 'uncommon', stackable: true, maxStack: 99,
+        bonusDamage: 2,
         element: 'ice', elementPower: 2,
-        description: 'Arrows infused with freezing magic.',
+        description: 'Arrows infused with freezing magic. +2 damage, ice element.',
         goldValue: 5
     },
     'poison_arrows': {
         id: 'poison_arrows', name: 'Poison Arrows', type: 'ammo', subtype: 'arrow',
         rarity: 'uncommon', stackable: true, maxStack: 99,
+        bonusDamage: 1,
         element: 'nature', elementPower: 2,
         special: { poisonChance: 0.30 },
-        description: 'Arrows coated with deadly poison.',
+        description: 'Arrows coated with deadly poison. 30% poison chance.',
         goldValue: 5
     },
 
     // === BOLTS (for crossbows) ===
+    'stone_bolts': {
+        id: 'stone_bolts', name: 'Stone Bolts', type: 'ammo', subtype: 'bolt',
+        rarity: 'common', stackable: true, maxStack: 99,
+        bonusDamage: 0,
+        description: 'Crude bolts with stone tips. Basic but functional.',
+        goldValue: 1
+    },
+    'steel_bolts': {
+        id: 'steel_bolts', name: 'Steel Bolts', type: 'ammo', subtype: 'bolt',
+        rarity: 'uncommon', stackable: true, maxStack: 99,
+        bonusDamage: 4,
+        description: 'Well-crafted bolts with steel tips. +4 damage.',
+        goldValue: 4
+    },
     'bolts': {
         id: 'bolts', name: 'Bolts', type: 'ammo', subtype: 'bolt',
         rarity: 'common', stackable: true, maxStack: 99,
-        description: 'Standard metal bolts for crossbows.',
+        bonusDamage: 2,
+        description: 'Standard iron bolts for crossbows.',
         goldValue: 2
     },
     'fire_bolts': {
         id: 'fire_bolts', name: 'Fire Bolts', type: 'ammo', subtype: 'bolt',
         rarity: 'uncommon', stackable: true, maxStack: 99,
+        bonusDamage: 3,
         element: 'fire', elementPower: 2,
-        description: 'Bolts tipped with flaming oil.',
+        description: 'Bolts tipped with flaming oil. +3 damage, fire element.',
         goldValue: 6
     },
     'ice_bolts': {
         id: 'ice_bolts', name: 'Ice Bolts', type: 'ammo', subtype: 'bolt',
         rarity: 'uncommon', stackable: true, maxStack: 99,
+        bonusDamage: 3,
         element: 'ice', elementPower: 2,
-        description: 'Bolts infused with freezing magic.',
+        description: 'Bolts infused with freezing magic. +3 damage, ice element.',
         goldValue: 6
     },
     'poison_bolts': {
         id: 'poison_bolts', name: 'Poison Bolts', type: 'ammo', subtype: 'bolt',
         rarity: 'uncommon', stackable: true, maxStack: 99,
+        bonusDamage: 2,
         element: 'nature', elementPower: 2,
         special: { poisonChance: 0.30 },
-        description: 'Bolts coated with deadly poison.',
+        description: 'Bolts coated with deadly poison. 30% poison chance.',
         goldValue: 6
     }
 };

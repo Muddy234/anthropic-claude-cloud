@@ -14,7 +14,12 @@ const COMBAT_CONFIG = {
     engageDelay: 0.4,             // Initial delay when engaging (seconds)
     minDamage: 1,                 // Minimum damage floor
     missChance: 0.08,             // Base 8% miss chance
-    debugLogging: true
+    debugLogging: true,
+    // Enemy attack animation settings
+    enemyAttackDuration: 400,     // Total enemy attack animation duration (ms)
+    enemyWindupPercent: 0.35,     // 35% of attack is windup (140ms at 400ms total)
+    enemyWhiteFlashStart: 0.85,   // White flash starts at 85% of windup (last 15%)
+    playerWindupPercent: 0.15     // Player windup is 15% for comparison
 };
 
 // ============================================================================
@@ -52,6 +57,23 @@ function updateEntityCombat(entity, deltaTime) {
         return;
     }
 
+    // Initialize attack animation state if needed
+    if (!combat.attackAnimation) {
+        combat.attackAnimation = {
+            state: 'idle',      // idle, windup, executing, recovery
+            timer: 0,
+            maxTimer: 0,
+            type: 'melee',      // melee, ranged, magic
+            targetLocked: null  // Target position locked at windup start
+        };
+    }
+
+    // Handle attack animation states
+    if (combat.attackAnimation.state !== 'idle') {
+        updateAttackAnimation(entity, deltaTime);
+        return;  // Don't process normal combat during animation
+    }
+
     // Reduce cooldown
     combat.attackCooldown -= deltaTime / 1000;
 
@@ -68,13 +90,134 @@ function updateEntityCombat(entity, deltaTime) {
 
     // Ready to attack? (Enemies only - player uses hotkeys)
     if (combat.attackCooldown <= 0) {
-        performAttack(entity, combat.currentTarget);
+        // Try to use a special ability first (for enemies with abilities)
+        let usedAbility = false;
+        if (entity !== game.player && typeof EnemyAbilitySystem !== 'undefined') {
+            usedAbility = EnemyAbilitySystem.tryUseAbility(entity, combat.currentTarget);
+        }
 
-        // Calculate attack speed (lower = faster)
-        const baseSpeed = combat.attackSpeed || 1.0;
-        const attackTimeMs = COMBAT_CONFIG.baseAttackTime * baseSpeed;
-        combat.attackCooldown = attackTimeMs / 1000;
+        // Fall back to basic attack with windup if no ability used
+        if (!usedAbility) {
+            startAttackWindup(entity, combat.currentTarget);
+        } else {
+            // Abilities have their own telegraph, reset cooldown
+            const baseSpeed = combat.attackSpeed || 1.0;
+            const attackTimeMs = COMBAT_CONFIG.baseAttackTime * baseSpeed;
+            combat.attackCooldown = attackTimeMs / 1000;
+        }
     }
+}
+
+/**
+ * Start attack windup animation
+ */
+function startAttackWindup(attacker, target) {
+    const combat = attacker.combat;
+    const duration = COMBAT_CONFIG.enemyAttackDuration;
+
+    // Determine attack type based on enemy's equipped weapon or abilities
+    let attackType = 'melee';
+    if (attacker.attackRange && attacker.attackRange > 2) {
+        attackType = 'ranged';
+    }
+    if (attacker.element && ['fire', 'ice', 'arcane', 'void', 'death'].includes(attacker.element)) {
+        attackType = 'magic';
+    }
+
+    // Override with combat-specific attack type if defined
+    if (combat.attackType) {
+        attackType = combat.attackType;
+    }
+
+    combat.attackAnimation = {
+        state: 'windup',
+        timer: duration * COMBAT_CONFIG.enemyWindupPercent,
+        maxTimer: duration * COMBAT_CONFIG.enemyWindupPercent,
+        totalDuration: duration,
+        type: attackType,
+        targetLocked: {
+            x: target.gridX,
+            y: target.gridY,
+            entity: target
+        }
+    };
+
+    // Face the target
+    const dx = target.gridX - attacker.gridX;
+    const dy = target.gridY - attacker.gridY;
+    if (Math.abs(dx) > Math.abs(dy)) {
+        attacker.facing = dx > 0 ? 'right' : 'left';
+    } else {
+        attacker.facing = dy > 0 ? 'down' : 'up';
+    }
+}
+
+/**
+ * Update attack animation state
+ */
+function updateAttackAnimation(entity, deltaTime) {
+    const combat = entity.combat;
+    const anim = combat.attackAnimation;
+
+    anim.timer -= deltaTime;
+
+    switch (anim.state) {
+        case 'windup':
+            // Check if windup is complete
+            if (anim.timer <= 0) {
+                // Execute the attack
+                const target = anim.targetLocked?.entity;
+                if (target && target.hp > 0) {
+                    performAttack(entity, target);
+                }
+
+                // Move to recovery phase (remaining 65% of attack duration)
+                anim.state = 'recovery';
+                anim.timer = anim.totalDuration * (1 - COMBAT_CONFIG.enemyWindupPercent);
+            }
+            break;
+
+        case 'recovery':
+            if (anim.timer <= 0) {
+                // Reset to idle
+                anim.state = 'idle';
+                anim.timer = 0;
+
+                // Set attack cooldown
+                const baseSpeed = combat.attackSpeed || 1.0;
+                const attackTimeMs = COMBAT_CONFIG.baseAttackTime * baseSpeed;
+                combat.attackCooldown = attackTimeMs / 1000;
+            }
+            break;
+    }
+}
+
+/**
+ * Get attack animation progress for rendering
+ * @returns {object|null} Animation info or null if not animating
+ */
+function getAttackAnimationState(entity) {
+    const anim = entity.combat?.attackAnimation;
+    if (!anim || anim.state === 'idle') return null;
+
+    const windupDuration = anim.maxTimer;
+    const windupProgress = anim.state === 'windup'
+        ? 1 - (anim.timer / windupDuration)
+        : 1;
+
+    // Calculate if in white flash phase (last 15% of windup)
+    const flashStart = COMBAT_CONFIG.enemyWhiteFlashStart;
+    const inFlashPhase = anim.state === 'windup' && windupProgress >= flashStart;
+
+    return {
+        state: anim.state,
+        type: anim.type,
+        progress: windupProgress,
+        inFlashPhase: inFlashPhase,
+        targetLocked: anim.targetLocked,
+        isWindup: anim.state === 'windup',
+        isRecovery: anim.state === 'recovery'
+    };
 }
 
 // ============================================================================
@@ -144,6 +287,11 @@ function performAttack(attacker, defender) {
     // Get current room for attunement
     const room = getCurrentRoom(attacker);
 
+    // Enemy combo system: track which attack in the combo (1, 2, or 3)
+    const isEnemy = attacker !== game.player;
+    const comboCount = isEnemy ? (attacker.combat?.comboCount || 1) : 1;
+    const isComboFinisher = isEnemy && comboCount === 3;
+
     // Use DamageCalculator if available
     let result;
     if (typeof DamageCalculator !== 'undefined') {
@@ -154,7 +302,10 @@ function performAttack(attacker, defender) {
     }
 
     if (!result.isHit) {
-        // Miss
+        // Miss - still advance combo for enemies
+        if (isEnemy && attacker.combat) {
+            attacker.combat.comboCount = (comboCount % 3) + 1;
+        }
         if (typeof addMessage === 'function') {
             addMessage(`${attacker.name || 'You'} missed!`);
         }
@@ -162,14 +313,31 @@ function performAttack(attacker, defender) {
         return;
     }
 
+    // Apply combo finisher bonus for enemies (1.5x damage on 3rd hit)
+    if (isComboFinisher) {
+        result.finalDamage = Math.floor(result.finalDamage * 1.5);
+        result.isComboFinisher = true;
+    }
+
+    // Advance enemy combo counter (1 -> 2 -> 3 -> 1)
+    if (isEnemy && attacker.combat) {
+        attacker.combat.comboCount = (comboCount % 3) + 1;
+    }
+
     // Apply damage
-    applyDamage(defender, result.finalDamage, attacker);
+    applyDamage(defender, result.finalDamage, attacker, result);
+
+    // Combat enhancements hook (knockback, screen shake, stagger)
+    if (typeof onCombatHit === 'function') {
+        onCombatHit(attacker, defender, result);
+    }
 
     // Build message
     let message = `${attacker.name || 'You'} hit ${defender.name || 'target'} for ${result.finalDamage}!`;
-    
+
     // Add modifiers to message
     if (result.isCrit) message += ' CRITICAL!';
+    if (result.isComboFinisher) message += ' COMBO!';
     if (result.messages) {
         for (const msg of result.messages) {
             if (msg !== 'CRITICAL' && msg !== 'MISS') {
@@ -185,6 +353,7 @@ function performAttack(attacker, defender) {
     // Determine damage number color
     let color = '#ff4444';
     if (result.isCrit) color = '#ffff00';
+    if (result.isComboFinisher) color = '#ff00ff';  // Purple for enemy combo finisher
     if (result.breakdown?.elementMod > 1.0) color = '#00ff00';
     if (result.breakdown?.elementMod < 1.0) color = '#ff8800';
 
@@ -211,7 +380,13 @@ function performAttack(attacker, defender) {
 /**
  * Apply damage to an entity
  */
-function applyDamage(entity, damage, source) {
+function applyDamage(entity, damage, source, damageResult) {
+    // Check for i-frames (dash invincibility)
+    if (entity === game.player && typeof playerHasIframes === 'function' && playerHasIframes()) {
+        console.log('[Combat] Player has i-frames - damage blocked');
+        return;
+    }
+
     // DEBUG: Skip damage for player if godMode is enabled
     if (entity === game.player && window.godMode) {
         console.log('[DEBUG] God mode: Player took no damage');
@@ -251,6 +426,12 @@ function applyDamage(entity, damage, source) {
         if (typeof addMessage === 'function') {
             addMessage(`Interrupted ${entity.name}'s alert!`);
         }
+    }
+
+    // Trigger damage-based mechanics for enemies
+    if (entity !== game.player && typeof EnemyAbilitySystem !== 'undefined') {
+        entity.lastDamageTime = Date.now();  // For regeneration passive
+        EnemyAbilitySystem.checkMechanics(entity, 'on_damaged', { damage, source });
     }
 
     // Break invisibility on damage
@@ -383,10 +564,11 @@ function handleDeath(entity, killer) {
 }
 
 function calculateXPReward(entity) {
+    // Fallback XP calculation (matches enemy-spawner.js values)
     const tierXP = {
-        'TIER_3': 10,
-        'TIER_2': 25,
-        'TIER_1': 50,
+        'TIER_3': 15,   // Increased for smoother early leveling
+        'TIER_2': 30,
+        'TIER_1': 55,
         'ELITE': 100,
         'BOSS': 500
     };
@@ -662,10 +844,12 @@ if (typeof window !== 'undefined') {
     window.updateDamageNumbers = updateDamageNumbers;
     window.renderDamageNumbers = renderDamageNumbers;
     window.damageNumbers = damageNumbers;
+    // Attack animation exports
+    window.getAttackAnimationState = getAttackAnimationState;
+    window.startAttackWindup = startAttackWindup;
 
-    // DEBUG: Enable god mode for testing (set to false for production)
-    window.godMode = true;
+    // DEBUG: God mode toggle (controlled via debug.godMode())
+    window.godMode = false;
 }
 
 console.log('✅ Combat system loaded (3-layer damage integration)');
-console.log('⚠️ GOD MODE ENABLED - Player takes no damage');

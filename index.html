@@ -33,10 +33,12 @@
     <script src="js/data/element-matrix.js"></script>
     <script src="js/data/monsters-data.js"></script>
     <script src="js/data/monster-tiers.js"></script>
+    <script src="js/data/ability-repository.js"></script>
     <script src="js/data/items.js"></script>
     <script src="js/data/weapon-types.js"></script>
     <script src="js/data/weapons-melee.js"></script>
     <script src="js/data/weapons-ranged.js"></script>
+    <script src="js/data/weapons-magic.js"></script>
     <script src="js/data/armor-types.js"></script>
     <script src="js/data/armor-defense.js"></script>
     <script src="js/data/armor-mobility.js"></script>
@@ -44,7 +46,8 @@
     <script src="js/data/room-attunement-matrix.js"></script>
     <script src="js/data/tileset-reference.js"></script>
     <script src="js/data/room-themes.js"></script>
-    
+    <script src="js/data/room-types.js"></script>
+
     <!-- ==================== -->
     <!-- UTILS: Helper functions (no registration) -->
     <!-- ==================== -->
@@ -118,6 +121,7 @@
     <script src="js/systems/light-source-system.js"></script>       <!-- Priority 4 (before vision) -->
     <script src="js/systems/shift-bonus-system.js"></script>        <!-- Priority 5 (bonuses) -->
 
+    <script src="js/systems/room-type-system.js"></script>          <!-- Priority 10 (room types) -->
     <script src="js/systems/vision-system.js"></script>             <!-- Priority 5 (Fog of War) -->
     <script src="js/systems/input-handler.js"></script>             <!-- Priority 10 -->
     <script src="js/systems/pokemon-movement.js"></script>          <!-- Priority 20 -->
@@ -129,6 +133,7 @@
     <script src="js/systems/dynamic-tile-system.js"></script>       <!-- Priority 36 -->
     <script src="js/systems/environmental-meter-system.js"></script><!-- Priority 37 -->
     <script src="js/systems/spawn-point-system.js"></script>        <!-- Priority 38 -->
+    <script src="js/systems/enemy-ability-system.js"></script>      <!-- Priority 38 (enemy abilities) -->
 
     <script src="js/systems/enemy-ai.js"></script>                  <!-- Priority 40 -->
     <script src="js/systems/monster-social-system.js"></script>     <!-- Priority 42 -->
@@ -137,6 +142,8 @@
     <script src="js/systems/combat-system.js"></script>             <!-- Priority 50 -->
     <script src="js/systems/projectile-system.js"></script>         <!-- Projectile travel time -->
     <script src="js/systems/active-combat.js"></script>             <!-- Active combat hotkeys -->
+    <script src="js/systems/combat-enhancements.js"></script>       <!-- Dash, knockback, screen shake, stagger -->
+    <script src="js/systems/mouse-attack-system.js"></script>      <!-- Mouse-driven attacks -->
     <script src="js/systems/skills-combat-integration.js"></script> <!-- Priority 55 -->
     <script src="js/systems/status-effect-system.js"></script>      <!-- Priority 56 -->
     <script src="js/systems/skill-system.js"></script>              <!-- Priority 60 -->

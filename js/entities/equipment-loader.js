@@ -9,6 +9,7 @@
     const EQUIPMENT_DATA = {
         ...window.MELEE_WEAPONS,
         ...window.RANGED_WEAPONS,
+        ...window.MAGIC_WEAPONS,
         ...window.DEFENSE_ARMOR,
         ...window.MOBILITY_ARMOR
     };

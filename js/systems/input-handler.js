@@ -164,13 +164,20 @@ window.addEventListener('keydown', e => {
             return;
         }
 
-        // Action hotkeys (1-4) - Active Combat System
-        if (['1', '2', '3', '4'].includes(e.key)) {
+        // Action hotkeys (3-4) for consumables
+        // Attacks are triggered by left-click only (uses combo system: 1, 2, special)
+        if (['3', '4'].includes(e.key)) {
+            e.preventDefault();
+            // Clear this key from movement state to prevent conflicts
+            keys[e.key] = false;
+
+            const keyNum = parseInt(e.key);
+
+            // Hotkeys 3-4: Consumables (use existing system)
             if (typeof handleActiveCombatHotkey === 'function') {
-                handleActiveCombatHotkey(parseInt(e.key), game.player);
+                handleActiveCombatHotkey(keyNum, game.player);
             } else if (typeof handleActionHotkey === 'function') {
-                // Fallback to old system
-                handleActionHotkey(parseInt(e.key), game.player);
+                handleActionHotkey(keyNum, game.player);
             }
             return;
         }
@@ -585,95 +592,35 @@ const setupCanvasHandlers = () => {
         return;
     }
 
-    // LEFT CLICK - Movement and target selection
+    // LEFT CLICK - Mouse-driven attack toward cursor
     canvas.addEventListener('click', (e) => {
         if (game.state !== 'playing') return;
 
         // If context menu is visible, let right-click-init.js handle the click
-        // Don't close it here - that would prevent the menu action from being processed
         if (window.contextMenu?.visible) {
             return;
         }
 
-        // Don't auto-walk if inspect popup is visible
+        // Don't attack if inspect popup is visible
         if (window.inspectPopup?.visible) {
             return;
         }
 
-        // Don't auto-walk if context menu just closed (prevents walk when clicking inspect)
+        // Don't attack if context menu just closed
         if (window.contextMenuJustClosed) {
             return;
         }
 
-        // Convert screen coords to grid coords
+        // Check if clicked in tracker area - ignore
         const rect = canvas.getBoundingClientRect();
         const clickX = e.clientX - rect.left;
-        const clickY = e.clientY - rect.top;
-
-        // Account for tracker offset
         const trackerWidth = typeof TRACKER_WIDTH !== 'undefined' ? TRACKER_WIDTH : 400;
-        const viewX = clickX - trackerWidth;
-        const viewY = clickY;
+        if (clickX < trackerWidth) return;
 
-        // If clicked in tracker area, ignore
-        if (viewX < 0) return;
-
-        const tileSize = (typeof TILE_SIZE !== 'undefined' ? TILE_SIZE : 32) * 
-                         (typeof ZOOM_LEVEL !== 'undefined' ? ZOOM_LEVEL : 2);
-        const camX = game.camera ? game.camera.x : 0;
-        const camY = game.camera ? game.camera.y : 0;
-
-        const gridX = Math.floor(viewX / tileSize + camX);
-        const gridY = Math.floor(viewY / tileSize + camY);
-
-        // Check if clicked on an enemy
-        const clickedEnemy = game.enemies.find(enemy =>
-            Math.floor(enemy.gridX) === gridX && Math.floor(enemy.gridY) === gridY
-        );
-
-        if (clickedEnemy) {
-            // ACTIVE COMBAT: Left-click targets enemy (doesn't auto-attack)
-            const oldTarget = game.player.combat?.currentTarget;
-            if (oldTarget && oldTarget !== clickedEnemy && oldTarget.combat) {
-                disengageCombat(oldTarget);
-            }
-            disengageCombat(game.player);
-            engageCombat(game.player, clickedEnemy);
-            return;
-        }
-
-        // ACTIVE COMBAT: No enemy clicked - do nothing (no auto-walk)
-        // Player must use WASD to move
-        return;
-
-        // (Old auto-walk code disabled for active combat)
-        if (game.player.combat.isInCombat && game.player.combat.currentTarget) {
-            const targetDist = Math.max(
-                Math.abs(gridX - Math.floor(game.player.combat.currentTarget.gridX)),
-                Math.abs(gridY - Math.floor(game.player.combat.currentTarget.gridY))
-            );
-
-            if (targetDist > 3) {
-                const enemy = game.player.combat.currentTarget;
-                disengageCombat(game.player);
-                if (enemy && enemy.combat) {
-                    disengageCombat(enemy);
-                }
-                addMessage("Escaped from combat!");
-            }
-        }
-
-        // Set movement target
-        game.player.manualMoveTarget = { x: gridX, y: gridY };
-
-        const dx = gridX - game.player.gridX;
-        const dy = gridY - game.player.gridY;
-
-        // Calculate 8-directional movement from click position
-        const dir = getDirectionFromDelta(dx, dy);
-
-        if (dir && typeof startPlayerMove === 'function') {
-            startPlayerMove(dir);
+        // Perform mouse attack toward cursor direction
+        // Uses combo system: Attack 1 (left), Attack 2 (right), Attack 3 (special)
+        if (typeof performMouseAttack === 'function') {
+            performMouseAttack(game.player);
         }
     });
 

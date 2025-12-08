@@ -740,8 +740,10 @@ game.camera.targetY = targetCamY;
 game.camera.x += (game.camera.targetX - game.camera.x) * CAMERA_SMOOTHING;
 game.camera.y += (game.camera.targetY - game.camera.y) * CAMERA_SMOOTHING;
 
-const camX = game.camera.x;
-const camY = game.camera.y;
+// Apply screen shake offset
+const shakeOffset = typeof getScreenShakeOffset === 'function' ? getScreenShakeOffset() : { x: 0, y: 0 };
+const camX = game.camera.x + (shakeOffset.x / (TILE_SIZE * ZOOM_LEVEL));
+const camY = game.camera.y + (shakeOffset.y / (TILE_SIZE * ZOOM_LEVEL));
 
         ctx.save(); ctx.beginPath(); ctx.rect(TRACKER_WIDTH, 0, viewW, canvas.height); ctx.clip();
         
@@ -871,7 +873,10 @@ const camY = game.camera.y;
             renderAllEnemies(ctx, camX, camY, effectiveTileSize, TRACKER_WIDTH);
         }
         // Projectiles (arrows, bolts, magic)
-        if (typeof renderProjectiles === 'function') { renderProjectiles(ctx, camX, camY, effectiveTileSize); }
+        if (typeof renderProjectiles === 'function') { renderProjectiles(ctx, camX, camY, effectiveTileSize, TRACKER_WIDTH); }
+
+        // Melee slash effects (mouse-driven combat)
+        if (typeof drawSlashEffects === 'function') { drawSlashEffects(ctx, camX, camY, effectiveTileSize, TRACKER_WIDTH); }
 
         if (typeof renderDamageNumbers === 'function') { renderDamageNumbers(camX, camY, effectiveTileSize, TRACKER_WIDTH); }
         ctx.restore();

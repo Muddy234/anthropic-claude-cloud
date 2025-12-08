@@ -16,26 +16,46 @@ const projectiles = [];
  * @param {Object} config - Projectile configuration
  * @param {number} config.x - Starting X position (grid)
  * @param {number} config.y - Starting Y position (grid)
- * @param {number} config.targetX - Target X position (grid)
- * @param {number} config.targetY - Target Y position (grid)
+ * @param {number} config.targetX - Target X position (grid) - optional if using dirX/dirY
+ * @param {number} config.targetY - Target Y position (grid) - optional if using dirX/dirY
+ * @param {number} config.dirX - Direction X (normalized) - for mouse-aimed projectiles
+ * @param {number} config.dirY - Direction Y (normalized) - for mouse-aimed projectiles
+ * @param {number} config.maxDistance - Maximum travel distance (for direction-based)
+ * @param {number} config.fadeAfter - Start fading after this distance
  * @param {number} config.speed - Speed in tiles per second
  * @param {number} config.damage - Pre-calculated damage
  * @param {string} config.element - Visual element type
  * @param {Object} config.attacker - Attacking entity
- * @param {Object} config.target - Target entity
+ * @param {Object} config.owner - Owner entity (alias for attacker)
+ * @param {Object} config.target - Target entity (optional for direction-based)
  * @param {boolean} config.isMagic - Is this a magic projectile?
  * @param {boolean} config.isSkill - Is this a skill attack?
+ * @param {boolean} config.isSpecial - Is this a special attack?
  * @param {Object} config.elementConfig - Magic element configuration
  */
 function createProjectile(config) {
-    const dx = config.targetX - config.x;
-    const dy = config.targetY - config.y;
-    const distance = Math.sqrt(dx * dx + dy * dy);
+    let dx, dy, distance;
 
-    if (distance === 0) {
-        // Already at target, apply damage immediately
-        applyProjectileDamage(config);
-        return null;
+    // Support direction-based projectiles (for mouse-aimed attacks)
+    if (config.dirX !== undefined && config.dirY !== undefined) {
+        dx = config.dirX;
+        dy = config.dirY;
+        distance = config.maxDistance || 10;
+    } else {
+        // Traditional target-based
+        dx = config.targetX - config.x;
+        dy = config.targetY - config.y;
+        distance = Math.sqrt(dx * dx + dy * dy);
+
+        if (distance === 0) {
+            // Already at target, apply damage immediately
+            applyProjectileDamage(config);
+            return null;
+        }
+
+        // Normalize
+        dx = dx / distance;
+        dy = dy / distance;
     }
 
     const projectile = {
@@ -45,25 +65,37 @@ function createProjectile(config) {
         displayX: config.x,
         displayY: config.y,
 
-        // Target
+        // Target (optional)
         targetX: config.targetX,
         targetY: config.targetY,
         target: config.target,
 
+        // Direction (normalized)
+        dirX: dx,
+        dirY: dy,
+
         // Movement
-        velocityX: (dx / distance) * config.speed,
-        velocityY: (dy / distance) * config.speed,
+        velocityX: dx * config.speed,
+        velocityY: dy * config.speed,
         speed: config.speed,
-        distanceToTravel: distance,
+        distanceToTravel: config.maxDistance || distance,
         distanceTraveled: 0,
+
+        // Fade effect
+        fadeStart: config.fadeAfter || config.maxDistance || distance,
+        alpha: 1.0,
 
         // Combat
         damage: config.damage,
         element: config.element || 'physical',
-        attacker: config.attacker,
+        attacker: config.attacker || config.owner,
         isMagic: config.isMagic || false,
         isSkill: config.isSkill || false,
+        isSpecial: config.isSpecial || false,
         elementConfig: config.elementConfig || null,
+
+        // Hit detection mode
+        isDirectionBased: config.dirX !== undefined,
 
         // State
         active: true,
@@ -98,18 +130,54 @@ function updateProjectiles(deltaTime) {
         proj.displayY += proj.velocityY * dt;
         proj.distanceTraveled += proj.speed * dt;
 
+        // Update fade alpha for direction-based projectiles
+        if (proj.isDirectionBased && proj.distanceTraveled > proj.fadeStart) {
+            const fadeProgress = (proj.distanceTraveled - proj.fadeStart) / (proj.distanceToTravel - proj.fadeStart);
+            proj.alpha = Math.max(0, 1 - fadeProgress);
+        }
+
+        // For direction-based projectiles, check enemy collision
+        if (proj.isDirectionBased && !proj.hasHit) {
+            const hitEnemy = checkProjectileEnemyCollision(proj);
+            if (hitEnemy) {
+                // Hit an enemy
+                applyProjectileDamage({
+                    damage: proj.damage,
+                    element: proj.element,
+                    attacker: proj.attacker,
+                    target: hitEnemy,
+                    isMagic: proj.isMagic,
+                    isSkill: proj.isSkill,
+                    isSpecial: proj.isSpecial,
+                    elementConfig: proj.elementConfig
+                });
+
+                // Combat enhancements hook
+                if (typeof onCombatHit === 'function') {
+                    onCombatHit(proj.attacker, hitEnemy, { finalDamage: proj.damage, isCrit: false });
+                }
+
+                proj.hasHit = true;
+                proj.active = false;
+                projectiles.splice(i, 1);
+                continue;
+            }
+        }
+
         // Check if reached target or max distance
         if (proj.distanceTraveled >= proj.distanceToTravel) {
-            // Hit target
-            applyProjectileDamage({
-                damage: proj.damage,
-                element: proj.element,
-                attacker: proj.attacker,
-                target: proj.target,
-                isMagic: proj.isMagic,
-                isSkill: proj.isSkill,
-                elementConfig: proj.elementConfig
-            });
+            // For target-based projectiles, apply damage to target
+            if (!proj.isDirectionBased && proj.target) {
+                applyProjectileDamage({
+                    damage: proj.damage,
+                    element: proj.element,
+                    attacker: proj.attacker,
+                    target: proj.target,
+                    isMagic: proj.isMagic,
+                    isSkill: proj.isSkill,
+                    elementConfig: proj.elementConfig
+                });
+            }
 
             proj.active = false;
             projectiles.splice(i, 1);
@@ -120,16 +188,45 @@ function updateProjectiles(deltaTime) {
         const gridX = Math.floor(proj.displayX);
         const gridY = Math.floor(proj.displayY);
 
-        if (checkProjectileCollision(gridX, gridY)) {
+        if (checkProjectileWallCollision(gridX, gridY)) {
             // Hit wall
-            if (typeof addMessage === 'function') {
-                addMessage('Shot blocked by obstacle!');
-            }
             proj.active = false;
             projectiles.splice(i, 1);
             continue;
         }
     }
+}
+
+/**
+ * Check if projectile hits any enemy
+ * @param {Object} proj - The projectile
+ * @returns {Object|null} Hit enemy or null
+ */
+function checkProjectileEnemyCollision(proj) {
+    if (!game.enemies) return null;
+
+    const hitRadius = 0.4; // Collision radius
+
+    for (const enemy of game.enemies) {
+        if (enemy.hp <= 0) continue;
+
+        const dx = proj.displayX - enemy.gridX;
+        const dy = proj.displayY - enemy.gridY;
+        const distance = Math.sqrt(dx * dx + dy * dy);
+
+        if (distance < hitRadius) {
+            return enemy;
+        }
+    }
+
+    return null;
+}
+
+/**
+ * Check if projectile hits a wall or obstacle (renamed for clarity)
+ */
+function checkProjectileWallCollision(x, y) {
+    return checkProjectileCollision(x, y);
 }
 
 // ============================================================================
@@ -143,27 +240,32 @@ function updateProjectiles(deltaTime) {
  * @returns {boolean} True if collision detected
  */
 function checkProjectileCollision(x, y) {
-    // Check bounds
-    if (!game.map || !game.currentRoom) return true;
+    // Check bounds - use global grid dimensions
+    const gridWidth = typeof GRID_WIDTH !== 'undefined' ? GRID_WIDTH : 100;
+    const gridHeight = typeof GRID_HEIGHT !== 'undefined' ? GRID_HEIGHT : 100;
 
-    const room = game.currentRoom;
-    const localX = x - room.x;
-    const localY = y - room.y;
-
-    // Out of bounds
-    if (localX < 0 || localY < 0 || localX >= room.width || localY >= room.height) {
+    if (x < 0 || x >= gridWidth || y < 0 || y >= gridHeight) {
         return true;
     }
 
-    // Check tile type
-    const tile = room.tiles[localY]?.[localX];
+    // Check tile directly from game.map (same as movement system)
+    if (!game.map) return true;
+
+    const tile = game.map[Math.floor(y)]?.[Math.floor(x)];
     if (!tile) return true;
 
-    // Walls block projectiles
-    if (tile.type === 'wall') return true;
+    // Walls and void block projectiles
+    if (tile.type === 'wall' || tile.type === 'void' || tile.type === 'interior_wall') {
+        return true;
+    }
 
     // Pillars block projectiles
     if (tile.decoration?.name === 'pillar') return true;
+
+    // Check decoration entity layer (same as movement)
+    if (typeof hasBlockingDecorationAt === 'function' && hasBlockingDecorationAt(Math.floor(x), Math.floor(y))) {
+        return true;
+    }
 
     // Closed doors block projectiles
     if (tile.type === 'door' && !tile.open) return true;
@@ -326,33 +428,115 @@ function checkLineOfSight(x1, y1, x2, y2) {
  * @param {number} camX - Camera X
  * @param {number} camY - Camera Y
  * @param {number} tileSize - Tile size in pixels
+ * @param {number} offsetX - Tracker width offset
  */
-function renderProjectiles(ctx, camX, camY, tileSize) {
+function renderProjectiles(ctx, camX, camY, tileSize, offsetX) {
+    const trackerWidth = offsetX || 0;
+
     for (const proj of projectiles) {
         if (!proj.active) continue;
 
-        const screenX = (proj.displayX - camX) * tileSize + tileSize / 2;
+        const screenX = (proj.displayX - camX) * tileSize + trackerWidth + tileSize / 2;
         const screenY = (proj.displayY - camY) * tileSize + tileSize / 2;
+        const angle = Math.atan2(proj.dirY || 0, proj.dirX || 1);
+
+        ctx.save();
+
+        // Apply fade alpha
+        const alpha = proj.alpha !== undefined ? proj.alpha : 1.0;
+        ctx.globalAlpha = alpha;
 
         // Draw projectile based on type
         if (proj.isMagic) {
-            // Magic projectile (colored orb)
+            // Magic projectile - glowing bolt with trail
             const color = getElementColor(proj.element);
-            ctx.fillStyle = color;
+
+            ctx.translate(screenX, screenY);
+            ctx.rotate(angle);
+
+            // Trail effect (elongated glow behind)
+            const gradient = ctx.createLinearGradient(-20, 0, 6, 0);
+            gradient.addColorStop(0, 'transparent');
+            gradient.addColorStop(0.5, color + '44');
+            gradient.addColorStop(1, color);
+
+            ctx.fillStyle = gradient;
             ctx.beginPath();
-            ctx.arc(screenX, screenY, 4, 0, Math.PI * 2);
+            ctx.moveTo(-20, 0);
+            ctx.lineTo(6, -4);
+            ctx.lineTo(6, 4);
+            ctx.closePath();
             ctx.fill();
 
-            // Glow effect
-            ctx.fillStyle = color + '44';
+            // Core bolt (bright white center)
+            ctx.fillStyle = '#ffffff';
             ctx.beginPath();
-            ctx.arc(screenX, screenY, 8, 0, Math.PI * 2);
+            ctx.ellipse(0, 0, 6, 3, 0, 0, Math.PI * 2);
+            ctx.fill();
+
+            // Outer glow
+            ctx.fillStyle = color;
+            ctx.globalAlpha = alpha * 0.7;
+            ctx.beginPath();
+            ctx.ellipse(0, 0, 10, 5, 0, 0, Math.PI * 2);
+            ctx.fill();
+
+            // Bright tip
+            ctx.globalAlpha = alpha;
+            ctx.fillStyle = '#ffffff';
+            ctx.beginPath();
+            ctx.arc(4, 0, 2, 0, Math.PI * 2);
             ctx.fill();
         } else {
-            // Physical projectile (arrow/bolt)
-            ctx.fillStyle = '#888888';
-            ctx.fillRect(screenX - 2, screenY - 2, 4, 4);
+            // Physical projectile (arrow/bolt) - white bolt with trail
+            ctx.translate(screenX, screenY);
+            ctx.rotate(angle);
+
+            // Trail effect
+            const trailGradient = ctx.createLinearGradient(-16, 0, 0, 0);
+            trailGradient.addColorStop(0, 'transparent');
+            trailGradient.addColorStop(1, 'rgba(255, 255, 255, 0.5)');
+
+            ctx.fillStyle = trailGradient;
+            ctx.beginPath();
+            ctx.moveTo(-16, 0);
+            ctx.lineTo(0, -2);
+            ctx.lineTo(0, 2);
+            ctx.closePath();
+            ctx.fill();
+
+            // Arrow body (white/silver)
+            ctx.fillStyle = '#dddddd';
+            ctx.fillRect(-6, -1, 14, 2);
+
+            // Arrow head (bright white)
+            ctx.fillStyle = '#ffffff';
+            ctx.beginPath();
+            ctx.moveTo(10, 0);
+            ctx.lineTo(6, -3);
+            ctx.lineTo(6, 3);
+            ctx.closePath();
+            ctx.fill();
+
+            // Fletching
+            ctx.fillStyle = '#aaaaaa';
+            ctx.beginPath();
+            ctx.moveTo(-6, 0);
+            ctx.lineTo(-4, -3);
+            ctx.lineTo(-4, 3);
+            ctx.closePath();
+            ctx.fill();
+
+            // Bright glow around arrow
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.4)';
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.moveTo(-6, 0);
+            ctx.lineTo(10, 0);
+            ctx.stroke();
         }
+
+        ctx.restore();
     }
 }
 

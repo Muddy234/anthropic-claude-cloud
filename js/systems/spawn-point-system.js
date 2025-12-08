@@ -11,7 +11,7 @@ const SpawnPointSystem = {
     // ========================================================================
     config: {
         debugLogging: false,
-        globalSpawnCap: 30,        // Max enemies from all spawn points
+        globalSpawnCap: 12,        // Reduced from 30 - fewer but more meaningful encounters
         minSpawnDistance: 3        // Minimum tiles from player to spawn
     },
 
@@ -38,9 +38,9 @@ const SpawnPointSystem = {
     SPAWN_CONFIGS: {
         'rift': {
             size: { width: 2, height: 2 },
-            spawnRate: 8000,         // ms between spawns
-            minSpawnRate: 2000,      // Fastest rate after scaling
-            spawnCap: 15,            // Max active from this point
+            spawnRate: 10000,        // Slower spawn rate (was 8000)
+            minSpawnRate: 4000,      // Slower min rate (was 2000)
+            spawnCap: 5,             // Reduced from 15
             maxTotalSpawns: null,    // null = infinite
             rateScale: 0.95,         // Rate multiplier per spawn
             health: null,            // null = indestructible
@@ -49,10 +49,10 @@ const SpawnPointSystem = {
         },
         'nest': {
             size: { width: 1, height: 1 },
-            spawnRate: 10000,
-            minSpawnRate: 4000,
-            spawnCap: 8,
-            maxTotalSpawns: 20,
+            spawnRate: 12000,        // Slower (was 10000)
+            minSpawnRate: 6000,      // Slower (was 4000)
+            spawnCap: 3,             // Reduced from 8
+            maxTotalSpawns: 8,       // Reduced from 20
             rateScale: 1.0,
             health: 100,
             enemyPool: ['spider'],
@@ -60,9 +60,9 @@ const SpawnPointSystem = {
         },
         'portal': {
             size: { width: 2, height: 2 },
-            spawnRate: 12000,
-            minSpawnRate: 5000,
-            spawnCap: 10,
+            spawnRate: 15000,        // Slower (was 12000)
+            minSpawnRate: 8000,      // Slower (was 5000)
+            spawnCap: 4,             // Reduced from 10
             maxTotalSpawns: null,
             rateScale: 0.9,
             health: 200,
@@ -71,10 +71,10 @@ const SpawnPointSystem = {
         },
         'grave': {
             size: { width: 1, height: 1 },
-            spawnRate: 15000,
-            minSpawnRate: 8000,
-            spawnCap: 4,
-            maxTotalSpawns: 8,
+            spawnRate: 18000,        // Slower (was 15000)
+            minSpawnRate: 10000,     // Slower (was 8000)
+            spawnCap: 2,             // Reduced from 4
+            maxTotalSpawns: 4,       // Reduced from 8
             rateScale: 1.0,
             health: 50,
             enemyPool: ['skeleton', 'zombie'],
@@ -82,9 +82,9 @@ const SpawnPointSystem = {
         },
         'hive': {
             size: { width: 3, height: 3 },
-            spawnRate: 5000,
-            minSpawnRate: 1500,
-            spawnCap: 20,
+            spawnRate: 8000,         // Slower (was 5000)
+            minSpawnRate: 3000,      // Slower (was 1500)
+            spawnCap: 6,             // Reduced from 20
             maxTotalSpawns: null,
             rateScale: 0.98,
             health: 300,
@@ -93,10 +93,10 @@ const SpawnPointSystem = {
         },
         'summoning_circle': {
             size: { width: 2, height: 2 },
-            spawnRate: 20000,
-            minSpawnRate: 15000,
-            spawnCap: 3,
-            maxTotalSpawns: 5,
+            spawnRate: 25000,        // Slower (was 20000)
+            minSpawnRate: 18000,     // Slower (was 15000)
+            spawnCap: 2,             // Reduced from 3
+            maxTotalSpawns: 3,       // Reduced from 5
             rateScale: 1.0,
             health: 150,
             enemyPool: ['elite'],
@@ -462,7 +462,8 @@ const SpawnPointSystem = {
                 attackCooldown: 0,
                 attackSpeed: template?.combat?.attackSpeed || 2.0,
                 autoRetaliate: true,
-                attackRange: template?.combat?.range || 1
+                attackRange: template?.combat?.range || 1,
+                comboCount: 1  // Enemy combo system: 1 -> 2 -> 3 (special) -> 1
             }
         };
 
@@ -472,6 +473,11 @@ const SpawnPointSystem = {
         // Register with AI system
         if (typeof AIManager !== 'undefined') {
             AIManager.registerEnemy(enemy);
+        }
+
+        // Initialize abilities from repository
+        if (typeof EnemyAbilitySystem !== 'undefined') {
+            EnemyAbilitySystem.initializeEnemy(enemy);
         }
 
         return enemy;
