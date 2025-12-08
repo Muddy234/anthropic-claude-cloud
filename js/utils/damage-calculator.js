@@ -135,17 +135,43 @@ const DamageCalculator = {
     getBaseDamage(attacker) {
         // Check for weapon
         const weapon = attacker.equipped?.MAIN;
-        
+
         if (weapon && weapon.stats?.damage) {
             // Weapon damage + stat scaling
             const baseDmg = weapon.stats.damage;
             const statBonus = this.getStatBonus(attacker, weapon);
             return baseDmg + statBonus;
         }
-        
-        // Unarmed damage
-        const str = attacker.stats?.STR || attacker.stats?.str || 10;
-        return 5 + Math.floor(str * 0.3);
+
+        // Monster/unarmed damage - scale based on attackType and appropriate stat
+        // Uses same scaling ratios as player weapons:
+        // - Physical melee: STR / 5
+        // - Physical ranged: AGI / 5
+        // - Magic: INT / 3
+        const attackType = attacker.attackType || 'physical';
+        const attackRange = attacker.attackRange || 1;
+
+        let stat, scalingDivisor;
+
+        if (attackType === 'magic') {
+            // Magic attacks: INT scaling (same as player staff/wand/tome)
+            stat = attacker.int || attacker.stats?.INT || attacker.stats?.int || 10;
+            scalingDivisor = 3;  // INT / 3 (higher scaling for magic)
+        } else if (attackRange > 1) {
+            // Physical ranged: AGI scaling (same as player bow/crossbow)
+            stat = attacker.agi || attacker.stats?.AGI || attacker.stats?.agi || 10;
+            scalingDivisor = 5;  // AGI / 5
+        } else {
+            // Physical melee: STR scaling (same as player melee weapons)
+            stat = attacker.str || attacker.stats?.STR || attacker.stats?.str || 10;
+            scalingDivisor = 5;  // STR / 5
+        }
+
+        // Base damage from stat (50% of stat) + scaling bonus (matches player formula)
+        const baseDamage = Math.floor(stat * 0.5);
+        const scalingBonus = Math.floor(stat / scalingDivisor);
+
+        return baseDamage + scalingBonus;
     },
 
     getStatBonus(attacker, weapon) {
