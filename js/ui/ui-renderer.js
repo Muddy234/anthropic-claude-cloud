@@ -154,13 +154,13 @@ function renderInspectPopup(ctx) {
         ctx.fillText(title, popupX + 10, headerY);
     }
 
-    // === TABS ===
-    const tabs = ['STATS', 'COMBAT', 'BEHAVIOR', 'LORE'];
+    // === TABS (3 tabs: General, Combat, Behavior) ===
+    const tabs = ['General', 'Combat', 'Behavior'];
     const tabY = popupY + 40;
     const tabHeight = 22;
     const tabWidth = popupWidth / tabs.length;
 
-    ctx.font = '11px monospace';
+    ctx.font = '12px monospace';
     for (let i = 0; i < tabs.length; i++) {
         const tabX = popupX + i * tabWidth;
 
@@ -198,17 +198,14 @@ function renderInspectPopup(ctx) {
         const enemy = inspectPopup.target;
 
         switch (inspectPopup.tab) {
-            case 0: // STATS
-                renderInspectStatsTab(ctx, enemy, contentX, contentY, contentWidth, lineHeight);
+            case 0: // General
+                renderInspectGeneralTab(ctx, enemy, contentX, contentY, contentWidth, lineHeight);
                 break;
-            case 1: // COMBAT
+            case 1: // Combat
                 renderInspectCombatTab(ctx, enemy, contentX, contentY, contentWidth, lineHeight);
                 break;
-            case 2: // BEHAVIOR
+            case 2: // Behavior
                 renderInspectBehaviorTab(ctx, enemy, contentX, contentY, contentWidth, lineHeight);
-                break;
-            case 3: // LORE
-                renderInspectLoreTab(ctx, enemy, contentX, contentY, contentWidth, lineHeight);
                 break;
         }
     } else if (inspectPopup.targetType === 'npc') {
@@ -226,11 +223,13 @@ function renderInspectPopup(ctx) {
 }
 
 /**
- * STATS tab content
+ * GENERAL tab content - Sprite, HP, Mana, Stats, Lore
  */
-function renderInspectStatsTab(ctx, enemy, x, y, width, lh) {
+function renderInspectGeneralTab(ctx, enemy, x, y, width, lh) {
+    const monsterData = typeof MONSTER_DATA !== 'undefined' ? MONSTER_DATA[enemy.name] : null;
+
     // Image area
-    const imgSize = 80;
+    const imgSize = 70;
     const imgX = x + (width - imgSize) / 2;
 
     // Try to draw animated sprite
@@ -285,13 +284,13 @@ function renderInspectStatsTab(ctx, enemy, x, y, width, lh) {
         ctx.fillText('[Portrait]', imgX + imgSize / 2, y + imgSize / 2 + 4);
     }
 
-    let lineY = y + imgSize + 20;
+    let lineY = y + imgSize + 15;
     ctx.textAlign = 'left';
     ctx.font = '13px monospace';
 
     // HP Bar
+    const barWidth = width - 40;
     const hpPct = Math.max(0, enemy.hp / enemy.maxHp);
-    const barWidth = width - 50;
     ctx.fillStyle = '#333';
     ctx.fillRect(x + 30, lineY - 10, barWidth, 12);
     ctx.fillStyle = hpPct > 0.5 ? '#27ae60' : hpPct > 0.25 ? '#f39c12' : '#e74c3c';
@@ -303,6 +302,23 @@ function renderInspectStatsTab(ctx, enemy, x, y, width, lh) {
     ctx.textAlign = 'center';
     ctx.font = '10px monospace';
     ctx.fillText(`${Math.ceil(enemy.hp)}/${enemy.maxHp}`, x + 30 + barWidth / 2, lineY - 1);
+    lineY += lh;
+
+    // Mana Bar
+    ctx.textAlign = 'left';
+    ctx.font = '13px monospace';
+    const mpPct = Math.max(0, (enemy.mp || 0) / (enemy.maxMp || 100));
+    ctx.fillStyle = '#333';
+    ctx.fillRect(x + 30, lineY - 10, barWidth, 12);
+    ctx.fillStyle = '#3498db';
+    ctx.fillRect(x + 30, lineY - 10, barWidth * mpPct, 12);
+    ctx.strokeStyle = '#555';
+    ctx.strokeRect(x + 30, lineY - 10, barWidth, 12);
+    ctx.fillStyle = '#fff';
+    ctx.fillText('MP', x, lineY);
+    ctx.textAlign = 'center';
+    ctx.font = '10px monospace';
+    ctx.fillText(`${Math.ceil(enemy.mp || 0)}/${enemy.maxMp || 100}`, x + 30 + barWidth / 2, lineY - 1);
     lineY += lh + 8;
 
     ctx.textAlign = 'left';
@@ -312,12 +328,9 @@ function renderInspectStatsTab(ctx, enemy, x, y, width, lh) {
     const col1X = x;
     const col2X = x + width / 2;
 
-    // Get stats from monster data or enemy object
-    const monsterData = typeof MONSTER_DATA !== 'undefined' ? MONSTER_DATA[enemy.name] : null;
-
     ctx.fillStyle = '#aaa';
-    ctx.fillText(`STR: ${monsterData?.str || enemy.damage || 10}`, col1X, lineY);
-    ctx.fillText(`pDEF: ${enemy.pDef || monsterData?.pDef || 0}`, col2X, lineY);
+    ctx.fillText(`STR: ${monsterData?.str || 10}`, col1X, lineY);
+    ctx.fillText(`pDEF: ${monsterData?.pDef || 0}`, col2X, lineY);
     lineY += lh;
 
     ctx.fillText(`AGI: ${monsterData?.agi || 10}`, col1X, lineY);
@@ -325,222 +338,257 @@ function renderInspectStatsTab(ctx, enemy, x, y, width, lh) {
     lineY += lh;
 
     ctx.fillText(`INT: ${monsterData?.int || 10}`, col1X, lineY);
-    lineY += lh + 5;
+    ctx.fillText(`Move: ${enemy.moveSpeed || 3}`, col2X, lineY);
+    lineY += lh + 8;
 
-    // Element with color
-    const element = enemy.element || 'physical';
-    const elemColor = ELEMENT_COLORS[element] || '#ccc';
-    ctx.fillStyle = '#888';
-    ctx.fillText('Element:', col1X, lineY);
-    ctx.fillStyle = elemColor;
-    ctx.fillText(element.charAt(0).toUpperCase() + element.slice(1), col1X + 70, lineY);
-    lineY += lh;
-
-    // XP/Gold
-    ctx.fillStyle = '#888';
-    ctx.fillText(`XP: ${enemy.xp || 10}`, col1X, lineY);
-    ctx.fillStyle = '#f1c40f';
-    ctx.fillText(`Gold: ${enemy.goldMin || 5}-${enemy.goldMax || 15}`, col2X, lineY);
-}
-
-/**
- * COMBAT tab content
- */
-function renderInspectCombatTab(ctx, enemy, x, y, width, lh) {
-    const monsterData = typeof MONSTER_DATA !== 'undefined' ? MONSTER_DATA[enemy.name] : null;
-    let lineY = y;
-
-    ctx.fillStyle = '#0f0';
-    ctx.fillText('Attack', x, lineY);
-    lineY += lh;
-
-    ctx.fillStyle = '#ddd';
-    const attackName = monsterData?.attack || 'Basic Attack';
-    ctx.fillText(`  ${attackName}`, x, lineY);
-    lineY += lh;
-
-    const attackType = monsterData?.attackType || enemy.damageType || 'physical';
-    ctx.fillStyle = '#888';
-    ctx.fillText(`  Type: ${attackType}`, x, lineY);
-    lineY += lh + 10;
-
-    ctx.fillStyle = '#0f0';
-    ctx.fillText('Combat Stats', x, lineY);
-    lineY += lh;
-
-    ctx.fillStyle = '#aaa';
-    const damage = enemy.damage || monsterData?.str || 10;
-    ctx.fillText(`  Damage: ${damage}`, x, lineY);
-    lineY += lh;
-
-    const range = enemy.combat?.attackRange || 1;
-    ctx.fillText(`  Range: ${range} tile${range > 1 ? 's' : ''}`, x, lineY);
-    lineY += lh;
-
-    const speed = enemy.combat?.attackSpeed || 1.0;
-    ctx.fillText(`  Attack Speed: ${speed.toFixed(1)}x`, x, lineY);
-    lineY += lh;
-
-    const moveSpeed = enemy.moveSpeed || 3;
-    ctx.fillText(`  Move Speed: ${moveSpeed}`, x, lineY);
-    lineY += lh + 10;
-
-    // Status effects
-    ctx.fillStyle = '#0f0';
-    ctx.fillText('Status Effects', x, lineY);
-    lineY += lh;
-
-    if (enemy.statusEffects && enemy.statusEffects.length > 0) {
-        ctx.fillStyle = '#f39c12';
-        for (const effect of enemy.statusEffects) {
-            ctx.fillText(`  ${effect.name || effect}`, x, lineY);
-            lineY += lh;
-        }
-    } else {
-        ctx.fillStyle = '#666';
-        ctx.fillText('  None', x, lineY);
-    }
-}
-
-/**
- * BEHAVIOR tab content
- */
-function renderInspectBehaviorTab(ctx, enemy, x, y, width, lh) {
-    let lineY = y;
-
-    ctx.fillStyle = '#0f0';
-    ctx.fillText('AI Behavior', x, lineY);
-    lineY += lh;
-
-    ctx.fillStyle = '#ddd';
-    const behaviorType = enemy.behaviorType || enemy.behavior?.type || 'territorial';
-    ctx.fillText(`  Type: ${behaviorType}`, x, lineY);
-    lineY += lh;
-
-    // Behavior description
-    const behaviorDescs = {
-        'aggressive': 'Will chase relentlessly',
-        'territorial': 'Guards its area',
-        'passive': 'Non-hostile unless attacked',
-        'defensive': 'Protects nearby allies',
-        'patrol': 'Wanders and investigates',
-        'swarm': 'Attacks in groups',
-        'pack': 'Follows pack leader',
-        'pack_leader': 'Commands nearby allies',
-        'solitary': 'Avoids other creatures'
-    };
+    // Lore section
     ctx.fillStyle = '#888';
     ctx.font = '11px monospace';
-    ctx.fillText(`  ${behaviorDescs[behaviorType] || 'Unknown behavior'}`, x, lineY);
-    lineY += lh + 10;
+    ctx.fillText('Lore:', x, lineY);
+    lineY += lh - 4;
 
-    ctx.font = '13px monospace';
-    ctx.fillStyle = '#0f0';
-    ctx.fillText('Perception', x, lineY);
-    lineY += lh;
-
+    const description = monsterData?.description || getEnemyDescription(enemy);
     ctx.fillStyle = '#aaa';
-    const sightRange = enemy.perception?.sightRange || enemy.aggression || 6;
-    ctx.fillText(`  Sight Range: ${sightRange} tiles`, x, lineY);
-    lineY += lh;
+    ctx.font = '10px monospace';
 
-    const hearingRange = enemy.perception?.hearingRange || 4;
-    ctx.fillText(`  Hearing Range: ${hearingRange} tiles`, x, lineY);
-    lineY += lh + 10;
-
-    ctx.fillStyle = '#0f0';
-    ctx.fillText('Current State', x, lineY);
-    lineY += lh;
-
-    // Real-time AI state
-    const aiState = enemy.ai?.currentState || enemy.state || 'idle';
-    const stateColors = {
-        'idle': '#888',
-        'wandering': '#888',
-        'alert': '#f39c12',
-        'chasing': '#e74c3c',
-        'combat': '#e74c3c',
-        'fleeing': '#9b59b6',
-        'searching': '#f39c12',
-        'returning': '#3498db'
-    };
-    ctx.fillStyle = stateColors[aiState] || '#888';
-    ctx.fillText(`  ${aiState.toUpperCase()}`, x, lineY);
-    lineY += lh;
-
-    // Combat status
-    if (enemy.combat?.isInCombat) {
-        ctx.fillStyle = '#e74c3c';
-        ctx.fillText('  IN COMBAT', x, lineY);
-    }
-}
-
-/**
- * LORE tab content
- */
-function renderInspectLoreTab(ctx, enemy, x, y, width, lh) {
-    let lineY = y;
-
-    ctx.fillStyle = '#0f0';
-    ctx.fillText('Description', x, lineY);
-    lineY += lh + 5;
-
-    // Get description from monster data
-    const monsterData = typeof MONSTER_DATA !== 'undefined' ? MONSTER_DATA[enemy.name] : null;
-    const description = monsterData?.description || enemy.description || getEnemyDescription(enemy);
-
-    // Word wrap
-    ctx.fillStyle = '#ccc';
-    ctx.font = '12px monospace';
+    // Word wrap lore text
     const words = description.split(' ');
     let line = '';
-    const maxWidth = width - 10;
+    const maxWidth = width - 5;
 
     for (const word of words) {
         const testLine = line + word + ' ';
-        const metrics = ctx.measureText(testLine);
-        if (metrics.width > maxWidth) {
+        if (ctx.measureText(testLine).width > maxWidth) {
             ctx.fillText(line.trim(), x, lineY);
             line = word + ' ';
-            lineY += lh;
+            lineY += lh - 4;
         } else {
             line = testLine;
         }
     }
     if (line.trim()) {
         ctx.fillText(line.trim(), x, lineY);
-        lineY += lh;
     }
+}
 
-    lineY += 15;
+/**
+ * COMBAT tab content - Element, Base Attack, Crit/Dodge, Armor, Abilities
+ */
+function renderInspectCombatTab(ctx, enemy, x, y, width, lh) {
+    const monsterData = typeof MONSTER_DATA !== 'undefined' ? MONSTER_DATA[enemy.name] : null;
+    let lineY = y;
 
-    // Additional lore info
-    ctx.font = '13px monospace';
+    // Element with color
+    const element = enemy.element || 'physical';
+    const elemColor = ELEMENT_COLORS[element] || '#ccc';
+    ctx.fillStyle = '#888';
+    ctx.fillText('Element:', x, lineY);
+    ctx.fillStyle = elemColor;
+    ctx.fillText(element.charAt(0).toUpperCase() + element.slice(1), x + 70, lineY);
+    lineY += lh + 5;
+
+    // Base Attack section
     ctx.fillStyle = '#0f0';
-    ctx.fillText('Classification', x, lineY);
+    ctx.fillText('Base Attack', x, lineY);
     lineY += lh;
+
+    // Determine attack type label based on monster's attack type
+    const attackType = monsterData?.attackType || 'physical';
+    const attackRange = monsterData?.attackRange || enemy.combat?.attackRange || 1;
+    let attackLabel = 'Melee';
+    if (attackType === 'magic') {
+        attackLabel = 'Magic';
+    } else if (attackRange > 1) {
+        attackLabel = 'Ranged';
+    }
 
     ctx.fillStyle = '#aaa';
-    const element = enemy.element || 'physical';
-    ctx.fillText(`  Element: ${element}`, x, lineY);
+    ctx.fillText(`  Type: ${attackLabel}`, x, lineY);
+    lineY += lh;
+    ctx.fillText(`  Range: ${attackRange} tile${attackRange > 1 ? 's' : ''}`, x, lineY);
+    lineY += lh + 5;
+
+    // Combat stats in two columns
+    const col1X = x;
+    const col2X = x + width / 2;
+
+    ctx.fillStyle = '#aaa';
+    ctx.fillText(`Crit: 5%`, col1X, lineY);
+    ctx.fillText(`Dodge: 0%`, col2X, lineY);
     lineY += lh;
 
-    if (enemy.isUndead) {
-        ctx.fillStyle = '#9b59b6';
-        ctx.fillText('  Undead creature', x, lineY);
-        lineY += lh;
-    }
+    // Armor type
+    const armorType = enemy.armorType || monsterData?.armorType || 'unarmored';
+    ctx.fillText(`Armor: ${armorType.charAt(0).toUpperCase() + armorType.slice(1)}`, col1X, lineY);
+    lineY += lh + 8;
 
-    const tier = enemy.tier || 'TIER_3';
-    const tierNames = {
-        'TIER_3': 'Common',
-        'TIER_2': 'Uncommon',
-        'TIER_1': 'Rare',
-        'ELITE': 'Elite',
-        'BOSS': 'Boss'
+    // Abilities section (from enemy-ability-system)
+    ctx.fillStyle = '#0f0';
+    ctx.font = '12px monospace';
+    ctx.fillText('Abilities', x, lineY);
+    lineY += lh;
+
+    ctx.font = '11px monospace';
+
+    // Get abilities from EnemyAbilitySystem preset
+    const abilityPreset = typeof EnemyAbilitySystem !== 'undefined'
+        ? EnemyAbilitySystem.MONSTER_ABILITY_PRESETS?.[enemy.name]
+        : null;
+
+    // Active ability (first attack from preset)
+    ctx.fillStyle = '#888';
+    ctx.fillText('Active:', x, lineY);
+    ctx.fillStyle = '#aaa';
+    if (abilityPreset?.attacks?.length > 0) {
+        const attackId = abilityPreset.attacks[0];
+        const attackDef = typeof AbilityRepository !== 'undefined'
+            ? AbilityRepository.ATTACKS?.[attackId]
+            : null;
+        ctx.fillText(attackDef?.name || attackId.replace(/_/g, ' '), x + 60, lineY);
+    } else {
+        ctx.fillText('Basic Attack', x + 60, lineY);
+    }
+    lineY += lh;
+
+    // Passive ability
+    ctx.fillStyle = '#888';
+    ctx.fillText('Passive:', x, lineY);
+    ctx.fillStyle = '#aaa';
+    if (abilityPreset?.passives?.length > 0) {
+        const passiveId = abilityPreset.passives[0];
+        const passiveDef = typeof AbilityRepository !== 'undefined'
+            ? AbilityRepository.PASSIVES?.[passiveId]
+            : null;
+        ctx.fillText(passiveDef?.name || passiveId.replace(/_/g, ' '), x + 65, lineY);
+    } else {
+        ctx.fillStyle = '#666';
+        ctx.fillText('None', x + 65, lineY);
+    }
+    lineY += lh;
+
+    // Mechanics
+    ctx.fillStyle = '#888';
+    ctx.fillText('Mechanics:', x, lineY);
+    ctx.fillStyle = '#aaa';
+    if (abilityPreset?.mechanics?.length > 0) {
+        const mechanicId = abilityPreset.mechanics[0];
+        const mechanicDef = typeof AbilityRepository !== 'undefined'
+            ? AbilityRepository.MECHANICS?.[mechanicId]
+            : null;
+        ctx.fillText(mechanicDef?.name || mechanicId.replace(/_/g, ' '), x + 80, lineY);
+    } else {
+        ctx.fillStyle = '#666';
+        ctx.fillText('None', x + 80, lineY);
+    }
+}
+
+/**
+ * BEHAVIOR tab content - Behavior, Social, Perception, Current State
+ */
+function renderInspectBehaviorTab(ctx, enemy, x, y, width, lh) {
+    let lineY = y;
+
+    // Behavior type
+    ctx.fillStyle = '#888';
+    ctx.fillText('Behavior:', x, lineY);
+    const behaviorType = enemy.behaviorType || enemy.behavior?.type || 'territorial';
+    ctx.fillStyle = '#aaa';
+    ctx.fillText(behaviorType.charAt(0).toUpperCase() + behaviorType.slice(1), x + 80, lineY);
+    lineY += lh;
+
+    // Social behavior
+    ctx.fillStyle = '#888';
+    ctx.fillText('Social:', x, lineY);
+
+    // Determine social type based on behavior and pack membership
+    let socialType = 'Solitary';
+    if (enemy.packId) {
+        socialType = 'Pack Member';
+    } else if (enemy.swarmId) {
+        socialType = 'Swarm';
+    } else if (behaviorType === 'pack_leader') {
+        socialType = 'Pack Leader';
+    } else if (behaviorType === 'swarm') {
+        socialType = 'Swarm';
+    } else if (enemy.social?.type) {
+        socialType = enemy.social.type.charAt(0).toUpperCase() + enemy.social.type.slice(1);
+    }
+    ctx.fillStyle = '#aaa';
+    ctx.fillText(socialType, x + 60, lineY);
+    lineY += lh + 5;
+
+    // Perception section
+    ctx.fillStyle = '#888';
+    ctx.fillText('Sight Range:', x, lineY);
+    const sightRange = enemy.perception?.sightRange || enemy.aggression || 6;
+    ctx.fillStyle = '#aaa';
+    ctx.fillText(`${sightRange} tiles`, x + 100, lineY);
+    lineY += lh;
+
+    ctx.fillStyle = '#888';
+    ctx.fillText('Hearing Range:', x, lineY);
+    const hearingRange = enemy.perception?.hearingRange || 4;
+    ctx.fillStyle = '#aaa';
+    ctx.fillText(`${hearingRange} tiles`, x + 115, lineY);
+    lineY += lh + 8;
+
+    // Current State section (real-time)
+    ctx.fillStyle = '#0f0';
+    ctx.font = '12px monospace';
+    ctx.fillText('Current State', x, lineY);
+    lineY += lh;
+
+    ctx.font = '13px monospace';
+
+    // Real-time AI state with color coding
+    const aiState = enemy.ai?.currentState || enemy.state || 'idle';
+    const stateColors = {
+        'idle': '#888888',
+        'wandering': '#888888',
+        'alert': '#f39c12',
+        'chasing': '#e74c3c',
+        'combat': '#e74c3c',
+        'fleeing': '#9b59b6',
+        'searching': '#f39c12',
+        'returning': '#3498db',
+        'following': '#27ae60',
+        'commanded': '#9b59b6',
+        'shouting': '#f1c40f'
     };
-    ctx.fillStyle = TIER_COLORS[tier] || '#888';
-    ctx.fillText(`  Rarity: ${tierNames[tier] || 'Unknown'}`, x, lineY);
+
+    const stateDescriptions = {
+        'idle': 'Standing still, unaware',
+        'wandering': 'Patrolling the area',
+        'alert': 'Heard something suspicious',
+        'chasing': 'Pursuing a target',
+        'combat': 'Actively fighting',
+        'fleeing': 'Running away',
+        'searching': 'Looking for target',
+        'returning': 'Going back to post',
+        'following': 'Following pack leader',
+        'commanded': 'Received orders',
+        'shouting': 'Alerting allies'
+    };
+
+    ctx.fillStyle = stateColors[aiState] || '#888';
+    ctx.fillText(`  ${aiState.toUpperCase()}`, x, lineY);
+    lineY += lh;
+
+    // State description
+    ctx.fillStyle = '#666';
+    ctx.font = '10px monospace';
+    ctx.fillText(`  ${stateDescriptions[aiState] || 'Unknown state'}`, x, lineY);
+    lineY += lh;
+
+    // Combat status indicator
+    ctx.font = '13px monospace';
+    if (enemy.combat?.isInCombat) {
+        ctx.fillStyle = '#e74c3c';
+        ctx.fillText('  [IN COMBAT]', x, lineY);
+    } else {
+        ctx.fillStyle = '#27ae60';
+        ctx.fillText('  [PASSIVE]', x, lineY);
+    }
 }
 
 /**
@@ -631,15 +679,15 @@ canvas.addEventListener('click', (e) => {
         return; // Click outside popup, ignore
     }
 
-    // Tab area
+    // Tab area (3 tabs: General, Combat, Behavior)
     const tabY = popupY + 40;
     const tabHeight = 22;
-    const tabWidth = popupWidth / 4;
+    const tabWidth = popupWidth / 3;
 
     // Check if click is on tabs
     if (clickY >= tabY && clickY <= tabY + tabHeight) {
         const tabIndex = Math.floor((clickX - popupX) / tabWidth);
-        if (tabIndex >= 0 && tabIndex <= 3) {
+        if (tabIndex >= 0 && tabIndex <= 2) {
             window.inspectPopup.tab = tabIndex;
         }
     }

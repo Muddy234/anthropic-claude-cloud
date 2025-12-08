@@ -333,6 +333,11 @@ function createEnemy(monsterType, x, y, room) {
         damage: stats.damage || 10,
         defense: stats.defense || 0,
         pDef: stats.defense || 0,
+
+        // Mana (scales with INT, magic monsters have more)
+        mp: calculateMonsterMana(template),
+        maxMp: calculateMonsterMana(template),
+        manaRegen: calculateMonsterManaRegen(template),
         
         // Element
         element: template.element || 'physical',
@@ -408,6 +413,37 @@ function calculateMonsterXP(template) {
     const healthBonus = Math.floor((template.stats?.health || 50) / 25);
 
     return base + healthBonus;
+}
+
+/**
+ * Calculate monster mana pool based on INT stat
+ * Magic monsters have significantly more mana
+ */
+function calculateMonsterMana(template) {
+    const intStat = template.int || 10;
+    const isMagic = template.attackType === 'magic';
+
+    // Base mana: 50 + INT bonus
+    // Magic monsters get 2x bonus
+    const baseMana = 50;
+    const intBonus = Math.floor(intStat * (isMagic ? 3 : 1));
+
+    return baseMana + intBonus;
+}
+
+/**
+ * Calculate monster mana regeneration rate
+ * Based on INT, magic monsters regen faster
+ */
+function calculateMonsterManaRegen(template) {
+    const intStat = template.int || 10;
+    const isMagic = template.attackType === 'magic';
+
+    // Base regen: 2/sec, scales with INT
+    const baseRegen = 2;
+    const intBonus = Math.floor(intStat / 10);
+
+    return baseRegen + intBonus + (isMagic ? 2 : 0);
 }
 
 // ============================================================================
