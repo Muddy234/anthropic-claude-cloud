@@ -6,6 +6,44 @@
 const getInspectPopup = () => window.inspectPopup || { visible: false, target: null, targetType: null, tab: 0 };
 const getContextMenu = () => window.contextMenu || { visible: false, options: [] };
 
+// Info popup state - displays detailed info when clicking on hyperlinks
+const getInfoPopup = () => window.infoPopup || { visible: false, type: null, data: null };
+
+// Initialize info popup if not exists
+if (!window.infoPopup) {
+    window.infoPopup = { visible: false, type: null, data: null };
+}
+
+// Track clickable link regions during render (cleared each frame)
+let clickableLinks = [];
+
+/**
+ * Register a clickable info link region
+ */
+function registerInfoLink(x, y, width, height, type, data) {
+    clickableLinks.push({ x, y, width, height, type, data });
+}
+
+/**
+ * Clear all link regions (call at start of each render)
+ */
+function clearInfoLinks() {
+    clickableLinks = [];
+}
+
+/**
+ * Check if a point is within any info link
+ */
+function getInfoLinkAtPoint(px, py) {
+    for (const link of clickableLinks) {
+        if (px >= link.x && px <= link.x + link.width &&
+            py >= link.y && py <= link.y + link.height) {
+            return link;
+        }
+    }
+    return null;
+}
+
 /**
  * Render the right-click context menu
  */
@@ -87,6 +125,475 @@ const ELEMENT_COLORS = {
     'nature': '#27ae60',
     'physical': '#cccccc'
 };
+
+// ============================================================================
+// INFO POPUP CONTENT - Detailed information for hyperlinks
+// ============================================================================
+
+const INFO_CONTENT = {
+    // Damage types and their effectiveness vs armor
+    damageType: {
+        blade: {
+            title: 'Blade Damage',
+            color: '#c0c0c0',
+            description: 'Slashing attacks from swords, claws, and sharp edges.',
+            effectiveness: [
+                { armor: 'Unarmored', modifier: '+30%', color: '#27ae60' },
+                { armor: 'Hide', modifier: '0%', color: '#888' },
+                { armor: 'Scaled', modifier: '0%', color: '#888' },
+                { armor: 'Armored', modifier: '-30%', color: '#e74c3c' },
+                { armor: 'Stone', modifier: '-30%', color: '#e74c3c' },
+                { armor: 'Bone', modifier: '0%', color: '#888' },
+                { armor: 'Ethereal', modifier: '0%', color: '#888' }
+            ]
+        },
+        blunt: {
+            title: 'Blunt Damage',
+            color: '#cd7f32',
+            description: 'Crushing attacks from hammers, fists, and heavy impacts.',
+            effectiveness: [
+                { armor: 'Unarmored', modifier: '0%', color: '#888' },
+                { armor: 'Hide', modifier: '0%', color: '#888' },
+                { armor: 'Scaled', modifier: '0%', color: '#888' },
+                { armor: 'Armored', modifier: '+30%', color: '#27ae60' },
+                { armor: 'Stone', modifier: '+30%', color: '#27ae60' },
+                { armor: 'Bone', modifier: '+30%', color: '#27ae60' },
+                { armor: 'Ethereal', modifier: '-30%', color: '#e74c3c' }
+            ]
+        },
+        pierce: {
+            title: 'Pierce Damage',
+            color: '#87ceeb',
+            description: 'Piercing attacks from fangs, spears, and arrows.',
+            effectiveness: [
+                { armor: 'Unarmored', modifier: '0%', color: '#888' },
+                { armor: 'Hide', modifier: '+30%', color: '#27ae60' },
+                { armor: 'Scaled', modifier: '+30%', color: '#27ae60' },
+                { armor: 'Armored', modifier: '-30%', color: '#e74c3c' },
+                { armor: 'Stone', modifier: '-30%', color: '#e74c3c' },
+                { armor: 'Bone', modifier: '0%', color: '#888' },
+                { armor: 'Ethereal', modifier: '+30%', color: '#27ae60' }
+            ]
+        },
+        magic: {
+            title: 'Magic Damage',
+            color: '#9b59b6',
+            description: 'Arcane attacks that bypass physical armor. Resisted by mDEF.',
+            effectiveness: [
+                { armor: 'All Types', modifier: 'Ignores physical armor', color: '#9b59b6' }
+            ],
+            note: 'Magic damage is reduced by mDEF (Magic Defense) instead of armor type.'
+        }
+    },
+
+    // Armor types and what they resist
+    armorType: {
+        unarmored: {
+            title: 'Unarmored',
+            color: '#ffcccc',
+            description: 'No natural protection. Soft flesh or exposed skin.',
+            resistances: [
+                { type: 'Blade', modifier: '-30%', color: '#e74c3c' },
+                { type: 'Blunt', modifier: '0%', color: '#888' },
+                { type: 'Pierce', modifier: '0%', color: '#888' }
+            ],
+            examples: 'Slimes, Wisps, Cultists'
+        },
+        hide: {
+            title: 'Hide Armor',
+            color: '#8b4513',
+            description: 'Tough skin or leather. Resists slashing but vulnerable to piercing.',
+            resistances: [
+                { type: 'Blade', modifier: '0%', color: '#888' },
+                { type: 'Blunt', modifier: '0%', color: '#888' },
+                { type: 'Pierce', modifier: '-30%', color: '#e74c3c' }
+            ],
+            examples: 'Salamanders, Crawlers'
+        },
+        scaled: {
+            title: 'Scaled Armor',
+            color: '#2ecc71',
+            description: 'Natural scales or plates. Piercing finds gaps between scales.',
+            resistances: [
+                { type: 'Blade', modifier: '0%', color: '#888' },
+                { type: 'Blunt', modifier: '0%', color: '#888' },
+                { type: 'Pierce', modifier: '-30%', color: '#e74c3c' }
+            ],
+            examples: 'Serpents, Spiders'
+        },
+        armored: {
+            title: 'Metal Armor',
+            color: '#95a5a6',
+            description: 'Heavy metal plating. Weak to blunt force that dents and crushes.',
+            resistances: [
+                { type: 'Blade', modifier: '+30%', color: '#27ae60' },
+                { type: 'Blunt', modifier: '-30%', color: '#e74c3c' },
+                { type: 'Pierce', modifier: '+30%', color: '#27ae60' }
+            ],
+            examples: 'Golems, Warriors'
+        },
+        stone: {
+            title: 'Stone Armor',
+            color: '#7f8c8d',
+            description: 'Rock-like body. Shatters under blunt impact.',
+            resistances: [
+                { type: 'Blade', modifier: '+30%', color: '#27ae60' },
+                { type: 'Blunt', modifier: '-30%', color: '#e74c3c' },
+                { type: 'Pierce', modifier: '+30%', color: '#27ae60' }
+            ],
+            examples: 'Stone Lurkers, Obsidian Golems'
+        },
+        bone: {
+            title: 'Bone Armor',
+            color: '#ecf0f1',
+            description: 'Skeletal structure. Breaks easily under crushing blows.',
+            resistances: [
+                { type: 'Blade', modifier: '0%', color: '#888' },
+                { type: 'Blunt', modifier: '-30%', color: '#e74c3c' },
+                { type: 'Pierce', modifier: '0%', color: '#888' }
+            ],
+            examples: 'Skeletons, Bone Golems'
+        },
+        ethereal: {
+            title: 'Ethereal',
+            color: '#9b59b6',
+            description: 'Incorporeal form. Piercing weapons anchor the spirit.',
+            resistances: [
+                { type: 'Blade', modifier: '0%', color: '#888' },
+                { type: 'Blunt', modifier: '+30%', color: '#27ae60' },
+                { type: 'Pierce', modifier: '-30%', color: '#e74c3c' }
+            ],
+            examples: 'Phantoms, Void Touched'
+        }
+    },
+
+    // Element information
+    element: {
+        fire: {
+            title: 'Fire Element',
+            color: '#ff6b35',
+            description: 'Burns with intense heat. Strong against Nature, weak against Water.',
+            strengths: ['Nature', 'Ice'],
+            weaknesses: ['Water', 'Earth'],
+            effects: 'May apply Burning status (damage over time)'
+        },
+        water: {
+            title: 'Water Element',
+            color: '#3498db',
+            description: 'Flows and adapts. Strong against Fire, weak against Nature.',
+            strengths: ['Fire'],
+            weaknesses: ['Nature', 'Ice'],
+            effects: 'May apply Wet status (increases ice/lightning damage)'
+        },
+        earth: {
+            title: 'Earth Element',
+            color: '#8b4513',
+            description: 'Solid and unyielding. Strong against Fire, weak against Nature.',
+            strengths: ['Fire', 'Physical'],
+            weaknesses: ['Nature', 'Water'],
+            effects: 'High physical defense, may cause knockback'
+        },
+        nature: {
+            title: 'Nature Element',
+            color: '#27ae60',
+            description: 'Life energy and growth. Strong against Water/Earth, weak against Fire.',
+            strengths: ['Water', 'Earth'],
+            weaknesses: ['Fire', 'Death'],
+            effects: 'May apply Poison or heal allies'
+        },
+        shadow: {
+            title: 'Shadow Element',
+            color: '#9b59b6',
+            description: 'Darkness and stealth. Strong against Physical, weak against Holy.',
+            strengths: ['Physical'],
+            weaknesses: ['Holy', 'Fire'],
+            effects: 'May reduce vision or cause fear'
+        },
+        death: {
+            title: 'Death Element',
+            color: '#666666',
+            description: 'Necrotic energy. Strong against Nature, weak against Holy.',
+            strengths: ['Nature', 'Physical'],
+            weaknesses: ['Holy', 'Fire'],
+            effects: 'May drain life or raise undead'
+        },
+        physical: {
+            title: 'Physical Element',
+            color: '#cccccc',
+            description: 'Pure physical force with no elemental affinity.',
+            strengths: ['None'],
+            weaknesses: ['None'],
+            effects: 'No special elemental effects'
+        }
+    },
+
+    // Behavior types
+    behavior: {
+        aggressive: {
+            title: 'Aggressive',
+            color: '#e74c3c',
+            description: 'Will chase targets relentlessly once spotted. Never gives up pursuit.',
+            traits: ['Long chase range', 'Quick to attack', 'Ignores flee thresholds']
+        },
+        territorial: {
+            title: 'Territorial',
+            color: '#f39c12',
+            description: 'Guards a specific area. Will chase intruders but returns to post.',
+            traits: ['Limited chase range', 'Returns to spawn point', 'Defends area aggressively']
+        },
+        defensive: {
+            title: 'Defensive',
+            color: '#3498db',
+            description: 'Protects nearby allies. Prioritizes helping wounded friends.',
+            traits: ['Supports allies', 'May heal or buff friends', 'Responds to ally distress calls']
+        },
+        passive: {
+            title: 'Passive',
+            color: '#27ae60',
+            description: 'Non-hostile unless attacked first. Will fight back if provoked.',
+            traits: ['Ignores players initially', 'Retaliates when damaged', 'May flee when hurt']
+        },
+        ambusher: {
+            title: 'Ambusher',
+            color: '#9b59b6',
+            description: 'Waits in hiding for prey to come close. First strike bonus.',
+            traits: ['Stealth until attack', 'Bonus damage on first hit', 'Teleport attacks']
+        },
+        swarm: {
+            title: 'Swarm',
+            color: '#e67e22',
+            description: 'Attacks in coordinated groups. Stronger with more allies.',
+            traits: ['Pack bonuses', 'Coordinated attacks', 'Surround tactics']
+        }
+    }
+};
+
+/**
+ * Draw an info link with icon
+ * Returns the width of the drawn text for click region registration
+ */
+function drawInfoLink(ctx, text, x, y, type, data, color = '#aaa') {
+    const iconSize = 10;
+    const padding = 3;
+
+    // Draw text
+    ctx.fillStyle = color;
+    ctx.fillText(text, x, y);
+    const textWidth = ctx.measureText(text).width;
+
+    // Draw info icon (ⓘ)
+    const iconX = x + textWidth + padding;
+    const iconY = y - iconSize + 2;
+
+    ctx.fillStyle = '#5dade2';
+    ctx.font = '10px monospace';
+    ctx.fillText('ⓘ', iconX, y);
+
+    // Register clickable region
+    const totalWidth = textWidth + padding + iconSize;
+    registerInfoLink(x, y - 12, totalWidth, 14, type, data);
+
+    return totalWidth;
+}
+
+/**
+ * Render the info popup (replaces inspect panel when shown)
+ */
+function renderInfoPopup(ctx) {
+    const infoPopup = getInfoPopup();
+    if (!infoPopup.visible) return;
+
+    const popupWidth = 300;
+    const popupHeight = 400;
+    const margin = 20;
+    const popupX = canvas.width - popupWidth - margin;
+    const popupY = canvas.height - popupHeight - margin;
+
+    // Get content based on type
+    const content = INFO_CONTENT[infoPopup.type]?.[infoPopup.data];
+    if (!content) {
+        window.infoPopup.visible = false;
+        return;
+    }
+
+    // Background
+    ctx.fillStyle = 'rgba(15, 15, 20, 0.95)';
+    ctx.fillRect(popupX, popupY, popupWidth, popupHeight);
+
+    // Border (colored by content type)
+    ctx.strokeStyle = content.color || '#888';
+    ctx.lineWidth = 3;
+    ctx.strokeRect(popupX, popupY, popupWidth, popupHeight);
+
+    // Header
+    const headerY = popupY + 25;
+    ctx.font = 'bold 16px monospace';
+    ctx.fillStyle = content.color || '#fff';
+    ctx.textAlign = 'left';
+    ctx.fillText(content.title, popupX + 10, headerY);
+
+    // Back button hint
+    ctx.font = '10px monospace';
+    ctx.fillStyle = '#666';
+    ctx.textAlign = 'right';
+    ctx.fillText('[ESC] Back', popupX + popupWidth - 10, headerY);
+
+    // Content area
+    let lineY = popupY + 55;
+    const contentX = popupX + 10;
+    const contentWidth = popupWidth - 20;
+    const lh = 16;
+
+    ctx.textAlign = 'left';
+
+    // Description (word-wrapped)
+    ctx.fillStyle = '#ccc';
+    ctx.font = '11px monospace';
+    const descWords = content.description.split(' ');
+    let line = '';
+    for (const word of descWords) {
+        const testLine = line + word + ' ';
+        if (ctx.measureText(testLine).width > contentWidth - 10) {
+            ctx.fillText(line.trim(), contentX, lineY);
+            line = word + ' ';
+            lineY += lh;
+        } else {
+            line = testLine;
+        }
+    }
+    if (line.trim()) {
+        ctx.fillText(line.trim(), contentX, lineY);
+        lineY += lh;
+    }
+    lineY += 10;
+
+    // Type-specific content
+    if (infoPopup.type === 'damageType' && content.effectiveness) {
+        ctx.fillStyle = '#0f0';
+        ctx.font = '12px monospace';
+        ctx.fillText('vs Armor Types:', contentX, lineY);
+        lineY += lh + 5;
+
+        ctx.font = '11px monospace';
+        for (const eff of content.effectiveness) {
+            ctx.fillStyle = '#888';
+            ctx.fillText(`  ${eff.armor}:`, contentX, lineY);
+            ctx.fillStyle = eff.color;
+            ctx.fillText(eff.modifier, contentX + 100, lineY);
+            lineY += lh;
+        }
+
+        if (content.note) {
+            lineY += 10;
+            ctx.fillStyle = '#f39c12';
+            ctx.font = '10px monospace';
+            const noteWords = content.note.split(' ');
+            line = '';
+            for (const word of noteWords) {
+                const testLine = line + word + ' ';
+                if (ctx.measureText(testLine).width > contentWidth - 10) {
+                    ctx.fillText(line.trim(), contentX, lineY);
+                    line = word + ' ';
+                    lineY += lh - 2;
+                } else {
+                    line = testLine;
+                }
+            }
+            if (line.trim()) ctx.fillText(line.trim(), contentX, lineY);
+        }
+    }
+
+    if (infoPopup.type === 'armorType' && content.resistances) {
+        ctx.fillStyle = '#0f0';
+        ctx.font = '12px monospace';
+        ctx.fillText('Damage Resistance:', contentX, lineY);
+        lineY += lh + 5;
+
+        ctx.font = '11px monospace';
+        for (const res of content.resistances) {
+            ctx.fillStyle = '#888';
+            ctx.fillText(`  ${res.type}:`, contentX, lineY);
+            ctx.fillStyle = res.color;
+            ctx.fillText(res.modifier, contentX + 80, lineY);
+            lineY += lh;
+        }
+
+        if (content.examples) {
+            lineY += 10;
+            ctx.fillStyle = '#888';
+            ctx.fillText('Examples:', contentX, lineY);
+            lineY += lh;
+            ctx.fillStyle = '#aaa';
+            ctx.fillText(`  ${content.examples}`, contentX, lineY);
+        }
+    }
+
+    if (infoPopup.type === 'element') {
+        if (content.strengths) {
+            ctx.fillStyle = '#27ae60';
+            ctx.font = '12px monospace';
+            ctx.fillText('Strong vs:', contentX, lineY);
+            lineY += lh;
+            ctx.fillStyle = '#aaa';
+            ctx.font = '11px monospace';
+            ctx.fillText(`  ${content.strengths.join(', ')}`, contentX, lineY);
+            lineY += lh + 5;
+        }
+
+        if (content.weaknesses) {
+            ctx.fillStyle = '#e74c3c';
+            ctx.font = '12px monospace';
+            ctx.fillText('Weak vs:', contentX, lineY);
+            lineY += lh;
+            ctx.fillStyle = '#aaa';
+            ctx.font = '11px monospace';
+            ctx.fillText(`  ${content.weaknesses.join(', ')}`, contentX, lineY);
+            lineY += lh + 5;
+        }
+
+        if (content.effects) {
+            lineY += 5;
+            ctx.fillStyle = '#f39c12';
+            ctx.font = '11px monospace';
+            ctx.fillText('Effects:', contentX, lineY);
+            lineY += lh;
+            ctx.fillStyle = '#aaa';
+            const effectWords = content.effects.split(' ');
+            line = '  ';
+            for (const word of effectWords) {
+                const testLine = line + word + ' ';
+                if (ctx.measureText(testLine).width > contentWidth - 10) {
+                    ctx.fillText(line.trim(), contentX, lineY);
+                    line = '  ' + word + ' ';
+                    lineY += lh;
+                } else {
+                    line = testLine;
+                }
+            }
+            if (line.trim()) ctx.fillText(line.trim(), contentX, lineY);
+        }
+    }
+
+    if (infoPopup.type === 'behavior' && content.traits) {
+        ctx.fillStyle = '#0f0';
+        ctx.font = '12px monospace';
+        ctx.fillText('Traits:', contentX, lineY);
+        lineY += lh + 5;
+
+        ctx.font = '11px monospace';
+        ctx.fillStyle = '#aaa';
+        for (const trait of content.traits) {
+            ctx.fillText(`  • ${trait}`, contentX, lineY);
+            lineY += lh;
+        }
+    }
+
+    // Footer
+    ctx.font = '10px monospace';
+    ctx.fillStyle = '#666';
+    ctx.textAlign = 'center';
+    ctx.fillText('Click outside or ESC to close', popupX + popupWidth / 2, popupY + popupHeight - 10);
+}
 
 /**
  * Render the inspect popup - Enhanced with tabs
@@ -378,13 +885,14 @@ function renderInspectCombatTab(ctx, enemy, x, y, width, lh) {
     const monsterData = typeof MONSTER_DATA !== 'undefined' ? MONSTER_DATA[enemy.name] : null;
     let lineY = y;
 
-    // Element with color
+    // Element with color and info link
     const element = enemy.element || 'physical';
     const elemColor = ELEMENT_COLORS[element] || '#ccc';
     ctx.fillStyle = '#888';
+    ctx.font = '13px monospace';
     ctx.fillText('Element:', x, lineY);
-    ctx.fillStyle = elemColor;
-    ctx.fillText(element.charAt(0).toUpperCase() + element.slice(1), x + 70, lineY);
+    drawInfoLink(ctx, element.charAt(0).toUpperCase() + element.slice(1), x + 70, lineY, 'element', element, elemColor);
+    ctx.font = '13px monospace'; // Reset font after drawInfoLink
     lineY += lh + 5;
 
     // Base Attack section
@@ -406,8 +914,8 @@ function renderInspectCombatTab(ctx, enemy, x, y, width, lh) {
 
     ctx.fillStyle = '#888';
     ctx.fillText('  Type:', x, lineY);
-    ctx.fillStyle = damageTypeColors[damageType] || '#aaa';
-    ctx.fillText(damageType.charAt(0).toUpperCase() + damageType.slice(1), x + 55, lineY);
+    drawInfoLink(ctx, damageType.charAt(0).toUpperCase() + damageType.slice(1), x + 55, lineY, 'damageType', damageType, damageTypeColors[damageType] || '#aaa');
+    ctx.font = '13px monospace'; // Reset font after drawInfoLink
     lineY += lh;
 
     ctx.fillStyle = '#aaa';
@@ -423,9 +931,12 @@ function renderInspectCombatTab(ctx, enemy, x, y, width, lh) {
     ctx.fillText(`Dodge: 0%`, col2X, lineY);
     lineY += lh;
 
-    // Armor type
+    // Armor type with info link
     const armorType = enemy.armorType || monsterData?.armorType || 'unarmored';
-    ctx.fillText(`Armor: ${armorType.charAt(0).toUpperCase() + armorType.slice(1)}`, col1X, lineY);
+    ctx.fillStyle = '#888';
+    ctx.fillText('Armor:', col1X, lineY);
+    drawInfoLink(ctx, armorType.charAt(0).toUpperCase() + armorType.slice(1), col1X + 55, lineY, 'armorType', armorType, '#aaa');
+    ctx.font = '13px monospace'; // Reset font after drawInfoLink
     lineY += lh + 8;
 
     // Abilities section (from enemy-ability-system)
@@ -494,12 +1005,21 @@ function renderInspectCombatTab(ctx, enemy, x, y, width, lh) {
 function renderInspectBehaviorTab(ctx, enemy, x, y, width, lh) {
     let lineY = y;
 
-    // Behavior type
+    // Behavior type with info link
     ctx.fillStyle = '#888';
+    ctx.font = '13px monospace';
     ctx.fillText('Behavior:', x, lineY);
     const behaviorType = enemy.behaviorType || enemy.behavior?.type || 'territorial';
-    ctx.fillStyle = '#aaa';
-    ctx.fillText(behaviorType.charAt(0).toUpperCase() + behaviorType.slice(1), x + 80, lineY);
+    const behaviorColors = {
+        'aggressive': '#e74c3c',
+        'territorial': '#f39c12',
+        'defensive': '#3498db',
+        'passive': '#27ae60',
+        'ambusher': '#9b59b6',
+        'swarm': '#e67e22'
+    };
+    drawInfoLink(ctx, behaviorType.charAt(0).toUpperCase() + behaviorType.slice(1), x + 80, lineY, 'behavior', behaviorType, behaviorColors[behaviorType] || '#aaa');
+    ctx.font = '13px monospace'; // Reset font after drawInfoLink
     lineY += lh;
 
     // Social behavior
@@ -662,12 +1182,9 @@ canvas.addEventListener('mousemove', (e) => {
 });
 
 /**
- * Handle clicks on inspect popup tabs
+ * Handle clicks on inspect popup tabs and info links
  */
 canvas.addEventListener('click', (e) => {
-    const inspectPopup = getInspectPopup();
-    if (!inspectPopup.visible) return;
-
     const rect = canvas.getBoundingClientRect();
 
     // Scale click coordinates to match canvas internal dimensions
@@ -676,17 +1193,45 @@ canvas.addEventListener('click', (e) => {
     const clickX = (e.clientX - rect.left) * scaleX;
     const clickY = (e.clientY - rect.top) * scaleY;
 
-    // Popup dimensions (must match renderInspectPopup)
+    const infoPopup = getInfoPopup();
+    const inspectPopup = getInspectPopup();
+
+    // Popup dimensions (must match renderInspectPopup/renderInfoPopup)
     const popupWidth = 300;
     const popupHeight = 400;
     const margin = 20;
     const popupX = canvas.width - popupWidth - margin;
     const popupY = canvas.height - popupHeight - margin;
 
+    // If info popup is visible, check for close (click outside)
+    if (infoPopup.visible) {
+        if (clickX < popupX || clickX > popupX + popupWidth ||
+            clickY < popupY || clickY > popupY + popupHeight) {
+            // Click outside popup - close info popup
+            window.infoPopup.visible = false;
+        }
+        return; // Don't process other clicks while info popup is open
+    }
+
+    // Handle inspect popup interactions
+    if (!inspectPopup.visible) return;
+
     // Check if click is within popup
     if (clickX < popupX || clickX > popupX + popupWidth ||
         clickY < popupY || clickY > popupY + popupHeight) {
         return; // Click outside popup, ignore
+    }
+
+    // Check if click is on an info link
+    const clickedLink = getInfoLinkAtPoint(clickX, clickY);
+    if (clickedLink) {
+        // Open info popup with this link's data
+        window.infoPopup = {
+            visible: true,
+            type: clickedLink.type,
+            data: clickedLink.data
+        };
+        return;
     }
 
     // Tab area (3 tabs: General, Combat, Behavior)
@@ -704,18 +1249,42 @@ canvas.addEventListener('click', (e) => {
 });
 
 /**
+ * Handle ESC key to close info popup
+ */
+document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') {
+        const infoPopup = getInfoPopup();
+        if (infoPopup.visible) {
+            window.infoPopup.visible = false;
+            e.preventDefault();
+            e.stopPropagation();
+        }
+    }
+});
+
+/**
  * Add this to your main render loop
  * Call after rendering the game world but before UI overlays
  */
 function renderUIOverlays(ctx) {
+    // Clear info link regions for this frame
+    clearInfoLinks();
+
     // Skills UI: Action bar and tooltips
     if (typeof renderSkillsUI === 'function') {
         renderSkillsUI(ctx);
     }
-    
+
     // Context menu and inspect popup
     renderContextMenu(ctx);
-    renderInspectPopup(ctx);
+
+    // Check if info popup should be shown (replaces inspect panel temporarily)
+    const infoPopup = getInfoPopup();
+    if (infoPopup.visible) {
+        renderInfoPopup(ctx);
+    } else {
+        renderInspectPopup(ctx);
+    }
 }
 
 // Export for use in renderer
