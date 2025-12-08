@@ -123,15 +123,42 @@ function decorateRoom(room) {
     
     const placedPositions = new Set();
     let placedCount = 0;
-    
-    // Place special decoration first (shrines, chests)
-    if (room.type !== 'entrance' && Math.random() < 0.3) {
+
+    // Track if we've placed an altar on this floor (for guaranteed altar logic)
+    if (!game._altarsPlacedThisFloor) game._altarsPlacedThisFloor = 0;
+
+    // Guarantee at least one altar per floor - place in non-entrance rooms
+    // Place altar with 40% chance per room, or 100% if no altar placed yet and this is room 3+
+    const roomIndex = game.rooms ? game.rooms.indexOf(room) : 0;
+    const needsGuaranteedAltar = game._altarsPlacedThisFloor === 0 && roomIndex >= 2;
+    const shouldPlaceAltar = room.type !== 'entrance' && room.type !== 'boss' &&
+                             (needsGuaranteedAltar || Math.random() < 0.4);
+
+    if (shouldPlaceAltar) {
+        const altarPos = findDecorationPosition(room, placedPositions, true);
+        if (altarPos) {
+            placeDecoration(altarPos.x, altarPos.y, 'sacrifice_altar', room, true, true);
+            placedPositions.add(`${altarPos.x},${altarPos.y}`);
+            placedCount++;
+            game._altarsPlacedThisFloor++;
+            if (DECORATOR_CONFIG.debugLogging) {
+                console.log(`[Decorator] Placed sacrifice altar in room ${roomIndex}`);
+            }
+        }
+    }
+
+    // Place other special decoration (shrines, chests) - reduced chance since we added altar
+    if (room.type !== 'entrance' && Math.random() < 0.25) {
         const specialPos = findDecorationPosition(room, placedPositions, true);
         if (specialPos) {
-            const specialType = decorPool.special[Math.floor(Math.random() * decorPool.special.length)];
-            placeDecoration(specialPos.x, specialPos.y, specialType, room, true, true);
-            placedPositions.add(`${specialPos.x},${specialPos.y}`);
-            placedCount++;
+            // Filter out sacrifice_altar from the pool since we handle it separately
+            const nonAltarSpecials = decorPool.special.filter(s => s !== 'sacrifice_altar');
+            if (nonAltarSpecials.length > 0) {
+                const specialType = nonAltarSpecials[Math.floor(Math.random() * nonAltarSpecials.length)];
+                placeDecoration(specialPos.x, specialPos.y, specialType, room, true, true);
+                placedPositions.add(`${specialPos.x},${specialPos.y}`);
+                placedCount++;
+            }
         }
     }
     
