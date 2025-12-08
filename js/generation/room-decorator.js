@@ -209,6 +209,9 @@ function decorateRoom(room) {
  * Place a single decoration
  */
 function placeDecoration(x, y, type, room, blocking, interactable) {
+    const color = getDecorationColor(type, room.element);
+    const symbol = getDecorationSymbol(type);
+
     const decoration = {
         x: x,
         y: y,
@@ -217,23 +220,36 @@ function placeDecoration(x, y, type, room, blocking, interactable) {
         element: room.element,
         blocking: blocking,
         interactable: interactable,
-        
+
         // Visual properties (can be overridden by tileset)
         sprite: getDecorationSprite(type, room.element),
-        color: getDecorationColor(type, room.element)
+        color: color,
+
+        // Data object for decoration-renderer.js compatibility
+        data: {
+            color: color,
+            symbol: symbol,
+            glow: interactable,
+            glowRadius: 0.8,
+            size: blocking ? 'large' : 'small'
+        }
     };
-    
+
     // Add to game decorations array
     if (!game.decorations) game.decorations = [];
     game.decorations.push(decoration);
-    
+
+    // Also add to room's decorations array (required for rendering)
+    if (!room.decorations) room.decorations = [];
+    room.decorations.push(decoration);
+
     // Mark tile as having decoration
     const tile = game.map?.[y]?.[x];
     if (tile) {
         tile.decoration = decoration;
         if (blocking) tile.blocked = true;
     }
-    
+
     return decoration;
 }
 
@@ -345,8 +361,75 @@ function getDecorationColor(type, element) {
         holy: '#fdcb6e',
         physical: '#b2bec3'
     };
-    
+
     return elementColors[element] || '#888888';
+}
+
+/**
+ * Get symbol for decoration type
+ */
+function getDecorationSymbol(type) {
+    const symbols = {
+        // Altars and shrines
+        sacrifice_altar: '⛧',
+        fire_shrine: '🔥',
+        ice_shrine: '❄',
+        water_shrine: '💧',
+        earth_shrine: '⛰',
+        nature_shrine: '🌿',
+        death_shrine: '💀',
+        arcane_shrine: '✨',
+        dark_shrine: '🌑',
+        holy_shrine: '✝',
+        combat_shrine: '⚔',
+
+        // Chests
+        chest: '📦',
+        frozen_chest: '🧊',
+        sunken_chest: '📦',
+        shadow_chest: '📦',
+        arena_chest: '📦',
+
+        // Blocking decorations
+        lava_rock: '🪨',
+        charred_pillar: '▓',
+        ember_brazier: '🔥',
+        scorched_bones: '🦴',
+        ice_pillar: '▓',
+        frozen_statue: '🗿',
+        frost_crystal: '💎',
+        boulder: '🪨',
+        stalagmite: '▲',
+        crystal_cluster: '💎',
+        stone_pillar: '▓',
+        pillar: '▓',
+        giant_mushroom: '🍄',
+        twisted_tree: '🌳',
+        bone_pile: '🦴',
+        tombstone: '🪦',
+        coffin: '⚰',
+
+        // Floor decorations
+        ash_pile: '·',
+        cinder_patch: '·',
+        heat_vent: '◎',
+        ice_patch: '·',
+        snow_drift: '·',
+        gravel_patch: '·',
+        mushroom_cluster: '🍄',
+        skull_pile: '💀',
+        rune_circle: '◯',
+
+        // Special
+        healing_spring: '💧',
+        blessing_fountain: '⛲',
+        geode: '💎',
+        sarcophagus: '⚰',
+        enchanting_table: '📖',
+        magma_pool_small: '🔥'
+    };
+
+    return symbols[type] || '◆';
 }
 
 // ============================================================================
