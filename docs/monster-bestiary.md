@@ -16,6 +16,64 @@
 
 ---
 
+## Armor Types
+
+Armor type affects damage taken from different weapon types (blade/blunt/pierce).
+
+| Armor Type | Description | Weak To (+30%) | Resistant To (-30%) |
+|------------|-------------|----------------|---------------------|
+| **Unarmored** | Soft flesh, no protection | Blade | - |
+| **Hide** | Tough skin or leather | Pierce | - |
+| **Scaled** | Natural scales or plates | Pierce | - |
+| **Armored** | Metal plate or shell | Blunt | Blade, Pierce |
+| **Stone** | Rock or crystal body | Blunt | Blade, Pierce |
+| **Bone** | Skeletal structure | Blunt | - |
+| **Ethereal** | Incorporeal spirit | Pierce | Blunt |
+
+---
+
+## AI States & Behavior
+
+### AI States
+
+Enemies cycle through these states based on player proximity and combat:
+
+| State | Description |
+|-------|-------------|
+| **Idle** | Standing still, not moving (1.5s before wandering) |
+| **Wandering** | Randomly moving within territory, pausing occasionally |
+| **Alert** | Heard noise or ally shout, investigating source (3s) |
+| **Chasing** | Pursuing target, moving at full speed |
+| **Combat** | In attack range, actively attacking target |
+| **Fleeing** | Running away (triggered by flee threshold) |
+| **Searching** | Lost sight of target, checking last known position |
+| **Returning** | Walking back to spawn point |
+| **Shouting** | Alerting nearby allies (1s windup, can be interrupted) |
+| **Following** | Following pack leader or ally |
+| **Commanded** | Directed by leader to attack specific target |
+
+### Behavior Types
+
+| Type | Territory | Chase Range | Search Duration | Notes |
+|------|-----------|-------------|-----------------|-------|
+| **Aggressive** | None | 15 tiles | 10s | Chases indefinitely |
+| **Territorial** | Room | 20 tiles | 5s | Returns if leaves territory |
+| **Passive** | 5 tiles | 0 | 0s | Won't chase, only retaliates |
+| **Defensive** | 10 tiles | 10 tiles | 3s | Maintains distance |
+| **Patrol** | Room | 12 tiles | 8s | Wanders set area |
+
+### Social Behaviors
+
+| Behavior | Description |
+|----------|-------------|
+| **Swarm** | Follows first pack member, shares aggro with leader |
+| **Pack** | Follows pack leader, coordinates attacks |
+| **Pack Leader** | Commands pack members to attack its target |
+| **Dominant** | Commands non-pack allies (like elites) |
+| **Solitary** | Avoids other enemies, keeps distance |
+
+---
+
 ## Volcanic Monsters
 
 ### Magma Slime
@@ -30,6 +88,7 @@
 | pDef | 15 | | Move Interval | 3 |
 | mDef | 8 | | Aggression | 2 |
 | XP | 25 | | Spawn Weight | 30 |
+| **Armor** | **Unarmored** | | **AI Type** | **Aggressive** |
 
 **Abilities:**
 - **Attacks:** Ground Slam
@@ -53,6 +112,7 @@
 | pDef | 20 | | Move Interval | 3 |
 | mDef | 5 | | Aggression | 2 |
 | XP | 45 | | Spawn Weight | 3 |
+| **Armor** | **Stone** | | **AI Type** | **Aggressive** |
 
 **Abilities:**
 - **Attacks:** Heavy Slam (40 dmg, knockback), Ground Slam, Stomp (stun)
@@ -76,6 +136,7 @@
 | pDef | 2 | | Move Interval | 1 |
 | mDef | 15 | | Aggression | 4 |
 | XP | 35 | | Spawn Weight | 7 |
+| **Armor** | **Ethereal** | | **AI Type** | **Defensive** |
 
 **Abilities:**
 - **Attacks:** Projectile Single, Fire Breath (cone, lingering flames)
@@ -99,6 +160,7 @@
 | pDef | 4 | | Move Interval | 1 |
 | mDef | 4 | | Aggression | 5 |
 | XP | 30 | | Spawn Weight | 8 |
+| **Armor** | **Unarmored** | | **AI Type** | **Aggressive** |
 
 **Abilities:**
 - **Attacks:** Bite (causes bleed), Pounce (dash attack)
@@ -122,6 +184,7 @@
 | pDef | 8 | | Move Interval | 2 |
 | mDef | 12 | | Aggression | 3 |
 | XP | 30 | | Spawn Weight | 6 |
+| **Armor** | **Unarmored** | | **AI Type** | **Aggressive** |
 
 **Abilities:**
 - **Attacks:** Claw Swipe, Lunge (dash with damage)
@@ -145,6 +208,7 @@
 | pDef | 10 | | Move Interval | 2 |
 | mDef | 10 | | Aggression | 3 |
 | XP | 35 | | Spawn Weight | 5 |
+| **Armor** | **Scaled** | | **AI Type** | **Aggressive** |
 
 **Abilities:**
 - **Attacks:** Tail Whip (knockback), Bite (bleed), Fire Breath
@@ -168,6 +232,7 @@
 | pDef | 5 | | Move Interval | 2 |
 | mDef | 8 | | Aggression | 4 |
 | XP | 40 | | Spawn Weight | 3 |
+| **Armor** | **Unarmored** | | **AI Type** | **Defensive** |
 
 **Abilities:**
 - **Attacks:** Projectile Burst, Fire Breath
@@ -193,6 +258,7 @@
 | pDef | 2 | | Move Interval | 1 |
 | mDef | 2 | | Aggression | 4 |
 | XP | 15 | | Spawn Weight | 12 |
+| **Armor** | **Unarmored** | | **AI Type** | **Aggressive** |
 
 **Abilities:**
 - **Attacks:** Bite
@@ -216,6 +282,7 @@
 | pDef | 18 | | Move Interval | 3 |
 | mDef | 5 | | Aggression | 2 |
 | XP | 35 | | Spawn Weight | 5 |
+| **Armor** | **Stone** | | **AI Type** | **Territorial** |
 
 **Abilities:**
 - **Attacks:** Heavy Slam (knockback), Stomp (stun)
@@ -239,6 +306,7 @@
 | pDef | 4 | | Move Interval | 2 |
 | mDef | 12 | | Aggression | 2 |
 | XP | 28 | | Spawn Weight | 30 |
+| **Armor** | **Unarmored** | | **AI Type** | **Defensive** |
 
 **Abilities:**
 - **Attacks:** Poison Cloud (cone, applies poison), Spit
@@ -262,6 +330,7 @@
 | pDef | 8 | | Move Interval | 1 |
 | mDef | 10 | | Aggression | 4 |
 | XP | 32 | | Spawn Weight | 5 |
+| **Armor** | **Scaled** | | **AI Type** | **Aggressive** |
 
 **Abilities:**
 - **Attacks:** Bite (bleed), Web Shot (roots target 2s), Pounce
@@ -287,6 +356,7 @@
 | pDef | 10 | | Move Interval | 2 |
 | mDef | 3 | | Aggression | 3 |
 | XP | 28 | | Spawn Weight | 8 |
+| **Armor** | **Bone** | | **AI Type** | **Aggressive** |
 
 **Abilities:**
 - **Attacks:** Melee Swing, Double Strike, Bone Throw (ranged)
@@ -310,6 +380,7 @@
 | pDef | 2 | | Move Interval | 2 |
 | mDef | 18 | | Aggression | 3 |
 | XP | 38 | | Spawn Weight | 30 |
+| **Armor** | **Ethereal** | | **AI Type** | **Aggressive** |
 
 **Abilities:**
 - **Attacks:** Life Drain (heals 50% of damage), Projectile Single, Shadow Step
@@ -333,6 +404,7 @@
 | pDef | 16 | | Move Interval | 3 |
 | mDef | 8 | | Aggression | 2 |
 | XP | 55 | | Spawn Weight | 2 |
+| **Armor** | **Bone** | | **AI Type** | **Aggressive** |
 
 **Abilities:**
 - **Attacks:** Heavy Slam, Ground Slam, Bone Throw
@@ -358,6 +430,7 @@
 | pDef | 12 | | Move Interval | 2 |
 | mDef | 6 | | Aggression | 3 |
 | XP | 30 | | Spawn Weight | 6 |
+| **Armor** | **Armored** | | **AI Type** | **Aggressive** |
 
 **Abilities:**
 - **Attacks:** Claw Swipe, Lunge
@@ -381,6 +454,7 @@
 | pDef | 8 | | Move Interval | 1 |
 | mDef | 10 | | Aggression | 4 |
 | XP | 40 | | Spawn Weight | 4 |
+| **Armor** | **Scaled** | | **AI Type** | **Aggressive** |
 
 **Abilities:**
 - **Attacks:** Bite (bleed), Tail Whip (knockback), Frost Breath (slow)
@@ -406,6 +480,7 @@
 | pDef | 6 | | Move Interval | 1 |
 | mDef | 10 | | Aggression | 5 |
 | XP | 42 | | Spawn Weight | 4 |
+| **Armor** | **Unarmored** | | **AI Type** | **Aggressive** |
 
 **Abilities:**
 - **Attacks:** Double Strike, Shadow Step (teleport + attack), Teleport Strike
@@ -429,6 +504,7 @@
 | pDef | 8 | | Move Interval | 2 |
 | mDef | 16 | | Aggression | 3 |
 | XP | 48 | | Spawn Weight | 30 |
+| **Armor** | **Ethereal** | | **AI Type** | **Defensive** |
 
 **Abilities:**
 - **Attacks:** Projectile Burst, Life Drain, Homing Orb
