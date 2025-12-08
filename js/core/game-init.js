@@ -74,8 +74,6 @@ function resetGameState() {
     game.doorways = [];
     game.rooms = [];
     game.groundLoot = [];
-    game.gold = 50;
-    game.merchantVisited = false;
     
     // Shift system
     game.shiftMeter = 0;

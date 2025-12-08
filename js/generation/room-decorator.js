@@ -26,61 +26,61 @@ const ELEMENT_DECORATIONS = {
         blocking: ['lava_rock', 'charred_pillar', 'ember_brazier', 'scorched_bones'],
         floor: ['ash_pile', 'cinder_patch', 'heat_vent', 'burnt_debris'],
         wall: ['torch_sconce', 'flame_rune', 'soot_marks'],
-        special: ['fire_shrine', 'magma_pool_small']
+        special: ['fire_shrine', 'magma_pool_small', 'sacrifice_altar']
     },
     ice: {
         blocking: ['ice_pillar', 'frozen_statue', 'frost_crystal', 'icicle_cluster'],
         floor: ['ice_patch', 'snow_drift', 'frozen_puddle', 'frost_runes'],
         wall: ['ice_formation', 'frozen_torch', 'rime_coating'],
-        special: ['ice_shrine', 'frozen_chest']
+        special: ['ice_shrine', 'frozen_chest', 'sacrifice_altar']
     },
     water: {
         blocking: ['coral_formation', 'water_pillar', 'shell_mound', 'barnacle_rock'],
         floor: ['shallow_pool', 'wet_stones', 'seaweed_patch', 'tide_pool'],
         wall: ['dripping_moss', 'water_stain', 'shell_decoration'],
-        special: ['water_shrine', 'sunken_chest']
+        special: ['water_shrine', 'sunken_chest', 'sacrifice_altar']
     },
     earth: {
         blocking: ['boulder', 'stalagmite', 'crystal_cluster', 'stone_pillar'],
         floor: ['gravel_patch', 'crystal_shard', 'mineral_vein', 'cracked_floor'],
         wall: ['ore_vein', 'fossil_imprint', 'cave_painting'],
-        special: ['earth_shrine', 'geode']
+        special: ['earth_shrine', 'geode', 'sacrifice_altar']
     },
     nature: {
         blocking: ['giant_mushroom', 'twisted_tree', 'thorn_bush', 'moss_boulder'],
         floor: ['mushroom_cluster', 'vine_patch', 'flower_bed', 'leaf_pile'],
         wall: ['hanging_vines', 'wall_fungus', 'root_growth'],
-        special: ['nature_shrine', 'healing_spring']
+        special: ['nature_shrine', 'healing_spring', 'sacrifice_altar']
     },
     death: {
         blocking: ['bone_pile', 'tombstone', 'coffin', 'skeletal_remains'],
         floor: ['skull_pile', 'grave_dirt', 'spectral_residue', 'death_rune'],
         wall: ['bone_decoration', 'death_mask', 'crypt_inscription'],
-        special: ['death_shrine', 'sarcophagus']
+        special: ['death_shrine', 'sarcophagus', 'sacrifice_altar']
     },
     arcane: {
         blocking: ['arcane_pillar', 'floating_crystal', 'runic_obelisk', 'mana_font'],
         floor: ['rune_circle', 'magic_residue', 'glyph_pattern', 'power_conduit'],
         wall: ['arcane_inscription', 'glowing_rune', 'spell_scar'],
-        special: ['arcane_shrine', 'enchanting_table']
+        special: ['arcane_shrine', 'enchanting_table', 'sacrifice_altar']
     },
     dark: {
         blocking: ['shadow_pillar', 'void_crystal', 'dark_altar', 'nightmare_statue'],
         floor: ['shadow_pool', 'dark_rune', 'void_crack', 'nightmare_residue'],
         wall: ['shadow_stain', 'void_portal_small', 'dark_inscription'],
-        special: ['dark_shrine', 'shadow_chest']
+        special: ['dark_shrine', 'shadow_chest', 'sacrifice_altar']
     },
     holy: {
         blocking: ['light_pillar', 'angel_statue', 'sacred_font', 'prayer_altar'],
         floor: ['holy_circle', 'blessed_tiles', 'light_beam', 'sacred_rune'],
         wall: ['holy_symbol', 'divine_inscription', 'light_sconce'],
-        special: ['holy_shrine', 'blessing_fountain']
+        special: ['holy_shrine', 'blessing_fountain', 'sacrifice_altar']
     },
     physical: {
         blocking: ['weapon_rack', 'training_dummy', 'pillar', 'broken_statue'],
         floor: ['blood_stain', 'weapon_debris', 'chain_pile', 'sand_pit'],
         wall: ['trophy_mount', 'battle_scar', 'chain_mount'],
-        special: ['combat_shrine', 'arena_chest']
+        special: ['combat_shrine', 'arena_chest', 'sacrifice_altar']
     }
 };
 
@@ -403,7 +403,12 @@ function interactWithDecoration(decoration, player) {
         decoration.interactable = false; // One use
         return true;
     }
-    
+
+    // Sacrifice Altars
+    if (type === 'sacrifice_altar') {
+        return openSacrificeUI(decoration, player);
+    }
+
     return false;
 }
 
@@ -446,25 +451,46 @@ function activateShrine(shrine, player) {
  * Open a chest
  */
 function openChest(chest, player) {
-    // Generate loot
-    const goldAmount = 20 + Math.floor(Math.random() * 50);
-    game.gold = (game.gold || 0) + goldAmount;
-    
-    if (typeof addMessage === 'function') {
-        addMessage(`Found ${goldAmount} gold!`);
-    }
-    
-    // Chance for item
-    if (Math.random() < 0.3 && typeof rollEquipmentDrop === 'function') {
-        const item = rollEquipmentDrop();
-        if (item) {
-            player.inventory.push(item);
-            if (typeof addMessage === 'function') {
-                addMessage(`Found ${item.name}!`);
+    // Generate random loot (no gold)
+    const items = [];
+
+    // Always drop a material/consumable
+    if (typeof rollMonsterLoot === 'function') {
+        // Pick a random monster to get loot from
+        const monsterNames = Object.keys(MONSTER_DATA || {});
+        if (monsterNames.length > 0) {
+            const randomMonster = monsterNames[Math.floor(Math.random() * monsterNames.length)];
+            const loot = rollMonsterLoot(randomMonster);
+            if (loot) {
+                items.push(loot);
             }
         }
     }
-    
+
+    // 40% chance for equipment
+    if (Math.random() < 0.4 && typeof rollEquipmentDrop === 'function') {
+        const item = rollEquipmentDrop();
+        if (item) {
+            items.push(item);
+        }
+    }
+
+    // Add items to inventory
+    for (const item of items) {
+        if (typeof addItemToInventory === 'function') {
+            addItemToInventory(item);
+        } else {
+            player.inventory.push(item);
+        }
+        if (typeof addMessage === 'function') {
+            addMessage(`Found ${item.name}!`);
+        }
+    }
+
+    if (items.length === 0 && typeof addMessage === 'function') {
+        addMessage('The chest was empty...');
+    }
+
     chest.interactable = false;
     chest.type = chest.type.replace('chest', 'chest_open');
     return true;

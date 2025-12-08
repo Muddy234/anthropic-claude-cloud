@@ -1244,6 +1244,13 @@ canvas.addEventListener('click', (e) => {
     const clickX = (e.clientX - rect.left) * scaleX;
     const clickY = (e.clientY - rect.top) * scaleY;
 
+    // Handle sacrifice UI clicks first
+    if (game.state === 'sacrifice' && typeof handleSacrificeClick === 'function') {
+        if (handleSacrificeClick(clickX, clickY)) {
+            return; // Click was handled by sacrifice UI
+        }
+    }
+
     const infoPopup = getInfoPopup();
     const inspectPopup = getInspectPopup();
 

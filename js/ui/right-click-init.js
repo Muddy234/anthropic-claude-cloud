@@ -139,6 +139,36 @@ function handleRightClick(e) {
         }
     }
 
+    // Check for interactable decorations (shrines, chests, altars)
+    if (game.decorations) {
+        const clickedDecoration = game.decorations.find(dec =>
+            Math.floor(dec.x) === gridX && Math.floor(dec.y) === gridY && dec.interactable
+        );
+
+        if (clickedDecoration) {
+            const tile = game.map?.[gridY]?.[gridX];
+            if (tile && tile.visible) {
+                // Check if player is close enough (within 2 tiles)
+                const dx = Math.abs(gridX - game.player.gridX);
+                const dy = Math.abs(gridY - game.player.gridY);
+                if (dx <= 2 && dy <= 2) {
+                    console.log('Right-click: Interacting with decoration:', clickedDecoration.type);
+                    // Direct action: Interact with decoration
+                    if (typeof window.interactWithDecoration === 'function') {
+                        window.interactWithDecoration(clickedDecoration, game.player);
+                    }
+                    return; // Don't show context menu
+                } else {
+                    console.log('Decoration too far away - move closer to interact');
+                    if (typeof addMessage === 'function') {
+                        addMessage('Move closer to interact.');
+                    }
+                    return;
+                }
+            }
+        }
+    }
+
     // Empty tile - no action (walk disabled with new mouse combat)
     // Could show context menu but walk is disabled anyway
     console.log('Right-click on empty tile - no action');

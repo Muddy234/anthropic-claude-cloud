@@ -65,8 +65,7 @@ function drawTracker() {
 
     // Stamina (text only for now)
     ctx.fillText(`STM: ${Math.floor(game.player.stamina)}/${game.player.maxStamina}`, px, y); y += 50;
-    ctx.fillStyle = '#FFD700'; ctx.textAlign = 'center'; ctx.font = 'bold 24px monospace'; ctx.fillText(`GOLD: ${game.gold}`, cx, y); y += 50;
-    ctx.fillStyle = '#FFD700'; ctx.fillText('INVENTORY', cx, y); y += 30;
+    ctx.fillStyle = '#9b59b6'; ctx.textAlign = 'center'; ctx.font = 'bold 24px monospace'; ctx.fillText('INVENTORY', cx, y); y += 30;
     ctx.fillStyle = '#fff'; ctx.font = '16px monospace';
     if (game.player.inventory.length === 0) { ctx.fillText('Empty', cx, y); } else { for (const item of game.player.inventory) { ctx.fillText(`${item.name} x${item.count}`, cx, y); y += 25; } }
     ctx.fillStyle = '#888'; ctx.font = '14px monospace'; ctx.fillText('[E] Open Inventory', cx, canvas.height - 30);
@@ -481,11 +480,12 @@ function drawItemInspectPanel(item, x, y, w, h, itemType) {
         dy += 20;
     }
 
-    // Gold value
-    ctx.fillStyle = '#f1c40f';
+    // Favor value (for altar sacrifice)
+    ctx.fillStyle = '#9b59b6';
     ctx.font = '18px monospace';
     ctx.textAlign = 'center';
-    ctx.fillText(`Value: ${itemData.goldValue || 0} Gold`, x + w / 2, dy);
+    const favorVal = itemData.favorValue || getFavorValue(itemData);
+    ctx.fillText(`Favor: ${favorVal} HP`, x + w / 2, dy);
     dy += 40;
 
     // Action button
@@ -519,34 +519,10 @@ function drawItemInspectPanel(item, x, y, w, h, itemType) {
     }
 }
 
+// Merchant removed - gold system replaced with Altar sacrifice system
 function drawMerchant() {
-    ctx.fillStyle = 'rgba(0, 0, 0, 0.9)'; ctx.fillRect(TRACKER_WIDTH, 0, canvas.width - TRACKER_WIDTH, canvas.height);
-    const cx = TRACKER_WIDTH + (canvas.width - TRACKER_WIDTH) / 2; const cy = canvas.height / 2;
-    const w = 800, h = 600; const x = cx - w / 2, y = cy - h / 2;
-    ctx.fillStyle = '#1a1a1a'; ctx.strokeStyle = '#f1c40f'; ctx.lineWidth = 4; ctx.fillRect(x, y, w, h); ctx.strokeRect(x, y, w, h);
-    ctx.fillStyle = '#f1c40f'; ctx.textAlign = 'center'; ctx.font = 'bold 40px monospace'; ctx.fillText('MERCHANT', cx, y + 60);
-    ctx.fillStyle = '#fff'; ctx.font = '24px monospace'; ctx.fillText(`Your Gold: ${game.gold}`, cx, y + 100);
-    if (!game.merchantMode) game.merchantMode = 'menu';
-    if (game.merchantMode === 'menu') {
-        ctx.fillStyle = '#fff'; ctx.font = 'bold 36px monospace'; ctx.fillText('[1] BUY', cx, cy - 20); ctx.fillText('[2] SELL', cx, cy + 40);
-        ctx.fillStyle = '#888'; ctx.font = '20px monospace'; ctx.fillText('Press [SPACE] to Leave', cx, y + h - 40);
-    } else if (game.merchantMode === 'buy') {
-        ctx.fillStyle = '#3498db'; ctx.font = 'bold 32px monospace'; ctx.fillText('BUY ITEMS', cx, y + 150);
-        ctx.fillStyle = '#fff'; ctx.font = '28px monospace'; ctx.fillText('[1] Health Potion - 30 Gold', cx, cy + 20);
-        if (game.merchantMsg) { ctx.fillStyle = game.merchantMsg.includes('Bought') ? '#2ecc71' : '#e74c3c'; ctx.fillText(game.merchantMsg, cx, cy + 80); }
-        ctx.fillStyle = '#888'; ctx.font = '20px monospace'; ctx.fillText('[ESC] Back | [SPACE] Leave', cx, y + h - 40);
-    } else if (game.merchantMode === 'sell') {
-        drawInventoryOverlay(); const cx = TRACKER_WIDTH + (canvas.width - TRACKER_WIDTH) / 2;
-        ctx.fillStyle = '#f1c40f'; ctx.font = 'bold 24px monospace'; ctx.textAlign = 'center'; ctx.fillText('SELL MODE - [Number] to Sell', cx, 60);
-        if (game.inventoryTab !== 4 && game.inventoryTab !== 5) {
-            const x = cx - 450; const y = (canvas.height / 2) - 400; const contentY = y + 60; let lineY = contentY;
-            const types = ['weapon', 'armor', 'consumable', 'material']; const targetType = types[game.inventoryTab]; const filteredItems = game.player.inventory.filter(i => i.type === targetType);
-            filteredItems.forEach((item, idx) => {
-                const itemData = EQUIPMENT_DATA[item.name]; const sellPrice = itemData ? Math.floor(itemData.goldValue / 2) : Math.floor((item.goldValue || 1) / 2);
-                ctx.fillStyle = '#f1c40f'; ctx.textAlign = 'right'; ctx.fillText(`${sellPrice} G`, x + 880, lineY); lineY += 40;
-            });
-        }
-    }
+    // Merchant functionality disabled
+    game.showMerchant = false;
 }
 
 function drawLevelUpScreen() {
@@ -693,7 +669,7 @@ function render() {
 
 if (game.state === 'menu') {
         ctx.fillStyle = '#fff'; ctx.font = '64px monospace'; ctx.textAlign = 'center'; ctx.fillText('THE SHIFTING CHASM', canvas.width / 2, 400); ctx.font = '32px monospace'; ctx.fillText('Press SPACE to Start', canvas.width / 2, 500);
-    } else if (game.state === 'playing' || game.state === 'merchant' || game.state === 'inventory' || game.state === 'map' || game.state === 'skills' || game.state === 'moveset' || game.state === 'levelup' || game.state === 'character' || game.state === 'shift') {
+    } else if (game.state === 'playing' || game.state === 'merchant' || game.state === 'inventory' || game.state === 'map' || game.state === 'skills' || game.state === 'moveset' || game.state === 'levelup' || game.state === 'character' || game.state === 'shift' || game.state === 'sacrifice') {
 
 const effectiveTileSize = TILE_SIZE * ZOOM_LEVEL;
 const viewW = canvas.width - TRACKER_WIDTH;
@@ -924,6 +900,7 @@ const camY = game.camera.y + (shakeOffset.y / (TILE_SIZE * ZOOM_LEVEL));
     if (game.state === 'skills') drawSkillsOverlay();
     if (game.state === 'moveset') drawMoveSetOverlay();
     if (game.state === 'levelup') drawLevelUpScreen();
+    if (game.state === 'sacrifice' && typeof renderSacrificeUI === 'function') renderSacrificeUI(ctx);
 
     // Draw shift countdown timer at top of screen
     drawShiftCountdown();
