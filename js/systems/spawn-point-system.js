@@ -475,6 +475,11 @@ const SpawnPointSystem = {
             AIManager.registerEnemy(enemy);
         }
 
+        // Initialize abilities from repository
+        if (typeof EnemyAbilitySystem !== 'undefined') {
+            EnemyAbilitySystem.initializeEnemy(enemy);
+        }
+
         return enemy;
     },
 

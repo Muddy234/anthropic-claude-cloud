@@ -111,6 +111,11 @@ function spawnEnemiesInRoom(room, validTiles, enemyCount) {
             if (typeof AIManager !== 'undefined') {
                 AIManager.registerEnemy(enemy);
             }
+
+            // Initialize abilities from repository
+            if (typeof EnemyAbilitySystem !== 'undefined') {
+                EnemyAbilitySystem.initializeEnemy(enemy);
+            }
         }
     }
     

@@ -68,7 +68,16 @@ function updateEntityCombat(entity, deltaTime) {
 
     // Ready to attack? (Enemies only - player uses hotkeys)
     if (combat.attackCooldown <= 0) {
-        performAttack(entity, combat.currentTarget);
+        // Try to use a special ability first (for enemies with abilities)
+        let usedAbility = false;
+        if (entity !== game.player && typeof EnemyAbilitySystem !== 'undefined') {
+            usedAbility = EnemyAbilitySystem.tryUseAbility(entity, combat.currentTarget);
+        }
+
+        // Fall back to basic attack if no ability used
+        if (!usedAbility) {
+            performAttack(entity, combat.currentTarget);
+        }
 
         // Calculate attack speed (lower = faster)
         const baseSpeed = combat.attackSpeed || 1.0;
@@ -283,6 +292,12 @@ function applyDamage(entity, damage, source, damageResult) {
         if (typeof addMessage === 'function') {
             addMessage(`Interrupted ${entity.name}'s alert!`);
         }
+    }
+
+    // Trigger damage-based mechanics for enemies
+    if (entity !== game.player && typeof EnemyAbilitySystem !== 'undefined') {
+        entity.lastDamageTime = Date.now();  // For regeneration passive
+        EnemyAbilitySystem.checkMechanics(entity, 'on_damaged', { damage, source });
     }
 
     // Break invisibility on damage
