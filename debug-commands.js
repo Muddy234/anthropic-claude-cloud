@@ -1138,14 +1138,16 @@ const Debug = {
     _arenaRoom: null,
     _arenaCreated: false,
     _originalPosition: null,
+    _savedTiles: null,
 
     arena() {
         // Create arena if not exists
         if (!this._arenaCreated) {
             const arenaWidth = 25;
             const arenaHeight = 25;
-            const arenaX = -100;
-            const arenaY = -100;
+            // Place arena in top-left corner of map (within valid grid bounds)
+            const arenaX = 5;
+            const arenaY = 5;
 
             this._arenaRoom = {
                 id: 'test_arena',
@@ -1165,6 +1167,17 @@ const Debug = {
 
             if (!game.map) game.map = [];
 
+            // Save original tiles so we can restore them later
+            this._savedTiles = [];
+            for (let y = arenaY; y < arenaY + arenaHeight; y++) {
+                this._savedTiles[y] = [];
+                for (let x = arenaX; x < arenaX + arenaWidth; x++) {
+                    if (game.map[y] && game.map[y][x]) {
+                        this._savedTiles[y][x] = { ...game.map[y][x] };
+                    }
+                }
+            }
+
             // Create arena tiles with visibility flags
             for (let y = arenaY; y < arenaY + arenaHeight; y++) {
                 if (!game.map[y]) game.map[y] = [];
@@ -1176,7 +1189,8 @@ const Debug = {
                             char: '#',
                             visible: true,
                             explored: true,
-                            alwaysVisible: true
+                            alwaysVisible: true,
+                            blocked: true
                         };
                     } else {
                         game.map[y][x] = {
