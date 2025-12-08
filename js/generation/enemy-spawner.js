@@ -377,10 +377,8 @@ function createEnemy(monsterType, x, y, room) {
             comboCount: 1  // Enemy combo system: 1 -> 2 -> 3 (special) -> 1
         },
 
-        // Loot (scaled by floor level)
-        loot: template.loot || { goldMin: 5, goldMax: 15 },
-        goldMin: stats.goldMin || template.goldMin || 5,
-        goldMax: stats.goldMax || template.goldMax || 15,
+        // Loot (favor-based system - no gold)
+        loot: template.loot || [],
         xp: stats.xp || calculateMonsterXP(template),
         
         // Status
