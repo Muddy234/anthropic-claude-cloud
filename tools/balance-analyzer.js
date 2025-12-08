@@ -379,6 +379,7 @@ function runSimulations(monsterName, floor, numSimulations = 1000) {
         monsterHpRemaining: [],
         damageToMonster: [],
         damageToPlayer: [],
+        damageTakenPerFight: [],  // Track damage taken even in losses
         fightDurations: [],
         playerCritRate: 0,
         monsterCritRate: 0,
@@ -406,6 +407,7 @@ function runSimulations(monsterName, floor, numSimulations = 1000) {
 
         results.damageToMonster.push(result.totalDamageToMonster);
         results.damageToPlayer.push(result.totalDamageToPlayer);
+        results.damageTakenPerFight.push(result.totalDamageToPlayer);
         results.fightDurations.push(result.fightDuration);
 
         totalPlayerHits += result.playerHits;
@@ -416,14 +418,35 @@ function runSimulations(monsterName, floor, numSimulations = 1000) {
         totalMonsterCrits += result.monsterCrits;
     }
 
-    // Calculate averages
+    // Calculate averages and statistics
     const avg = arr => arr.length ? arr.reduce((a, b) => a + b, 0) / arr.length : 0;
+    const min = arr => arr.length ? Math.min(...arr) : 0;
+    const max = arr => arr.length ? Math.max(...arr) : 0;
+    const median = arr => {
+        if (!arr.length) return 0;
+        const sorted = [...arr].sort((a, b) => a - b);
+        const mid = Math.floor(sorted.length / 2);
+        return sorted.length % 2 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2;
+    };
 
     results.avgPlayerHpRemaining = avg(results.playerHpRemaining);
+    results.minPlayerHpRemaining = min(results.playerHpRemaining);
+    results.maxPlayerHpRemaining = max(results.playerHpRemaining);
+    results.medianPlayerHpRemaining = median(results.playerHpRemaining);
+
     results.avgMonsterHpRemaining = avg(results.monsterHpRemaining);
     results.avgDamageToMonster = avg(results.damageToMonster);
     results.avgDamageToPlayer = avg(results.damageToPlayer);
+    results.avgDamageTaken = avg(results.damageTakenPerFight);
+    results.minDamageTaken = min(results.damageTakenPerFight);
+    results.maxDamageTaken = max(results.damageTakenPerFight);
     results.avgFightDuration = avg(results.fightDurations);
+
+    // Sustainability: how many fights can be won consecutively?
+    // Based on average damage taken per fight vs total HP
+    results.estimatedFightsBeforeDeath = results.avgDamageTaken > 0
+        ? Math.floor(player.hp / results.avgDamageTaken)
+        : Infinity;
 
     results.playerHitRate = totalPlayerHits / (totalPlayerHits + totalPlayerMisses);
     results.monsterHitRate = totalMonsterHits / (totalMonsterHits + totalMonsterMisses);
@@ -522,16 +545,40 @@ function printSimulationResults(monsterName, floor, data) {
     console.log(`Player Wins:  ${results.playerWins} (${winRate}%)`);
     console.log(`Monster Wins: ${results.monsterWins} (${lossRate}%)`);
 
+    // CRITICAL: HP/Damage tracking section
+    console.log(`\n--- DAMAGE TAKEN (per fight) ---`);
+    console.log(`Average:  ${results.avgDamageTaken.toFixed(1)} HP`);
+    console.log(`Minimum:  ${results.minDamageTaken} HP`);
+    console.log(`Maximum:  ${results.maxDamageTaken} HP`);
+    const dmgPct = ((results.avgDamageTaken / player.hp) * 100).toFixed(1);
+    console.log(`% of Max HP: ${dmgPct}%`);
+
     if (results.playerWins > 0) {
-        console.log(`\n--- WHEN PLAYER WINS ---`);
-        const hpPct = ((results.avgPlayerHpRemaining / player.hp) * 100).toFixed(1);
-        console.log(`Avg HP Remaining: ${results.avgPlayerHpRemaining.toFixed(1)} / ${player.hp} (${hpPct}%)`);
+        console.log(`\n--- HP REMAINING (when player wins) ---`);
+        const avgPct = ((results.avgPlayerHpRemaining / player.hp) * 100).toFixed(1);
+        const minPct = ((results.minPlayerHpRemaining / player.hp) * 100).toFixed(1);
+        const maxPct = ((results.maxPlayerHpRemaining / player.hp) * 100).toFixed(1);
+        console.log(`Average:  ${results.avgPlayerHpRemaining.toFixed(1)} / ${player.hp} (${avgPct}%)`);
+        console.log(`Minimum:  ${results.minPlayerHpRemaining} / ${player.hp} (${minPct}%)`);
+        console.log(`Maximum:  ${results.maxPlayerHpRemaining} / ${player.hp} (${maxPct}%)`);
+        console.log(`Median:   ${results.medianPlayerHpRemaining.toFixed(1)} / ${player.hp}`);
     }
 
     if (results.monsterWins > 0) {
-        console.log(`\n--- WHEN MONSTER WINS ---`);
+        console.log(`\n--- MONSTER HP REMAINING (when monster wins) ---`);
         const hpPct = ((results.avgMonsterHpRemaining / monster.hp) * 100).toFixed(1);
-        console.log(`Avg HP Remaining: ${results.avgMonsterHpRemaining.toFixed(1)} / ${monster.hp} (${hpPct}%)`);
+        console.log(`Average:  ${results.avgMonsterHpRemaining.toFixed(1)} / ${monster.hp} (${hpPct}%)`);
+    }
+
+    // SUSTAINABILITY - Critical for multi-fight analysis
+    console.log(`\n--- SUSTAINABILITY ---`);
+    const fightsBeforeDeath = results.estimatedFightsBeforeDeath;
+    console.log(`Estimated fights before death: ${fightsBeforeDeath === Infinity ? '∞' : fightsBeforeDeath}`);
+    if (fightsBeforeDeath !== Infinity) {
+        const hpNeededPerFight = results.avgDamageTaken;
+        console.log(`HP needed per fight: ~${hpNeededPerFight.toFixed(1)}`);
+        // Healing needed to sustain
+        console.log(`Healing needed to sustain: ${hpNeededPerFight.toFixed(1)} HP/fight`);
     }
 
     console.log(`\n--- COMBAT STATS ---`);
@@ -592,26 +639,29 @@ function printTheoreticalResults(monsterName, floor, data) {
 function printAllMonstersReport(floor) {
     printHeader(`BALANCE REPORT - FLOOR ${floor}`);
 
-    console.log('\n%-20s %6s %6s %8s %8s %8s %10s'.replace(/%(\d+)s/g, (m, n) => ' '.repeat(n)));
-    console.log('Monster              WinRate  Danger  P.DPS  M.DPS  P.TTK  Rating');
-    console.log('-'.repeat(70));
+    console.log('\nMonster              Win%   AvgDmg  HPLeft  Sustain  Rating');
+    console.log('-'.repeat(65));
 
     const monsterNames = Object.keys(MONSTER_DATA);
     const results = [];
 
     for (const name of monsterNames) {
         const sim = runSimulations(name, floor, 500);
-        const theory = calculateTheoretical(name, floor);
 
-        if (sim && theory) {
+        if (sim) {
             const winRate = ((sim.results.playerWins / sim.numSimulations) * 100).toFixed(0);
+            const avgDmg = sim.results.avgDamageTaken.toFixed(0);
+            const avgHpLeft = sim.results.playerWins > 0
+                ? sim.results.avgPlayerHpRemaining.toFixed(0)
+                : '0';
+            const sustain = sim.results.estimatedFightsBeforeDeath;
+
             results.push({
                 name: name.substring(0, 18),
                 winRate,
-                danger: theory.dangerRatio,
-                pDPS: theory.playerDPS,
-                mDPS: theory.monsterDPS,
-                pTTK: theory.playerTTK
+                avgDmg,
+                avgHpLeft,
+                sustain: sustain === Infinity ? '∞' : sustain.toString()
             });
         }
     }
@@ -629,8 +679,99 @@ function printAllMonstersReport(floor) {
         else if (wr >= 20) rating = 'Hard';
         else rating = 'Too Hard';
 
-        console.log(`${r.name.padEnd(20)} ${r.winRate.padStart(5)}%  ${r.danger.padStart(6)}  ${r.pDPS.padStart(6)}  ${r.mDPS.padStart(6)}  ${r.pTTK.padStart(6)}  ${rating}`);
+        console.log(`${r.name.padEnd(20)} ${r.winRate.padStart(4)}%  ${r.avgDmg.padStart(6)}  ${r.avgHpLeft.padStart(6)}  ${r.sustain.padStart(7)}  ${rating}`);
     }
+
+    console.log('\nLegend: AvgDmg = damage taken per fight, HPLeft = HP after winning, Sustain = fights before death');
+}
+
+// ============================================================================
+// GAUNTLET SIMULATION - Multiple consecutive fights
+// ============================================================================
+
+function runGauntlet(monsterName, floor, numRuns = 100) {
+    const baseMonster = MONSTER_DATA[monsterName];
+    if (!baseMonster) {
+        console.error(`Unknown monster: ${monsterName}`);
+        return null;
+    }
+
+    const monster = scaleStats(baseMonster, floor);
+    const results = {
+        monstersKilled: [],
+        finalHp: [],
+        causeOfDeath: { monster: 0, attrition: 0 }
+    };
+
+    for (let run = 0; run < numRuns; run++) {
+        let playerHp = PLAYER_STATS.hp;
+        let kills = 0;
+
+        while (playerHp > 0) {
+            // Fight a fresh monster
+            const player = { ...PLAYER_STATS, hp: playerHp };
+            const result = simulateFight(player, { ...monster });
+
+            if (result.playerWins) {
+                kills++;
+                playerHp = result.playerHpRemaining;
+            } else {
+                // Player died during fight
+                playerHp = 0;
+                results.causeOfDeath.monster++;
+            }
+        }
+
+        results.monstersKilled.push(kills);
+        results.finalHp.push(0);
+    }
+
+    // Calculate statistics
+    const avg = arr => arr.reduce((a, b) => a + b, 0) / arr.length;
+    const min = arr => Math.min(...arr);
+    const max = arr => Math.max(...arr);
+
+    return {
+        monster,
+        numRuns,
+        avgKills: avg(results.monstersKilled),
+        minKills: min(results.monstersKilled),
+        maxKills: max(results.monstersKilled),
+        killDistribution: results.monstersKilled
+    };
+}
+
+function printGauntletResults(monsterName, floor, data) {
+    printHeader(`GAUNTLET: Player vs ${monsterName} (Floor ${floor})`);
+
+    console.log(`\nRuns: ${data.numRuns}`);
+    console.log(`Monster: HP=${data.monster.hp}  STR=${data.monster.str}  pDef=${data.monster.pDef}`);
+
+    console.log(`\n--- KILLS BEFORE DEATH ---`);
+    console.log(`Average:  ${data.avgKills.toFixed(1)} monsters`);
+    console.log(`Minimum:  ${data.minKills} monsters`);
+    console.log(`Maximum:  ${data.maxKills} monsters`);
+
+    // Distribution histogram
+    console.log(`\n--- KILL DISTRIBUTION ---`);
+    const counts = {};
+    for (const k of data.killDistribution) {
+        counts[k] = (counts[k] || 0) + 1;
+    }
+    const sortedKills = Object.keys(counts).map(Number).sort((a, b) => a - b);
+
+    for (const k of sortedKills) {
+        const pct = ((counts[k] / data.numRuns) * 100).toFixed(1);
+        const bar = '█'.repeat(Math.ceil(counts[k] / data.numRuns * 30));
+        console.log(`${k.toString().padStart(3)} kills: ${bar} ${pct}%`);
+    }
+
+    // XP/Gold projection
+    const baseMonster = MONSTER_DATA[monsterName];
+    const scaledXP = Math.floor(baseMonster.xp * (1 + (floor - 1) * 0.10));
+    const avgXP = Math.floor(data.avgKills * scaledXP);
+    console.log(`\n--- REWARDS (before death) ---`);
+    console.log(`Avg XP earned: ${avgXP} (${scaledXP} per kill)`);
 }
 
 // ============================================================================
@@ -645,15 +786,17 @@ Usage:
   node balance-analyzer.js [command] [options]
 
 Commands:
-  sim <monster> [floor]     Run combat simulation (default: 1000 fights)
-  theory <monster> [floor]  Show theoretical calculations (no RNG)
-  report [floor]            Generate report for all monsters
-  list                      List all monsters
-  stats                     Show current player stats
-  set <stat> <value>        Set player stat
+  sim <monster> [floor]       Run combat simulation (default: 1000 fights)
+  gauntlet <monster> [floor]  Simulate consecutive fights until death
+  theory <monster> [floor]    Show theoretical calculations (no RNG)
+  report [floor]              Generate report for all monsters
+  list                        List all monsters
+  stats                       Show current player stats
+  set <stat> <value>          Set player stat
 
 Examples:
   node balance-analyzer.js sim "Magma Slime" 3
+  node balance-analyzer.js gauntlet "Cave Bat" 1
   node balance-analyzer.js theory "Obsidian Golem" 5
   node balance-analyzer.js report 5
   node balance-analyzer.js set str 15
@@ -661,6 +804,11 @@ Examples:
 
 Player Stats (settable):
   hp, str, agi, int, pDef, mDef, weaponDamage, weaponSpeed
+
+Key Metrics:
+  - AvgDmg:  Average damage taken per fight
+  - HPLeft:  Average HP remaining after winning
+  - Sustain: Estimated fights before death (no healing)
 `);
 }
 
@@ -707,6 +855,18 @@ switch (command) {
         }
         const result = runSimulations(monster, floor);
         if (result) printSimulationResults(monster, floor, result);
+        break;
+    }
+
+    case 'gauntlet': {
+        const monster = args[1];
+        const floor = parseInt(args[2]) || 1;
+        if (!monster) {
+            console.error('Error: Monster name required');
+            process.exit(1);
+        }
+        const result = runGauntlet(monster, floor);
+        if (result) printGauntletResults(monster, floor, result);
         break;
     }
 
