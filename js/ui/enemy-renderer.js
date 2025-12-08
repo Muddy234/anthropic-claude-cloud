@@ -94,12 +94,190 @@ function tryDrawEnemySprite(ctx, enemy, ex, ey, cx, cy, tileSize) {
 }
 
 /**
+ * Draw attack windup visual effects
+ * Shows distinct visuals for melee, ranged, and magic attacks
+ */
+function drawAttackWindup(ctx, enemy, ex, ey, cx, cy, tileSize) {
+    // Get attack animation state
+    if (typeof getAttackAnimationState !== 'function') return;
+
+    const animState = getAttackAnimationState(enemy);
+    if (!animState || !animState.isWindup) return;
+
+    const progress = animState.progress;
+    const type = animState.type;
+    const target = animState.targetLocked;
+
+    ctx.save();
+
+    // Calculate direction to target
+    let angle = 0;
+    if (target) {
+        const dx = target.x - enemy.gridX;
+        const dy = target.y - enemy.gridY;
+        angle = Math.atan2(dy, dx);
+    } else {
+        // Use facing direction if no target
+        const facingCoords = getFacingCoordinates(enemy.facing);
+        angle = Math.atan2(facingCoords.y, facingCoords.x);
+    }
+
+    // Base alpha that pulses and increases with progress
+    const pulseSpeed = 12;
+    const pulse = 0.5 + 0.5 * Math.sin(Date.now() / 1000 * pulseSpeed);
+    const baseAlpha = 0.3 + progress * 0.5 + pulse * 0.2;
+
+    // Draw different effects based on attack type
+    switch (type) {
+        case 'melee':
+            // Slash arc telegraph - shows where the attack will swing
+            ctx.strokeStyle = `rgba(255, 100, 50, ${baseAlpha})`;
+            ctx.fillStyle = `rgba(255, 50, 0, ${baseAlpha * 0.3})`;
+            ctx.lineWidth = 3 + progress * 2;
+
+            // Draw arc showing attack range
+            const arcRadius = tileSize * (0.8 + progress * 0.5);
+            const arcSpread = Math.PI / 2;  // 90 degree arc
+
+            ctx.beginPath();
+            ctx.moveTo(cx, cy);
+            ctx.arc(cx, cy, arcRadius, angle - arcSpread / 2, angle + arcSpread / 2);
+            ctx.closePath();
+            ctx.fill();
+            ctx.stroke();
+
+            // Inner charging arc
+            if (progress > 0.3) {
+                ctx.strokeStyle = `rgba(255, 200, 100, ${(progress - 0.3) * 1.5})`;
+                ctx.lineWidth = 2;
+                const innerRadius = arcRadius * 0.6 * progress;
+                ctx.beginPath();
+                ctx.arc(cx, cy, innerRadius, angle - arcSpread / 2, angle + arcSpread / 2);
+                ctx.stroke();
+            }
+            break;
+
+        case 'ranged':
+            // Projectile charge - glowing orb forming at enemy
+            const chargeRadius = 6 + progress * 10;
+
+            // Outer glow
+            const gradient = ctx.createRadialGradient(cx, cy, 0, cx, cy, chargeRadius * 2);
+            gradient.addColorStop(0, `rgba(255, 200, 50, ${baseAlpha})`);
+            gradient.addColorStop(0.5, `rgba(255, 100, 0, ${baseAlpha * 0.5})`);
+            gradient.addColorStop(1, `rgba(255, 50, 0, 0)`);
+
+            ctx.fillStyle = gradient;
+            ctx.beginPath();
+            ctx.arc(cx, cy, chargeRadius * 2, 0, Math.PI * 2);
+            ctx.fill();
+
+            // Core charge
+            ctx.fillStyle = `rgba(255, 255, 200, ${0.5 + progress * 0.5})`;
+            ctx.beginPath();
+            ctx.arc(cx, cy, chargeRadius * 0.5, 0, Math.PI * 2);
+            ctx.fill();
+
+            // Direction indicator (line toward target)
+            if (progress > 0.5 && target) {
+                ctx.strokeStyle = `rgba(255, 200, 50, ${(progress - 0.5) * 2})`;
+                ctx.lineWidth = 2;
+                ctx.setLineDash([4, 4]);
+                const lineLength = tileSize * 2;
+                ctx.beginPath();
+                ctx.moveTo(cx, cy);
+                ctx.lineTo(cx + Math.cos(angle) * lineLength, cy + Math.sin(angle) * lineLength);
+                ctx.stroke();
+                ctx.setLineDash([]);
+            }
+            break;
+
+        case 'magic':
+            // Magic circle - arcane symbols forming around enemy
+            const circleRadius = tileSize * 0.6 + progress * tileSize * 0.3;
+
+            // Outer magic circle
+            ctx.strokeStyle = `rgba(150, 50, 255, ${baseAlpha})`;
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.arc(cx, cy, circleRadius, 0, Math.PI * 2);
+            ctx.stroke();
+
+            // Inner rotating symbols (simplified as rotating lines)
+            const numSymbols = 6;
+            const rotationOffset = (Date.now() / 500) % (Math.PI * 2);
+            ctx.strokeStyle = `rgba(200, 100, 255, ${baseAlpha * 0.8})`;
+            ctx.lineWidth = 2;
+
+            for (let i = 0; i < numSymbols; i++) {
+                const symbolAngle = (i / numSymbols) * Math.PI * 2 + rotationOffset;
+                const symbolX = cx + Math.cos(symbolAngle) * circleRadius * 0.7;
+                const symbolY = cy + Math.sin(symbolAngle) * circleRadius * 0.7;
+
+                // Draw small rune-like marks
+                ctx.beginPath();
+                ctx.moveTo(symbolX - 4, symbolY);
+                ctx.lineTo(symbolX + 4, symbolY);
+                ctx.moveTo(symbolX, symbolY - 4);
+                ctx.lineTo(symbolX, symbolY + 4);
+                ctx.stroke();
+            }
+
+            // Central glow that intensifies
+            const magicGradient = ctx.createRadialGradient(cx, cy, 0, cx, cy, circleRadius * 0.5);
+            magicGradient.addColorStop(0, `rgba(200, 100, 255, ${progress * 0.6})`);
+            magicGradient.addColorStop(1, `rgba(150, 50, 255, 0)`);
+            ctx.fillStyle = magicGradient;
+            ctx.beginPath();
+            ctx.arc(cx, cy, circleRadius * 0.5, 0, Math.PI * 2);
+            ctx.fill();
+            break;
+    }
+
+    // Draw direction indicator arrow for all types
+    if (progress > 0.2) {
+        ctx.strokeStyle = `rgba(255, 255, 255, ${(progress - 0.2) * 0.8})`;
+        ctx.lineWidth = 2;
+        const arrowLen = tileSize * 0.6;
+        const arrowX = cx + Math.cos(angle) * arrowLen;
+        const arrowY = cy + Math.sin(angle) * arrowLen;
+
+        // Arrow line
+        ctx.beginPath();
+        ctx.moveTo(cx, cy);
+        ctx.lineTo(arrowX, arrowY);
+        ctx.stroke();
+
+        // Arrow head
+        const headLen = 8;
+        const headAngle = Math.PI / 6;
+        ctx.beginPath();
+        ctx.moveTo(arrowX, arrowY);
+        ctx.lineTo(
+            arrowX - headLen * Math.cos(angle - headAngle),
+            arrowY - headLen * Math.sin(angle - headAngle)
+        );
+        ctx.moveTo(arrowX, arrowY);
+        ctx.lineTo(
+            arrowX - headLen * Math.cos(angle + headAngle),
+            arrowY - headLen * Math.sin(angle + headAngle)
+        );
+        ctx.stroke();
+    }
+
+    ctx.restore();
+}
+
+/**
  * Draw enemy overlays (tier indicator, alerts, health bar, combo indicator)
  * Works for both sprite and circle rendering
  */
 function drawEnemyOverlays(ctx, enemy, ex, ey, cx, cy, tileSize) {
     const isTargeted = game.player?.combat?.currentTarget === enemy;
     const isElite = enemy.elite || enemy.tier === 'ELITE';
+
+    // Draw attack windup effects first (behind other indicators)
+    drawAttackWindup(ctx, enemy, ex, ey, cx, cy, tileSize);
 
     // Draw tier indicator
     drawTierIndicator(ctx, enemy, cx, ey, tileSize);
@@ -184,6 +362,15 @@ function drawEnemy(ctx, enemy, camX, camY, tileSize, offsetX) {
     const isStaggered = typeof isEnemyStaggered === 'function' && isEnemyStaggered(enemy);
     const staggerFlash = typeof getEnemyStaggerFlash === 'function' && getEnemyStaggerFlash(enemy);
 
+    // Check for attack animation white flash (before attack execution)
+    let attackFlash = false;
+    if (typeof getAttackAnimationState === 'function') {
+        const animState = getAttackAnimationState(enemy);
+        if (animState && animState.inFlashPhase) {
+            attackFlash = true;
+        }
+    }
+
     const ex = (enemy.displayX - camX) * tileSize + offsetX;
     const ey = (enemy.displayY - camY) * tileSize;
     const cx = ex + tileSize / 2;
@@ -201,6 +388,14 @@ function drawEnemy(ctx, enemy, camX, camY, tileSize, offsetX) {
     if (spriteDrawn) {
         // Sprite was drawn successfully, still draw overlays
         drawEnemyOverlays(ctx, enemy, ex, ey, cx, cy, tileSize);
+
+        // Draw attack flash overlay (white flash before attack)
+        if (attackFlash) {
+            // Pulsing white flash that rapidly blinks
+            const flashPulse = Math.sin(Date.now() / 30) > 0 ? 0.8 : 0.3;
+            ctx.fillStyle = `rgba(255, 255, 255, ${flashPulse})`;
+            ctx.fillRect(ex, ey, tileSize, tileSize);
+        }
 
         // Draw stagger flash overlay
         if (staggerFlash) {
@@ -282,6 +477,16 @@ function drawEnemy(ctx, enemy, camX, camY, tileSize, offsetX) {
 
     // Draw overlays (tier, alerts, health bar)
     drawEnemyOverlays(ctx, enemy, ex, ey, cx, cy, tileSize);
+
+    // Draw attack flash overlay for circle enemies (white flash before attack)
+    if (attackFlash) {
+        // Pulsing white flash that rapidly blinks
+        const flashPulse = Math.sin(Date.now() / 30) > 0 ? 0.8 : 0.3;
+        ctx.fillStyle = `rgba(255, 255, 255, ${flashPulse})`;
+        ctx.beginPath();
+        ctx.arc(cx, cy, radius + 3, 0, Math.PI * 2);
+        ctx.fill();
+    }
 
     // Draw stagger flash overlay for circle enemies
     if (staggerFlash) {
@@ -455,10 +660,11 @@ if (typeof window !== 'undefined') {
     window.MONSTER_COLORS = MONSTER_COLORS;
     window.getFacingCoordinates = getFacingCoordinates;
     window.drawEnemy = drawEnemy;
+    window.drawAttackWindup = drawAttackWindup;
     window.drawTierIndicator = drawTierIndicator;
     window.drawEnemyHealthBar = drawEnemyHealthBar;
     window.renderAllEnemies = renderAllEnemies;
     window.renderAIDebugOverlay = renderAIDebugOverlay;
 }
 
-console.log('✅ Enemy renderer loaded (with tier indicators + facing fix)');
+console.log('✅ Enemy renderer loaded (with attack windups + white flash)');

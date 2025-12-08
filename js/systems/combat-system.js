@@ -14,7 +14,12 @@ const COMBAT_CONFIG = {
     engageDelay: 0.4,             // Initial delay when engaging (seconds)
     minDamage: 1,                 // Minimum damage floor
     missChance: 0.08,             // Base 8% miss chance
-    debugLogging: true
+    debugLogging: true,
+    // Enemy attack animation settings
+    enemyAttackDuration: 400,     // Total enemy attack animation duration (ms)
+    enemyWindupPercent: 0.35,     // 35% of attack is windup (140ms at 400ms total)
+    enemyWhiteFlashStart: 0.85,   // White flash starts at 85% of windup (last 15%)
+    playerWindupPercent: 0.15     // Player windup is 15% for comparison
 };
 
 // ============================================================================
@@ -52,6 +57,23 @@ function updateEntityCombat(entity, deltaTime) {
         return;
     }
 
+    // Initialize attack animation state if needed
+    if (!combat.attackAnimation) {
+        combat.attackAnimation = {
+            state: 'idle',      // idle, windup, executing, recovery
+            timer: 0,
+            maxTimer: 0,
+            type: 'melee',      // melee, ranged, magic
+            targetLocked: null  // Target position locked at windup start
+        };
+    }
+
+    // Handle attack animation states
+    if (combat.attackAnimation.state !== 'idle') {
+        updateAttackAnimation(entity, deltaTime);
+        return;  // Don't process normal combat during animation
+    }
+
     // Reduce cooldown
     combat.attackCooldown -= deltaTime / 1000;
 
@@ -74,16 +96,128 @@ function updateEntityCombat(entity, deltaTime) {
             usedAbility = EnemyAbilitySystem.tryUseAbility(entity, combat.currentTarget);
         }
 
-        // Fall back to basic attack if no ability used
+        // Fall back to basic attack with windup if no ability used
         if (!usedAbility) {
-            performAttack(entity, combat.currentTarget);
+            startAttackWindup(entity, combat.currentTarget);
+        } else {
+            // Abilities have their own telegraph, reset cooldown
+            const baseSpeed = combat.attackSpeed || 1.0;
+            const attackTimeMs = COMBAT_CONFIG.baseAttackTime * baseSpeed;
+            combat.attackCooldown = attackTimeMs / 1000;
         }
-
-        // Calculate attack speed (lower = faster)
-        const baseSpeed = combat.attackSpeed || 1.0;
-        const attackTimeMs = COMBAT_CONFIG.baseAttackTime * baseSpeed;
-        combat.attackCooldown = attackTimeMs / 1000;
     }
+}
+
+/**
+ * Start attack windup animation
+ */
+function startAttackWindup(attacker, target) {
+    const combat = attacker.combat;
+    const duration = COMBAT_CONFIG.enemyAttackDuration;
+
+    // Determine attack type based on enemy's equipped weapon or abilities
+    let attackType = 'melee';
+    if (attacker.attackRange && attacker.attackRange > 2) {
+        attackType = 'ranged';
+    }
+    if (attacker.element && ['fire', 'ice', 'arcane', 'void', 'death'].includes(attacker.element)) {
+        attackType = 'magic';
+    }
+
+    // Override with combat-specific attack type if defined
+    if (combat.attackType) {
+        attackType = combat.attackType;
+    }
+
+    combat.attackAnimation = {
+        state: 'windup',
+        timer: duration * COMBAT_CONFIG.enemyWindupPercent,
+        maxTimer: duration * COMBAT_CONFIG.enemyWindupPercent,
+        totalDuration: duration,
+        type: attackType,
+        targetLocked: {
+            x: target.gridX,
+            y: target.gridY,
+            entity: target
+        }
+    };
+
+    // Face the target
+    const dx = target.gridX - attacker.gridX;
+    const dy = target.gridY - attacker.gridY;
+    if (Math.abs(dx) > Math.abs(dy)) {
+        attacker.facing = dx > 0 ? 'right' : 'left';
+    } else {
+        attacker.facing = dy > 0 ? 'down' : 'up';
+    }
+}
+
+/**
+ * Update attack animation state
+ */
+function updateAttackAnimation(entity, deltaTime) {
+    const combat = entity.combat;
+    const anim = combat.attackAnimation;
+
+    anim.timer -= deltaTime;
+
+    switch (anim.state) {
+        case 'windup':
+            // Check if windup is complete
+            if (anim.timer <= 0) {
+                // Execute the attack
+                const target = anim.targetLocked?.entity;
+                if (target && target.hp > 0) {
+                    performAttack(entity, target);
+                }
+
+                // Move to recovery phase (remaining 65% of attack duration)
+                anim.state = 'recovery';
+                anim.timer = anim.totalDuration * (1 - COMBAT_CONFIG.enemyWindupPercent);
+            }
+            break;
+
+        case 'recovery':
+            if (anim.timer <= 0) {
+                // Reset to idle
+                anim.state = 'idle';
+                anim.timer = 0;
+
+                // Set attack cooldown
+                const baseSpeed = combat.attackSpeed || 1.0;
+                const attackTimeMs = COMBAT_CONFIG.baseAttackTime * baseSpeed;
+                combat.attackCooldown = attackTimeMs / 1000;
+            }
+            break;
+    }
+}
+
+/**
+ * Get attack animation progress for rendering
+ * @returns {object|null} Animation info or null if not animating
+ */
+function getAttackAnimationState(entity) {
+    const anim = entity.combat?.attackAnimation;
+    if (!anim || anim.state === 'idle') return null;
+
+    const windupDuration = anim.maxTimer;
+    const windupProgress = anim.state === 'windup'
+        ? 1 - (anim.timer / windupDuration)
+        : 1;
+
+    // Calculate if in white flash phase (last 15% of windup)
+    const flashStart = COMBAT_CONFIG.enemyWhiteFlashStart;
+    const inFlashPhase = anim.state === 'windup' && windupProgress >= flashStart;
+
+    return {
+        state: anim.state,
+        type: anim.type,
+        progress: windupProgress,
+        inFlashPhase: inFlashPhase,
+        targetLocked: anim.targetLocked,
+        isWindup: anim.state === 'windup',
+        isRecovery: anim.state === 'recovery'
+    };
 }
 
 // ============================================================================
@@ -710,6 +844,9 @@ if (typeof window !== 'undefined') {
     window.updateDamageNumbers = updateDamageNumbers;
     window.renderDamageNumbers = renderDamageNumbers;
     window.damageNumbers = damageNumbers;
+    // Attack animation exports
+    window.getAttackAnimationState = getAttackAnimationState;
+    window.startAttackWindup = startAttackWindup;
 
     // DEBUG: God mode toggle (controlled via debug.godMode())
     window.godMode = false;

@@ -394,21 +394,95 @@ const EnemyAbilitySystem = {
         abilitySet.cooldowns[ability.id] = ability.cooldown;
         abilitySet.globalCooldown = this.config.globalCooldownBase;
 
-        // Create telegraph if ability has one
-        if (ability.telegraphTime > 0) {
-            this.createTelegraph(enemy, target, ability);
+        // Determine attack type from ability category for visual rendering
+        const attackType = this.getAttackTypeFromAbility(ability);
 
-            // Delayed execution after telegraph
-            setTimeout(() => {
-                this.resolveAbility(enemy, target, ability);
-            }, ability.telegraphTime);
-        } else {
-            // Immediate execution
-            this.resolveAbility(enemy, target, ability);
+        // Use minimum telegraph time based on combat config
+        const minWindupTime = typeof COMBAT_CONFIG !== 'undefined'
+            ? COMBAT_CONFIG.enemyAttackDuration * COMBAT_CONFIG.enemyWindupPercent
+            : 140;  // 140ms default (35% of 400ms)
+
+        const telegraphTime = Math.max(ability.telegraphTime || 0, minWindupTime);
+
+        // Set up attack animation state for visual rendering
+        if (enemy.combat) {
+            enemy.combat.attackAnimation = {
+                state: 'windup',
+                timer: telegraphTime,
+                maxTimer: telegraphTime,
+                totalDuration: telegraphTime / 0.35,  // Estimate total based on windup
+                type: attackType,
+                targetLocked: {
+                    x: target.gridX,
+                    y: target.gridY,
+                    entity: target
+                },
+                abilityBased: true  // Flag to indicate ability-based attack
+            };
         }
 
+        // Face the target
+        const dx = target.gridX - enemy.gridX;
+        const dy = target.gridY - enemy.gridY;
+        if (Math.abs(dx) > Math.abs(dy)) {
+            enemy.facing = dx > 0 ? 'right' : 'left';
+        } else {
+            enemy.facing = dy > 0 ? 'down' : 'up';
+        }
+
+        // Create telegraph if ability has one (for ground indicators)
+        if (ability.telegraphTime > 0 && ability.aoe) {
+            this.createTelegraph(enemy, target, ability);
+        }
+
+        // Delayed execution after telegraph/windup
+        setTimeout(() => {
+            this.resolveAbility(enemy, target, ability);
+
+            // Clear attack animation after resolve
+            if (enemy.combat?.attackAnimation) {
+                enemy.combat.attackAnimation.state = 'recovery';
+                enemy.combat.attackAnimation.timer = 200;  // Brief recovery
+
+                // Reset to idle after recovery
+                setTimeout(() => {
+                    if (enemy.combat?.attackAnimation) {
+                        enemy.combat.attackAnimation.state = 'idle';
+                    }
+                }, 200);
+            }
+        }, telegraphTime);
+
         if (this.config.debugLogging) {
-            console.log(`[EnemyAbility] ${enemy.name} using ${ability.name}`);
+            console.log(`[EnemyAbility] ${enemy.name} using ${ability.name} (type: ${attackType})`);
+        }
+    },
+
+    /**
+     * Get visual attack type from ability category
+     */
+    getAttackTypeFromAbility(ability) {
+        const category = ability.category || 'melee';
+
+        switch (category) {
+            case 'melee':
+            case 'charge':
+                return 'melee';
+
+            case 'ranged':
+                return 'ranged';
+
+            case 'breath':
+            case 'aoe':
+            case 'special':
+                // Determine based on element
+                if (ability.element && ['fire', 'ice', 'arcane', 'void', 'death', 'magic', 'poison'].includes(ability.element)) {
+                    return 'magic';
+                }
+                return ability.category === 'ranged' ? 'ranged' : 'melee';
+
+            default:
+                return 'melee';
         }
     },
 
