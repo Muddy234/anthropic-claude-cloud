@@ -668,21 +668,23 @@ function renderInspectPopup(ctx) {
     ctx.lineWidth = 3;
     ctx.strokeRect(popupX, popupY, popupWidth, popupHeight);
 
-    // === HEADER: Name + Tier indicator ===
+    // === HEADER: Name + Tier indicator + Level ===
     const headerY = popupY + 25;
     ctx.font = 'bold 16px monospace';
     ctx.textAlign = 'left';
 
     let title = 'Inspection';
     let tierIndicator = '';
+    let monsterLevel = 1;
     if (inspectPopup.targetType === 'enemy' && inspectPopup.target) {
         title = inspectPopup.target.name || 'Unknown';
         tierIndicator = inspectPopup.target.tierIndicator || '';
+        monsterLevel = inspectPopup.target.level || 1;
     } else if (inspectPopup.targetType === 'npc') {
         title = inspectPopup.target?.name || 'Merchant';
     }
 
-    // Tier indicator
+    // Tier indicator and name
     if (tierIndicator) {
         ctx.fillStyle = borderColor;
         ctx.fillText(tierIndicator, popupX + 10, headerY);
@@ -691,6 +693,15 @@ function renderInspectPopup(ctx) {
     } else {
         ctx.fillStyle = '#ffffff';
         ctx.fillText(title, popupX + 10, headerY);
+    }
+
+    // Monster level (right side of header)
+    if (inspectPopup.targetType === 'enemy') {
+        ctx.font = '12px monospace';
+        ctx.textAlign = 'right';
+        ctx.fillStyle = '#aaa';
+        ctx.fillText(`Lv.${monsterLevel}`, popupX + popupWidth - 10, headerY);
+        ctx.textAlign = 'left';
     }
 
     // === TABS (3 tabs: General, Combat, Behavior) ===
