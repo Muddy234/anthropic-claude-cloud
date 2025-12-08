@@ -392,19 +392,25 @@ function renderInspectCombatTab(ctx, enemy, x, y, width, lh) {
     ctx.fillText('Base Attack', x, lineY);
     lineY += lh;
 
-    // Determine attack type label based on monster's attack type
-    const attackType = monsterData?.attackType || 'physical';
+    // Get damage type (blade, blunt, pierce, magic)
+    const damageType = monsterData?.damageType || enemy.damageType || 'blunt';
     const attackRange = monsterData?.attackRange || enemy.combat?.attackRange || 1;
-    let attackLabel = 'Melee';
-    if (attackType === 'magic') {
-        attackLabel = 'Magic';
-    } else if (attackRange > 1) {
-        attackLabel = 'Ranged';
-    }
+
+    // Damage type colors
+    const damageTypeColors = {
+        'blade': '#c0c0c0',   // Silver
+        'blunt': '#cd7f32',   // Bronze
+        'pierce': '#87ceeb',  // Sky blue
+        'magic': '#9b59b6'    // Purple
+    };
+
+    ctx.fillStyle = '#888';
+    ctx.fillText('  Type:', x, lineY);
+    ctx.fillStyle = damageTypeColors[damageType] || '#aaa';
+    ctx.fillText(damageType.charAt(0).toUpperCase() + damageType.slice(1), x + 55, lineY);
+    lineY += lh;
 
     ctx.fillStyle = '#aaa';
-    ctx.fillText(`  Type: ${attackLabel}`, x, lineY);
-    lineY += lh;
     ctx.fillText(`  Range: ${attackRange} tile${attackRange > 1 ? 's' : ''}`, x, lineY);
     lineY += lh + 5;
 
@@ -663,8 +669,12 @@ canvas.addEventListener('click', (e) => {
     if (!inspectPopup.visible) return;
 
     const rect = canvas.getBoundingClientRect();
-    const clickX = e.clientX - rect.left;
-    const clickY = e.clientY - rect.top;
+
+    // Scale click coordinates to match canvas internal dimensions
+    const scaleX = canvas.width / rect.width;
+    const scaleY = canvas.height / rect.height;
+    const clickX = (e.clientX - rect.left) * scaleX;
+    const clickY = (e.clientY - rect.top) * scaleY;
 
     // Popup dimensions (must match renderInspectPopup)
     const popupWidth = 300;

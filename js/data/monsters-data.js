@@ -7,7 +7,7 @@ const MONSTER_DATA = {
     'Magma Slime': {
         hp: 60, str: 12, agi: 5, int: 8, pDef: 15, mDef: 8,
         xp: 25, goldMin: 10, goldMax: 15,
-        element: 'fire', attack: 'Slam', attackType: 'physical',
+        element: 'fire', attack: 'Slam', attackType: 'physical', damageType: 'blunt',
         attackRange: 1, attackSpeed: 2.5,  // Slow melee attacker
         elite: false, moveInterval: 3, aggression: 2, spawnWeight: 30,  // TESTING: Increased for sprite animation testing
         loot: [
@@ -20,7 +20,7 @@ const MONSTER_DATA = {
     'Obsidian Golem': {
         hp: 105, str: 18, agi: 3, int: 4, pDef: 20, mDef: 5,
         xp: 45, goldMin: 15, goldMax: 25,
-        element: 'physical', attack: 'Boulder Smash', attackType: 'physical',
+        element: 'physical', attack: 'Boulder Smash', attackType: 'physical', damageType: 'blunt',
         attackRange: 1, attackSpeed: 3.0,  // Very slow but powerful melee
         elite: false, moveInterval: 3, aggression: 2, spawnWeight: 3,
         loot: [
@@ -33,7 +33,7 @@ const MONSTER_DATA = {
     'Cinder Wisp': {
         hp: 30, str: 3, agi: 16, int: 18, pDef: 2, mDef: 15,
         xp: 35, goldMin: 12, goldMax: 18,
-        element: 'fire', attack: 'Flare', attackType: 'magic',
+        element: 'fire', attack: 'Flare', attackType: 'magic', damageType: 'magic',
         attackRange: 4, attackSpeed: 1.5,  // Fast ranged caster
         elite: false, moveInterval: 1, aggression: 4, spawnWeight: 7,
         loot: [
@@ -46,7 +46,7 @@ const MONSTER_DATA = {
     'Flame Bat': {
         hp: 40, str: 10, agi: 20, int: 2, pDef: 4, mDef: 4,
         xp: 30, goldMin: 5, goldMax: 10,
-        element: 'fire', attack: 'Singe Bite', attackType: 'physical',
+        element: 'fire', attack: 'Singe Bite', attackType: 'physical', damageType: 'pierce',
         attackRange: 1, attackSpeed: 1.2,  // Very fast melee attacker
         elite: false, moveInterval: 1, aggression: 5, spawnWeight: 8,
         loot: [
@@ -59,7 +59,7 @@ const MONSTER_DATA = {
     'Ash Walker': {
         hp: 75, str: 14, agi: 6, int: 5, pDef: 8, mDef: 12,
         xp: 30, goldMin: 8, goldMax: 12,
-        element: 'shadow', attack: 'Choke', attackType: 'physical',
+        element: 'shadow', attack: 'Choke', attackType: 'physical', damageType: 'blunt',
         attackRange: 1, attackSpeed: 2.2,  // Medium-slow melee
         elite: false, moveInterval: 2, aggression: 3, spawnWeight: 6,
         loot: [
@@ -72,7 +72,7 @@ const MONSTER_DATA = {
     'Salamander': {
         hp: 55, str: 12, agi: 12, int: 10, pDef: 10, mDef: 10,
         xp: 35, goldMin: 15, goldMax: 20,
-        element: 'nature', attack: 'Tail Whip', attackType: 'physical',
+        element: 'nature', attack: 'Tail Whip', attackType: 'physical', damageType: 'blunt',
         attackRange: 1, attackSpeed: 1.8,  // Balanced melee
         elite: false, moveInterval: 2, aggression: 3, spawnWeight: 5,
         loot: [
@@ -85,7 +85,7 @@ const MONSTER_DATA = {
     'Pyro Cultist': {
         hp: 50, str: 6, agi: 10, int: 16, pDef: 5, mDef: 8,
         xp: 40, goldMin: 20, goldMax: 30,
-        element: 'fire', attack: 'Ember Bolt', attackType: 'magic',
+        element: 'fire', attack: 'Ember Bolt', attackType: 'magic', damageType: 'magic',
         attackRange: 5, attackSpeed: 2.0,  // Long range caster
         elite: false, moveInterval: 2, aggression: 4, spawnWeight: 3,
         loot: [
@@ -100,7 +100,7 @@ const MONSTER_DATA = {
     'Cave Bat': {
         hp: 25, str: 6, agi: 18, int: 2, pDef: 2, mDef: 2,
         xp: 15, goldMin: 3, goldMax: 8,
-        element: 'physical', attack: 'Bite', attackType: 'physical',
+        element: 'physical', attack: 'Bite', attackType: 'physical', damageType: 'pierce',
         attackRange: 1, attackSpeed: 1.0,  // Very fast weak melee
         elite: false, moveInterval: 1, aggression: 4, spawnWeight: 12,
         loot: [
@@ -112,7 +112,7 @@ const MONSTER_DATA = {
     'Stone Lurker': {
         hp: 80, str: 14, agi: 4, int: 3, pDef: 18, mDef: 5,
         xp: 35, goldMin: 12, goldMax: 20,
-        element: 'earth', attack: 'Rock Slam', attackType: 'physical',
+        element: 'earth', attack: 'Rock Slam', attackType: 'physical', damageType: 'blunt',
         attackRange: 1, attackSpeed: 2.8,  // Slow heavy melee
         elite: false, moveInterval: 3, aggression: 2, spawnWeight: 5,
         loot: [
@@ -124,7 +124,7 @@ const MONSTER_DATA = {
     'Mushroom Sprite': {
         hp: 35, str: 5, agi: 8, int: 14, pDef: 4, mDef: 12,
         xp: 28, goldMin: 8, goldMax: 15,
-        element: 'nature', attack: 'Spore Cloud', attackType: 'magic',
+        element: 'nature', attack: 'Spore Cloud', attackType: 'magic', damageType: 'magic',
         attackRange: 3, attackSpeed: 2.2,  // Medium range AOE caster
         elite: false, moveInterval: 2, aggression: 2, spawnWeight: 30,  // TESTING: Increased for sprite animation testing
         loot: [
@@ -136,7 +136,7 @@ const MONSTER_DATA = {
     'Crystal Spider': {
         hp: 45, str: 11, agi: 14, int: 6, pDef: 8, mDef: 10,
         xp: 32, goldMin: 10, goldMax: 18,
-        element: 'physical', attack: 'Venomous Bite', attackType: 'physical',
+        element: 'physical', attack: 'Venomous Bite', attackType: 'physical', damageType: 'pierce',
         attackRange: 1, attackSpeed: 1.3,  // Fast melee with venom
         elite: false, moveInterval: 1, aggression: 4, spawnWeight: 5,
         loot: [
@@ -151,7 +151,7 @@ const MONSTER_DATA = {
     'Skeletal Warrior': {
         hp: 50, str: 13, agi: 8, int: 3, pDef: 10, mDef: 3,
         xp: 28, goldMin: 8, goldMax: 15,
-        element: 'death', attack: 'Bone Slash', attackType: 'physical',
+        element: 'death', attack: 'Bone Slash', attackType: 'physical', damageType: 'blade',
         attackRange: 1, attackSpeed: 1.8,  // Standard melee fighter
         elite: false, moveInterval: 2, aggression: 3, spawnWeight: 8,
         loot: [
@@ -164,7 +164,7 @@ const MONSTER_DATA = {
     'Phantom': {
         hp: 40, str: 4, agi: 12, int: 16, pDef: 2, mDef: 18,
         xp: 38, goldMin: 15, goldMax: 25,
-        element: 'death', attack: 'Soul Drain', attackType: 'magic',
+        element: 'death', attack: 'Soul Drain', attackType: 'magic', damageType: 'magic',
         attackRange: 3, attackSpeed: 2.0,  // Medium range life drainer
         elite: false, moveInterval: 2, aggression: 3, spawnWeight: 30,  // TESTING: Increased for sprite animation testing
         loot: [
@@ -176,7 +176,7 @@ const MONSTER_DATA = {
     'Bone Golem': {
         hp: 120, str: 20, agi: 3, int: 2, pDef: 16, mDef: 8,
         xp: 55, goldMin: 20, goldMax: 35,
-        element: 'death', attack: 'Crushing Blow', attackType: 'physical',
+        element: 'death', attack: 'Crushing Blow', attackType: 'physical', damageType: 'blunt',
         attackRange: 1, attackSpeed: 3.2,  // Very slow devastating melee
         elite: false, moveInterval: 3, aggression: 2, spawnWeight: 2,
         loot: [
@@ -191,7 +191,7 @@ const MONSTER_DATA = {
     'Deep Crawler': {
         hp: 55, str: 12, agi: 10, int: 4, pDef: 12, mDef: 6,
         xp: 30, goldMin: 10, goldMax: 18,
-        element: 'water', attack: 'Pincer Strike', attackType: 'physical',
+        element: 'water', attack: 'Pincer Strike', attackType: 'physical', damageType: 'pierce',
         attackRange: 1, attackSpeed: 1.6,  // Medium-fast melee
         elite: false, moveInterval: 2, aggression: 3, spawnWeight: 6,
         loot: [
@@ -203,7 +203,7 @@ const MONSTER_DATA = {
     'Tide Serpent': {
         hp: 65, str: 14, agi: 14, int: 8, pDef: 8, mDef: 10,
         xp: 40, goldMin: 15, goldMax: 25,
-        element: 'water', attack: 'Aqua Fang', attackType: 'physical',
+        element: 'water', attack: 'Aqua Fang', attackType: 'physical', damageType: 'pierce',
         attackRange: 1, attackSpeed: 1.4,  // Fast melee striker
         elite: false, moveInterval: 1, aggression: 4, spawnWeight: 4,
         loot: [
@@ -217,7 +217,7 @@ const MONSTER_DATA = {
     'Shadow Stalker': {
         hp: 45, str: 15, agi: 16, int: 8, pDef: 6, mDef: 10,
         xp: 42, goldMin: 18, goldMax: 28,
-        element: 'shadow', attack: 'Shadow Strike', attackType: 'physical',
+        element: 'shadow', attack: 'Shadow Strike', attackType: 'physical', damageType: 'blade',
         attackRange: 1, attackSpeed: 1.0,  // Extremely fast assassin
         elite: false, moveInterval: 1, aggression: 5, spawnWeight: 4,
         loot: [
@@ -229,7 +229,7 @@ const MONSTER_DATA = {
     'Void Touched': {
         hp: 70, str: 10, agi: 8, int: 18, pDef: 8, mDef: 16,
         xp: 48, goldMin: 22, goldMax: 35,
-        element: 'shadow', attack: 'Void Bolt', attackType: 'magic',
+        element: 'shadow', attack: 'Void Bolt', attackType: 'magic', damageType: 'magic',
         attackRange: 4, attackSpeed: 1.8,  // Ranged void caster
         elite: false, moveInterval: 2, aggression: 3, spawnWeight: 30,  // TESTING: Increased for sprite animation testing
         loot: [
