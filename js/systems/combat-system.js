@@ -144,6 +144,11 @@ function performAttack(attacker, defender) {
     // Get current room for attunement
     const room = getCurrentRoom(attacker);
 
+    // Enemy combo system: track which attack in the combo (1, 2, or 3)
+    const isEnemy = attacker !== game.player;
+    const comboCount = isEnemy ? (attacker.combat?.comboCount || 1) : 1;
+    const isComboFinisher = isEnemy && comboCount === 3;
+
     // Use DamageCalculator if available
     let result;
     if (typeof DamageCalculator !== 'undefined') {
@@ -154,12 +159,26 @@ function performAttack(attacker, defender) {
     }
 
     if (!result.isHit) {
-        // Miss
+        // Miss - still advance combo for enemies
+        if (isEnemy && attacker.combat) {
+            attacker.combat.comboCount = (comboCount % 3) + 1;
+        }
         if (typeof addMessage === 'function') {
             addMessage(`${attacker.name || 'You'} missed!`);
         }
         showDamageNumber(defender, 0, '#888888');
         return;
+    }
+
+    // Apply combo finisher bonus for enemies (1.5x damage on 3rd hit)
+    if (isComboFinisher) {
+        result.finalDamage = Math.floor(result.finalDamage * 1.5);
+        result.isComboFinisher = true;
+    }
+
+    // Advance enemy combo counter (1 -> 2 -> 3 -> 1)
+    if (isEnemy && attacker.combat) {
+        attacker.combat.comboCount = (comboCount % 3) + 1;
     }
 
     // Apply damage
@@ -172,9 +191,10 @@ function performAttack(attacker, defender) {
 
     // Build message
     let message = `${attacker.name || 'You'} hit ${defender.name || 'target'} for ${result.finalDamage}!`;
-    
+
     // Add modifiers to message
     if (result.isCrit) message += ' CRITICAL!';
+    if (result.isComboFinisher) message += ' COMBO!';
     if (result.messages) {
         for (const msg of result.messages) {
             if (msg !== 'CRITICAL' && msg !== 'MISS') {
@@ -190,6 +210,7 @@ function performAttack(attacker, defender) {
     // Determine damage number color
     let color = '#ff4444';
     if (result.isCrit) color = '#ffff00';
+    if (result.isComboFinisher) color = '#ff00ff';  // Purple for enemy combo finisher
     if (result.breakdown?.elementMod > 1.0) color = '#00ff00';
     if (result.breakdown?.elementMod < 1.0) color = '#ff8800';
 

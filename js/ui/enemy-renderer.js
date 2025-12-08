@@ -94,7 +94,7 @@ function tryDrawEnemySprite(ctx, enemy, ex, ey, cx, cy, tileSize) {
 }
 
 /**
- * Draw enemy overlays (tier indicator, alerts, health bar)
+ * Draw enemy overlays (tier indicator, alerts, health bar, combo indicator)
  * Works for both sprite and circle rendering
  */
 function drawEnemyOverlays(ctx, enemy, ex, ey, cx, cy, tileSize) {
@@ -104,20 +104,45 @@ function drawEnemyOverlays(ctx, enemy, ex, ey, cx, cy, tileSize) {
     // Draw tier indicator
     drawTierIndicator(ctx, enemy, cx, ey, tileSize);
 
+    // Draw combo finisher telegraph (when next attack is the powerful 3rd hit)
+    const comboCount = enemy.combat?.comboCount || 1;
+    if (comboCount === 3 && enemy.combat?.isInCombat) {
+        // Pulsing red glow to warn player of incoming combo finisher
+        const pulseSpeed = 8;
+        const pulse = 0.5 + 0.5 * Math.sin(Date.now() / 1000 * pulseSpeed);
+        const glowRadius = tileSize / 2 + 8 + (pulse * 6);
+
+        ctx.strokeStyle = `rgba(255, 0, 255, ${0.4 + pulse * 0.4})`;
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.arc(cx, cy, glowRadius, 0, Math.PI * 2);
+        ctx.stroke();
+
+        // Draw "!!" warning
+        ctx.fillStyle = `rgba(255, 0, 255, ${0.7 + pulse * 0.3})`;
+        ctx.font = 'bold 16px monospace';
+        ctx.textAlign = 'center';
+        ctx.fillText('!!', cx, ey + 12);
+    }
+
     // Draw alert indicators
     if (enemy.ai) {
         const state = enemy.ai.currentState;
-        if (state === 'chasing' || state === 'combat') {
-            ctx.fillStyle = '#f00';
-            ctx.font = 'bold 20px monospace';
-            ctx.textAlign = 'center';
-            ctx.fillText('!', cx, ey + 10);
-        } else if (state === 'alert' || state === 'searching') {
-            ctx.fillStyle = '#ff0';
-            ctx.font = 'bold 20px monospace';
-            ctx.textAlign = 'center';
-            ctx.fillText('?', cx, ey + 10);
-        } else if (state === 'shouting') {
+        // Only show alert indicator if not showing combo telegraph
+        if (comboCount !== 3 || !enemy.combat?.isInCombat) {
+            if (state === 'chasing' || state === 'combat') {
+                ctx.fillStyle = '#f00';
+                ctx.font = 'bold 20px monospace';
+                ctx.textAlign = 'center';
+                ctx.fillText('!', cx, ey + 10);
+            } else if (state === 'alert' || state === 'searching') {
+                ctx.fillStyle = '#ff0';
+                ctx.font = 'bold 20px monospace';
+                ctx.textAlign = 'center';
+                ctx.fillText('?', cx, ey + 10);
+            }
+        }
+        if (state === 'shouting') {
             // Shouting indicator - concentric circles
             ctx.strokeStyle = 'rgba(255, 200, 0, 0.5)';
             ctx.lineWidth = 2;
@@ -129,7 +154,7 @@ function drawEnemyOverlays(ctx, enemy, ex, ey, cx, cy, tileSize) {
                 ctx.stroke();
             }
         }
-    } else if (enemy.state === 'chasing') {
+    } else if (enemy.state === 'chasing' && (comboCount !== 3 || !enemy.combat?.isInCombat)) {
         ctx.fillStyle = '#f00';
         ctx.font = 'bold 20px monospace';
         ctx.textAlign = 'center';

@@ -117,7 +117,7 @@ const Debug = {
             hp: template.stats?.health || 50,
             maxHp: template.stats?.health || 50,
             ...template,
-            combat: { isInCombat: false, currentTarget: null, attackCooldown: 0, attackSpeed: 2.0, autoRetaliate: true, attackRange: 1 }
+            combat: { isInCombat: false, currentTarget: null, attackCooldown: 0, attackSpeed: 2.0, autoRetaliate: true, attackRange: 1, comboCount: 1 }
         };
         
         game.enemies.push(enemy);

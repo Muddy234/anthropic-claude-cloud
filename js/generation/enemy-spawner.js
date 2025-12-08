@@ -354,7 +354,8 @@ function createEnemy(monsterType, x, y, room) {
             attackCooldown: 0,
             attackSpeed: tierData?.combat?.attackSpeed || 2.0,
             autoRetaliate: true,
-            attackRange: tierData?.combat?.attackRange || 1
+            attackRange: tierData?.combat?.attackRange || 1,
+            comboCount: 1  // Enemy combo system: 1 -> 2 -> 3 (special) -> 1
         },
         
         // Loot

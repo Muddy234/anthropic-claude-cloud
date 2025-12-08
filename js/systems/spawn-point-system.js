@@ -462,7 +462,8 @@ const SpawnPointSystem = {
                 attackCooldown: 0,
                 attackSpeed: template?.combat?.attackSpeed || 2.0,
                 autoRetaliate: true,
-                attackRange: template?.combat?.range || 1
+                attackRange: template?.combat?.range || 1,
+                comboCount: 1  // Enemy combo system: 1 -> 2 -> 3 (special) -> 1
             }
         };
 
