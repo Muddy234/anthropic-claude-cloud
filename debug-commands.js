@@ -13,6 +13,15 @@ const Debug = {
 ╔══════════════════════════════════════════════════════════════╗
 ║                    DEBUG COMMANDS                            ║
 ╠══════════════════════════════════════════════════════════════╣
+║ TEST ARENA (Combat Testing)                                  ║
+║   debug.arena()             - Teleport to test arena         ║
+║   debug.return()            - Return from arena              ║
+║   debug.spawnMonster(name)  - Spawn monster (current floor)  ║
+║   debug.spawnMonster(n, 5)  - Spawn monster at level 5       ║
+║   debug.spawnAll()          - Spawn all monster types        ║
+║   debug.clear()             - Remove all enemies             ║
+║   debug.setFloor(n)         - Set floor (affects scaling)    ║
+║                                                              ║
 ║ MONSTERS                                                     ║
 ║   debug.spawn(id, x, y)     - Spawn monster at position      ║
 ║   debug.killAll()           - Kill all enemies               ║
@@ -1121,6 +1130,234 @@ const Debug = {
         }
 
         console.log('\n============================\n');
+    },
+
+    // ========================================================================
+    // TEST ARENA
+    // ========================================================================
+    _arenaRoom: null,
+    _arenaCreated: false,
+    _originalPosition: null,
+
+    arena() {
+        // Create arena if not exists
+        if (!this._arenaCreated) {
+            const arenaWidth = 25;
+            const arenaHeight = 25;
+            const arenaX = -100;
+            const arenaY = -100;
+
+            this._arenaRoom = {
+                id: 'test_arena',
+                type: 'arena',
+                x: arenaX,
+                y: arenaY,
+                width: arenaWidth,
+                height: arenaHeight,
+                floorX: arenaX + 1,
+                floorY: arenaY + 1,
+                floorWidth: arenaWidth - 2,
+                floorHeight: arenaHeight - 2,
+                element: 'physical',
+                blob: { difficulty: 5 },
+                isTestArena: true
+            };
+
+            if (!game.map) game.map = [];
+
+            for (let y = arenaY; y < arenaY + arenaHeight; y++) {
+                if (!game.map[y]) game.map[y] = [];
+                for (let x = arenaX; x < arenaX + arenaWidth; x++) {
+                    if (x === arenaX || x === arenaX + arenaWidth - 1 ||
+                        y === arenaY || y === arenaY + arenaHeight - 1) {
+                        game.map[y][x] = { type: 'wall', char: '#' };
+                    } else {
+                        game.map[y][x] = { type: 'floor', char: '.', room: this._arenaRoom };
+                    }
+                }
+            }
+
+            if (game.rooms && !game.rooms.includes(this._arenaRoom)) {
+                game.rooms.push(this._arenaRoom);
+            }
+
+            this._arenaCreated = true;
+            console.log('[Arena] Created at', arenaX, arenaY);
+        }
+
+        // Save original position
+        this._originalPosition = {
+            x: game.player.gridX,
+            y: game.player.gridY
+        };
+
+        // Teleport to center
+        const centerX = this._arenaRoom.x + Math.floor(this._arenaRoom.width / 2);
+        const centerY = this._arenaRoom.y + Math.floor(this._arenaRoom.height / 2);
+
+        game.player.gridX = centerX;
+        game.player.gridY = centerY;
+        game.player.x = centerX;
+        game.player.y = centerY;
+        game.player.displayX = centerX;
+        game.player.displayY = centerY;
+
+        this.clear();
+
+        console.log('[Arena] Teleported to test arena');
+        console.log('[Arena] Use debug.spawnMonster("name") or debug.spawnMonster("name", level)');
+        console.log('[Arena] Use debug.listMonsters() to see available monsters');
+        if (typeof addMessage === 'function') {
+            addMessage('Teleported to Test Arena!');
+        }
+    },
+
+    return() {
+        if (this._originalPosition) {
+            game.player.gridX = this._originalPosition.x;
+            game.player.gridY = this._originalPosition.y;
+            game.player.x = this._originalPosition.x;
+            game.player.y = this._originalPosition.y;
+            game.player.displayX = this._originalPosition.x;
+            game.player.displayY = this._originalPosition.y;
+            console.log('[Arena] Returned to original position');
+            if (typeof addMessage === 'function') {
+                addMessage('Returned from Test Arena');
+            }
+        } else {
+            console.warn('[Arena] No original position saved');
+        }
+    },
+
+    spawnMonster(monsterName, level = null, offsetX = 3, offsetY = 0) {
+        if (!monsterName) {
+            console.log('Usage: debug.spawnMonster("Monster Name") or debug.spawnMonster("Monster Name", level)');
+            return null;
+        }
+
+        if (typeof MONSTER_DATA === 'undefined') {
+            console.error('[Arena] MONSTER_DATA not loaded');
+            return null;
+        }
+
+        // Find monster (case-insensitive partial match)
+        let matchedName = null;
+        const lowerInput = monsterName.toLowerCase();
+
+        for (const name of Object.keys(MONSTER_DATA)) {
+            if (name.toLowerCase() === lowerInput) {
+                matchedName = name;
+                break;
+            }
+            if (name.toLowerCase().includes(lowerInput)) {
+                matchedName = name;
+            }
+        }
+
+        if (!matchedName) {
+            console.error(`[Arena] Monster "${monsterName}" not found`);
+            console.log('[Arena] Available:', Object.keys(MONSTER_DATA).join(', '));
+            return null;
+        }
+
+        const spawnX = game.player.gridX + offsetX;
+        const spawnY = game.player.gridY + offsetY;
+
+        // Override floor for level scaling
+        const originalFloor = game.floor;
+        if (level !== null) {
+            game.floor = level;
+        }
+
+        let enemy = null;
+        if (typeof createEnemy === 'function') {
+            enemy = createEnemy(matchedName, spawnX, spawnY, this._arenaRoom || game.player.room);
+        }
+
+        // Restore floor
+        if (level !== null) {
+            game.floor = originalFloor;
+            if (enemy) enemy.level = level;
+        }
+
+        if (enemy) {
+            if (!game.enemies) game.enemies = [];
+            game.enemies.push(enemy);
+
+            if (typeof AIManager !== 'undefined' && typeof AIManager.registerEnemy === 'function') {
+                AIManager.registerEnemy(enemy);
+            }
+
+            console.log(`[Arena] Spawned ${matchedName} (Lv.${enemy.level}) at (${spawnX}, ${spawnY})`);
+            console.log(`[Arena] HP: ${enemy.hp}/${enemy.maxHp}, STR: ${enemy.str}, AGI: ${enemy.agi}, INT: ${enemy.int}`);
+
+            if (typeof addMessage === 'function') {
+                addMessage(`Spawned ${matchedName} (Lv.${enemy.level})!`);
+            }
+
+            return enemy;
+        } else {
+            console.error('[Arena] Failed to create enemy');
+            return null;
+        }
+    },
+
+    spawnAll(level = null) {
+        if (typeof MONSTER_DATA === 'undefined') {
+            console.error('[Arena] MONSTER_DATA not loaded');
+            return;
+        }
+
+        const monsters = Object.keys(MONSTER_DATA);
+        const gridSize = Math.ceil(Math.sqrt(monsters.length));
+        let spawned = 0;
+
+        monsters.forEach((name, i) => {
+            const row = Math.floor(i / gridSize);
+            const col = i % gridSize;
+            const offsetX = (col - Math.floor(gridSize / 2)) * 2 + 3;
+            const offsetY = (row - Math.floor(gridSize / 2)) * 2;
+
+            const enemy = this.spawnMonster(name, level, offsetX, offsetY);
+            if (enemy) spawned++;
+        });
+
+        console.log(`[Arena] Spawned ${spawned}/${monsters.length} monsters`);
+    },
+
+    clear() {
+        if (!game.enemies) return;
+
+        if (typeof AIManager !== 'undefined') {
+            game.enemies.forEach(enemy => {
+                if (typeof AIManager.unregisterEnemy === 'function') {
+                    AIManager.unregisterEnemy(enemy);
+                }
+            });
+        }
+
+        const count = game.enemies.length;
+        game.enemies = [];
+
+        console.log(`[Arena] Cleared ${count} enemies`);
+        if (typeof addMessage === 'function') {
+            addMessage(`Cleared ${count} enemies`);
+        }
+    },
+
+    setFloor(floor) {
+        if (typeof floor !== 'number' || floor < 1) {
+            console.error('[Arena] Invalid floor number');
+            return;
+        }
+
+        game.floor = floor;
+        console.log(`[Arena] Floor set to ${floor}`);
+        console.log(`[Arena] New monsters will spawn at Lv.${floor} with ${Math.round((1 + (floor - 1) * 0.12) * 100)}% stats`);
+
+        if (typeof addMessage === 'function') {
+            addMessage(`Floor set to ${floor}`);
+        }
     }
 };
 
