@@ -35,6 +35,9 @@ function updateCombat(deltaTime) {
     // Update enemy combat
     if (game.enemies) {
         for (const enemy of game.enemies) {
+            // Skip dead enemies - they should not attack
+            if (enemy.hp <= 0) continue;
+
             if (enemy.combat?.isInCombat) {
                 updateEntityCombat(enemy, deltaTime);
             }
@@ -159,15 +162,22 @@ function updateAttackAnimation(entity, deltaTime) {
     const combat = entity.combat;
     const anim = combat.attackAnimation;
 
+    // Dead entities cannot attack - cancel animation
+    if (entity.hp <= 0) {
+        anim.state = 'idle';
+        anim.timer = 0;
+        return;
+    }
+
     anim.timer -= deltaTime;
 
     switch (anim.state) {
         case 'windup':
             // Check if windup is complete
             if (anim.timer <= 0) {
-                // Execute the attack
+                // Execute the attack (only if attacker is still alive)
                 const target = anim.targetLocked?.entity;
-                if (target && target.hp > 0) {
+                if (entity.hp > 0 && target && target.hp > 0) {
                     performAttack(entity, target);
                 }
 
@@ -489,6 +499,16 @@ function handleDeath(entity, killer) {
             game.state = 'gameover';
         }
         return;
+    }
+
+    // Immediately disengage combat for the dead entity to prevent ghost attacks
+    if (entity.combat) {
+        entity.combat.isInCombat = false;
+        entity.combat.currentTarget = null;
+        if (entity.combat.attackAnimation) {
+            entity.combat.attackAnimation.state = 'idle';
+            entity.combat.attackAnimation.timer = 0;
+        }
     }
 
     // Enemy death

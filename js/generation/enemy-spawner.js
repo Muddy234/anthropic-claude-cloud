@@ -397,22 +397,12 @@ function createEnemy(monsterType, x, y, room) {
 
 /**
  * Calculate XP reward for monster
+ * Uses the monster's base XP from MONSTER_DATA - tiers do NOT affect XP
  */
 function calculateMonsterXP(template) {
-    // Base XP by tier - increased TIER_3 for better early game progression
-    const tierXP = {
-        'TIER_3': 15,   // Was 10, now 15 for smoother early leveling
-        'TIER_2': 30,   // Was 25, slight bump
-        'TIER_1': 55,   // Was 50, slight bump
-        'ELITE': 100,
-        'BOSS': 500
-    };
-    const base = tierXP[template.tier] || 15;
-
-    // Bonus for stronger stats
-    const healthBonus = Math.floor((template.stats?.health || 50) / 25);
-
-    return base + healthBonus;
+    // Use the monster's defined XP from MONSTER_DATA
+    // Tiers only affect behavior/AI, not rewards
+    return template.xp || 20;
 }
 
 /**
