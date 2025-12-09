@@ -49,32 +49,32 @@ STARTER_WEAPONS = {
     'Rusty Sword': {
         'damageType': 'blade',
         'damage': 7,
-        'speed': 0.75,              # 25% faster (1.0 → 0.75)
+        'speed': 0.8,               # 560ms - very fast melee
         'stat_scaling': 'str',
-        'bleed_chance': 0.15,       # 15% chance to inflict bleed
-        'bleed_dot': 0.05,          # 5% of max HP per second
+        'bleed_chance': 0.20,       # 20% chance to inflict bleed (buffed)
+        'bleed_dot': 0.07,          # 7% of max HP per second (buffed)
         'bleed_duration': 50        # 5 seconds (50 ticks)
     },
     'Iron Mace': {
         'damageType': 'blunt',
-        'damage': 10.5,             # +25% more damage (8.4 → 10.5)
-        'speed': 1.25,              # +25% slower
+        'damage': 10.5,             # High damage per hit
+        'speed': 1.1,               # 770ms - slow but powerful
         'stat_scaling': 'str',
-        'stun_chance': 0.15,        # 15% chance to stun
+        'stun_chance': 0.20,        # 20% chance to stun
         'stun_duration': 10         # 1 second (10 ticks)
     },
     'Wooden Spear': {
         'damageType': 'pierce',
         'damage': 7,
-        'speed': 1.375,             # 25% slower (1.1 → 1.375)
+        'speed': 1.1,               # 770ms - balanced
         'stat_scaling': 'str',
         'range': 2,                 # Can attack from 2 tiles
-        'crit_bonus': 0.10          # +10% crit chance
+        'crit_bonus': 0.05          # +5% crit chance (reduced)
     },
     'Short Bow': {
         'damageType': 'pierce',
-        'damage': 5.5,
-        'speed': 1.2375,            # 25% slower (0.99 → 1.2375)
+        'damage': 5.0,
+        'speed': 0.92,              # 644ms - moderate speed
         'stat_scaling': 'agi',
         'ranged': True,
         'range': 4
