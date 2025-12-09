@@ -49,7 +49,7 @@ STARTER_WEAPONS = {
     'Rusty Sword': {
         'damageType': 'blade',
         'damage': 7,
-        'speed': 1.0,
+        'speed': 0.75,              # 25% faster (1.0 → 0.75)
         'stat_scaling': 'str',
         'bleed_chance': 0.15,       # 15% chance to inflict bleed
         'bleed_dot': 0.05,          # 5% of max HP per second
@@ -57,8 +57,8 @@ STARTER_WEAPONS = {
     },
     'Iron Mace': {
         'damageType': 'blunt',
-        'damage': 8.4,              # +20% damage (7 → 8.4)
-        'speed': 1.25,              # +25% slower (1.0 → 1.25)
+        'damage': 10.5,             # +25% more damage (8.4 → 10.5)
+        'speed': 1.25,              # +25% slower
         'stat_scaling': 'str',
         'stun_chance': 0.15,        # 15% chance to stun
         'stun_duration': 10         # 1 second (10 ticks)
@@ -66,7 +66,7 @@ STARTER_WEAPONS = {
     'Wooden Spear': {
         'damageType': 'pierce',
         'damage': 7,
-        'speed': 1.1,               # +10% slower (1.0 → 1.1)
+        'speed': 1.375,             # 25% slower (1.1 → 1.375)
         'stat_scaling': 'str',
         'range': 2,                 # Can attack from 2 tiles
         'crit_bonus': 0.10          # +10% crit chance
@@ -74,7 +74,7 @@ STARTER_WEAPONS = {
     'Short Bow': {
         'damageType': 'pierce',
         'damage': 5.5,
-        'speed': 0.99,              # +10% slower (0.9 → 0.99)
+        'speed': 1.2375,            # 25% slower (0.99 → 1.2375)
         'stat_scaling': 'agi',
         'ranged': True,
         'range': 4
