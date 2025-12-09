@@ -69,8 +69,16 @@ STARTER_WEAPONS = {
         'damage': 5.5,
         'speed': 0.9,           # 630ms (700 * 0.9) - slightly faster than melee
         'stat_scaling': 'agi',  # AGI-based weapon
-        'ranged': True
+        'ranged': True,
+        'range': 4              # Can attack from 4 tiles away
     },
+}
+
+# --- RANGE CONFIG ---
+RANGE_CONFIG = {
+    'starting_distance': 4,     # Tiles between player and monster at fight start
+    'melee_range': 1,           # Distance for melee attacks
+    'default_move_speed': 7     # Ticks to move 1 tile (same as base attack speed)
 }
 
 # --- STAT ALLOCATION STRATEGIES ---
@@ -178,11 +186,12 @@ SPAWN_POOL = {
 }
 
 MONSTER_STATS = {
-    'Flame Bat':        {'hp': 40, 'str': 10, 'pDef': 4,  'atkSpeed': 1.2, 'armor': 'unarmored'},
-    'Cave Bat':         {'hp': 25, 'str': 6,  'pDef': 2,  'atkSpeed': 1.0, 'armor': 'unarmored'},
-    'Magma Slime':      {'hp': 60, 'str': 12, 'pDef': 15, 'atkSpeed': 2.5, 'armor': 'unarmored'},
-    'Skeletal Warrior': {'hp': 40, 'str': 11, 'pDef': 10, 'atkSpeed': 1.8, 'armor': 'bone'},  # Nerfed: -20% HP (50→40), -2 STR (13→11)
-    'Shadow Stalker':   {'hp': 45, 'str': 15, 'pDef': 6,  'atkSpeed': 1.0, 'armor': 'hide'}
+    # moveSpeed: ticks to move 1 tile (lower = faster). Default 7 = 700ms per tile
+    'Flame Bat':        {'hp': 40, 'str': 10, 'pDef': 4,  'atkSpeed': 1.2, 'armor': 'unarmored', 'moveSpeed': 5},   # Fast flyer
+    'Cave Bat':         {'hp': 25, 'str': 6,  'pDef': 2,  'atkSpeed': 1.0, 'armor': 'unarmored', 'moveSpeed': 5},   # Fast flyer
+    'Magma Slime':      {'hp': 60, 'str': 12, 'pDef': 15, 'atkSpeed': 2.5, 'armor': 'unarmored', 'moveSpeed': 10},  # Slow crawler
+    'Skeletal Warrior': {'hp': 40, 'str': 11, 'pDef': 10, 'atkSpeed': 1.8, 'armor': 'bone', 'moveSpeed': 7},        # Normal
+    'Shadow Stalker':   {'hp': 45, 'str': 15, 'pDef': 6,  'atkSpeed': 1.0, 'armor': 'hide', 'moveSpeed': 6}         # Fast predator
 }
 
 WEAPON_MATRIX = {
@@ -311,8 +320,14 @@ def spawn_enemy():
 
 def fight(p, m_name, floor=1):
     """
-    Simulate a fight between player and monster.
+    Simulate a fight between player and monster with range mechanics.
     Returns: (ticks, dmg_dealt, dmg_taken, won)
+
+    Range mechanics:
+    - Combat starts at RANGE_CONFIG['starting_distance'] tiles apart
+    - Monster moves toward player each moveSpeed ticks
+    - Ranged weapons can attack at their range, melee requires distance <= 1
+    - Monster can only attack when in melee range (distance <= 1)
     """
     m_stats = MONSTER_STATS[m_name].copy()
     m_hp = int(apply_floor_scaling(m_stats['hp'], floor))
@@ -320,17 +335,31 @@ def fight(p, m_name, floor=1):
     m_agi = m_stats.get('agi', 8)  # Monster AGI (default 8)
 
     # Player attack speed based on weapon
-    weapon_speed = p['weapon'].get('speed', 1.0)
+    weapon = p['weapon']
+    weapon_speed = weapon.get('speed', 1.0)
     p_ticks = int(7 * weapon_speed)  # Lower = faster attacks
     m_ticks = int(7 * m_stats['atkSpeed'])
+
+    # Range mechanics
+    distance = RANGE_CONFIG['starting_distance']
+    weapon_range = weapon.get('range', 1)  # Melee = 1, ranged = higher
+    is_ranged = weapon.get('ranged', False)
+    m_move_ticks = m_stats.get('moveSpeed', RANGE_CONFIG['default_move_speed'])
+
     tick = 0
     total_dmg_dealt = 0
     total_dmg_taken = 0
 
     while p['hp'] > 0 and m_hp > 0:
         tick += 1
-        # Player attack
-        if tick % p_ticks == 0:
+
+        # Monster movement (closes distance)
+        if distance > RANGE_CONFIG['melee_range'] and tick % m_move_ticks == 0:
+            distance -= 1
+
+        # Player attack (check range)
+        can_player_attack = distance <= weapon_range
+        if can_player_attack and tick % p_ticks == 0:
             # Roll hit (player AGI vs monster AGI)
             if roll_hit(p['agi'], m_agi):
                 dmg = get_damage(p, m_stats, True)
@@ -341,8 +370,9 @@ def fight(p, m_name, floor=1):
                 total_dmg_dealt += dmg
             # Miss: no damage dealt
 
-        # Monster attack
-        if m_hp > 0 and tick % m_ticks == 0:
+        # Monster attack (only in melee range)
+        can_monster_attack = distance <= RANGE_CONFIG['melee_range']
+        if m_hp > 0 and can_monster_attack and tick % m_ticks == 0:
             # Roll hit (monster AGI vs player AGI)
             if roll_hit(m_agi, p['agi']):
                 dmg = get_damage(m_stats, p, False, floor)
@@ -583,6 +613,7 @@ def run_simulation():
     print(f"        Altar every {ALTAR_INTERVAL} rooms | Floor scaling: {FLOOR_SCALING*100:.0f}%")
     print(f"        Full heal on floor exit: YES")
     print(f"Weapon: {', '.join(weapon_names)} (random selection)")
+    print(f"Range: Start={RANGE_CONFIG['starting_distance']} tiles | Bow range={STARTER_WEAPONS['Short Bow']['range']}")
     print(f"Stat Strategies: 25% All STR | 25% All AGI | 50% STR/AGI Split")
     print(f"AGI Buff: +50% (hit={AGI_CONFIG['hit_per_agi']*100:.1f}%/pt, crit={AGI_CONFIG['crit_per_agi']*100:.2f}%/pt)")
     print("-" * 60)
