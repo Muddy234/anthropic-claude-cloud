@@ -97,6 +97,21 @@ STRATEGY_WEIGHTS = {
     'split': 50
 }
 
+# --- AGI SCALING CONFIG (50% buffed from base game) ---
+# Base game values: hit=0.002, evasion=0.002, crit=0.001
+# Buffed values (+50%): hit=0.003, evasion=0.003, crit=0.0015
+AGI_CONFIG = {
+    'base_hit_chance': 0.90,       # 90% base hit chance
+    'hit_per_agi': 0.003,          # +0.3% per AGI (was 0.2%)
+    'evasion_per_agi': 0.003,      # -0.3% per defender AGI (was 0.2%)
+    'min_hit_chance': 0.50,        # Floor at 50%
+    'max_hit_chance': 0.98,        # Cap at 98%
+    'base_crit_chance': 0.05,      # 5% base crit chance
+    'crit_per_agi': 0.0015,        # +0.15% per AGI (was 0.1%)
+    'max_crit_chance': 0.50,       # Cap at 50%
+    'crit_multiplier': 1.5         # 150% damage on crit
+}
+
 # --- WEAPON VS ARMOR MATRIX ---
 # Modifiers: +0.30 (strong), 0 (neutral), -0.30 (weak)
 WEAPON_ARMOR_MATRIX = {
@@ -199,6 +214,21 @@ def get_weapon_armor_modifier(damage_type, armor_type):
         return 0.0
     return WEAPON_ARMOR_MATRIX[damage_type].get(armor_type, 0.0)
 
+def roll_hit(attacker_agi, defender_agi):
+    """Roll to hit based on AGI difference"""
+    hit_chance = AGI_CONFIG['base_hit_chance']
+    hit_chance += attacker_agi * AGI_CONFIG['hit_per_agi']
+    hit_chance -= defender_agi * AGI_CONFIG['evasion_per_agi']
+    hit_chance = max(AGI_CONFIG['min_hit_chance'], min(AGI_CONFIG['max_hit_chance'], hit_chance))
+    return random.random() < hit_chance
+
+def roll_crit(attacker_agi):
+    """Roll for critical hit based on AGI"""
+    crit_chance = AGI_CONFIG['base_crit_chance']
+    crit_chance += attacker_agi * AGI_CONFIG['crit_per_agi']
+    crit_chance = min(AGI_CONFIG['max_crit_chance'], crit_chance)
+    return random.random() < crit_chance
+
 def get_damage(attacker, defender, is_player, floor=1):
     """Calculate damage with floor scaling for monsters"""
     if is_player:
@@ -273,6 +303,7 @@ def fight(p, m_name, floor=1):
     m_stats = MONSTER_STATS[m_name].copy()
     m_hp = int(apply_floor_scaling(m_stats['hp'], floor))
     m_stats['pDef'] = int(apply_floor_scaling(m_stats['pDef'], floor))
+    m_agi = m_stats.get('agi', 8)  # Monster AGI (default 8)
 
     p_ticks = 7
     m_ticks = int(7 * m_stats['atkSpeed'])
@@ -282,15 +313,30 @@ def fight(p, m_name, floor=1):
 
     while p['hp'] > 0 and m_hp > 0:
         tick += 1
+        # Player attack
         if tick % p_ticks == 0:
-            dmg = get_damage(p, m_stats, True)
-            m_hp -= dmg
-            total_dmg_dealt += dmg
+            # Roll hit (player AGI vs monster AGI)
+            if roll_hit(p['agi'], m_agi):
+                dmg = get_damage(p, m_stats, True)
+                # Roll crit
+                if roll_crit(p['agi']):
+                    dmg = int(dmg * AGI_CONFIG['crit_multiplier'])
+                m_hp -= dmg
+                total_dmg_dealt += dmg
+            # Miss: no damage dealt
+
+        # Monster attack
         if m_hp > 0 and tick % m_ticks == 0:
-            dmg = get_damage(m_stats, p, False, floor)
-            p['hp'] -= dmg
-            total_dmg_taken += dmg
-            check_potion(p)
+            # Roll hit (monster AGI vs player AGI)
+            if roll_hit(m_agi, p['agi']):
+                dmg = get_damage(m_stats, p, False, floor)
+                # Monsters can crit too
+                if roll_crit(m_agi):
+                    dmg = int(dmg * AGI_CONFIG['crit_multiplier'])
+                p['hp'] -= dmg
+                total_dmg_taken += dmg
+                check_potion(p)
+            # Miss: no damage taken
 
     won = p['hp'] > 0
     return (tick, total_dmg_dealt, total_dmg_taken, won)
@@ -524,6 +570,7 @@ def run_simulation():
     print(f"        Full heal on floor exit: YES")
     print(f"Weapon: {', '.join(weapon_names)} (blade only)")
     print(f"Stat Strategies: 25% All STR | 25% All AGI | 50% STR/AGI Split")
+    print(f"AGI Buff: +50% (hit={AGI_CONFIG['hit_per_agi']*100:.1f}%/pt, crit={AGI_CONFIG['crit_per_agi']*100:.2f}%/pt)")
     print("-" * 60)
 
     # ==========================================================================
