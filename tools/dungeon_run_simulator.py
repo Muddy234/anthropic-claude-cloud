@@ -66,8 +66,8 @@ STARTER_WEAPONS = {
     },
     'Short Bow': {
         'damageType': 'pierce',
-        'damage': 6,
-        'speed': 0.8,           # Faster attack speed (ranged advantage)
+        'damage': 5.5,
+        'speed': 0.9,           # 630ms (700 * 0.9) - slightly faster than melee
         'stat_scaling': 'agi',  # AGI-based weapon
         'ranged': True
     },
