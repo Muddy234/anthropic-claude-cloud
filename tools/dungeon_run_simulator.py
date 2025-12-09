@@ -50,27 +50,34 @@ STARTER_WEAPONS = {
         'damageType': 'blade',
         'damage': 7,
         'speed': 1.0,
-        'stat_scaling': 'str'
+        'stat_scaling': 'str',
+        'bleed_chance': 0.15,       # 15% chance to inflict bleed
+        'bleed_dot': 0.05,          # 5% of max HP per second
+        'bleed_duration': 50        # 5 seconds (50 ticks)
     },
     'Iron Mace': {
         'damageType': 'blunt',
-        'damage': 7,
-        'speed': 1.0,
-        'stat_scaling': 'str'
+        'damage': 8.4,              # +20% damage (7 → 8.4)
+        'speed': 1.25,              # +25% slower (1.0 → 1.25)
+        'stat_scaling': 'str',
+        'stun_chance': 0.15,        # 15% chance to stun
+        'stun_duration': 10         # 1 second (10 ticks)
     },
     'Wooden Spear': {
         'damageType': 'pierce',
         'damage': 7,
-        'speed': 1.0,
-        'stat_scaling': 'str'
+        'speed': 1.1,               # +10% slower (1.0 → 1.1)
+        'stat_scaling': 'str',
+        'range': 2,                 # Can attack from 2 tiles
+        'crit_bonus': 0.10          # +10% crit chance
     },
     'Short Bow': {
         'damageType': 'pierce',
         'damage': 5.5,
-        'speed': 0.9,           # 630ms (700 * 0.9) - slightly faster than melee
-        'stat_scaling': 'agi',  # AGI-based weapon
+        'speed': 0.99,              # +10% slower (0.9 → 0.99)
+        'stat_scaling': 'agi',
         'ranged': True,
-        'range': 4              # Can attack from 4 tiles away
+        'range': 4
     },
 }
 
@@ -244,10 +251,11 @@ def roll_hit(attacker_agi, defender_agi):
     hit_chance = max(AGI_CONFIG['min_hit_chance'], min(AGI_CONFIG['max_hit_chance'], hit_chance))
     return random.random() < hit_chance
 
-def roll_crit(attacker_agi):
-    """Roll for critical hit based on AGI"""
+def roll_crit(attacker_agi, crit_bonus=0):
+    """Roll for critical hit based on AGI + weapon bonus"""
     crit_chance = AGI_CONFIG['base_crit_chance']
     crit_chance += attacker_agi * AGI_CONFIG['crit_per_agi']
+    crit_chance += crit_bonus  # Weapon-specific crit bonus (e.g., pierce +10%)
     crit_chance = min(AGI_CONFIG['max_crit_chance'], crit_chance)
     return random.random() < crit_chance
 
@@ -324,14 +332,15 @@ def fight(p, m_name, floor=1):
     Simulate a fight between player and monster with range mechanics.
     Returns: (ticks, dmg_dealt, dmg_taken, won)
 
-    Range mechanics:
-    - Combat starts at RANGE_CONFIG['starting_distance'] tiles apart
-    - Monster moves toward player each moveSpeed ticks
-    - Ranged weapons can attack at their range, melee requires distance <= 1
-    - Monster can only attack when in melee range (distance <= 1)
+    Mechanics:
+    - Range: Combat starts at distance, ranged weapons attack from afar
+    - Stun (blunt): 15% chance to stun enemy for 1 second
+    - Bleed (blade): 15% chance to inflict 5% HP/sec DoT for 5 seconds
+    - Crit bonus (pierce): +10% crit chance
     """
     m_stats = MONSTER_STATS[m_name].copy()
     m_hp = int(apply_floor_scaling(m_stats['hp'], floor))
+    m_max_hp = m_hp  # Store max HP for bleed calculation
     m_stats['pDef'] = int(apply_floor_scaling(m_stats['pDef'], floor))
     m_agi = m_stats.get('agi', 8)  # Monster AGI (default 8)
 
@@ -344,8 +353,12 @@ def fight(p, m_name, floor=1):
     # Range mechanics
     distance = RANGE_CONFIG['starting_distance']
     weapon_range = weapon.get('range', 1)  # Melee = 1, ranged = higher
-    is_ranged = weapon.get('ranged', False)
     m_move_ticks = m_stats.get('moveSpeed', RANGE_CONFIG['default_move_speed'])
+
+    # Status effects
+    stun_remaining = 0      # Ticks monster is stunned
+    bleed_remaining = 0     # Ticks of bleed remaining
+    bleed_dot = 0           # Damage per tick from bleed
 
     tick = 0
     total_dmg_dealt = 0
@@ -354,8 +367,20 @@ def fight(p, m_name, floor=1):
     while p['hp'] > 0 and m_hp > 0:
         tick += 1
 
-        # Monster movement (closes distance)
-        if distance > RANGE_CONFIG['melee_range'] and tick % m_move_ticks == 0:
+        # Apply bleed damage (every 10 ticks = 1 second)
+        if bleed_remaining > 0:
+            bleed_remaining -= 1
+            if tick % 10 == 0:  # Apply bleed damage once per second
+                bleed_dmg = int(m_max_hp * bleed_dot)
+                m_hp -= bleed_dmg
+                total_dmg_dealt += bleed_dmg
+
+        # Decrement stun
+        if stun_remaining > 0:
+            stun_remaining -= 1
+
+        # Monster movement (closes distance) - blocked by stun
+        if stun_remaining == 0 and distance > RANGE_CONFIG['melee_range'] and tick % m_move_ticks == 0:
             distance -= 1
 
         # Player attack (check range)
@@ -364,15 +389,25 @@ def fight(p, m_name, floor=1):
             # Roll hit (player AGI vs monster AGI)
             if roll_hit(p['agi'], m_agi):
                 dmg = get_damage(p, m_stats, True)
-                # Roll crit
-                if roll_crit(p['agi']):
+                # Roll crit (with weapon crit bonus)
+                crit_bonus = weapon.get('crit_bonus', 0)
+                if roll_crit(p['agi'], crit_bonus):
                     dmg = int(dmg * AGI_CONFIG['crit_multiplier'])
                 m_hp -= dmg
                 total_dmg_dealt += dmg
+
+                # Roll stun (blunt weapons)
+                if weapon.get('stun_chance', 0) > 0 and random.random() < weapon['stun_chance']:
+                    stun_remaining = weapon.get('stun_duration', 10)
+
+                # Roll bleed (blade weapons) - resets timer, doesn't stack
+                if weapon.get('bleed_chance', 0) > 0 and random.random() < weapon['bleed_chance']:
+                    bleed_remaining = weapon.get('bleed_duration', 50)
+                    bleed_dot = weapon.get('bleed_dot', 0.05)
             # Miss: no damage dealt
 
-        # Monster attack (only in melee range)
-        can_monster_attack = distance <= RANGE_CONFIG['melee_range']
+        # Monster attack (only in melee range, blocked by stun)
+        can_monster_attack = distance <= RANGE_CONFIG['melee_range'] and stun_remaining == 0
         if m_hp > 0 and can_monster_attack and tick % m_ticks == 0:
             # Roll hit (monster AGI vs player AGI)
             if roll_hit(m_agi, p['agi']):
