@@ -237,14 +237,10 @@ def get_damage(attacker, defender, is_player, floor=1):
         # Base damage from weapon
         base = weapon['damage']
 
-        # Add stat scaling (STR, INT, or AGI based on weapon)
-        scaling_stat = weapon['stat_scaling']
-        if scaling_stat == 'str':
-            base += attacker['str'] * 0.5
-        elif scaling_stat == 'int':
-            base += attacker['int'] * 0.5
-        elif scaling_stat == 'agi':
-            base += attacker.get('agi', 8) * 0.5
+        # Add stat scaling: STR × 0.35 + AGI × 0.15
+        # This allows AGI builds to contribute some damage
+        base += attacker['str'] * 0.35
+        base += attacker.get('agi', 8) * 0.15
 
         # Apply weapon vs armor modifier
         armor_mod = get_weapon_armor_modifier(weapon['damageType'], defender['armor'])
