@@ -44,27 +44,27 @@ PLAYER_BASE = {
     'potions': 2, 'potion_heal': 50
 }
 
-# --- STARTER WEAPONS (blade only for stat allocation test) ---
+# --- STARTER WEAPONS (pierce only for stat allocation test) ---
 STARTER_WEAPONS = {
-    'Rusty Sword': {
-        'damageType': 'blade',
-        'damage': 7,
-        'speed': 1.0,
-        'stat_scaling': 'str'  # Uses STR for damage
-    },
     # DISABLED FOR STAT ALLOCATION TEST:
+    # 'Rusty Sword': {
+    #     'damageType': 'blade',
+    #     'damage': 7,
+    #     'speed': 1.0,
+    #     'stat_scaling': 'str'
+    # },
     # 'Iron Mace': {
     #     'damageType': 'blunt',
     #     'damage': 7,
     #     'speed': 1.0,
     #     'stat_scaling': 'str'
     # },
-    # 'Wooden Spear': {
-    #     'damageType': 'pierce',
-    #     'damage': 7,
-    #     'speed': 1.0,
-    #     'stat_scaling': 'str'
-    # },
+    'Wooden Spear': {
+        'damageType': 'pierce',
+        'damage': 7,
+        'speed': 1.0,
+        'stat_scaling': 'str'
+    },
 }
 
 # --- STAT ALLOCATION STRATEGIES ---
@@ -178,7 +178,10 @@ MONSTER_STATS = {
     'Shadow Stalker':   {'hp': 45, 'str': 15, 'pDef': 6,  'atkSpeed': 1.0, 'armor': 'hide'}
 }
 
-WEAPON_MATRIX = {'blade': {'unarmored': 1.3, 'hide': 1.0, 'bone': 0.7}}
+WEAPON_MATRIX = {
+    'blade': {'unarmored': 1.3, 'hide': 1.0, 'bone': 1.0},
+    'pierce': {'unarmored': 1.0, 'hide': 1.3, 'bone': 1.0}
+}
 
 # ==============================================================================
 # HELPER FUNCTIONS
@@ -562,7 +565,7 @@ def run_simulation():
     print(f"Config: {FLOOR_CONFIG[1]['rooms']}/{FLOOR_CONFIG[2]['rooms']}/{FLOOR_CONFIG[3]['rooms']} rooms per floor")
     print(f"        Altar every {ALTAR_INTERVAL} rooms | Floor scaling: {FLOOR_SCALING*100:.0f}%")
     print(f"        Full heal on floor exit: YES")
-    print(f"Weapon: {', '.join(weapon_names)} (blade only)")
+    print(f"Weapon: {', '.join(weapon_names)} (pierce only)")
     print(f"Stat Strategies: 25% All STR | 25% All AGI | 50% STR/AGI Split")
     print(f"AGI Buff: +50% (hit={AGI_CONFIG['hit_per_agi']*100:.1f}%/pt, crit={AGI_CONFIG['crit_per_agi']*100:.2f}%/pt)")
     print("-" * 60)
