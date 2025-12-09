@@ -64,19 +64,20 @@ STARTER_WEAPONS = {
         'speed': 0.95,
         'stat_scaling': 'str'
     },
-    'Apprentice Staff': {
-        'damageType': 'magic',
-        'damage': 8,
-        'speed': 0.9,
-        'stat_scaling': 'int'  # Uses INT for damage
-    },
-    'Shortbow': {
-        'damageType': 'pierce',
-        'damage': 6,
-        'speed': 1.1,
-        'stat_scaling': 'agi',  # Uses AGI (we'll add this)
-        'ranged': True
-    }
+    # DISABLED FOR TESTING:
+    # 'Apprentice Staff': {
+    #     'damageType': 'magic',
+    #     'damage': 8,
+    #     'speed': 0.9,
+    #     'stat_scaling': 'int'  # Uses INT for damage
+    # },
+    # 'Shortbow': {
+    #     'damageType': 'pierce',
+    #     'damage': 6,
+    #     'speed': 1.1,
+    #     'stat_scaling': 'agi',  # Uses AGI (we'll add this)
+    #     'ranged': True
+    # }
 }
 
 # --- WEAPON VS ARMOR MATRIX ---
@@ -487,7 +488,8 @@ def run_simulation():
 
     for sim in range(SIMULATIONS):
         # Randomly select weapon for this run
-        weapon_choice = random.choice(weapon_names)
+        # TESTING: Force Wooden Spear only
+        weapon_choice = 'Wooden Spear'  # random.choice(weapon_names)
         player = create_player(weapon_choice)
         weapon_runs[weapon_choice] += 1
 
