@@ -8,11 +8,39 @@
 const LOOT_CONFIG = {
     despawnTime: 60000,         // 60 seconds in ms
     pileSize: 0.66,             // 2/3 of tile size
-    goldDropChance: 0.70,       // 70% chance to drop gold
     monsterItemChance: 0.25,    // 25% chance for monster-specific item (already has dropChance)
     equipmentDropChance: 0.08,  // 8% base chance to roll for equipment
-    stackableTypes: ['material', 'consumable', 'gold']
+    stackableTypes: ['material', 'consumable']
 };
+
+// ============================================================================
+// FAVOR VALUE CONFIG - HP restoration from sacrificing items
+// ============================================================================
+
+const FAVOR_CONFIG = {
+    // HP restored per rarity tier (min-max range)
+    common:   { min: 2, max: 5 },
+    uncommon: { min: 10, max: 20 },
+    rare:     { min: 35, max: 55 },
+    epic:     { min: 100, max: 120 }
+};
+
+/**
+ * Get favor value (HP restoration) for an item based on rarity
+ * @param {object} item - The item
+ * @returns {number} - Favor value (HP to restore)
+ */
+function getFavorValue(item) {
+    // If item has explicit favorValue, use it
+    if (item.favorValue) {
+        return item.favorValue;
+    }
+
+    // Calculate based on rarity
+    const rarity = item.rarity || 'common';
+    const range = FAVOR_CONFIG[rarity] || FAVOR_CONFIG.common;
+    return range.min + Math.floor(Math.random() * (range.max - range.min + 1));
+}
 
 // ============================================================================
 // LOOT PILE DATA STRUCTURE
@@ -30,9 +58,8 @@ if (typeof game !== 'undefined' && !game.groundLoot) {
  *     x: grid x position,
  *     y: grid y position,
  *     items: [
- *         { name: 'Gold', type: 'gold', count: 15 },
- *         { name: 'Ashes', type: 'material', count: 1, goldValue: 2 },
- *         { name: 'Rusty Broadsword', type: 'weapon', count: 1, ... }
+ *         { name: 'Ashes', type: 'material', count: 1, rarity: 'common', favorValue: 3 },
+ *         { name: 'Rusty Broadsword', type: 'weapon', count: 1, rarity: 'uncommon', ... }
  *     ],
  *     spawnTime: timestamp when created
  * }
@@ -47,28 +74,13 @@ let lootIdCounter = 0;
 /**
  * Spawn a loot pile when an enemy dies
  * @param {number} x - Grid X position
- * @param {number} y - Grid Y position  
+ * @param {number} y - Grid Y position
  * @param {object} enemy - The defeated enemy
  */
 function spawnLootPile(x, y, enemy) {
     const items = [];
     const monsterData = MONSTER_DATA[enemy.name] || enemy;
-    
-    // Roll for gold
-    if (Math.random() < LOOT_CONFIG.goldDropChance) {
-        const goldMin = monsterData.goldMin || 5;
-        const goldMax = monsterData.goldMax || 15;
-        const goldAmount = goldMin + Math.floor(Math.random() * (goldMax - goldMin + 1));
-        
-        if (goldAmount > 0) {
-            items.push({
-                name: 'Gold',
-                type: 'gold',
-                count: goldAmount
-            });
-        }
-    }
-    
+
     // Roll for monster-specific item
     if (Math.random() < LOOT_CONFIG.monsterItemChance) {
         const monsterItem = rollMonsterLoot(enemy.name);
@@ -76,7 +88,7 @@ function spawnLootPile(x, y, enemy) {
             items.push(monsterItem);
         }
     }
-    
+
     // Roll for equipment drop
     if (Math.random() < LOOT_CONFIG.equipmentDropChance) {
         const equipment = rollEquipmentDrop();
@@ -84,7 +96,7 @@ function spawnLootPile(x, y, enemy) {
             items.push(equipment);
         }
     }
-    
+
     // Only create pile if there's something to drop
     if (items.length > 0) {
         const pile = {
@@ -94,11 +106,11 @@ function spawnLootPile(x, y, enemy) {
             items: items,
             spawnTime: Date.now()
         };
-        
+
         game.groundLoot.push(pile);
-        
+
         // Log what dropped
-        const itemNames = items.map(i => i.type === 'gold' ? `${i.count} Gold` : i.name).join(', ');
+        const itemNames = items.map(i => i.name).join(', ');
         console.log(`Loot dropped at (${x}, ${y}): ${itemNames}`);
     }
 }
@@ -111,7 +123,7 @@ function rollMonsterLootInternal(monsterName) {
     if (typeof rollMonsterLoot === 'function') {
         return rollMonsterLoot(monsterName);
     }
-    
+
     // Fallback implementation
     const monster = MONSTER_DATA[monsterName];
     if (!monster || !monster.loot) return null;
@@ -123,7 +135,8 @@ function rollMonsterLootInternal(monsterName) {
             return {
                 name: lootItem.name,
                 type: 'material',
-                goldValue: lootItem.goldValue,
+                rarity: lootItem.rarity || 'common',
+                favorValue: lootItem.favorValue || 3,
                 count: 1
             };
         }
@@ -132,9 +145,6 @@ function rollMonsterLootInternal(monsterName) {
     return null;
 }
 
-/**
- * Roll for equipment drop (uses existing function if available)
- */
 /**
  * Roll for equipment drop (weapons, armor, shields)
  * @returns {object|null} - Equipment item or null
@@ -229,8 +239,8 @@ function rollEquipmentDrop() {
  * @returns {object|null} - The loot pile or null
  */
 function getLootPileAt(x, y) {
-    return game.groundLoot.find(pile => 
-        Math.floor(pile.x) === Math.floor(x) && 
+    return game.groundLoot.find(pile =>
+        Math.floor(pile.x) === Math.floor(x) &&
         Math.floor(pile.y) === Math.floor(y)
     );
 }
@@ -241,27 +251,21 @@ function getLootPileAt(x, y) {
  */
 function pickupLootPile(pile) {
     if (!pile || !pile.items) return;
-    
+
     const messages = [];
-    
+
     for (const item of pile.items) {
-        if (item.type === 'gold') {
-            // Add gold directly
-            game.gold += item.count;
-            messages.push(`${item.count} Gold`);
-        } else {
-            // Add to inventory
-            addItemToInventory(item);
-            messages.push(item.name);
-        }
+        // Add to inventory
+        addItemToInventory(item);
+        messages.push(item.name);
     }
-    
+
     // Remove the pile
     const index = game.groundLoot.indexOf(pile);
     if (index > -1) {
         game.groundLoot.splice(index, 1);
     }
-    
+
     // Show message
     if (messages.length > 0) {
         addMessage(`Picked up: ${messages.join(', ')}`);
@@ -281,13 +285,14 @@ function addItemToInventory(item) {
             return;
         }
     }
-    
+
     // Add as new item
     game.player.inventory.push({
         name: item.name,
         type: item.type,
         count: item.count,
-        goldValue: item.goldValue || 0,
+        rarity: item.rarity || 'common',
+        favorValue: item.favorValue || getFavorValue(item),
         ...item
     });
 }
@@ -316,14 +321,14 @@ function tryPickupLootAtPosition(gridX, gridY) {
  */
 function updateLootPiles(deltaTime) {
     if (!game.groundLoot) return;
-    
+
     const now = Date.now();
-    
+
     // Remove expired loot piles
     for (let i = game.groundLoot.length - 1; i >= 0; i--) {
         const pile = game.groundLoot[i];
         const age = now - pile.spawnTime;
-        
+
         if (age >= LOOT_CONFIG.despawnTime) {
             console.log(`Loot pile despawned at (${pile.x}, ${pile.y})`);
             game.groundLoot.splice(i, 1);
@@ -346,10 +351,10 @@ function updateLootPiles(deltaTime) {
  */
 function renderLootPiles(ctx, camX, camY, tileSize, offsetX) {
     if (!game.groundLoot) return;
-    
+
     const pileSize = tileSize * LOOT_CONFIG.pileSize;
     const padding = (tileSize - pileSize) / 2;
-    
+
     for (const pile of game.groundLoot) {
         const screenX = (pile.x - camX) * tileSize + offsetX + padding;
         const screenY = (pile.y - camY) * tileSize + padding;
@@ -365,7 +370,7 @@ function renderLootPiles(ctx, camX, camY, tileSize, offsetX) {
             screenY < -tileSize || screenY > ctx.canvas.height) {
             continue;
         }
-        
+
         // Calculate fade for last 10 seconds
         const age = Date.now() - pile.spawnTime;
         const timeLeft = LOOT_CONFIG.despawnTime - age;
@@ -374,25 +379,25 @@ function renderLootPiles(ctx, camX, camY, tileSize, offsetX) {
             // Blink effect in last 10 seconds
             alpha = (Math.sin(age / 150) + 1) / 2 * 0.7 + 0.3;
         }
-        
+
         ctx.globalAlpha = alpha;
-        
-        // Draw yellow star
+
+        // Draw loot star (now represents offerings/items, not gold)
         drawLootStar(ctx, screenX + pileSize / 2, screenY + pileSize / 2, pileSize / 2);
-        
+
         // Draw item count badge if multiple items
         if (pile.items.length > 1) {
             ctx.fillStyle = '#e74c3c';
             ctx.beginPath();
             ctx.arc(screenX + pileSize - 5, screenY + 5, 10, 0, Math.PI * 2);
             ctx.fill();
-            
+
             ctx.fillStyle = '#fff';
             ctx.font = 'bold 12px monospace';
             ctx.textAlign = 'center';
             ctx.fillText(pile.items.length.toString(), screenX + pileSize - 5, screenY + 9);
         }
-        
+
         ctx.globalAlpha = 1.0;
     }
 }
@@ -404,29 +409,29 @@ function drawLootStar(ctx, cx, cy, radius) {
     const spikes = 5;
     const outerRadius = radius;
     const innerRadius = radius * 0.5;
-    
+
     ctx.beginPath();
-    ctx.fillStyle = '#FFD700'; // Gold color
-    ctx.strokeStyle = '#B8860B'; // Darker gold outline
+    ctx.fillStyle = '#9b59b6'; // Purple color for offerings
+    ctx.strokeStyle = '#6c3483'; // Darker purple outline
     ctx.lineWidth = 2;
-    
+
     for (let i = 0; i < spikes * 2; i++) {
         const r = i % 2 === 0 ? outerRadius : innerRadius;
         const angle = (Math.PI / 2 * 3) + (i * Math.PI / spikes);
         const x = cx + Math.cos(angle) * r;
         const y = cy + Math.sin(angle) * r;
-        
+
         if (i === 0) {
             ctx.moveTo(x, y);
         } else {
             ctx.lineTo(x, y);
         }
     }
-    
+
     ctx.closePath();
     ctx.fill();
     ctx.stroke();
-    
+
     // Add shine effect
     ctx.fillStyle = 'rgba(255, 255, 255, 0.4)';
     ctx.beginPath();
@@ -447,7 +452,7 @@ function drawLootStar(ctx, cx, cy, radius) {
 function getLootPileAtScreen(screenX, screenY, camX, camY, tileSize, offsetX) {
     const gridX = Math.floor((screenX - offsetX) / tileSize + camX);
     const gridY = Math.floor(screenY / tileSize + camY);
-    
+
     return getLootPileAt(gridX, gridY);
 }
 
@@ -466,7 +471,7 @@ function initializeLootSystem() {
         game.groundLoot.length = 0; // Clear existing
     }
     lootIdCounter = 0;
-    console.log('âœ“ Loot system initialized');
+    console.log('✓ Loot system initialized');
 }
 
 /**
@@ -476,11 +481,8 @@ function initializeLootSystem() {
  */
 function getLootPileSummary(pile) {
     if (!pile || !pile.items) return '';
-    
+
     return pile.items.map(item => {
-        if (item.type === 'gold') {
-            return `${item.count} Gold`;
-        }
         return item.count > 1 ? `${item.name} x${item.count}` : item.name;
     }).join(', ');
 }
@@ -490,6 +492,8 @@ function getLootPileSummary(pile) {
 // ============================================================================
 
 window.LOOT_CONFIG = LOOT_CONFIG;
+window.FAVOR_CONFIG = FAVOR_CONFIG;
+window.getFavorValue = getFavorValue;
 window.spawnLootPile = spawnLootPile;
 window.getLootPileAt = getLootPileAt;
 window.pickupLootPile = pickupLootPile;
@@ -501,21 +505,23 @@ window.initializeLootSystem = initializeLootSystem;
 window.getLootPileSummary = getLootPileSummary;
 window.addItemToInventory = addItemToInventory;
 
-console.log('âœ“ Loot system loaded');// ============================================================================
-// SYSTEM MANAGER REGISTRATION - Add to end of loot-system.js
+console.log('✓ Loot system loaded');
+
+// ============================================================================
+// SYSTEM MANAGER REGISTRATION
 // ============================================================================
 
 const LootSystemDef = {
     name: 'loot-system',
-    
+
     init(game) {
         initializeLootSystem();
     },
-    
+
     update(dt) {
         updateLootPiles(dt);
     },
-    
+
     cleanup() {
         // Clear ground loot on floor transition
         if (game.groundLoot) {

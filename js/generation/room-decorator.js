@@ -26,61 +26,61 @@ const ELEMENT_DECORATIONS = {
         blocking: ['lava_rock', 'charred_pillar', 'ember_brazier', 'scorched_bones'],
         floor: ['ash_pile', 'cinder_patch', 'heat_vent', 'burnt_debris'],
         wall: ['torch_sconce', 'flame_rune', 'soot_marks'],
-        special: ['fire_shrine', 'magma_pool_small']
+        special: ['fire_shrine', 'magma_pool_small', 'sacrifice_altar']
     },
     ice: {
         blocking: ['ice_pillar', 'frozen_statue', 'frost_crystal', 'icicle_cluster'],
         floor: ['ice_patch', 'snow_drift', 'frozen_puddle', 'frost_runes'],
         wall: ['ice_formation', 'frozen_torch', 'rime_coating'],
-        special: ['ice_shrine', 'frozen_chest']
+        special: ['ice_shrine', 'frozen_chest', 'sacrifice_altar']
     },
     water: {
         blocking: ['coral_formation', 'water_pillar', 'shell_mound', 'barnacle_rock'],
         floor: ['shallow_pool', 'wet_stones', 'seaweed_patch', 'tide_pool'],
         wall: ['dripping_moss', 'water_stain', 'shell_decoration'],
-        special: ['water_shrine', 'sunken_chest']
+        special: ['water_shrine', 'sunken_chest', 'sacrifice_altar']
     },
     earth: {
         blocking: ['boulder', 'stalagmite', 'crystal_cluster', 'stone_pillar'],
         floor: ['gravel_patch', 'crystal_shard', 'mineral_vein', 'cracked_floor'],
         wall: ['ore_vein', 'fossil_imprint', 'cave_painting'],
-        special: ['earth_shrine', 'geode']
+        special: ['earth_shrine', 'geode', 'sacrifice_altar']
     },
     nature: {
         blocking: ['giant_mushroom', 'twisted_tree', 'thorn_bush', 'moss_boulder'],
         floor: ['mushroom_cluster', 'vine_patch', 'flower_bed', 'leaf_pile'],
         wall: ['hanging_vines', 'wall_fungus', 'root_growth'],
-        special: ['nature_shrine', 'healing_spring']
+        special: ['nature_shrine', 'healing_spring', 'sacrifice_altar']
     },
     death: {
         blocking: ['bone_pile', 'tombstone', 'coffin', 'skeletal_remains'],
         floor: ['skull_pile', 'grave_dirt', 'spectral_residue', 'death_rune'],
         wall: ['bone_decoration', 'death_mask', 'crypt_inscription'],
-        special: ['death_shrine', 'sarcophagus']
+        special: ['death_shrine', 'sarcophagus', 'sacrifice_altar']
     },
     arcane: {
         blocking: ['arcane_pillar', 'floating_crystal', 'runic_obelisk', 'mana_font'],
         floor: ['rune_circle', 'magic_residue', 'glyph_pattern', 'power_conduit'],
         wall: ['arcane_inscription', 'glowing_rune', 'spell_scar'],
-        special: ['arcane_shrine', 'enchanting_table']
+        special: ['arcane_shrine', 'enchanting_table', 'sacrifice_altar']
     },
     dark: {
         blocking: ['shadow_pillar', 'void_crystal', 'dark_altar', 'nightmare_statue'],
         floor: ['shadow_pool', 'dark_rune', 'void_crack', 'nightmare_residue'],
         wall: ['shadow_stain', 'void_portal_small', 'dark_inscription'],
-        special: ['dark_shrine', 'shadow_chest']
+        special: ['dark_shrine', 'shadow_chest', 'sacrifice_altar']
     },
     holy: {
         blocking: ['light_pillar', 'angel_statue', 'sacred_font', 'prayer_altar'],
         floor: ['holy_circle', 'blessed_tiles', 'light_beam', 'sacred_rune'],
         wall: ['holy_symbol', 'divine_inscription', 'light_sconce'],
-        special: ['holy_shrine', 'blessing_fountain']
+        special: ['holy_shrine', 'blessing_fountain', 'sacrifice_altar']
     },
     physical: {
         blocking: ['weapon_rack', 'training_dummy', 'pillar', 'broken_statue'],
         floor: ['blood_stain', 'weapon_debris', 'chain_pile', 'sand_pit'],
         wall: ['trophy_mount', 'battle_scar', 'chain_mount'],
-        special: ['combat_shrine', 'arena_chest']
+        special: ['combat_shrine', 'arena_chest', 'sacrifice_altar']
     }
 };
 
@@ -123,15 +123,42 @@ function decorateRoom(room) {
     
     const placedPositions = new Set();
     let placedCount = 0;
-    
-    // Place special decoration first (shrines, chests)
-    if (room.type !== 'entrance' && Math.random() < 0.3) {
+
+    // Track if we've placed an altar on this floor (for guaranteed altar logic)
+    if (!game._altarsPlacedThisFloor) game._altarsPlacedThisFloor = 0;
+
+    // Guarantee at least one altar per floor - place in non-entrance rooms
+    // Place altar with 40% chance per room, or 100% if no altar placed yet and this is room 3+
+    const roomIndex = game.rooms ? game.rooms.indexOf(room) : 0;
+    const needsGuaranteedAltar = game._altarsPlacedThisFloor === 0 && roomIndex >= 2;
+    const shouldPlaceAltar = room.type !== 'entrance' && room.type !== 'boss' &&
+                             (needsGuaranteedAltar || Math.random() < 0.4);
+
+    if (shouldPlaceAltar) {
+        const altarPos = findDecorationPosition(room, placedPositions, true);
+        if (altarPos) {
+            placeDecoration(altarPos.x, altarPos.y, 'sacrifice_altar', room, true, true);
+            placedPositions.add(`${altarPos.x},${altarPos.y}`);
+            placedCount++;
+            game._altarsPlacedThisFloor++;
+            if (DECORATOR_CONFIG.debugLogging) {
+                console.log(`[Decorator] Placed sacrifice altar in room ${roomIndex}`);
+            }
+        }
+    }
+
+    // Place other special decoration (shrines, chests) - reduced chance since we added altar
+    if (room.type !== 'entrance' && Math.random() < 0.25) {
         const specialPos = findDecorationPosition(room, placedPositions, true);
         if (specialPos) {
-            const specialType = decorPool.special[Math.floor(Math.random() * decorPool.special.length)];
-            placeDecoration(specialPos.x, specialPos.y, specialType, room, true, true);
-            placedPositions.add(`${specialPos.x},${specialPos.y}`);
-            placedCount++;
+            // Filter out sacrifice_altar from the pool since we handle it separately
+            const nonAltarSpecials = decorPool.special.filter(s => s !== 'sacrifice_altar');
+            if (nonAltarSpecials.length > 0) {
+                const specialType = nonAltarSpecials[Math.floor(Math.random() * nonAltarSpecials.length)];
+                placeDecoration(specialPos.x, specialPos.y, specialType, room, true, true);
+                placedPositions.add(`${specialPos.x},${specialPos.y}`);
+                placedCount++;
+            }
         }
     }
     
@@ -182,6 +209,9 @@ function decorateRoom(room) {
  * Place a single decoration
  */
 function placeDecoration(x, y, type, room, blocking, interactable) {
+    const color = getDecorationColor(type, room.element);
+    const symbol = getDecorationSymbol(type);
+
     const decoration = {
         x: x,
         y: y,
@@ -190,23 +220,36 @@ function placeDecoration(x, y, type, room, blocking, interactable) {
         element: room.element,
         blocking: blocking,
         interactable: interactable,
-        
+
         // Visual properties (can be overridden by tileset)
         sprite: getDecorationSprite(type, room.element),
-        color: getDecorationColor(type, room.element)
+        color: color,
+
+        // Data object for decoration-renderer.js compatibility
+        data: {
+            color: color,
+            symbol: symbol,
+            glow: interactable,
+            glowRadius: 0.8,
+            size: blocking ? 'large' : 'small'
+        }
     };
-    
+
     // Add to game decorations array
     if (!game.decorations) game.decorations = [];
     game.decorations.push(decoration);
-    
+
+    // Also add to room's decorations array (required for rendering)
+    if (!room.decorations) room.decorations = [];
+    room.decorations.push(decoration);
+
     // Mark tile as having decoration
     const tile = game.map?.[y]?.[x];
     if (tile) {
         tile.decoration = decoration;
         if (blocking) tile.blocked = true;
     }
-    
+
     return decoration;
 }
 
@@ -318,8 +361,75 @@ function getDecorationColor(type, element) {
         holy: '#fdcb6e',
         physical: '#b2bec3'
     };
-    
+
     return elementColors[element] || '#888888';
+}
+
+/**
+ * Get symbol for decoration type
+ */
+function getDecorationSymbol(type) {
+    const symbols = {
+        // Altars and shrines
+        sacrifice_altar: '⛧',
+        fire_shrine: '🔥',
+        ice_shrine: '❄',
+        water_shrine: '💧',
+        earth_shrine: '⛰',
+        nature_shrine: '🌿',
+        death_shrine: '💀',
+        arcane_shrine: '✨',
+        dark_shrine: '🌑',
+        holy_shrine: '✝',
+        combat_shrine: '⚔',
+
+        // Chests
+        chest: '📦',
+        frozen_chest: '🧊',
+        sunken_chest: '📦',
+        shadow_chest: '📦',
+        arena_chest: '📦',
+
+        // Blocking decorations
+        lava_rock: '🪨',
+        charred_pillar: '▓',
+        ember_brazier: '🔥',
+        scorched_bones: '🦴',
+        ice_pillar: '▓',
+        frozen_statue: '🗿',
+        frost_crystal: '💎',
+        boulder: '🪨',
+        stalagmite: '▲',
+        crystal_cluster: '💎',
+        stone_pillar: '▓',
+        pillar: '▓',
+        giant_mushroom: '🍄',
+        twisted_tree: '🌳',
+        bone_pile: '🦴',
+        tombstone: '🪦',
+        coffin: '⚰',
+
+        // Floor decorations
+        ash_pile: '·',
+        cinder_patch: '·',
+        heat_vent: '◎',
+        ice_patch: '·',
+        snow_drift: '·',
+        gravel_patch: '·',
+        mushroom_cluster: '🍄',
+        skull_pile: '💀',
+        rune_circle: '◯',
+
+        // Special
+        healing_spring: '💧',
+        blessing_fountain: '⛲',
+        geode: '💎',
+        sarcophagus: '⚰',
+        enchanting_table: '📖',
+        magma_pool_small: '🔥'
+    };
+
+    return symbols[type] || '◆';
 }
 
 // ============================================================================
@@ -403,7 +513,12 @@ function interactWithDecoration(decoration, player) {
         decoration.interactable = false; // One use
         return true;
     }
-    
+
+    // Sacrifice Altars
+    if (type === 'sacrifice_altar') {
+        return openSacrificeUI(decoration, player);
+    }
+
     return false;
 }
 
@@ -446,25 +561,46 @@ function activateShrine(shrine, player) {
  * Open a chest
  */
 function openChest(chest, player) {
-    // Generate loot
-    const goldAmount = 20 + Math.floor(Math.random() * 50);
-    game.gold = (game.gold || 0) + goldAmount;
-    
-    if (typeof addMessage === 'function') {
-        addMessage(`Found ${goldAmount} gold!`);
-    }
-    
-    // Chance for item
-    if (Math.random() < 0.3 && typeof rollEquipmentDrop === 'function') {
-        const item = rollEquipmentDrop();
-        if (item) {
-            player.inventory.push(item);
-            if (typeof addMessage === 'function') {
-                addMessage(`Found ${item.name}!`);
+    // Generate random loot (no gold)
+    const items = [];
+
+    // Always drop a material/consumable
+    if (typeof rollMonsterLoot === 'function') {
+        // Pick a random monster to get loot from
+        const monsterNames = Object.keys(MONSTER_DATA || {});
+        if (monsterNames.length > 0) {
+            const randomMonster = monsterNames[Math.floor(Math.random() * monsterNames.length)];
+            const loot = rollMonsterLoot(randomMonster);
+            if (loot) {
+                items.push(loot);
             }
         }
     }
-    
+
+    // 40% chance for equipment
+    if (Math.random() < 0.4 && typeof rollEquipmentDrop === 'function') {
+        const item = rollEquipmentDrop();
+        if (item) {
+            items.push(item);
+        }
+    }
+
+    // Add items to inventory
+    for (const item of items) {
+        if (typeof addItemToInventory === 'function') {
+            addItemToInventory(item);
+        } else {
+            player.inventory.push(item);
+        }
+        if (typeof addMessage === 'function') {
+            addMessage(`Found ${item.name}!`);
+        }
+    }
+
+    if (items.length === 0 && typeof addMessage === 'function') {
+        addMessage('The chest was empty...');
+    }
+
     chest.interactable = false;
     chest.type = chest.type.replace('chest', 'chest_open');
     return true;

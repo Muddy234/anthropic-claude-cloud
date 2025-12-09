@@ -88,11 +88,14 @@ class EnemyAI {
     }
     
     update(dt, game) {
+        // Dead enemies should not update AI
+        if (this.enemy.hp <= 0) return;
+
         this.stateTimer += dt;
         this.thinkTimer += dt;
         this.attackCooldown = Math.max(0, this.attackCooldown - dt);
         this.specialCooldown = Math.max(0, this.specialCooldown - dt);
-        
+
         if (this.thinkTimer >= this.thinkInterval) {
             this.thinkTimer = 0;
             this._think(game);

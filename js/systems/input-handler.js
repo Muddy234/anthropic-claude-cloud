@@ -55,6 +55,13 @@ window.addEventListener('keydown', e => {
         return;
     }
 
+    // Close sacrifice UI on ESC or Enter to confirm
+    if (game.state === 'sacrifice') {
+        if (typeof handleSacrificeKey === 'function' && handleSacrificeKey(e.key)) {
+            return;
+        }
+    }
+
     // PRIORITY 2: Context menu and inspect popup (only if game.state === 'playing')
     // Close inspect popup on ESC
     if (e.key === 'Escape' && inspectPopup.visible && game.state === 'playing') {

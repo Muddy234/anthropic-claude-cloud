@@ -277,18 +277,22 @@ function createEnemy(monsterType, x, y, room) {
     }
     
     // Get tier data
-    const tierData = typeof getMonsterAIConfig === 'function' 
+    const tierData = typeof getMonsterAIConfig === 'function'
         ? getMonsterAIConfig(monsterType)
         : null;
-    
+
     const tierIndicator = typeof getTierIndicator === 'function'
         ? getTierIndicator(monsterType)
         : { indicator: '?', color: '#888888' };
-    
-    // Apply tier multipliers to stats
+
+    // Get current floor for stat scaling (monsters level up with floor)
+    const currentFloor = (typeof game !== 'undefined' && game.floor) ? game.floor : 1;
+
+    // Apply floor-based stat scaling
+    // Monster level = floor number (Floor 1 = Level 1, etc.)
     const stats = typeof applyTierMultipliers === 'function'
-        ? applyTierMultipliers(template, monsterType)
-        : { ...template.stats };
+        ? applyTierMultipliers(template, monsterType, currentFloor)
+        : { ...template };
     
     // Random facing direction
     const directions = ['up', 'down', 'left', 'right'];
@@ -327,31 +331,41 @@ function createEnemy(monsterType, x, y, room) {
         // Collision
         blockingRadius: template.elite ? 1.0 : 0.75,
 
-        // Stats
-        hp: stats.health || 50,
-        maxHp: stats.health || 50,
-        damage: stats.damage || 10,
-        defense: stats.defense || 0,
-        pDef: stats.defense || 0,
-        
+        // Monster level (equal to floor number)
+        level: stats.level || currentFloor,
+
+        // Stats (scaled by floor level)
+        hp: stats.hp || 50,
+        maxHp: stats.hp || 50,
+        str: stats.str || 10,
+        agi: stats.agi || 10,
+        int: stats.int || 10,
+        pDef: stats.pDef || 0,
+        mDef: stats.mDef || 0,
+
+        // Mana (scales with INT, magic monsters have more)
+        mp: calculateMonsterMana(template),
+        maxMp: calculateMonsterMana(template),
+        manaRegen: calculateMonsterManaRegen(template),
+
         // Element
         element: template.element || 'physical',
         armorType: template.armorType || 'unarmored',
         damageType: template.damageType || 'physical',
-        
+
         // Behavior
-	behaviorType: determineBehaviorType(template),
+        behaviorType: determineBehaviorType(template),
         behavior: createBehaviorObject(template),
         state: 'idle',
-        
+
         // Perception
         perception: template.perception || { sightRange: 6, hearingRange: 4 },
         aggression: template.perception?.sightRange || 6,
-        
+
         // Room reference
         room: room,
         spawnRoom: room,
-        
+
         // Combat - use individual monster values from tierData (via buildCombatConfig)
         combat: {
             isInCombat: false,
@@ -362,12 +376,10 @@ function createEnemy(monsterType, x, y, room) {
             attackRange: tierData?.combat?.attackRange || 1,
             comboCount: 1  // Enemy combo system: 1 -> 2 -> 3 (special) -> 1
         },
-        
-        // Loot
-        loot: template.loot || { goldMin: 5, goldMax: 15 },
-        goldMin: template.loot?.goldMin || 5,
-        goldMax: template.loot?.goldMax || 15,
-        xp: calculateMonsterXP(template),
+
+        // Loot (favor-based system - no gold)
+        loot: template.loot || [],
+        xp: stats.xp || calculateMonsterXP(template),
         
         // Status
         statusEffects: [],
@@ -392,22 +404,43 @@ function createEnemy(monsterType, x, y, room) {
 
 /**
  * Calculate XP reward for monster
+ * Uses the monster's base XP from MONSTER_DATA - tiers do NOT affect XP
  */
 function calculateMonsterXP(template) {
-    // Base XP by tier - increased TIER_3 for better early game progression
-    const tierXP = {
-        'TIER_3': 15,   // Was 10, now 15 for smoother early leveling
-        'TIER_2': 30,   // Was 25, slight bump
-        'TIER_1': 55,   // Was 50, slight bump
-        'ELITE': 100,
-        'BOSS': 500
-    };
-    const base = tierXP[template.tier] || 15;
+    // Use the monster's defined XP from MONSTER_DATA
+    // Tiers only affect behavior/AI, not rewards
+    return template.xp || 20;
+}
 
-    // Bonus for stronger stats
-    const healthBonus = Math.floor((template.stats?.health || 50) / 25);
+/**
+ * Calculate monster mana pool based on INT stat
+ * Magic monsters have significantly more mana
+ */
+function calculateMonsterMana(template) {
+    const intStat = template.int || 10;
+    const isMagic = template.attackType === 'magic';
 
-    return base + healthBonus;
+    // Base mana: 50 + INT bonus
+    // Magic monsters get 2x bonus
+    const baseMana = 50;
+    const intBonus = Math.floor(intStat * (isMagic ? 3 : 1));
+
+    return baseMana + intBonus;
+}
+
+/**
+ * Calculate monster mana regeneration rate
+ * Based on INT, magic monsters regen faster
+ */
+function calculateMonsterManaRegen(template) {
+    const intStat = template.int || 10;
+    const isMagic = template.attackType === 'magic';
+
+    // Base regen: 2/sec, scales with INT
+    const baseRegen = 2;
+    const intBonus = Math.floor(intStat / 10);
+
+    return baseRegen + intBonus + (isMagic ? 2 : 0);
 }
 
 // ============================================================================

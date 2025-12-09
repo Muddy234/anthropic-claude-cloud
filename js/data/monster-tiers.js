@@ -436,17 +436,69 @@ function getMonsterConfig(monsterTypeId) {
     return getMonsterAIConfig(monsterTypeId);
 }
 
-function applyTierMultipliers(baseStats, monsterName) {
+// ============================================================
+// FLOOR-BASED STAT SCALING
+// ============================================================
+// Monsters grow stronger as players descend deeper into the dungeon
+// Level = Floor number (Floor 1 = Level 1, Floor 5 = Level 5, etc.)
+
+const FLOOR_SCALING = {
+    // Per-floor multiplier increase (floor 1 = 1.0x, floor 2 = 1.12x, etc.)
+    // Formula: multiplier = 1 + (floor - 1) * rate
+    hp: 0.12,        // +12% HP per floor
+    str: 0.12,       // +12% STR per floor
+    agi: 0.12,       // +12% AGI per floor
+    int: 0.12,       // +12% INT per floor
+    pDef: 0.12,      // +12% physical defense per floor
+    mDef: 0.12,      // +12% magic defense per floor
+    xp: 0.10,        // +10% XP per floor (slightly less to not over-reward)
+    gold: 0.10,      // +10% gold per floor
+
+    // Cap to prevent infinite scaling
+    maxMultiplier: 3.0,  // Stats can't exceed 3x base (reached at floor ~17)
+
+    // Minimum floor (floors below this don't scale)
+    minScalingFloor: 1
+};
+
+/**
+ * Apply floor-based scaling to monster stats
+ * @param {object} baseStats - Base stats from MONSTER_DATA
+ * @param {string} monsterName - Monster type name
+ * @param {number} floor - Current dungeon floor (1-based)
+ * @returns {object} Scaled stats
+ */
+function applyTierMultipliers(baseStats, monsterName, floor = 1) {
+    const cfg = FLOOR_SCALING;
+
+    // No scaling below minimum floor
+    if (floor < cfg.minScalingFloor) {
+        floor = cfg.minScalingFloor;
+    }
+
+    // Helper to calculate scaled stat
+    const scale = (base, rate) => {
+        if (typeof base !== 'number' || isNaN(base)) return base;
+        const mult = Math.min(cfg.maxMultiplier, 1 + (floor - 1) * rate);
+        return Math.floor(base * mult);
+    };
+
     return {
-        hp: baseStats.hp,
-        str: baseStats.str,
-        agi: baseStats.agi,
-        int: baseStats.int,
-        pDef: baseStats.pDef,
-        mDef: baseStats.mDef,
-        xp: baseStats.xp,
-        goldMin: baseStats.goldMin,
-        goldMax: baseStats.goldMax
+        // Combat stats - all scale with floor
+        hp: scale(baseStats.hp, cfg.hp),
+        str: scale(baseStats.str, cfg.str),
+        agi: scale(baseStats.agi, cfg.agi),
+        int: scale(baseStats.int, cfg.int),
+        pDef: scale(baseStats.pDef, cfg.pDef),
+        mDef: scale(baseStats.mDef, cfg.mDef),
+
+        // Rewards - scale proportionally
+        xp: scale(baseStats.xp, cfg.xp),
+        goldMin: scale(baseStats.goldMin, cfg.gold),
+        goldMax: scale(baseStats.goldMax, cfg.gold),
+
+        // Track the monster's level for UI display
+        level: floor
     };
 }
 
@@ -476,6 +528,7 @@ function isEliteMonster(monsterName) {
 window.MONSTER_TIERS = MONSTER_TIERS;
 window.MONSTER_TIER_MAP = MONSTER_TIER_MAP;
 window.MONSTER_AI_OVERRIDES = MONSTER_AI_OVERRIDES;
+window.FLOOR_SCALING = FLOOR_SCALING;
 window.getMonsterTierId = getMonsterTierId;
 window.getMonsterTierConfig = getMonsterTierConfig;
 window.getMonsterAIConfig = getMonsterAIConfig;

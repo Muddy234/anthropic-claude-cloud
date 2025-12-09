@@ -71,11 +71,10 @@ function resetGameState() {
     game.floor = 1;
     game.enemies = [];
     game.decorations = [];
+    game._altarsPlacedThisFloor = 0; // Reset altar counter for new floor
     game.doorways = [];
     game.rooms = [];
     game.groundLoot = [];
-    game.gold = 50;
-    game.merchantVisited = false;
     
     // Shift system
     game.shiftMeter = 0;
@@ -487,6 +486,7 @@ function advanceToNextFloor() {
     // Reset floor-specific state (keep player, gold, etc.)
     game.enemies = [];
     game.decorations = [];
+    game._altarsPlacedThisFloor = 0; // Reset altar counter for new floor
     game.doorways = [];
     game.rooms = [];
     game.groundLoot = [];

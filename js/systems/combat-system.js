@@ -35,6 +35,9 @@ function updateCombat(deltaTime) {
     // Update enemy combat
     if (game.enemies) {
         for (const enemy of game.enemies) {
+            // Skip dead enemies - they should not attack
+            if (enemy.hp <= 0) continue;
+
             if (enemy.combat?.isInCombat) {
                 updateEntityCombat(enemy, deltaTime);
             }
@@ -159,15 +162,22 @@ function updateAttackAnimation(entity, deltaTime) {
     const combat = entity.combat;
     const anim = combat.attackAnimation;
 
+    // Dead entities cannot attack - cancel animation
+    if (entity.hp <= 0) {
+        anim.state = 'idle';
+        anim.timer = 0;
+        return;
+    }
+
     anim.timer -= deltaTime;
 
     switch (anim.state) {
         case 'windup':
             // Check if windup is complete
             if (anim.timer <= 0) {
-                // Execute the attack
+                // Execute the attack (only if attacker is still alive)
                 const target = anim.targetLocked?.entity;
-                if (target && target.hp > 0) {
+                if (entity.hp > 0 && target && target.hp > 0) {
                     performAttack(entity, target);
                 }
 
@@ -445,12 +455,44 @@ function applyDamage(entity, damage, source, damageResult) {
 
 /**
  * Apply weapon special effects on hit
+ * Includes damage type effects: Blade=Bleed, Blunt=Stun, Pierce=CritBonus (handled in DamageCalculator)
  */
 function applyWeaponEffects(attacker, defender, damageResult) {
     const weapon = attacker.equipped?.MAIN;
     if (!weapon) return;
 
-    // Element status effect
+    // === DAMAGE TYPE EFFECTS (Base effects for weapon categories) ===
+    const damageType = weapon.damageType;
+    if (damageType && typeof applyStatusEffect === 'function') {
+        // Blade weapons: 15% base chance to cause Bleeding
+        if (damageType === 'blade') {
+            const bleedChance = weapon.special?.bleedChance || 0.15;
+            if (Math.random() < bleedChance) {
+                applyStatusEffect(defender, 'bleeding', attacker);
+                if (typeof addMessage === 'function') {
+                    addMessage(`${defender.name || 'Enemy'} is bleeding!`, 'combat');
+                }
+            }
+        }
+
+        // Blunt weapons: 15% base chance to cause Stun (1 second)
+        if (damageType === 'blunt') {
+            const stunChance = weapon.special?.stunChance || 0.15;
+            if (Math.random() < stunChance) {
+                // Apply shorter stun (1 second instead of default 2 seconds)
+                if (typeof StatusEffectSystem !== 'undefined') {
+                    StatusEffectSystem.applyEffect(defender, 'stunned', attacker, { duration: 1000 });
+                } else {
+                    applyStatusEffect(defender, 'stunned', attacker);
+                }
+                if (typeof addMessage === 'function') {
+                    addMessage(`${defender.name || 'Enemy'} is stunned!`, 'combat');
+                }
+            }
+        }
+    }
+
+    // === ELEMENT STATUS EFFECTS ===
     if (weapon.element && typeof applyStatusEffect === 'function') {
         const effectChance = (weapon.elementPower || 1) * 0.1; // 10% per power level
         if (Math.random() < effectChance) {
@@ -471,7 +513,7 @@ function applyWeaponEffects(attacker, defender, damageResult) {
         }
     }
 
-    // Weapon special effect
+    // === WEAPON SPECIAL EFFECTS (Custom per-weapon effects) ===
     if (weapon.special?.onHit && typeof weapon.special.onHit === 'function') {
         weapon.special.onHit(attacker, defender, damageResult);
     }
@@ -489,6 +531,16 @@ function handleDeath(entity, killer) {
             game.state = 'gameover';
         }
         return;
+    }
+
+    // Immediately disengage combat for the dead entity to prevent ghost attacks
+    if (entity.combat) {
+        entity.combat.isInCombat = false;
+        entity.combat.currentTarget = null;
+        if (entity.combat.attackAnimation) {
+            entity.combat.attackAnimation.state = 'idle';
+            entity.combat.attackAnimation.timer = 0;
+        }
     }
 
     // Enemy death
