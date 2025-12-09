@@ -334,25 +334,7 @@ function performRangedAttack(player, direction, isSpecial, comboCount) {
     }
     const adjustedDirection = direction + angleOffset;
 
-    // Check for ammo if bow/crossbow (magic weapons don't use ammo)
-    if (!isMagic) {
-        if (weaponType === 'bow' && player.ammo?.arrows <= 0) {
-            if (typeof addMessage === 'function') {
-                addMessage('No arrows!');
-            }
-            return;
-        }
-        if (weaponType === 'crossbow' && player.ammo?.bolts <= 0) {
-            if (typeof addMessage === 'function') {
-                addMessage('No bolts!');
-            }
-            return;
-        }
-
-        // Consume ammo
-        if (weaponType === 'bow') player.ammo.arrows--;
-        if (weaponType === 'crossbow') player.ammo.bolts--;
-    }
+    // Note: Ammo requirement removed - bows and crossbows have unlimited arrows/bolts
 
     // Get player vision range for projectile distance
     const visionRange = typeof VISION_RADIUS !== 'undefined' ? VISION_RADIUS : 8;

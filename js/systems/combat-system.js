@@ -19,7 +19,9 @@ const COMBAT_CONFIG = {
     enemyAttackDuration: 400,     // Total enemy attack animation duration (ms)
     enemyWindupPercent: 0.35,     // 35% of attack is windup (140ms at 400ms total)
     enemyWhiteFlashStart: 0.85,   // White flash starts at 85% of windup (last 15%)
-    playerWindupPercent: 0.15     // Player windup is 15% for comparison
+    playerWindupPercent: 0.15,    // Player windup is 15% for comparison
+    // Combat disengage settings
+    combatDisengageTime: 30000    // Time (ms) without combat before auto-disengage (30 seconds)
 };
 
 // ============================================================================
@@ -40,6 +42,72 @@ function updateCombat(deltaTime) {
 
             if (enemy.combat?.isInCombat) {
                 updateEntityCombat(enemy, deltaTime);
+            }
+        }
+    }
+
+    // Check for player combat disengage (flee mechanic)
+    updatePlayerCombatDisengage(deltaTime);
+}
+
+/**
+ * Check if player should disengage from combat after fleeing (leaving room)
+ * Combat ends after 30 seconds if no enemies are chasing or in same room
+ */
+function updatePlayerCombatDisengage(deltaTime) {
+    const player = game.player;
+    if (!player) return;
+
+    // Only check if player is flagged as in combat
+    if (!player.inCombat && !player.combat?.isInCombat) return;
+
+    // Check if any enemies are actively targeting/chasing the player
+    let hasActiveThreats = false;
+
+    if (game.enemies) {
+        for (const enemy of game.enemies) {
+            if (enemy.hp <= 0) continue;
+
+            // Enemy is chasing or in combat with player
+            if (enemy.state === 'chasing' || enemy.combat?.isInCombat) {
+                // Check if enemy's target is the player
+                if (enemy.combat?.currentTarget === player) {
+                    hasActiveThreats = true;
+                    break;
+                }
+                // Check if enemy is in same room as player
+                if (typeof isInSameRoom === 'function' && isInSameRoom(enemy, player)) {
+                    hasActiveThreats = true;
+                    break;
+                }
+            }
+        }
+    }
+
+    // Initialize disengage timer if not exists
+    if (player.combatDisengageTimer === undefined) {
+        player.combatDisengageTimer = 0;
+    }
+
+    if (hasActiveThreats) {
+        // Reset timer if there are active threats
+        player.combatDisengageTimer = 0;
+    } else {
+        // No active threats - increment timer
+        player.combatDisengageTimer += deltaTime * 1000; // Convert to ms
+
+        // Check if timer exceeded disengage threshold
+        if (player.combatDisengageTimer >= COMBAT_CONFIG.combatDisengageTime) {
+            // Disengage player from combat
+            disengageCombat(player);
+            player.combatDisengageTimer = 0;
+
+            if (typeof addMessage === 'function') {
+                addMessage('You have escaped combat.');
+            }
+
+            if (COMBAT_CONFIG.debugLogging) {
+                console.log('[Combat] Player disengaged after 30s with no threats');
             }
         }
     }
@@ -579,7 +647,19 @@ function handleDeath(entity, killer) {
     // Award skill XP
     if (typeof awardSkillXp === 'function') {
         const weapon = game.player.equipped?.MAIN;
-        const specialty = weapon?.specialty || weapon?.weaponType || 'unarmed';
+        let specialty = weapon?.specialty || weapon?.weaponType || 'unarmed';
+
+        // For staffs and tomes, use the weapon's element as specialty (routes XP to magic skill)
+        // This allows magic users to level up their element skill instead of blunt/staff
+        if (weapon && (weapon.weaponType === 'staff' || weapon.weaponType === 'tome' || weapon.weaponType === 'wand')) {
+            if (weapon.element) {
+                specialty = weapon.element;
+            } else {
+                // Fallback to arcane for staffs/tomes without an element
+                specialty = 'arcane';
+            }
+        }
+
         awardSkillXp(game.player, specialty, xpReward);
     }
 

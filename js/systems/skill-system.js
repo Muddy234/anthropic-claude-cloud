@@ -234,7 +234,91 @@ const SPECIALTIES = {
             undeadDamage: level * 0.5    // +0.5% damage to undead per level
         })
     },
-    
+
+    water: {
+        id: 'water',
+        name: 'Water Magic',
+        proficiency: 'magic',
+        description: 'Fluid magic favoring area control and debuffs.',
+        getBonuses: (level) => ({
+            damageMultiplier: 1 + (level * SKILL_CONFIG.specialtyBonusPerLevel),
+            aoeRadius: level * 0.3,      // +0.3% AoE radius per level
+            debuffDuration: level * 0.4  // +0.4% debuff duration per level
+        })
+    },
+
+    earth: {
+        id: 'earth',
+        name: 'Earth Magic',
+        proficiency: 'magic',
+        description: 'Sturdy magic favoring defense and stagger.',
+        getBonuses: (level) => ({
+            damageMultiplier: 1 + (level * SKILL_CONFIG.specialtyBonusPerLevel),
+            staggerChance: level * 0.4,  // +0.4% stagger chance per level
+            armorBonus: level * 0.3      // +0.3% armor bonus per level
+        })
+    },
+
+    nature: {
+        id: 'nature',
+        name: 'Nature Magic',
+        proficiency: 'magic',
+        description: 'Living magic favoring healing and poison.',
+        getBonuses: (level) => ({
+            damageMultiplier: 1 + (level * SKILL_CONFIG.specialtyBonusPerLevel),
+            poisonDamage: level * 0.5,   // +0.5% poison damage per level
+            healingBonus: level * 0.4    // +0.4% healing effectiveness per level
+        })
+    },
+
+    dark: {
+        id: 'dark',
+        name: 'Dark Magic',
+        proficiency: 'magic',
+        description: 'Shadow magic favoring stealth and debuffs.',
+        getBonuses: (level) => ({
+            damageMultiplier: 1 + (level * SKILL_CONFIG.specialtyBonusPerLevel),
+            noiseReduction: level * 0.5, // +0.5% noise reduction per level
+            debuffPotency: level * 0.4   // +0.4% debuff strength per level
+        })
+    },
+
+    holy: {
+        id: 'holy',
+        name: 'Holy Magic',
+        proficiency: 'magic',
+        description: 'Divine magic favoring healing and smiting undead.',
+        getBonuses: (level) => ({
+            damageMultiplier: 1 + (level * SKILL_CONFIG.specialtyBonusPerLevel),
+            healingBonus: level * 0.5,   // +0.5% healing effectiveness per level
+            undeadDamage: level * 0.6    // +0.6% damage to undead per level
+        })
+    },
+
+    arcane: {
+        id: 'arcane',
+        name: 'Arcane Magic',
+        proficiency: 'magic',
+        description: 'Pure magic favoring raw power and penetration.',
+        getBonuses: (level) => ({
+            damageMultiplier: 1 + (level * SKILL_CONFIG.specialtyBonusPerLevel),
+            magicPenetration: level * 0.5, // +0.5% magic penetration per level
+            spellPower: level * 0.3        // +0.3% spell power per level
+        })
+    },
+
+    death: {
+        id: 'death',
+        name: 'Death Magic',
+        proficiency: 'magic',
+        description: 'Necrotic magic favoring life drain and execution.',
+        getBonuses: (level) => ({
+            damageMultiplier: 1 + (level * SKILL_CONFIG.specialtyBonusPerLevel),
+            lifesteal: level * 0.3,       // +0.3% lifesteal per level
+            executeBonus: level * 0.4     // +0.4% execute threshold per level
+        })
+    },
+
     // === RANGED SPECIALTIES ===
     bow: {
         id: 'bow',

@@ -295,6 +295,18 @@ function applyProjectileDamage(config) {
         target.hp -= config.damage;
     }
 
+    // Trigger aggro - enemy should chase when hit by ranged attacks
+    if (config.attacker === game.player && target !== game.player) {
+        // Make enemy aware and start chasing
+        if (target.state !== 'chasing') {
+            target.state = 'chasing';
+        }
+        // Engage combat
+        if (typeof engageCombat === 'function' && !target.combat?.isInCombat) {
+            engageCombat(target, config.attacker);
+        }
+    }
+
     // Show damage number
     const color = config.isMagic ? '#00ffff' : '#ff4444';
     if (typeof showDamageNumber === 'function') {
