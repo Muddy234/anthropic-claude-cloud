@@ -330,9 +330,7 @@ def fight(p, m_name, floor=1):
             # Roll hit (monster AGI vs player AGI)
             if roll_hit(m_agi, p['agi']):
                 dmg = get_damage(m_stats, p, False, floor)
-                # Monsters can crit too
-                if roll_crit(m_agi):
-                    dmg = int(dmg * AGI_CONFIG['crit_multiplier'])
+                # Monsters cannot crit (player-only mechanic)
                 p['hp'] -= dmg
                 total_dmg_taken += dmg
                 check_potion(p)
