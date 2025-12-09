@@ -455,12 +455,44 @@ function applyDamage(entity, damage, source, damageResult) {
 
 /**
  * Apply weapon special effects on hit
+ * Includes damage type effects: Blade=Bleed, Blunt=Stun, Pierce=CritBonus (handled in DamageCalculator)
  */
 function applyWeaponEffects(attacker, defender, damageResult) {
     const weapon = attacker.equipped?.MAIN;
     if (!weapon) return;
 
-    // Element status effect
+    // === DAMAGE TYPE EFFECTS (Base effects for weapon categories) ===
+    const damageType = weapon.damageType;
+    if (damageType && typeof applyStatusEffect === 'function') {
+        // Blade weapons: 15% base chance to cause Bleeding
+        if (damageType === 'blade') {
+            const bleedChance = weapon.special?.bleedChance || 0.15;
+            if (Math.random() < bleedChance) {
+                applyStatusEffect(defender, 'bleeding', attacker);
+                if (typeof addMessage === 'function') {
+                    addMessage(`${defender.name || 'Enemy'} is bleeding!`, 'combat');
+                }
+            }
+        }
+
+        // Blunt weapons: 15% base chance to cause Stun (1 second)
+        if (damageType === 'blunt') {
+            const stunChance = weapon.special?.stunChance || 0.15;
+            if (Math.random() < stunChance) {
+                // Apply shorter stun (1 second instead of default 2 seconds)
+                if (typeof StatusEffectSystem !== 'undefined') {
+                    StatusEffectSystem.applyEffect(defender, 'stunned', attacker, { duration: 1000 });
+                } else {
+                    applyStatusEffect(defender, 'stunned', attacker);
+                }
+                if (typeof addMessage === 'function') {
+                    addMessage(`${defender.name || 'Enemy'} is stunned!`, 'combat');
+                }
+            }
+        }
+    }
+
+    // === ELEMENT STATUS EFFECTS ===
     if (weapon.element && typeof applyStatusEffect === 'function') {
         const effectChance = (weapon.elementPower || 1) * 0.1; // 10% per power level
         if (Math.random() < effectChance) {
@@ -481,7 +513,7 @@ function applyWeaponEffects(attacker, defender, damageResult) {
         }
     }
 
-    // Weapon special effect
+    // === WEAPON SPECIAL EFFECTS (Custom per-weapon effects) ===
     if (weapon.special?.onHit && typeof weapon.special.onHit === 'function') {
         weapon.special.onHit(attacker, defender, damageResult);
     }

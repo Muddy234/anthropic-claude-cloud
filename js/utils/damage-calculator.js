@@ -11,8 +11,9 @@ const DamageCalculator = {
     config: {
         baseVariance: 0,             // No random variance (was 0.10)
         minDamage: 1,                // Minimum damage floor
-        critMultiplier: 1.5,         // Critical hit multiplier
+        critMultiplier: 2.5,         // Critical hit multiplier (was 1.5, buffed for balance)
         baseCritChance: 0.05,        // 5% base crit chance
+        pierceCritBonus: 0.07,       // +7% crit chance for pierce weapons
         defenseScaling: 0.015,       // Defense reduces damage by 1.5% per point (was 0.01)
         maxDefenseReduction: 0.75,   // Cap defense at 75% reduction
         debugLogging: true           // Log damage calculations
@@ -354,20 +355,25 @@ const DamageCalculator = {
 
     rollCrit(attacker) {
         let critChance = this.config.baseCritChance;
-        
+
         // Bonus from AGI
         const agi = attacker.stats?.AGI || attacker.stats?.agi || 10;
         critChance += agi * 0.001; // +0.1% per AGI
-        
-        // Weapon crit bonus
+
+        // Weapon crit bonus (from special property)
         const weapon = attacker.equipped?.MAIN;
         if (weapon?.special?.critBonus) {
             critChance += weapon.special.critBonus;
         }
-        
+
+        // Pierce weapons get base crit bonus (+7%)
+        if (weapon?.damageType === 'pierce') {
+            critChance += this.config.pierceCritBonus;
+        }
+
         // Cap at 50%
         critChance = Math.min(0.50, critChance);
-        
+
         return Math.random() < critChance;
     },
 

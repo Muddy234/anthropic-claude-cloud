@@ -87,17 +87,23 @@ const StatusEffectSystem = {
             name: 'Bleeding',
             type: 'dot',
             element: 'physical',
-            damagePerTick: 4,
+            damagePercent: 0.05,       // 5% of max HP per tick (was flat 4 damage)
             tickInterval: 1000,
-            duration: 6000,
+            duration: 5000,            // 5 seconds (was 6)
             maxStacks: 3,
-            stackBehavior: 'intensity',
+            stackBehavior: 'refresh',  // Refreshes duration instead of stacking intensity
             color: '#e74c3c',
             icon: '🩸',
             onApply: (entity) => addMessage(`${entity.name || 'You'} started bleeding!`),
             onTick: (entity, effect) => {
-                const damagePerTick = effect.definition?.damagePerTick || 4;
-                entity.hp -= damagePerTick * (effect.stacks || 1);
+                // 5% of max HP per tick
+                const maxHp = entity.maxHp || entity.hp || 100;
+                const damagePercent = effect.definition?.damagePercent || 0.05;
+                const damage = Math.max(1, Math.floor(maxHp * damagePercent));
+                entity.hp -= damage;
+                if (this.config.debugLogging) {
+                    console.log(`[Bleeding] ${entity.name || 'Entity'} takes ${damage} damage (${damagePercent * 100}% of ${maxHp} HP)`);
+                }
             }
         });
 
