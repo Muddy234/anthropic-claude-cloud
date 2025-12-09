@@ -197,7 +197,7 @@ def get_damage(attacker, defender, is_player, floor=1):
 
     def_val = min(defender['pDef'], 50)
     def_mod = max(0.25, 1.0 - (def_val * 0.015))
-    return max(1, int(base * def_mod * random.uniform(0.9, 1.1)))
+    return max(1, int(base * def_mod))  # No variance for exact damage
 
 def check_potion(p):
     """Use potion if HP is low"""

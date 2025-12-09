@@ -9,11 +9,11 @@
 const DamageCalculator = {
     // Configuration
     config: {
-        baseVariance: 0.10,          // ±10% random variance
+        baseVariance: 0,             // No random variance (was 0.10)
         minDamage: 1,                // Minimum damage floor
         critMultiplier: 1.5,         // Critical hit multiplier
         baseCritChance: 0.05,        // 5% base crit chance
-        defenseScaling: 0.01,        // Defense reduces damage by 1% per point
+        defenseScaling: 0.015,       // Defense reduces damage by 1.5% per point (was 0.01)
         maxDefenseReduction: 0.75,   // Cap defense at 75% reduction
         debugLogging: true           // Log damage calculations
     },
