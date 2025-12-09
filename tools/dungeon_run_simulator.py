@@ -36,12 +36,88 @@ FLOOR_SCALING_CAP = 3.0   # Max 3x multiplier
 # XP Curve
 XP_THRESHOLDS = {2: 100, 3: 300, 4: 600, 5: 1000, 6: 1500, 7: 2100}
 
-PLAYER_START = {
+PLAYER_BASE = {
     'level': 1, 'xp': 0,
     'hp': 100, 'max_hp': 100,
     'str': 12, 'pDef': 5,
-    'weaponDmg': 8, 'weaponType': 'blade',
+    'int': 8,  # For magic weapons
     'potions': 2, 'potion_heal': 50
+}
+
+# --- STARTER WEAPONS (one per damage type) ---
+STARTER_WEAPONS = {
+    'Rusty Sword': {
+        'damageType': 'blade',
+        'damage': 7,
+        'speed': 1.0,
+        'stat_scaling': 'str'  # Uses STR for damage
+    },
+    'Iron Mace': {
+        'damageType': 'blunt',
+        'damage': 11,
+        'speed': 0.9,
+        'stat_scaling': 'str'
+    },
+    'Wooden Spear': {
+        'damageType': 'pierce',
+        'damage': 7,
+        'speed': 0.95,
+        'stat_scaling': 'str'
+    },
+    'Apprentice Staff': {
+        'damageType': 'magic',
+        'damage': 8,
+        'speed': 0.9,
+        'stat_scaling': 'int'  # Uses INT for damage
+    },
+    'Shortbow': {
+        'damageType': 'pierce',
+        'damage': 6,
+        'speed': 1.1,
+        'stat_scaling': 'agi',  # Uses AGI (we'll add this)
+        'ranged': True
+    }
+}
+
+# --- WEAPON VS ARMOR MATRIX ---
+# Modifiers: +0.30 (strong), 0 (neutral), -0.30 (weak)
+WEAPON_ARMOR_MATRIX = {
+    'blade': {
+        'unarmored': 0.30,   # Blades excel vs unprotected flesh
+        'hide': 0.0,         # Neutral vs tough skin
+        'scaled': 0.0,       # Neutral vs natural plates
+        'armored': -0.30,    # Poor vs metal plate
+        'stone': -0.30,      # Poor vs rock
+        'bone': 0.0,         # Neutral vs skeletal
+        'ethereal': 0.0      # Neutral vs incorporeal
+    },
+    'blunt': {
+        'unarmored': 0.0,    # Neutral vs flesh
+        'hide': 0.0,         # Neutral vs tough skin
+        'scaled': 0.0,       # Neutral vs natural plates
+        'armored': 0.30,     # Excellent vs metal (dents/crushes)
+        'stone': 0.30,       # Excellent vs rock (shatters)
+        'bone': 0.30,        # Excellent vs skeletal (breaks)
+        'ethereal': -0.30    # Poor vs incorporeal
+    },
+    'pierce': {
+        'unarmored': 0.0,    # Neutral vs flesh
+        'hide': 0.30,        # Excellent vs tough skin (penetrates)
+        'scaled': 0.30,      # Excellent vs plates (finds gaps)
+        'armored': -0.30,    # Poor vs solid metal
+        'stone': -0.30,      # Poor vs solid rock
+        'bone': 0.0,         # Neutral vs skeletal
+        'ethereal': 0.30     # Excellent vs spirits (anchors)
+    },
+    'magic': {
+        'unarmored': 0.0,    # Magic ignores physical armor
+        'hide': 0.0,
+        'scaled': 0.0,
+        'armored': 0.0,      # Bypasses physical armor
+        'stone': 0.0,
+        'bone': 0.0,
+        'ethereal': 0.30     # Good vs spirits
+    }
 }
 
 # --- ECONOMY ---
@@ -79,12 +155,41 @@ def apply_floor_scaling(base_stat, floor):
     """Apply floor scaling to a stat"""
     return base_stat * min(FLOOR_SCALING_CAP, 1.0 + (floor - 1) * FLOOR_SCALING)
 
+def create_player(weapon_name):
+    """Create a new player with the specified weapon"""
+    player = PLAYER_BASE.copy()
+    weapon = STARTER_WEAPONS[weapon_name]
+    player['weapon_name'] = weapon_name
+    player['weapon'] = weapon
+    player['agi'] = 8  # Add agility for ranged weapons
+    return player
+
+def get_weapon_armor_modifier(damage_type, armor_type):
+    """Get damage modifier from weapon vs armor matchup"""
+    if damage_type not in WEAPON_ARMOR_MATRIX:
+        return 0.0
+    return WEAPON_ARMOR_MATRIX[damage_type].get(armor_type, 0.0)
+
 def get_damage(attacker, defender, is_player, floor=1):
     """Calculate damage with floor scaling for monsters"""
     if is_player:
-        base = attacker['weaponDmg'] + (attacker['str'] * 0.5)
-        mod = WEAPON_MATRIX[attacker['weaponType']].get(defender['armor'], 1.0)
-        base *= mod
+        weapon = attacker['weapon']
+
+        # Base damage from weapon
+        base = weapon['damage']
+
+        # Add stat scaling (STR, INT, or AGI based on weapon)
+        scaling_stat = weapon['stat_scaling']
+        if scaling_stat == 'str':
+            base += attacker['str'] * 0.5
+        elif scaling_stat == 'int':
+            base += attacker['int'] * 0.5
+        elif scaling_stat == 'agi':
+            base += attacker.get('agi', 8) * 0.5
+
+        # Apply weapon vs armor modifier
+        armor_mod = get_weapon_armor_modifier(weapon['damageType'], defender['armor'])
+        base *= (1.0 + armor_mod)
     else:
         scaled_str = apply_floor_scaling(attacker['str'], floor)
         base = (scaled_str * 0.5) + (scaled_str / 5.0)
@@ -323,6 +428,13 @@ def run_simulation():
     victory_levels = []  # Level at victory
     victory_times = []  # Time to complete all floors
 
+    # Weapon-specific tracking
+    weapon_names = list(STARTER_WEAPONS.keys())
+    weapon_victories = {w: 0 for w in weapon_names}
+    weapon_deaths = {w: 0 for w in weapon_names}
+    weapon_kills = {w: 0 for w in weapon_names}
+    weapon_runs = {w: 0 for w in weapon_names}
+
     # Death tracking
     deaths = 0
     death_floor = []
@@ -361,6 +473,7 @@ def run_simulation():
     print(f"Goal: Complete {FLOORS_TO_WIN} floors to escape")
     print(f"Config: {FLOOR_CONFIG[1]['rooms']}/{FLOOR_CONFIG[2]['rooms']}/{FLOOR_CONFIG[3]['rooms']} rooms per floor")
     print(f"        Altar every {ALTAR_INTERVAL} rooms | Floor scaling: {FLOOR_SCALING*100:.0f}%")
+    print(f"Weapons: {', '.join(weapon_names)} (randomized)")
     print("-" * 60)
 
     # ==========================================================================
@@ -368,7 +481,11 @@ def run_simulation():
     # ==========================================================================
 
     for sim in range(SIMULATIONS):
-        player = PLAYER_START.copy()
+        # Randomly select weapon for this run
+        weapon_choice = random.choice(weapon_names)
+        player = create_player(weapon_choice)
+        weapon_runs[weapon_choice] += 1
+
         inventory = []
         run_kills = 0
         run_rooms = 0
@@ -401,6 +518,7 @@ def run_simulation():
             if result['result'] == 'death':
                 # Player died
                 deaths += 1
+                weapon_deaths[weapon_choice] += 1
                 death_floor.append(floor_num)
                 death_room.append(result['room'])
 
@@ -438,8 +556,12 @@ def run_simulation():
         total_rooms_per_run.append(run_rooms)
         fights_skipped_per_run.append(run_skipped)
 
+        # Track weapon kills for this run
+        weapon_kills[weapon_choice] += run_kills
+
         if run_success:
             victories += 1
+            weapon_victories[weapon_choice] += 1
             victory_hp.append(player['hp'])
             victory_levels.append(player['level'])
 
@@ -481,6 +603,53 @@ def run_simulation():
 
         close_victories = len([hp for hp in victory_hp if hp < 30])
         print(f"\n  Close Victories (HP<30): {(close_victories/victories)*100:.1f}%")
+
+    # --- WEAPON PERFORMANCE ---
+    print("\n" + "-" * 60)
+    print("                   WEAPON PERFORMANCE")
+    print("-" * 60)
+
+    print(f"\n  {'Weapon':<20} {'Runs':>6} {'Win%':>7} {'Kills':>7} {'Avg Kills':>10}")
+    print("  " + "-" * 52)
+
+    # Sort weapons by win rate for display
+    weapon_stats = []
+    for w in weapon_names:
+        runs = weapon_runs[w]
+        if runs == 0:
+            continue
+        wins = weapon_victories[w]
+        win_rate = (wins / runs) * 100
+        kills = weapon_kills[w]
+        avg_kills = kills / runs
+        weapon_stats.append((w, runs, win_rate, kills, avg_kills))
+
+    # Sort by win rate descending
+    weapon_stats.sort(key=lambda x: x[2], reverse=True)
+
+    for w, runs, win_rate, kills, avg_kills in weapon_stats:
+        weapon_data = STARTER_WEAPONS[w]
+        dmg_type = weapon_data['damageType']
+        bar = "█" * int(win_rate / 5) + "░" * (20 - int(win_rate / 5))
+        print(f"  {w:<20} {runs:>6} {win_rate:>6.1f}% {kills:>7} {avg_kills:>9.1f}")
+        print(f"    └─ {dmg_type} damage | {bar}")
+
+    # Show damage type summary
+    print(f"\n  Win Rate by Damage Type:")
+    dmg_type_stats = {}
+    for w in weapon_names:
+        dmg_type = STARTER_WEAPONS[w]['damageType']
+        if dmg_type not in dmg_type_stats:
+            dmg_type_stats[dmg_type] = {'runs': 0, 'wins': 0}
+        dmg_type_stats[dmg_type]['runs'] += weapon_runs[w]
+        dmg_type_stats[dmg_type]['wins'] += weapon_victories[w]
+
+    for dmg_type in sorted(dmg_type_stats.keys()):
+        stats = dmg_type_stats[dmg_type]
+        if stats['runs'] > 0:
+            rate = (stats['wins'] / stats['runs']) * 100
+            bar = "█" * int(rate / 5) + "░" * (20 - int(rate / 5))
+            print(f"    {dmg_type:<10} {bar} {rate:5.1f}%")
 
     # --- FLOOR PROGRESSION ---
     print("\n" + "-" * 60)
@@ -630,6 +799,20 @@ def run_simulation():
             top_killer, top_count = killer_counts.most_common(1)[0]
             if (top_count / deaths) * 100 > 35:
                 recommendations.append(f"- {top_killer} causes {(top_count/deaths)*100:.0f}% of deaths. Consider nerfs.")
+
+    # Weapon balance recommendations
+    if weapon_stats:
+        best_weapon = weapon_stats[0]  # Already sorted by win rate
+        worst_weapon = weapon_stats[-1]
+
+        win_diff = best_weapon[2] - worst_weapon[2]  # Difference in win rates
+        if win_diff > 15:
+            recommendations.append(f"- Weapon imbalance: {best_weapon[0]} ({best_weapon[2]:.0f}%) vs {worst_weapon[0]} ({worst_weapon[2]:.0f}%)")
+            # Check if it's a damage type issue
+            best_type = STARTER_WEAPONS[best_weapon[0]]['damageType']
+            worst_type = STARTER_WEAPONS[worst_weapon[0]]['damageType']
+            if best_type != worst_type:
+                recommendations.append(f"  Consider buffing {worst_type} weapons or nerfing {best_type} weapons.")
 
     if not recommendations:
         recommendations.append("- Balance looks reasonable for target difficulty!")
