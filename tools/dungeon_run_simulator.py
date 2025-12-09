@@ -44,7 +44,7 @@ PLAYER_BASE = {
     'potions': 2, 'potion_heal': 50
 }
 
-# --- STARTER WEAPONS (one per damage type) ---
+# --- STARTER WEAPONS (blade only for stat allocation test) ---
 STARTER_WEAPONS = {
     'Rusty Sword': {
         'damageType': 'blade',
@@ -52,32 +52,49 @@ STARTER_WEAPONS = {
         'speed': 1.0,
         'stat_scaling': 'str'  # Uses STR for damage
     },
-    'Iron Mace': {
-        'damageType': 'blunt',
-        'damage': 7,  # Equalized with other weapons (was 11)
-        'speed': 1.0,  # Equalized speed
-        'stat_scaling': 'str'
-    },
-    'Wooden Spear': {
-        'damageType': 'pierce',
-        'damage': 7,
-        'speed': 1.0,  # Equalized speed
-        'stat_scaling': 'str'
-    },
-    # DISABLED FOR TESTING:
-    # 'Apprentice Staff': {
-    #     'damageType': 'magic',
-    #     'damage': 8,
-    #     'speed': 0.9,
-    #     'stat_scaling': 'int'  # Uses INT for damage
+    # DISABLED FOR STAT ALLOCATION TEST:
+    # 'Iron Mace': {
+    #     'damageType': 'blunt',
+    #     'damage': 7,
+    #     'speed': 1.0,
+    #     'stat_scaling': 'str'
     # },
-    # 'Shortbow': {
+    # 'Wooden Spear': {
     #     'damageType': 'pierce',
-    #     'damage': 6,
-    #     'speed': 1.1,
-    #     'stat_scaling': 'agi',  # Uses AGI (we'll add this)
-    #     'ranged': True
-    # }
+    #     'damage': 7,
+    #     'speed': 1.0,
+    #     'stat_scaling': 'str'
+    # },
+}
+
+# --- STAT ALLOCATION STRATEGIES ---
+# Each strategy defines how stat points are distributed on level up
+STAT_STRATEGIES = {
+    'all_str': {
+        'name': 'All STR',
+        'str': 3,    # +3 STR per level
+        'agi': 0,
+        'pDef': 0
+    },
+    'all_agi': {
+        'name': 'All AGI',
+        'str': 0,
+        'agi': 3,    # +3 AGI per level
+        'pDef': 0
+    },
+    'split': {
+        'name': 'STR/AGI Split',
+        'str': 1,    # +1 STR per level
+        'agi': 1,    # +1 AGI per level
+        'pDef': 1    # +1 pDef per level
+    }
+}
+
+# Strategy weights: 1/4 STR, 1/4 AGI, 1/2 split
+STRATEGY_WEIGHTS = {
+    'all_str': 25,
+    'all_agi': 25,
+    'split': 50
 }
 
 # --- WEAPON VS ARMOR MATRIX ---
@@ -156,13 +173,24 @@ def apply_floor_scaling(base_stat, floor):
     """Apply floor scaling to a stat"""
     return base_stat * min(FLOOR_SCALING_CAP, 1.0 + (floor - 1) * FLOOR_SCALING)
 
-def create_player(weapon_name):
-    """Create a new player with the specified weapon"""
+def select_strategy():
+    """Select a stat allocation strategy based on weights"""
+    roll = random.uniform(0, 100)
+    cum = 0
+    for strat_name, weight in STRATEGY_WEIGHTS.items():
+        cum += weight
+        if roll <= cum:
+            return strat_name
+    return 'split'  # Default
+
+def create_player(weapon_name, strategy='split'):
+    """Create a new player with the specified weapon and stat strategy"""
     player = PLAYER_BASE.copy()
     weapon = STARTER_WEAPONS[weapon_name]
     player['weapon_name'] = weapon_name
     player['weapon'] = weapon
-    player['agi'] = 8  # Add agility for ranged weapons
+    player['agi'] = 8  # Base agility
+    player['strategy'] = strategy  # Track stat allocation strategy
     return player
 
 def get_weapon_armor_modifier(damage_type, armor_type):
@@ -208,16 +236,20 @@ def check_potion(p):
     return False
 
 def check_level_up(p):
-    """Check and apply level up"""
+    """Check and apply level up using player's stat strategy"""
     leveled = False
+    strategy = STAT_STRATEGIES.get(p.get('strategy', 'split'), STAT_STRATEGIES['split'])
+
     while True:
         next_lvl = p['level'] + 1
         if next_lvl in XP_THRESHOLDS and p['xp'] >= XP_THRESHOLDS[next_lvl]:
             p['level'] = next_lvl
             p['max_hp'] += 10
             p['hp'] = p['max_hp']  # Full Heal
-            p['str'] += 2
-            p['pDef'] += 1
+            # Apply stat gains based on strategy
+            p['str'] += strategy['str']
+            p['agi'] += strategy['agi']
+            p['pDef'] += strategy['pDef']
             leveled = True
         else:
             break
@@ -436,6 +468,15 @@ def run_simulation():
     weapon_kills = {w: 0 for w in weapon_names}
     weapon_runs = {w: 0 for w in weapon_names}
 
+    # Strategy-specific tracking
+    strategy_names = list(STAT_STRATEGIES.keys())
+    strategy_victories = {s: 0 for s in strategy_names}
+    strategy_deaths = {s: 0 for s in strategy_names}
+    strategy_kills = {s: 0 for s in strategy_names}
+    strategy_runs = {s: 0 for s in strategy_names}
+    strategy_end_str = {s: [] for s in strategy_names}   # Final STR at victory/death
+    strategy_end_agi = {s: [] for s in strategy_names}   # Final AGI at victory/death
+
     # Death tracking
     deaths = 0
     death_floor = []
@@ -444,9 +485,11 @@ def run_simulation():
     death_hp_before = []
     death_level = []
     death_str = []       # Player STR at death
+    death_agi = []       # Player AGI at death
     death_pdef = []      # Player pDef at death
     death_max_hp = []    # Player max HP at death
     death_weapon = []    # Weapon used at death
+    death_strategy = []  # Strategy used at death
     killers = []
 
     # Floor completion tracking
@@ -479,7 +522,8 @@ def run_simulation():
     print(f"Config: {FLOOR_CONFIG[1]['rooms']}/{FLOOR_CONFIG[2]['rooms']}/{FLOOR_CONFIG[3]['rooms']} rooms per floor")
     print(f"        Altar every {ALTAR_INTERVAL} rooms | Floor scaling: {FLOOR_SCALING*100:.0f}%")
     print(f"        Full heal on floor exit: YES")
-    print(f"Weapons: {', '.join(weapon_names)} (randomized)")
+    print(f"Weapon: {', '.join(weapon_names)} (blade only)")
+    print(f"Stat Strategies: 25% All STR | 25% All AGI | 50% STR/AGI Split")
     print("-" * 60)
 
     # ==========================================================================
@@ -487,10 +531,12 @@ def run_simulation():
     # ==========================================================================
 
     for sim in range(SIMULATIONS):
-        # Randomly select weapon for this run
+        # Randomly select weapon and strategy for this run
         weapon_choice = random.choice(weapon_names)
-        player = create_player(weapon_choice)
+        strategy_choice = select_strategy()
+        player = create_player(weapon_choice, strategy_choice)
         weapon_runs[weapon_choice] += 1
+        strategy_runs[strategy_choice] += 1
 
         inventory = []
         run_kills = 0
@@ -525,6 +571,7 @@ def run_simulation():
                 # Player died
                 deaths += 1
                 weapon_deaths[weapon_choice] += 1
+                strategy_deaths[strategy_choice] += 1
                 death_floor.append(floor_num)
                 death_room.append(result['room'])
 
@@ -536,10 +583,16 @@ def run_simulation():
                 death_hp_before.append(result.get('hp_before_death', 0))
                 death_level.append(player['level'])
                 death_str.append(player['str'])
+                death_agi.append(player['agi'])
                 death_pdef.append(player['pDef'])
                 death_max_hp.append(player['max_hp'])
                 death_weapon.append(weapon_choice)
+                death_strategy.append(strategy_choice)
                 killers.append(result['killer'])
+
+                # Track final stats by strategy
+                strategy_end_str[strategy_choice].append(player['str'])
+                strategy_end_agi[strategy_choice].append(player['agi'])
 
                 run_success = False
                 break
@@ -569,13 +622,19 @@ def run_simulation():
         total_rooms_per_run.append(run_rooms)
         fights_skipped_per_run.append(run_skipped)
 
-        # Track weapon kills for this run
+        # Track weapon and strategy kills for this run
         weapon_kills[weapon_choice] += run_kills
+        strategy_kills[strategy_choice] += run_kills
 
         if run_success:
             victories += 1
             weapon_victories[weapon_choice] += 1
+            strategy_victories[strategy_choice] += 1
             victory_hp.append(player['hp'])
+
+            # Track final stats by strategy
+            strategy_end_str[strategy_choice].append(player['str'])
+            strategy_end_agi[strategy_choice].append(player['agi'])
             victory_levels.append(player['level'])
 
             # Calculate run time (simplified)
@@ -664,6 +723,49 @@ def run_simulation():
             bar = "█" * int(rate / 5) + "░" * (20 - int(rate / 5))
             print(f"    {dmg_type:<10} {bar} {rate:5.1f}%")
 
+    # --- STAT STRATEGY PERFORMANCE ---
+    print("\n" + "-" * 60)
+    print("                 STAT STRATEGY PERFORMANCE")
+    print("-" * 60)
+
+    print(f"\n  {'Strategy':<20} {'Runs':>6} {'Win%':>7} {'Kills':>7} {'Avg Kills':>10}")
+    print("  " + "-" * 52)
+
+    # Sort strategies by win rate for display
+    strat_stats = []
+    for s in strategy_names:
+        runs = strategy_runs[s]
+        if runs == 0:
+            continue
+        wins = strategy_victories[s]
+        s_win_rate = (wins / runs) * 100
+        kills = strategy_kills[s]
+        avg_kills = kills / runs
+        strat_stats.append((s, runs, s_win_rate, kills, avg_kills))
+
+    # Sort by win rate descending
+    strat_stats.sort(key=lambda x: x[2], reverse=True)
+
+    for s, runs, s_win_rate, kills, avg_kills in strat_stats:
+        strat_data = STAT_STRATEGIES[s]
+        strat_name = strat_data['name']
+        bar = "█" * int(s_win_rate / 5) + "░" * (20 - int(s_win_rate / 5))
+        print(f"  {strat_name:<20} {runs:>6} {s_win_rate:>6.1f}% {kills:>7} {avg_kills:>9.1f}")
+        print(f"    └─ {bar}")
+
+        # Show average ending stats for this strategy
+        if strategy_end_str[s]:
+            avg_str = statistics.mean(strategy_end_str[s])
+            avg_agi = statistics.mean(strategy_end_agi[s])
+            print(f"    └─ Final Stats: STR={avg_str:.1f}  AGI={avg_agi:.1f}")
+
+    # Summary comparison
+    print(f"\n  Strategy Win Rate Summary:")
+    for s, runs, s_win_rate, kills, avg_kills in strat_stats:
+        strat_name = STAT_STRATEGIES[s]['name']
+        bar = "█" * int(s_win_rate / 5) + "░" * (20 - int(s_win_rate / 5))
+        print(f"    {strat_name:<16} {bar} {s_win_rate:5.1f}%")
+
     # --- FLOOR PROGRESSION ---
     print("\n" + "-" * 60)
     print("                    FLOOR PROGRESSION")
@@ -725,8 +827,18 @@ def run_simulation():
 
         print(f"\n  Player Stats at Death:")
         print(f"    STR:    Min={min(death_str):>3}  Avg={statistics.mean(death_str):>5.1f}  Max={max(death_str):>3}")
+        print(f"    AGI:    Min={min(death_agi):>3}  Avg={statistics.mean(death_agi):>5.1f}  Max={max(death_agi):>3}")
         print(f"    pDef:   Min={min(death_pdef):>3}  Avg={statistics.mean(death_pdef):>5.1f}  Max={max(death_pdef):>3}")
         print(f"    Max HP: Min={min(death_max_hp):>3}  Avg={statistics.mean(death_max_hp):>5.1f}  Max={max(death_max_hp):>3}")
+
+        # Deaths by strategy
+        print(f"\n  Deaths by Stat Strategy:")
+        strategy_death_counts = Counter(death_strategy)
+        for strat, count in strategy_death_counts.most_common():
+            strat_total_runs = strategy_runs[strat]
+            death_rate = (count / strat_total_runs) * 100 if strat_total_runs > 0 else 0
+            strat_name = STAT_STRATEGIES[strat]['name']
+            print(f"    {strat_name:<20} {count:>4} deaths ({death_rate:>5.1f}% of runs)")
 
         # Deaths by weapon type
         print(f"\n  Deaths by Weapon:")
