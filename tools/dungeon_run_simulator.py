@@ -54,14 +54,14 @@ STARTER_WEAPONS = {
     },
     'Iron Mace': {
         'damageType': 'blunt',
-        'damage': 11,
-        'speed': 0.9,
+        'damage': 7,  # Equalized with other weapons (was 11)
+        'speed': 1.0,  # Equalized speed
         'stat_scaling': 'str'
     },
     'Wooden Spear': {
         'damageType': 'pierce',
         'damage': 7,
-        'speed': 0.95,
+        'speed': 1.0,  # Equalized speed
         'stat_scaling': 'str'
     },
     # DISABLED FOR TESTING:
@@ -488,8 +488,7 @@ def run_simulation():
 
     for sim in range(SIMULATIONS):
         # Randomly select weapon for this run
-        # TESTING: Force Wooden Spear only
-        weapon_choice = 'Wooden Spear'  # random.choice(weapon_names)
+        weapon_choice = random.choice(weapon_names)
         player = create_player(weapon_choice)
         weapon_runs[weapon_choice] += 1
 
