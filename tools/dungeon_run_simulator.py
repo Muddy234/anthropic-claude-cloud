@@ -442,6 +442,10 @@ def run_simulation():
     death_room_pct = []  # How far through the floor (0-100%)
     death_hp_before = []
     death_level = []
+    death_str = []       # Player STR at death
+    death_pdef = []      # Player pDef at death
+    death_max_hp = []    # Player max HP at death
+    death_weapon = []    # Weapon used at death
     killers = []
 
     # Floor completion tracking
@@ -473,6 +477,7 @@ def run_simulation():
     print(f"Goal: Complete {FLOORS_TO_WIN} floors to escape")
     print(f"Config: {FLOOR_CONFIG[1]['rooms']}/{FLOOR_CONFIG[2]['rooms']}/{FLOOR_CONFIG[3]['rooms']} rooms per floor")
     print(f"        Altar every {ALTAR_INTERVAL} rooms | Floor scaling: {FLOOR_SCALING*100:.0f}%")
+    print(f"        Full heal on floor exit: YES")
     print(f"Weapons: {', '.join(weapon_names)} (randomized)")
     print("-" * 60)
 
@@ -529,6 +534,10 @@ def run_simulation():
 
                 death_hp_before.append(result.get('hp_before_death', 0))
                 death_level.append(player['level'])
+                death_str.append(player['str'])
+                death_pdef.append(player['pDef'])
+                death_max_hp.append(player['max_hp'])
+                death_weapon.append(weapon_choice)
                 killers.append(result['killer'])
 
                 run_success = False
@@ -540,6 +549,9 @@ def run_simulation():
                 floor_completion_hp[floor_num].append(result['hp_at_exit'])
                 floor_completion_level[floor_num].append(player['level'])
                 floor_kills[floor_num].append(result['kills'])
+
+                # Full heal when reaching floor exit
+                player['hp'] = player['max_hp']
 
         # Aggregate analytics
         for key in ['monster_fights', 'monster_killed', 'monster_kills_player', 'monster_dmg_taken']:
@@ -709,6 +721,19 @@ def run_simulation():
             pct = (count / deaths) * 100
             bar = "█" * int(pct / 5) + "░" * (20 - int(pct / 5))
             print(f"    Level {lvl}: {bar} {pct:5.1f}%")
+
+        print(f"\n  Player Stats at Death:")
+        print(f"    STR:    Min={min(death_str):>3}  Avg={statistics.mean(death_str):>5.1f}  Max={max(death_str):>3}")
+        print(f"    pDef:   Min={min(death_pdef):>3}  Avg={statistics.mean(death_pdef):>5.1f}  Max={max(death_pdef):>3}")
+        print(f"    Max HP: Min={min(death_max_hp):>3}  Avg={statistics.mean(death_max_hp):>5.1f}  Max={max(death_max_hp):>3}")
+
+        # Deaths by weapon type
+        print(f"\n  Deaths by Weapon:")
+        weapon_death_counts = Counter(death_weapon)
+        for weapon, count in weapon_death_counts.most_common():
+            weapon_total_runs = weapon_runs[weapon]
+            death_rate = (count / weapon_total_runs) * 100 if weapon_total_runs > 0 else 0
+            print(f"    {weapon:<20} {count:>4} deaths ({death_rate:>5.1f}% of runs)")
 
         print(f"\n  Top Killers:")
         killer_counts = Counter(killers)
