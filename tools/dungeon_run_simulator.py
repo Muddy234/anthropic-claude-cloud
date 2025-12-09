@@ -64,6 +64,13 @@ STARTER_WEAPONS = {
         'speed': 1.0,
         'stat_scaling': 'str'
     },
+    'Short Bow': {
+        'damageType': 'pierce',
+        'damage': 6,
+        'speed': 0.8,           # Faster attack speed (ranged advantage)
+        'stat_scaling': 'agi',  # AGI-based weapon
+        'ranged': True
+    },
 }
 
 # --- STAT ALLOCATION STRATEGIES ---
@@ -210,6 +217,7 @@ def create_player(weapon_name, strategy='split'):
     player['weapon'] = weapon
     player['agi'] = 8  # Base agility
     player['strategy'] = strategy  # Track stat allocation strategy
+    player['arrows'] = 99  # Plenty of arrows for ranged weapons
     return player
 
 def get_weapon_armor_modifier(damage_type, armor_type):
@@ -241,10 +249,16 @@ def get_damage(attacker, defender, is_player, floor=1):
         # Base damage from weapon
         base = weapon['damage']
 
-        # Add stat scaling: STR × 0.35 + AGI × 0.15
-        # This allows AGI builds to contribute some damage
-        base += attacker['str'] * 0.35
-        base += attacker.get('agi', 8) * 0.15
+        # Stat scaling based on weapon type
+        scaling_stat = weapon.get('stat_scaling', 'str')
+        if scaling_stat == 'agi':
+            # AGI weapons: AGI × 0.35 + STR × 0.15 (inverted from STR weapons)
+            base += attacker.get('agi', 8) * 0.35
+            base += attacker['str'] * 0.15
+        else:
+            # STR weapons: STR × 0.35 + AGI × 0.15
+            base += attacker['str'] * 0.35
+            base += attacker.get('agi', 8) * 0.15
 
         # Apply weapon vs armor modifier
         armor_mod = get_weapon_armor_modifier(weapon['damageType'], defender['armor'])
@@ -305,7 +319,9 @@ def fight(p, m_name, floor=1):
     m_stats['pDef'] = int(apply_floor_scaling(m_stats['pDef'], floor))
     m_agi = m_stats.get('agi', 8)  # Monster AGI (default 8)
 
-    p_ticks = 7
+    # Player attack speed based on weapon
+    weapon_speed = p['weapon'].get('speed', 1.0)
+    p_ticks = int(7 * weapon_speed)  # Lower = faster attacks
     m_ticks = int(7 * m_stats['atkSpeed'])
     tick = 0
     total_dmg_dealt = 0
