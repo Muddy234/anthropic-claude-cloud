@@ -186,12 +186,13 @@ SPAWN_POOL = {
 }
 
 MONSTER_STATS = {
-    # moveSpeed: ticks to move 1 tile (lower = faster). Default 7 = 700ms per tile
-    'Flame Bat':        {'hp': 40, 'str': 10, 'pDef': 4,  'atkSpeed': 1.2, 'armor': 'unarmored', 'moveSpeed': 5},   # Fast flyer
-    'Cave Bat':         {'hp': 25, 'str': 6,  'pDef': 2,  'atkSpeed': 1.0, 'armor': 'unarmored', 'moveSpeed': 5},   # Fast flyer
-    'Magma Slime':      {'hp': 60, 'str': 12, 'pDef': 15, 'atkSpeed': 2.5, 'armor': 'unarmored', 'moveSpeed': 10},  # Slow crawler
-    'Skeletal Warrior': {'hp': 40, 'str': 11, 'pDef': 10, 'atkSpeed': 1.8, 'armor': 'bone', 'moveSpeed': 7},        # Normal
-    'Shadow Stalker':   {'hp': 45, 'str': 15, 'pDef': 6,  'atkSpeed': 1.0, 'armor': 'hide', 'moveSpeed': 6}         # Fast predator
+    # moveSpeed: ticks to move 1 tile (lower = faster)
+    # Bow attacks every 6 ticks, needs 3 tiles to close. For 1.5 free attacks: 9 ticks / 3 tiles = 3 ticks/tile
+    'Flame Bat':        {'hp': 40, 'str': 10, 'pDef': 4,  'atkSpeed': 1.2, 'armor': 'unarmored', 'moveSpeed': 3},   # Fast flyer
+    'Cave Bat':         {'hp': 25, 'str': 6,  'pDef': 2,  'atkSpeed': 1.0, 'armor': 'unarmored', 'moveSpeed': 3},   # Fast flyer
+    'Magma Slime':      {'hp': 60, 'str': 12, 'pDef': 15, 'atkSpeed': 2.5, 'armor': 'unarmored', 'moveSpeed': 5},   # Slow crawler (~2.5 free attacks)
+    'Skeletal Warrior': {'hp': 40, 'str': 11, 'pDef': 10, 'atkSpeed': 1.8, 'armor': 'bone', 'moveSpeed': 4},        # Medium (~2 free attacks)
+    'Shadow Stalker':   {'hp': 45, 'str': 15, 'pDef': 6,  'atkSpeed': 1.0, 'armor': 'hide', 'moveSpeed': 3}         # Fast predator (~1.5 free attacks)
 }
 
 WEAPON_MATRIX = {
