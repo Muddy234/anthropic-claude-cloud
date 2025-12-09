@@ -44,27 +44,26 @@ PLAYER_BASE = {
     'potions': 2, 'potion_heal': 50
 }
 
-# --- STARTER WEAPONS (blunt only for stat allocation test) ---
+# --- STARTER WEAPONS (all enabled for balance test) ---
 STARTER_WEAPONS = {
-    # DISABLED FOR STAT ALLOCATION TEST:
-    # 'Rusty Sword': {
-    #     'damageType': 'blade',
-    #     'damage': 7,
-    #     'speed': 1.0,
-    #     'stat_scaling': 'str'
-    # },
+    'Rusty Sword': {
+        'damageType': 'blade',
+        'damage': 7,
+        'speed': 1.0,
+        'stat_scaling': 'str'
+    },
     'Iron Mace': {
         'damageType': 'blunt',
         'damage': 7,
         'speed': 1.0,
         'stat_scaling': 'str'
     },
-    # 'Wooden Spear': {
-    #     'damageType': 'pierce',
-    #     'damage': 7,
-    #     'speed': 1.0,
-    #     'stat_scaling': 'str'
-    # },
+    'Wooden Spear': {
+        'damageType': 'pierce',
+        'damage': 7,
+        'speed': 1.0,
+        'stat_scaling': 'str'
+    },
 }
 
 # --- STAT ALLOCATION STRATEGIES ---
@@ -161,13 +160,14 @@ LOOT_TABLE = {
     'gear':   {'weight': 10, 'heal': 60}
 }
 
-# --- MONSTERS ---
+# --- MONSTERS (balanced armor distribution: 33% each type) ---
+# Unarmored: 33% | Bone: 33% | Hide: 33%
 SPAWN_POOL = {
-    'Flame Bat':        {'weight': 30, 'xp': 15},
-    'Magma Slime':      {'weight': 30, 'xp': 25},
-    'Skeletal Warrior': {'weight': 20, 'xp': 28},
-    'Shadow Stalker':   {'weight': 10, 'xp': 42},
-    'Cave Bat':         {'weight': 10, 'xp': 10}
+    'Flame Bat':        {'weight': 11, 'xp': 15},   # unarmored
+    'Magma Slime':      {'weight': 11, 'xp': 25},   # unarmored
+    'Cave Bat':         {'weight': 11, 'xp': 10},   # unarmored
+    'Skeletal Warrior': {'weight': 33, 'xp': 28},   # bone
+    'Shadow Stalker':   {'weight': 33, 'xp': 42}    # hide
 }
 
 MONSTER_STATS = {
@@ -566,7 +566,7 @@ def run_simulation():
     print(f"Config: {FLOOR_CONFIG[1]['rooms']}/{FLOOR_CONFIG[2]['rooms']}/{FLOOR_CONFIG[3]['rooms']} rooms per floor")
     print(f"        Altar every {ALTAR_INTERVAL} rooms | Floor scaling: {FLOOR_SCALING*100:.0f}%")
     print(f"        Full heal on floor exit: YES")
-    print(f"Weapon: {', '.join(weapon_names)} (blunt only)")
+    print(f"Weapon: {', '.join(weapon_names)} (random selection)")
     print(f"Stat Strategies: 25% All STR | 25% All AGI | 50% STR/AGI Split")
     print(f"AGI Buff: +50% (hit={AGI_CONFIG['hit_per_agi']*100:.1f}%/pt, crit={AGI_CONFIG['crit_per_agi']*100:.2f}%/pt)")
     print("-" * 60)
