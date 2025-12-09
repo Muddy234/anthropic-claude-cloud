@@ -141,7 +141,7 @@ MONSTER_STATS = {
     'Flame Bat':        {'hp': 40, 'str': 10, 'pDef': 4,  'atkSpeed': 1.2, 'armor': 'unarmored'},
     'Cave Bat':         {'hp': 25, 'str': 6,  'pDef': 2,  'atkSpeed': 1.0, 'armor': 'unarmored'},
     'Magma Slime':      {'hp': 60, 'str': 12, 'pDef': 15, 'atkSpeed': 2.5, 'armor': 'unarmored'},
-    'Skeletal Warrior': {'hp': 50, 'str': 13, 'pDef': 10, 'atkSpeed': 1.8, 'armor': 'bone'},
+    'Skeletal Warrior': {'hp': 40, 'str': 11, 'pDef': 10, 'atkSpeed': 1.8, 'armor': 'bone'},  # Nerfed: -20% HP (50→40), -2 STR (13→11)
     'Shadow Stalker':   {'hp': 45, 'str': 15, 'pDef': 6,  'atkSpeed': 1.0, 'armor': 'hide'}
 }
 
