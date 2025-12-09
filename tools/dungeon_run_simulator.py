@@ -109,7 +109,7 @@ AGI_CONFIG = {
     'base_crit_chance': 0.05,      # 5% base crit chance
     'crit_per_agi': 0.0015,        # +0.15% per AGI (was 0.1%)
     'max_crit_chance': 0.50,       # Cap at 50%
-    'crit_multiplier': 1.5         # 150% damage on crit
+    'crit_multiplier': 3.0         # 300% damage on crit (was 1.5)
 }
 
 # --- WEAPON VS ARMOR MATRIX ---
