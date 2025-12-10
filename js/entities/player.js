@@ -115,8 +115,7 @@ function createPlayer() {
         // ====================================================================
         
         inventory: [
-            // Start with 2 health potions only
-            { name: 'Health Potion', count: 2, type: 'consumable', description: 'Restores 50 HP' }
+            // Start with empty inventory - player must find items in starter chest
         ],
 
         // ====================================================================
