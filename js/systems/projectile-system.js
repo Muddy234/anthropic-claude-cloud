@@ -208,7 +208,8 @@ function checkProjectileEnemyCollision(proj) {
     const hitRadius = 0.4; // Collision radius
 
     for (const enemy of game.enemies) {
-        if (enemy.hp <= 0) continue;
+        // Skip dead enemies or enemies with invalid HP
+        if (!enemy || enemy.hp <= 0 || isNaN(enemy.hp)) continue;
 
         const dx = proj.displayX - enemy.gridX;
         const dy = proj.displayY - enemy.gridY;
@@ -284,15 +285,29 @@ function checkProjectileCollision(x, y) {
 function applyProjectileDamage(config) {
     const target = config.target;
 
-    if (!target || target.hp <= 0) {
-        return; // Target already dead
+    // Skip dead targets or targets with invalid HP
+    if (!target || target.hp <= 0 || isNaN(target.hp)) {
+        return; // Target already dead or invalid
+    }
+
+    // Ensure damage is valid
+    let damage = config.damage;
+    if (isNaN(damage) || damage === undefined) {
+        console.warn('[Projectile] Invalid damage value, using default');
+        damage = 5;
     }
 
     // Apply damage
     if (typeof applyDamage === 'function') {
-        applyDamage(target, config.damage, config.attacker);
+        applyDamage(target, damage, config.attacker);
     } else {
-        target.hp -= config.damage;
+        target.hp -= damage;
+    }
+
+    // Ensure HP doesn't become NaN
+    if (isNaN(target.hp)) {
+        console.warn('[Projectile] Target HP became NaN, setting to 0');
+        target.hp = 0;
     }
 
     // Trigger aggro - enemy should chase when hit by ranged attacks
@@ -310,13 +325,13 @@ function applyProjectileDamage(config) {
     // Show damage number
     const color = config.isMagic ? '#00ffff' : '#ff4444';
     if (typeof showDamageNumber === 'function') {
-        showDamageNumber(target, config.damage, color);
+        showDamageNumber(target, damage, color);
     }
 
     // Message
     if (typeof addMessage === 'function' && config.attacker === game.player) {
         const attackType = config.isSkill ? 'skill shot' : config.isMagic ? 'spell' : 'shot';
-        addMessage(`Your ${attackType} hits ${target.name} for ${config.damage} damage!`);
+        addMessage(`Your ${attackType} hits ${target.name} for ${damage} damage!`);
     }
 
     // Apply magic effects (burn, freeze, lifesteal)
@@ -325,8 +340,17 @@ function applyProjectileDamage(config) {
     }
 
     // Check death
-    if (target.hp <= 0 && typeof handleDeath === 'function') {
-        handleDeath(target, config.attacker);
+    if (target.hp <= 0) {
+        if (typeof handleDeath === 'function') {
+            handleDeath(target, config.attacker);
+        } else {
+            // Fallback: remove enemy directly if handleDeath is unavailable
+            console.warn('[Projectile] handleDeath not available, removing enemy directly');
+            const index = game.enemies.indexOf(target);
+            if (index > -1) {
+                game.enemies.splice(index, 1);
+            }
+        }
     }
 }
 

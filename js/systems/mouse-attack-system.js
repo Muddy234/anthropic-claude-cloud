@@ -452,9 +452,12 @@ function checkMeleeHits(player, direction, arcConfig, isSpecial) {
     const halfArc = (arcConfig.arcAngle * (Math.PI / 180)) / 2;
     const range = arcConfig.arcRange;
 
-    for (const enemy of game.enemies) {
-        // Skip dead enemies or already hit
-        if (enemy.hp <= 0) continue;
+    // Use a copy of the array to avoid issues with splicing during iteration
+    const enemiesCopy = [...game.enemies];
+
+    for (const enemy of enemiesCopy) {
+        // Skip dead enemies, already hit, or enemies with invalid HP
+        if (!enemy || enemy.hp <= 0 || isNaN(enemy.hp)) continue;
         if (mouseAttackState.hitEnemies.has(enemy)) continue;
 
         // Calculate distance and angle to enemy
@@ -516,8 +519,20 @@ function applyMeleeDamage(player, enemy, isSpecial) {
         }
     }
 
+    // Ensure damage is a valid number (defensive check)
+    if (isNaN(damageResult.finalDamage) || damageResult.finalDamage === undefined) {
+        console.warn('[MouseAttack] Invalid damage calculated, using base damage');
+        damageResult.finalDamage = Math.max(1, baseDamage);
+    }
+
     // Apply damage
     enemy.hp -= damageResult.finalDamage;
+
+    // Ensure HP doesn't become NaN
+    if (isNaN(enemy.hp)) {
+        console.warn('[MouseAttack] Enemy HP became NaN, setting to 0');
+        enemy.hp = 0;
+    }
 
     // Show damage number
     if (typeof showDamageNumber === 'function') {
@@ -534,6 +549,13 @@ function applyMeleeDamage(player, enemy, isSpecial) {
     if (enemy.hp <= 0) {
         if (typeof handleDeath === 'function') {
             handleDeath(enemy, player);
+        } else {
+            // Fallback: remove enemy directly if handleDeath is unavailable
+            console.warn('[MouseAttack] handleDeath not available, removing enemy directly');
+            const index = game.enemies.indexOf(enemy);
+            if (index > -1) {
+                game.enemies.splice(index, 1);
+            }
         }
     }
 
