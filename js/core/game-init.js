@@ -213,8 +213,15 @@ function postInitialization() {
  * Place a starter chest near the player spawn with guaranteed loot
  */
 function placeStarterChest() {
-    if (!game.player || !game.decorations) {
-        console.warn('[Init] Cannot place starter chest - player or decorations not initialized');
+    if (!game.player || !game.rooms) {
+        console.warn('[Init] Cannot place starter chest - player or rooms not initialized');
+        return;
+    }
+
+    // Find entrance room
+    const entranceRoom = game.rooms.find(r => r.type === 'entrance');
+    if (!entranceRoom) {
+        console.warn('[Init] Cannot place starter chest - no entrance room found');
         return;
     }
 
@@ -239,9 +246,9 @@ function placeStarterChest() {
 
         // Check if valid floor tile
         const tile = game.map[testY]?.[testX];
-        if (tile && tile.type === 'floor' && !tile.blocked) {
-            // Check no decoration already there
-            const existingDec = game.decorations.find(d => d.x === testX && d.y === testY);
+        if (tile && tile.type === 'floor' && !tile.blocked && !tile.decoration) {
+            // Check no decoration already there in global array
+            const existingDec = game.decorations?.find(d => d.x === testX && d.y === testY);
             if (!existingDec) {
                 chestX = testX;
                 chestY = testY;
@@ -255,19 +262,44 @@ function placeStarterChest() {
         return;
     }
 
-    // Create the starter chest decoration
+    // Create the starter chest decoration with proper format for rendering
     const starterChest = {
         x: chestX,
         y: chestY,
         type: 'starter_chest',
-        interactable: true,
+        room: entranceRoom,
+        element: entranceRoom.element || 'physical',
         blocking: false,
-        visual: '📦',
+        interactable: true,
+        sprite: null,
+        color: '#FFD700',
         name: 'Supply Chest',
-        description: 'A chest left by previous adventurers.'
+        description: 'A chest left by previous adventurers.',
+
+        // Data object for decoration-renderer.js compatibility
+        data: {
+            color: '#FFD700',
+            symbol: '📦',
+            glow: true,
+            glowRadius: 0.8,
+            size: 'large'
+        }
     };
 
+    // Add to game decorations array
+    if (!game.decorations) game.decorations = [];
     game.decorations.push(starterChest);
+
+    // Add to room's decorations array (required for rendering)
+    if (!entranceRoom.decorations) entranceRoom.decorations = [];
+    entranceRoom.decorations.push(starterChest);
+
+    // Mark tile as having decoration
+    const tile = game.map?.[chestY]?.[chestX];
+    if (tile) {
+        tile.decoration = starterChest;
+    }
+
     console.log(`[Init] Placed starter chest at (${chestX}, ${chestY})`);
 }
 
@@ -362,8 +394,13 @@ function openStarterChest(chest, player) {
     // Mark chest as opened
     chest.interactable = false;
     chest.type = 'starter_chest_open';
-    chest.visual = '📭';
     chest.description = 'An empty chest.';
+
+    // Update visual for rendering
+    if (chest.data) {
+        chest.data.symbol = '📭';
+        chest.data.glow = false;
+    }
 
     console.log('[Init] Starter chest opened');
     return true;
