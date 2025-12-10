@@ -313,11 +313,22 @@ function applyProjectileDamage(config) {
     // Trigger aggro - enemy should chase when hit by ranged attacks
     if (config.attacker === game.player && target !== game.player) {
         // Make enemy aware and start chasing
-        if (target.state !== 'chasing') {
-            target.state = 'chasing';
+        target.state = 'chasing';
+
+        // Initialize combat object if it doesn't exist
+        if (!target.combat) {
+            target.combat = {
+                isInCombat: false,
+                currentTarget: null,
+                attackCooldown: 0,
+                attackSpeed: target.attackSpeed || 1.0,
+                autoRetaliate: true,
+                attackRange: target.attackRange || 1
+            };
         }
+
         // Engage combat
-        if (typeof engageCombat === 'function' && !target.combat?.isInCombat) {
+        if (typeof engageCombat === 'function') {
             engageCombat(target, config.attacker);
         }
     }

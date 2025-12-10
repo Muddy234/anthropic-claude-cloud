@@ -46,18 +46,53 @@ function recalculateDerivedStats() {
     }
 }
 
-function checkLevelUp() {
-    if (!game.player) return;
-    const xpNeeded = 100 + (game.player.level - 1) * 150;
-    if (game.player.xp >= xpNeeded) {
-        const remainingXP = game.player.xp - xpNeeded;
-        game.player.xp = remainingXP;
-        game.player.level++;
-        game.player.hp = game.player.maxHp;
-        game.player.mana = game.player.maxMana;
-        game.player.stamina = game.player.maxStamina;
-        game.state = 'levelup';
-        game.levelUpData = { attributePoints: 3, skillPoints: 1, tempStats: { ...game.player.stats } };
-        addMessage(`LEVEL UP! Now Level ${game.player.level}!`);
+function checkLevelUp(player) {
+    // Support both calling conventions
+    if (!player) player = game.player;
+    if (!player) return;
+
+    // Track total levels gained for this check
+    let levelsGained = 0;
+
+    // Use player.xpToNextLevel if available, otherwise calculate
+    // Loop to handle multiple level-ups at once
+    while (true) {
+        const xpNeeded = player.xpToNextLevel || (100 + (player.level - 1) * 150);
+
+        if (player.xp < xpNeeded) break;
+
+        // Level up!
+        player.xp -= xpNeeded;
+        player.level++;
+        levelsGained++;
+
+        // Update xpToNextLevel for next iteration (1.5x scaling like player.js)
+        player.xpToNextLevel = Math.floor(xpNeeded * 1.5);
+
+        // Auto-increment stats (+1 to each per level)
+        if (player.stats) {
+            player.stats.STR = (player.stats.STR || 10) + 1;
+            player.stats.AGI = (player.stats.AGI || 10) + 1;
+            player.stats.INT = (player.stats.INT || 10) + 1;
+            player.stats.STA = (player.stats.STA || 10) + 1;
+        }
+
+        if (typeof addMessage === 'function') {
+            addMessage(`LEVEL UP! Now Level ${player.level}!`);
+        }
+        console.log(`[LevelUp] Player reached level ${player.level}`);
+    }
+
+    // If any levels gained, recalculate stats and restore resources
+    if (levelsGained > 0) {
+        if (typeof recalculatePlayerStats === 'function') {
+            recalculatePlayerStats(player);
+        }
+
+        // Restore resources on level up
+        player.hp = player.maxHp;
+        if (player.maxMana !== undefined) player.mana = player.maxMana;
+        if (player.maxMp !== undefined) player.mp = player.maxMp;
+        if (player.maxStamina !== undefined) player.stamina = player.maxStamina;
     }
 }

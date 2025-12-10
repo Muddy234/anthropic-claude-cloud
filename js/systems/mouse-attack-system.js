@@ -545,6 +545,28 @@ function applyMeleeDamage(player, enemy, isSpecial) {
         onCombatHit(player, enemy, damageResult);
     }
 
+    // Trigger aggro - enemy should chase when hit
+    if (enemy.hp > 0) {
+        enemy.state = 'chasing';
+
+        // Initialize combat object if it doesn't exist
+        if (!enemy.combat) {
+            enemy.combat = {
+                isInCombat: false,
+                currentTarget: null,
+                attackCooldown: 0,
+                attackSpeed: enemy.attackSpeed || 1.0,
+                autoRetaliate: true,
+                attackRange: enemy.attackRange || 1
+            };
+        }
+
+        // Engage combat
+        if (typeof engageCombat === 'function') {
+            engageCombat(enemy, player);
+        }
+    }
+
     // Check for death
     if (enemy.hp <= 0) {
         if (typeof handleDeath === 'function') {

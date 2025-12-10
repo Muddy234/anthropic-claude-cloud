@@ -660,6 +660,10 @@ function handleDeath(entity, killer) {
             }
         }
 
+        // Normalize specialty to lowercase (defensive)
+        specialty = String(specialty).toLowerCase();
+
+        console.log(`[SkillXP] Awarding ${xpReward} XP to specialty: ${specialty}`);
         awardSkillXp(game.player, specialty, xpReward);
     }
 

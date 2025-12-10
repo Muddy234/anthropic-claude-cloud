@@ -981,25 +981,37 @@ function getXpForNextLevel(currentLevel) {
  * @param {number} xpAmount - Total XP to award
  */
 function awardSkillXp(player, specialtyId, xpAmount) {
-    if (!player.skills) initializePlayerSkills(player);
-    
-    const specialty = SPECIALTIES[specialtyId];
-    if (!specialty) {
-        console.warn(`Unknown specialty: ${specialtyId}`);
+    if (!player) {
+        console.warn('[SkillXP] No player provided');
         return;
     }
-    
+    if (!player.skills) {
+        console.log('[SkillXP] Initializing player skills...');
+        initializePlayerSkills(player);
+    }
+
+    // Normalize specialty ID to lowercase
+    const normalizedSpecialtyId = String(specialtyId).toLowerCase();
+
+    const specialty = SPECIALTIES[normalizedSpecialtyId];
+    if (!specialty) {
+        console.warn(`[SkillXP] Unknown specialty: ${normalizedSpecialtyId}`);
+        return;
+    }
+
     const proficiencyId = specialty.proficiency;
-    
+
     // Calculate XP split
     const profXp = Math.floor(xpAmount * SKILL_CONFIG.xpSplitProficiency);
     const specXp = Math.floor(xpAmount * SKILL_CONFIG.xpSplitSpecialty);
-    
+
+    console.log(`[SkillXP] ${xpAmount} XP -> ${proficiencyId}: +${profXp}, ${normalizedSpecialtyId}: +${specXp}`);
+
     // Award proficiency XP
     addProficiencyXp(player, proficiencyId, profXp);
-    
+
     // Award specialty XP
-    addSpecialtyXp(player, specialtyId, specXp);
+    addSpecialtyXp(player, normalizedSpecialtyId, specXp);
 }
 
 /**
