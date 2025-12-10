@@ -184,12 +184,17 @@ function getMouseWorldPosition() {
 
 /**
  * Get direction from player to mouse in radians
+ * Uses displayX/displayY for accurate visual alignment during movement
  */
 function getDirectionToMouse() {
     if (!game.player) return 0;
 
-    const dx = mouseWorldX - game.player.gridX;
-    const dy = mouseWorldY - game.player.gridY;
+    // Use display position for visual accuracy (gridX/gridY can lag behind during movement)
+    const playerX = game.player.displayX !== undefined ? game.player.displayX : game.player.gridX;
+    const playerY = game.player.displayY !== undefined ? game.player.displayY : game.player.gridY;
+
+    const dx = mouseWorldX - playerX;
+    const dy = mouseWorldY - playerY;
 
     return Math.atan2(dy, dx);
 }
@@ -346,11 +351,15 @@ function performRangedAttack(player, direction, isSpecial, comboCount) {
     // Determine element for magic weapons
     const element = weapon?.element || (isMagic ? 'arcane' : 'physical');
 
+    // Use display position for visual accuracy
+    const originX = player.displayX !== undefined ? player.displayX : player.gridX;
+    const originY = player.displayY !== undefined ? player.displayY : player.gridY;
+
     // Create projectile using projectile system
     if (typeof createProjectile === 'function') {
         createProjectile({
-            x: player.gridX,
-            y: player.gridY,
+            x: originX,
+            y: originY,
             dirX: dirX,
             dirY: dirY,
             speed: arcConfig.projectileSpeed || 8,
@@ -366,8 +375,8 @@ function performRangedAttack(player, direction, isSpecial, comboCount) {
         // Fallback: create simple projectile in game state
         if (!game.projectiles) game.projectiles = [];
         game.projectiles.push({
-            x: player.gridX,
-            y: player.gridY,
+            x: originX,
+            y: originY,
             dirX: dirX,
             dirY: dirY,
             speed: arcConfig.projectileSpeed || 8,
@@ -541,6 +550,7 @@ function applyMeleeDamage(player, enemy, isSpecial) {
 
 /**
  * Create a visual slash effect
+ * Uses displayX/displayY for accurate visual positioning during movement
  */
 function createSlashEffect(player, direction, arcConfig, isSpecial = false, attackFromLeft = true, comboCount = 1) {
     const slashStyle = arcConfig.slashStyle || 'sweep';
@@ -549,9 +559,13 @@ function createSlashEffect(player, direction, arcConfig, isSpecial = false, atta
     // Attack 1: from left, Attack 2: from right, Attack 3: special (center/both)
     const fromLeft = attackFromLeft;
 
+    // Use display position for visual accuracy
+    const originX = player.displayX !== undefined ? player.displayX : player.gridX;
+    const originY = player.displayY !== undefined ? player.displayY : player.gridY;
+
     mouseAttackState.slashEffects.push({
-        x: player.gridX,
-        y: player.gridY,
+        x: originX,
+        y: originY,
         angle: direction,
         progress: 0,
         duration: 0.2,  // 200ms trail duration
