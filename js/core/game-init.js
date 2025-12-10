@@ -304,7 +304,7 @@ function placeStarterChest() {
 }
 
 /**
- * Open the starter chest - returns predetermined loot
+ * Open the starter chest - shows UI with predetermined loot
  */
 function openStarterChest(chest, player) {
     if (!chest || chest.type !== 'starter_chest') return false;
@@ -319,90 +319,53 @@ function openStarterChest(chest, player) {
     // Get random uncommon mainhand weapon
     const randomWeapon = getRandomUncommonMainhand();
 
-    // Drop items on ground near chest
-    const dropOffsets = [
-        { x: 0, y: 0 },
-        { x: 1, y: 0 },
-        { x: 0, y: 1 },
-        { x: -1, y: 0 },
-        { x: 0, y: -1 }
-    ];
+    // Build chest contents array
+    const contents = [];
 
-    let dropIndex = 0;
-
-    // Drop torch
+    // Add torch
     if (torch) {
-        const pos = dropOffsets[dropIndex % dropOffsets.length];
-        dropIndex++;
-        if (typeof spawnGroundItem === 'function') {
-            spawnGroundItem({ ...torch }, chest.x + pos.x, chest.y + pos.y);
-        } else {
-            game.items = game.items || [];
-            game.items.push({
-                ...torch,
-                x: chest.x + pos.x,
-                y: chest.y + pos.y,
-                onGround: true
-            });
-        }
-        if (typeof addMessage === 'function') {
-            addMessage(`Found: ${torch.name}`);
-        }
+        contents.push({
+            ...torch,
+            count: 1,
+            type: 'armor'
+        });
     }
 
-    // Drop 2 health potions
+    // Add 2 health potions (as single stack)
     if (healthPotion) {
-        for (let i = 0; i < 2; i++) {
-            const pos = dropOffsets[dropIndex % dropOffsets.length];
-            dropIndex++;
-            if (typeof spawnGroundItem === 'function') {
-                spawnGroundItem({ ...healthPotion }, chest.x + pos.x, chest.y + pos.y);
-            } else {
-                game.items = game.items || [];
-                game.items.push({
-                    ...healthPotion,
-                    x: chest.x + pos.x,
-                    y: chest.y + pos.y,
-                    onGround: true
-                });
-            }
-        }
-        if (typeof addMessage === 'function') {
-            addMessage(`Found: Health Potion x2`);
-        }
+        contents.push({
+            ...healthPotion,
+            count: 2,
+            type: 'consumable'
+        });
     }
 
-    // Drop random uncommon weapon
+    // Add random uncommon weapon
     if (randomWeapon) {
-        const pos = dropOffsets[dropIndex % dropOffsets.length];
-        if (typeof spawnGroundItem === 'function') {
-            spawnGroundItem({ ...randomWeapon }, chest.x + pos.x, chest.y + pos.y);
-        } else {
-            game.items = game.items || [];
-            game.items.push({
-                ...randomWeapon,
-                x: chest.x + pos.x,
-                y: chest.y + pos.y,
-                onGround: true
-            });
-        }
-        if (typeof addMessage === 'function') {
-            addMessage(`Found: ${randomWeapon.name}`);
-        }
+        contents.push({
+            ...randomWeapon,
+            count: 1,
+            type: 'weapon'
+        });
     }
 
-    // Mark chest as opened
+    // Open the chest UI with contents
+    if (typeof openChestUI === 'function' && contents.length > 0) {
+        openChestUI(chest, contents);
+        console.log('[Init] Starter chest UI opened with', contents.length, 'items');
+        return true;
+    }
+
+    // Fallback: just mark as opened if UI not available
     chest.interactable = false;
     chest.type = 'starter_chest_open';
     chest.description = 'An empty chest.';
-
-    // Update visual for rendering
     if (chest.data) {
         chest.data.symbol = '📭';
         chest.data.glow = false;
     }
 
-    console.log('[Init] Starter chest opened');
+    console.log('[Init] Starter chest opened (no UI)');
     return true;
 }
 
@@ -620,33 +583,12 @@ function setPlayerPosition(x, y) {
 
 /**
  * Equip starting torch for fog of war
+ * NOTE: Starting torch removed from loadout - player must find torch in starter chest
  */
 function equipStartingTorch() {
-    if (!game.player || !game.player.equipped) return;
-
-    // Get torch from equipment data
-    const torch = typeof DEFENSE_ARMOR !== 'undefined' ? DEFENSE_ARMOR['torch'] : null;
-
-    if (torch) {
-        // Equip directly to OFF slot
-        game.player.equipped.OFF = { ...torch };
-        console.log('[Init] Equipped starting torch (+2 vision range)');
-
-        // Recalculate stats if function exists
-        if (typeof recalculatePlayerStats === 'function') {
-            recalculatePlayerStats(game.player);
-        }
-    } else {
-        // Fallback: create inline torch item
-        game.player.equipped.OFF = {
-            id: 'torch',
-            name: 'Torch',
-            slot: 'OFF',
-            visionBonus: 2,
-            description: 'A simple torch that illuminates the darkness.'
-        };
-        console.log('[Init] Equipped fallback torch (+2 vision range)');
-    }
+    // Starting torch is now in the starter chest instead of being auto-equipped
+    // Player spawns without a torch and must open the nearby chest to get one
+    console.log('[Init] No starting torch - player must find one in starter chest');
 }
 
 /**

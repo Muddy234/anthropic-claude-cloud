@@ -669,7 +669,7 @@ function render() {
 
 if (game.state === 'menu') {
         ctx.fillStyle = '#fff'; ctx.font = '64px monospace'; ctx.textAlign = 'center'; ctx.fillText('THE SHIFTING CHASM', canvas.width / 2, 400); ctx.font = '32px monospace'; ctx.fillText('Press SPACE to Start', canvas.width / 2, 500);
-    } else if (game.state === 'playing' || game.state === 'merchant' || game.state === 'inventory' || game.state === 'map' || game.state === 'skills' || game.state === 'moveset' || game.state === 'levelup' || game.state === 'character' || game.state === 'shift' || game.state === 'sacrifice') {
+    } else if (game.state === 'playing' || game.state === 'merchant' || game.state === 'inventory' || game.state === 'map' || game.state === 'skills' || game.state === 'moveset' || game.state === 'levelup' || game.state === 'character' || game.state === 'shift' || game.state === 'sacrifice' || game.state === 'chest') {
 
 const effectiveTileSize = TILE_SIZE * ZOOM_LEVEL;
 const viewW = canvas.width - TRACKER_WIDTH;
@@ -901,6 +901,7 @@ const camY = game.camera.y + (shakeOffset.y / (TILE_SIZE * ZOOM_LEVEL));
     if (game.state === 'moveset') drawMoveSetOverlay();
     if (game.state === 'levelup') drawLevelUpScreen();
     if (game.state === 'sacrifice' && typeof renderSacrificeUI === 'function') renderSacrificeUI(ctx);
+    if (game.state === 'chest' && typeof renderChestUI === 'function') renderChestUI(ctx);
 
     // Draw shift countdown timer at top of screen
     drawShiftCountdown();

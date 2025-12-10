@@ -62,6 +62,13 @@ window.addEventListener('keydown', e => {
         }
     }
 
+    // Chest UI input handling
+    if (game.state === 'chest') {
+        if (typeof handleChestKey === 'function' && handleChestKey(e.key)) {
+            return;
+        }
+    }
+
     // PRIORITY 2: Context menu and inspect popup (only if game.state === 'playing')
     // Close inspect popup on ESC
     if (e.key === 'Escape' && inspectPopup.visible && game.state === 'playing') {
@@ -601,6 +608,15 @@ const setupCanvasHandlers = () => {
 
     // LEFT CLICK - Mouse-driven attack toward cursor
     canvas.addEventListener('click', (e) => {
+        // Handle chest UI clicks
+        if (game.state === 'chest' && typeof handleChestClick === 'function') {
+            const rect = canvas.getBoundingClientRect();
+            const clickX = e.clientX - rect.left;
+            const clickY = e.clientY - rect.top;
+            handleChestClick(clickX, clickY);
+            return;
+        }
+
         if (game.state !== 'playing') return;
 
         // If context menu is visible, let right-click-init.js handle the click
