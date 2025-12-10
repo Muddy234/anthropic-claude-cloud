@@ -185,17 +185,20 @@ function initializeAllSystems() {
  */
 function postInitialization() {
     console.log('[Init] Post-initialization...');
-    
+
     // Form social groups
     if (typeof MonsterSocialSystem !== 'undefined') {
         MonsterSocialSystem.scanAndFormGroups();
     }
-    
+
     // Initialize attunement
     if (typeof AttunementSystem !== 'undefined') {
         AttunementSystem.init();
     }
-    
+
+    // Place starter chest near player
+    placeStarterChest();
+
     // Show entrance room message
     const entranceRoom = game.rooms.find(r => r.type === 'entrance');
     if (entranceRoom && typeof getRoomEnterEffect === 'function') {
@@ -205,6 +208,216 @@ function postInitialization() {
         }
     }
 }
+
+/**
+ * Place a starter chest near the player spawn with guaranteed loot
+ */
+function placeStarterChest() {
+    if (!game.player || !game.decorations) {
+        console.warn('[Init] Cannot place starter chest - player or decorations not initialized');
+        return;
+    }
+
+    const playerX = game.player.gridX;
+    const playerY = game.player.gridY;
+
+    // Find a valid floor tile adjacent to player (prefer right or down)
+    const offsets = [
+        { x: 1, y: 0 },   // Right
+        { x: 0, y: 1 },   // Down
+        { x: -1, y: 0 },  // Left
+        { x: 0, y: -1 },  // Up
+        { x: 1, y: 1 },   // Down-right
+        { x: -1, y: 1 },  // Down-left
+    ];
+
+    let chestX = null, chestY = null;
+
+    for (const offset of offsets) {
+        const testX = playerX + offset.x;
+        const testY = playerY + offset.y;
+
+        // Check if valid floor tile
+        const tile = game.map[testY]?.[testX];
+        if (tile && tile.type === 'floor' && !tile.blocked) {
+            // Check no decoration already there
+            const existingDec = game.decorations.find(d => d.x === testX && d.y === testY);
+            if (!existingDec) {
+                chestX = testX;
+                chestY = testY;
+                break;
+            }
+        }
+    }
+
+    if (chestX === null) {
+        console.warn('[Init] Could not find valid position for starter chest');
+        return;
+    }
+
+    // Create the starter chest decoration
+    const starterChest = {
+        x: chestX,
+        y: chestY,
+        type: 'starter_chest',
+        interactable: true,
+        blocking: false,
+        visual: '📦',
+        name: 'Supply Chest',
+        description: 'A chest left by previous adventurers.'
+    };
+
+    game.decorations.push(starterChest);
+    console.log(`[Init] Placed starter chest at (${chestX}, ${chestY})`);
+}
+
+/**
+ * Open the starter chest - returns predetermined loot
+ */
+function openStarterChest(chest, player) {
+    if (!chest || chest.type !== 'starter_chest') return false;
+
+    // Get torch from equipment data
+    const torch = typeof MOBILITY_ARMOR !== 'undefined' ? MOBILITY_ARMOR['torch'] :
+                  typeof DEFENSE_ARMOR !== 'undefined' ? DEFENSE_ARMOR['torch'] : null;
+
+    // Get health potion from consumables
+    const healthPotion = typeof CONSUMABLES !== 'undefined' ? CONSUMABLES['health_potion'] : null;
+
+    // Get random uncommon mainhand weapon
+    const randomWeapon = getRandomUncommonMainhand();
+
+    // Drop items on ground near chest
+    const dropOffsets = [
+        { x: 0, y: 0 },
+        { x: 1, y: 0 },
+        { x: 0, y: 1 },
+        { x: -1, y: 0 },
+        { x: 0, y: -1 }
+    ];
+
+    let dropIndex = 0;
+
+    // Drop torch
+    if (torch) {
+        const pos = dropOffsets[dropIndex % dropOffsets.length];
+        dropIndex++;
+        if (typeof spawnGroundItem === 'function') {
+            spawnGroundItem({ ...torch }, chest.x + pos.x, chest.y + pos.y);
+        } else {
+            game.items = game.items || [];
+            game.items.push({
+                ...torch,
+                x: chest.x + pos.x,
+                y: chest.y + pos.y,
+                onGround: true
+            });
+        }
+        if (typeof addMessage === 'function') {
+            addMessage(`Found: ${torch.name}`);
+        }
+    }
+
+    // Drop 2 health potions
+    if (healthPotion) {
+        for (let i = 0; i < 2; i++) {
+            const pos = dropOffsets[dropIndex % dropOffsets.length];
+            dropIndex++;
+            if (typeof spawnGroundItem === 'function') {
+                spawnGroundItem({ ...healthPotion }, chest.x + pos.x, chest.y + pos.y);
+            } else {
+                game.items = game.items || [];
+                game.items.push({
+                    ...healthPotion,
+                    x: chest.x + pos.x,
+                    y: chest.y + pos.y,
+                    onGround: true
+                });
+            }
+        }
+        if (typeof addMessage === 'function') {
+            addMessage(`Found: Health Potion x2`);
+        }
+    }
+
+    // Drop random uncommon weapon
+    if (randomWeapon) {
+        const pos = dropOffsets[dropIndex % dropOffsets.length];
+        if (typeof spawnGroundItem === 'function') {
+            spawnGroundItem({ ...randomWeapon }, chest.x + pos.x, chest.y + pos.y);
+        } else {
+            game.items = game.items || [];
+            game.items.push({
+                ...randomWeapon,
+                x: chest.x + pos.x,
+                y: chest.y + pos.y,
+                onGround: true
+            });
+        }
+        if (typeof addMessage === 'function') {
+            addMessage(`Found: ${randomWeapon.name}`);
+        }
+    }
+
+    // Mark chest as opened
+    chest.interactable = false;
+    chest.type = 'starter_chest_open';
+    chest.visual = '📭';
+    chest.description = 'An empty chest.';
+
+    console.log('[Init] Starter chest opened');
+    return true;
+}
+
+/**
+ * Get a random uncommon mainhand weapon from all weapon pools
+ */
+function getRandomUncommonMainhand() {
+    const uncommonWeapons = [];
+
+    // Collect from melee weapons
+    if (typeof MELEE_WEAPONS !== 'undefined') {
+        for (const id in MELEE_WEAPONS) {
+            const weapon = MELEE_WEAPONS[id];
+            if (weapon.rarity === 'uncommon' && weapon.slot === 'MAIN') {
+                uncommonWeapons.push(weapon);
+            }
+        }
+    }
+
+    // Collect from ranged weapons (polearms, bows)
+    if (typeof RANGED_WEAPONS !== 'undefined') {
+        for (const id in RANGED_WEAPONS) {
+            const weapon = RANGED_WEAPONS[id];
+            if (weapon.rarity === 'uncommon' && weapon.slot === 'MAIN') {
+                uncommonWeapons.push(weapon);
+            }
+        }
+    }
+
+    // Collect from magic weapons
+    if (typeof MAGIC_WEAPONS !== 'undefined') {
+        for (const id in MAGIC_WEAPONS) {
+            const weapon = MAGIC_WEAPONS[id];
+            if (weapon.rarity === 'uncommon' && weapon.slot === 'MAIN') {
+                uncommonWeapons.push(weapon);
+            }
+        }
+    }
+
+    if (uncommonWeapons.length === 0) {
+        console.warn('[Init] No uncommon mainhand weapons found');
+        return null;
+    }
+
+    // Return random weapon
+    const randomIndex = Math.floor(Math.random() * uncommonWeapons.length);
+    return uncommonWeapons[randomIndex];
+}
+
+// Export starter chest functions
+window.openStarterChest = openStarterChest;
+window.placeStarterChest = placeStarterChest;
 
 // ============================================================================
 // SYSTEM REGISTRATION
