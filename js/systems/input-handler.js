@@ -608,6 +608,15 @@ const setupCanvasHandlers = () => {
 
     // LEFT CLICK - Mouse-driven attack toward cursor
     canvas.addEventListener('click', (e) => {
+        // Handle skills overlay clicks (pentagon radar, tabs)
+        if (game.state === 'skills' && typeof handleSkillsOverlayClick === 'function') {
+            const rect = canvas.getBoundingClientRect();
+            const clickX = e.clientX - rect.left;
+            const clickY = e.clientY - rect.top;
+            handleSkillsOverlayClick(clickX, clickY);
+            return;
+        }
+
         // Handle chest UI clicks
         if (game.state === 'chest' && typeof handleChestClick === 'function') {
             const rect = canvas.getBoundingClientRect();
