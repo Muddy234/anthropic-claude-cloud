@@ -197,11 +197,12 @@ const LightSourceSystem = {
     config: {
         debugLogging: false,
         defaultPlayerLightRadius: 3,
-        flickerIntensity: 0.1,       // Base flicker amplitude
-        flickerSpeed: 15,            // Perlin noise speed (was 200ms interval)
-        flickerOctaves: 2,           // Number of noise octaves
+        flickerIntensity: 0.25,      // Increased from 0.1 - more dramatic flicker
+        flickerSpeed: 12,            // Slightly faster for more lively feel
+        flickerOctaves: 3,           // More octaves for complex organic movement
+        flickerPersistence: 0.6,     // How much each octave contributes
         useCookieTextures: true,     // Enable irregular light shapes
-        cookieIrregularity: 0.25     // How irregular cookie shapes are
+        cookieIrregularity: 0.3      // Slightly more irregular shapes
     },
 
     // ========================================================================
@@ -470,11 +471,24 @@ const LightSourceSystem = {
         const noiseY = source.noiseOffsetY;
 
         // Use FBM for more complex, layered flicker
-        const noiseValue = PerlinNoise.fbm(noiseX, noiseY, this.config.flickerOctaves);
+        // More octaves and persistence creates more organic, lively movement
+        const noiseValue = PerlinNoise.fbm(
+            noiseX,
+            noiseY,
+            this.config.flickerOctaves,
+            this.config.flickerPersistence || 0.5
+        );
+
+        // Add a secondary faster flicker for more "alive" feel
+        const fastFlicker = PerlinNoise.noise2D(
+            noiseX * 3, // Faster
+            noiseY + 100
+        ) * 0.1; // Subtle high-frequency variation
 
         // Convert noise (-1 to 1) to flicker multiplier
         // Apply configured intensity
-        return 1 + noiseValue * this.config.flickerIntensity;
+        const combinedNoise = noiseValue + fastFlicker;
+        return 1 + combinedNoise * this.config.flickerIntensity;
     },
 
     /**
@@ -683,12 +697,19 @@ const LightSourceSystem = {
         // Advance Perlin noise time for organic flicker
         this.noiseTime += dt;
 
-        // Update legacy flickerOffset for backward compatibility
-        // Uses Perlin noise instead of sin() for more organic feel
-        this.flickerOffset = PerlinNoise.noise2D(
+        // Update global flickerOffset for player torchlight
+        // Uses FBM with fast flicker overlay for lively feel
+        const baseFlicker = PerlinNoise.fbm(
             this.noiseTime * this.config.flickerSpeed / 1000,
-            0
+            0,
+            this.config.flickerOctaves,
+            this.config.flickerPersistence || 0.5
         );
+        const fastFlicker = PerlinNoise.noise2D(
+            this.noiseTime * this.config.flickerSpeed / 1000 * 3,
+            50
+        ) * 0.12;
+        this.flickerOffset = baseFlicker + fastFlicker;
 
         // Update each source
         this.sources.forEach((source, id) => {
