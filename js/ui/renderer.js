@@ -101,38 +101,84 @@ function drawInventoryOverlay() {
         game.selectedItemIndex = 0;
     }
 
-    ctx.fillStyle = 'rgba(0, 0, 0, 0.9)';
+    // Get colors from design system
+    const colors = typeof UI_COLORS !== 'undefined' ? UI_COLORS : {
+        bgDarkest: '#0a0a0f',
+        bgDark: '#12121a',
+        bgMedium: '#1a1a24',
+        border: '#3a3a4a',
+        gold: '#d4af37',
+        corruption: '#8e44ad',
+        health: '#c0392b',
+        success: '#27ae60',
+        textPrimary: '#ffffff',
+        textSecondary: '#b0b0b0',
+        textMuted: '#666666'
+    };
+
+    // Background vignette
+    const vignetteGrad = ctx.createRadialGradient(
+        canvas.width / 2, canvas.height / 2, canvas.height * 0.3,
+        canvas.width / 2, canvas.height / 2, canvas.height
+    );
+    vignetteGrad.addColorStop(0, 'rgba(0, 0, 0, 0.6)');
+    vignetteGrad.addColorStop(1, 'rgba(0, 0, 0, 0.92)');
+    ctx.fillStyle = vignetteGrad;
     ctx.fillRect(TRACKER_WIDTH, 0, canvas.width - TRACKER_WIDTH, canvas.height);
+
     const cx = TRACKER_WIDTH + (canvas.width - TRACKER_WIDTH) / 2;
     const cy = canvas.height / 2;
 
     // Scale panel to fit screen if necessary
     const maxW = canvas.width - TRACKER_WIDTH - 40;
     const maxH = canvas.height - 40;
-    const w = Math.min(1200, maxW), h = Math.min(800, maxH);
+    const w = Math.min(1000, maxW), h = Math.min(700, maxH);
     const x = Math.max(TRACKER_WIDTH + 20, cx - w / 2);
     const y = Math.max(20, cy - h / 2);
+    const radius = 8;
 
-    ctx.fillStyle = '#1a1a1a';
-    ctx.strokeStyle = '#3498db';
-    ctx.lineWidth = 4;
-    ctx.fillRect(x, y, w, h);
-    ctx.strokeRect(x, y, w, h);
+    // Use shared panel drawing if available
+    if (typeof drawOverlayPanel === 'function') {
+        drawOverlayPanel(ctx, x, y, w, h, colors);
+    } else {
+        // Fallback panel
+        ctx.fillStyle = colors.bgDark;
+        ctx.fillRect(x, y, w, h);
+        ctx.strokeStyle = colors.border;
+        ctx.lineWidth = 2;
+        ctx.strokeRect(x, y, w, h);
+    }
 
-    // Updated tabs - removed INSPECT
-    const tabs = ['WEAPONS', 'ARMOR', 'CONSUMABLES', 'ITEMS', 'EQUIPPED'];
+    // Updated tabs - CotDG style
+    const tabs = ['WEAPONS', 'ARMOR', 'CONSUME', 'ITEMS', 'EQUIPPED'];
     const tabW = w / tabs.length;
-    ctx.font = 'bold 18px monospace';
+    const tabH = 36;
+    ctx.font = 'bold 14px monospace';
     ctx.textAlign = 'center';
 
     for (let i = 0; i < tabs.length; i++) {
         const tx = x + i * tabW;
-        ctx.fillStyle = game.inventoryTab === i ? '#3498db' : '#333';
-        ctx.fillRect(tx, y, tabW, 40);
-        ctx.strokeStyle = '#111';
-        ctx.strokeRect(tx, y, tabW, 40);
-        ctx.fillStyle = game.inventoryTab === i ? '#fff' : '#888';
-        ctx.fillText(tabs[i], tx + tabW / 2, y + 26);
+        const isActive = game.inventoryTab === i;
+
+        // Tab background
+        if (isActive) {
+            const tabGrad = ctx.createLinearGradient(tx, y, tx, y + tabH);
+            tabGrad.addColorStop(0, colors.gold || '#d4af37');
+            tabGrad.addColorStop(1, '#8b6914');
+            ctx.fillStyle = tabGrad;
+        } else {
+            ctx.fillStyle = colors.bgMedium || '#1a1a24';
+        }
+        ctx.fillRect(tx + 2, y + 2, tabW - 4, tabH - 4);
+
+        // Tab border
+        ctx.strokeStyle = isActive ? (colors.gold || '#d4af37') : (colors.border || '#3a3a4a');
+        ctx.lineWidth = 1;
+        ctx.strokeRect(tx + 2, y + 2, tabW - 4, tabH - 4);
+
+        // Tab text
+        ctx.fillStyle = isActive ? (colors.bgDarkest || '#0a0a0f') : (colors.textMuted || '#888');
+        ctx.fillText(tabs[i], tx + tabW / 2, y + 23);
     }
 
     const contentY = y + 60;
