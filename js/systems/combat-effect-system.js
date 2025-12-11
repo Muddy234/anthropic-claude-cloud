@@ -79,32 +79,35 @@ const COMBAT_EFFECT_CONFIG = {
 };
 
 // Map effect types to visual categories for easy selection
+// Each element uses ONE consistent variant for visual consistency
 const EFFECT_MAPPINGS = {
     // Melee weapon attacks -> slash effects
     melee: {
-        default: { type: 'slash', variants: [1, 2, 3, 4, 5] },
-        blade: { type: 'slash', variants: [1, 2, 3, 6, 7] },      // Swords, daggers
-        blunt: { type: 'slash', variants: [4, 5, 8, 9, 10] },     // Hammers, maces
-        pierce: { type: 'slash', variants: [1, 3, 5, 7, 9] }      // Spears, rapiers
+        default: { type: 'slash', variant: 1 },
+        blade: { type: 'slash', variant: 2 },      // Swords, daggers
+        blunt: { type: 'slash', variant: 4 },      // Hammers, maces
+        pierce: { type: 'slash', variant: 3 }      // Spears, rapiers
     },
 
-    // Magic attacks -> magic effects
+    // Magic attacks -> magic effects (one variant per element for consistency)
     magic: {
-        default: { type: 'magic', variants: [1, 2, 3, 4, 5] },
-        fire: { type: 'magic', variants: [3, 5, 7] },             // Orange/red effects
-        ice: { type: 'magic', variants: [1, 4, 6] },              // Blue/white effects
-        lightning: { type: 'magic', variants: [2, 8] },           // Yellow effects
-        arcane: { type: 'magic', variants: [5, 9, 10] },          // Purple effects
-        nature: { type: 'magic', variants: [4, 6] },              // Green effects
-        dark: { type: 'magic', variants: [7, 9, 10] },            // Dark effects
-        holy: { type: 'magic', variants: [1, 2, 8] }              // Light effects
+        default: { type: 'magic', variant: 1 },
+        fire: { type: 'magic', variant: 3 },       // Orange/red effect
+        ice: { type: 'magic', variant: 1 },        // Blue/white effect
+        lightning: { type: 'magic', variant: 2 },  // Yellow effect
+        arcane: { type: 'magic', variant: 5 },     // Purple effect
+        nature: { type: 'magic', variant: 4 },     // Green effect
+        dark: { type: 'magic', variant: 7 },       // Dark effect
+        holy: { type: 'magic', variant: 8 },       // Light effect
+        necromancy: { type: 'magic', variant: 7 }, // Dark (same as dark)
+        water: { type: 'magic', variant: 6 }       // Blue effect
     },
 
     // Impact/hit effects -> explosion effects
     impact: {
-        default: { type: 'explosion', variants: [1, 2, 3, 4, 5] },
-        fire: { type: 'explosion', variants: [2, 3, 4] },         // Fire explosions
-        death: { type: 'explosion', variants: [1, 5] }            // Green/dark smoke
+        default: { type: 'explosion', variant: 1 },
+        fire: { type: 'explosion', variant: 2 },   // Fire explosion
+        death: { type: 'explosion', variant: 1 }   // Green/dark smoke
     }
 };
 
@@ -176,6 +179,17 @@ function loadCombatEffectSprites() {
  */
 function loadEffectFrame(effectType, variant, frame, config, cacheKey) {
     return new Promise((resolve, reject) => {
+        // Build the path first
+        let path;
+        if (effectType === 'slash') {
+            // Format: assets/spritesheet/slash1/png/skash_00001.png
+            const paddedFrame = String(frame).padStart(config.frameDigits, '0');
+            path = `${config.basePath}${variant}/png/skash_${paddedFrame}.png`;
+        } else {
+            // Format: assets/spritesheet/magic_effect/1/1.png
+            path = `${config.basePath}/${variant}/${frame}.png`;
+        }
+
         const img = new Image();
 
         img.onload = () => {
@@ -187,21 +201,11 @@ function loadEffectFrame(effectType, variant, frame, config, cacheKey) {
         };
 
         img.onerror = () => {
-            const errorMsg = `Failed to load effect: ${effectType}/${variant}/frame${frame}`;
+            const errorMsg = `Failed to load: ${path}`;
             EFFECT_LOADER_STATUS.failedEffects.push(errorMsg);
+            console.error(`[CombatEffect] ${errorMsg}`);
             reject(errorMsg);
         };
-
-        // Build the path
-        let path;
-        if (effectType === 'slash') {
-            // Format: assets/spritesheet/slash1/png/skash_00001.png
-            const paddedFrame = String(frame).padStart(config.frameDigits, '0');
-            path = `${config.basePath}${variant}/png/skash_${paddedFrame}.png`;
-        } else {
-            // Format: assets/spritesheet/magic_effect/1/1.png
-            path = `${config.basePath}/${variant}/${frame}.png`;
-        }
 
         img.src = path;
     });
@@ -228,6 +232,7 @@ function areCombatEffectsReady() {
  */
 function spawnCombatEffect(category, subType, x, y, options = {}) {
     if (!EFFECT_LOADER_STATUS.isReady) {
+        console.warn(`[CombatEffect] Sprites not ready yet`);
         return null;  // Effects not loaded yet
     }
 
@@ -238,15 +243,15 @@ function spawnCombatEffect(category, subType, x, y, options = {}) {
         return null;
     }
 
-    // Pick a random variant from the available options
-    const variantIndex = Math.floor(Math.random() * mapping.variants.length);
-    const variant = mapping.variants[variantIndex];
+    // Use single consistent variant (not random)
+    const variant = mapping.variant;
 
     const config = COMBAT_EFFECT_CONFIG[mapping.type];
     const cacheKey = `${mapping.type}_${variant}`;
     const frames = EFFECT_SPRITE_CACHE[cacheKey];
 
     if (!frames || frames.length === 0) {
+        console.warn(`[CombatEffect] No frames for ${cacheKey}, loaded: ${EFFECT_LOADER_STATUS.loadedEffects}/${EFFECT_LOADER_STATUS.totalEffects}`);
         return null;  // No frames loaded for this effect
     }
 
@@ -448,6 +453,14 @@ if (typeof SystemManager !== 'undefined') {
     SystemManager.register('combat-effect-system', CombatEffectSystemDef, 51);
 } else {
     console.warn('⚠️ SystemManager not found - combat-effect-system running standalone');
+    // Start loading immediately if no SystemManager
+    loadCombatEffectSprites();
+}
+
+// Also start loading immediately as a fallback
+// This ensures sprites are loaded even if SystemManager init is delayed
+if (!EFFECT_LOADER_STATUS.isLoading && !EFFECT_LOADER_STATUS.isReady) {
+    loadCombatEffectSprites();
 }
 
 // ============================================================================
