@@ -499,8 +499,15 @@ function interactWithDecoration(decoration, player) {
         return activateShrine(decoration, player);
     }
     
-    // Chests
-    if (type.includes('chest')) {
+    // Starter chest (special - predetermined loot)
+    if (type === 'starter_chest') {
+        if (typeof openStarterChest === 'function') {
+            return openStarterChest(decoration, player);
+        }
+    }
+
+    // Regular chests
+    if (type.includes('chest') && !type.includes('starter_chest')) {
         return openChest(decoration, player);
     }
     

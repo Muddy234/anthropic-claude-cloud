@@ -185,17 +185,20 @@ function initializeAllSystems() {
  */
 function postInitialization() {
     console.log('[Init] Post-initialization...');
-    
+
     // Form social groups
     if (typeof MonsterSocialSystem !== 'undefined') {
         MonsterSocialSystem.scanAndFormGroups();
     }
-    
+
     // Initialize attunement
     if (typeof AttunementSystem !== 'undefined') {
         AttunementSystem.init();
     }
-    
+
+    // Place starter chest near player
+    placeStarterChest();
+
     // Show entrance room message
     const entranceRoom = game.rooms.find(r => r.type === 'entrance');
     if (entranceRoom && typeof getRoomEnterEffect === 'function') {
@@ -205,6 +208,216 @@ function postInitialization() {
         }
     }
 }
+
+/**
+ * Place a starter chest near the player spawn with guaranteed loot
+ */
+function placeStarterChest() {
+    if (!game.player || !game.rooms) {
+        console.warn('[Init] Cannot place starter chest - player or rooms not initialized');
+        return;
+    }
+
+    // Find entrance room
+    const entranceRoom = game.rooms.find(r => r.type === 'entrance');
+    if (!entranceRoom) {
+        console.warn('[Init] Cannot place starter chest - no entrance room found');
+        return;
+    }
+
+    const playerX = game.player.gridX;
+    const playerY = game.player.gridY;
+
+    // Find a valid floor tile adjacent to player (prefer right or down)
+    const offsets = [
+        { x: 1, y: 0 },   // Right
+        { x: 0, y: 1 },   // Down
+        { x: -1, y: 0 },  // Left
+        { x: 0, y: -1 },  // Up
+        { x: 1, y: 1 },   // Down-right
+        { x: -1, y: 1 },  // Down-left
+    ];
+
+    let chestX = null, chestY = null;
+
+    for (const offset of offsets) {
+        const testX = playerX + offset.x;
+        const testY = playerY + offset.y;
+
+        // Check if valid floor tile
+        const tile = game.map[testY]?.[testX];
+        if (tile && tile.type === 'floor' && !tile.blocked && !tile.decoration) {
+            // Check no decoration already there in global array
+            const existingDec = game.decorations?.find(d => d.x === testX && d.y === testY);
+            if (!existingDec) {
+                chestX = testX;
+                chestY = testY;
+                break;
+            }
+        }
+    }
+
+    if (chestX === null) {
+        console.warn('[Init] Could not find valid position for starter chest');
+        return;
+    }
+
+    // Create the starter chest decoration with proper format for rendering
+    const starterChest = {
+        x: chestX,
+        y: chestY,
+        type: 'starter_chest',
+        room: entranceRoom,
+        element: entranceRoom.element || 'physical',
+        blocking: false,
+        interactable: true,
+        sprite: null,
+        color: '#FFD700',
+        name: 'Supply Chest',
+        description: 'A chest left by previous adventurers.',
+
+        // Data object for decoration-renderer.js compatibility
+        data: {
+            color: '#FFD700',
+            symbol: '📦',
+            glow: true,
+            glowRadius: 0.8,
+            size: 'large'
+        }
+    };
+
+    // Add to game decorations array
+    if (!game.decorations) game.decorations = [];
+    game.decorations.push(starterChest);
+
+    // Add to room's decorations array (required for rendering)
+    if (!entranceRoom.decorations) entranceRoom.decorations = [];
+    entranceRoom.decorations.push(starterChest);
+
+    // Mark tile as having decoration
+    const tile = game.map?.[chestY]?.[chestX];
+    if (tile) {
+        tile.decoration = starterChest;
+    }
+
+    console.log(`[Init] Placed starter chest at (${chestX}, ${chestY})`);
+}
+
+/**
+ * Open the starter chest - shows UI with predetermined loot
+ */
+function openStarterChest(chest, player) {
+    if (!chest || chest.type !== 'starter_chest') return false;
+
+    // Get torch from equipment data
+    const torch = typeof MOBILITY_ARMOR !== 'undefined' ? MOBILITY_ARMOR['torch'] :
+                  typeof DEFENSE_ARMOR !== 'undefined' ? DEFENSE_ARMOR['torch'] : null;
+
+    // Get health potion from consumables
+    const healthPotion = typeof CONSUMABLES !== 'undefined' ? CONSUMABLES['health_potion'] : null;
+
+    // Get random uncommon mainhand weapon
+    const randomWeapon = getRandomUncommonMainhand();
+
+    // Build chest contents array
+    const contents = [];
+
+    // Add torch
+    if (torch) {
+        contents.push({
+            ...torch,
+            count: 1,
+            type: 'armor'
+        });
+    }
+
+    // Add 2 health potions (as single stack)
+    if (healthPotion) {
+        contents.push({
+            ...healthPotion,
+            count: 2,
+            type: 'consumable'
+        });
+    }
+
+    // Add random uncommon weapon
+    if (randomWeapon) {
+        contents.push({
+            ...randomWeapon,
+            count: 1,
+            type: 'weapon'
+        });
+    }
+
+    // Open the chest UI with contents
+    if (typeof openChestUI === 'function' && contents.length > 0) {
+        openChestUI(chest, contents);
+        console.log('[Init] Starter chest UI opened with', contents.length, 'items');
+        return true;
+    }
+
+    // Fallback: just mark as opened if UI not available
+    chest.interactable = false;
+    chest.type = 'starter_chest_open';
+    chest.description = 'An empty chest.';
+    if (chest.data) {
+        chest.data.symbol = '📭';
+        chest.data.glow = false;
+    }
+
+    console.log('[Init] Starter chest opened (no UI)');
+    return true;
+}
+
+/**
+ * Get a random uncommon mainhand weapon from all weapon pools
+ */
+function getRandomUncommonMainhand() {
+    const uncommonWeapons = [];
+
+    // Collect from melee weapons
+    if (typeof MELEE_WEAPONS !== 'undefined') {
+        for (const id in MELEE_WEAPONS) {
+            const weapon = MELEE_WEAPONS[id];
+            if (weapon.rarity === 'uncommon' && weapon.slot === 'MAIN') {
+                uncommonWeapons.push(weapon);
+            }
+        }
+    }
+
+    // Collect from ranged weapons (polearms, bows)
+    if (typeof RANGED_WEAPONS !== 'undefined') {
+        for (const id in RANGED_WEAPONS) {
+            const weapon = RANGED_WEAPONS[id];
+            if (weapon.rarity === 'uncommon' && weapon.slot === 'MAIN') {
+                uncommonWeapons.push(weapon);
+            }
+        }
+    }
+
+    // Collect from magic weapons
+    if (typeof MAGIC_WEAPONS !== 'undefined') {
+        for (const id in MAGIC_WEAPONS) {
+            const weapon = MAGIC_WEAPONS[id];
+            if (weapon.rarity === 'uncommon' && weapon.slot === 'MAIN') {
+                uncommonWeapons.push(weapon);
+            }
+        }
+    }
+
+    if (uncommonWeapons.length === 0) {
+        console.warn('[Init] No uncommon mainhand weapons found');
+        return null;
+    }
+
+    // Return random weapon
+    const randomIndex = Math.floor(Math.random() * uncommonWeapons.length);
+    return uncommonWeapons[randomIndex];
+}
+
+// Export starter chest functions
+window.openStarterChest = openStarterChest;
+window.placeStarterChest = placeStarterChest;
 
 // ============================================================================
 // SYSTEM REGISTRATION
@@ -370,33 +583,12 @@ function setPlayerPosition(x, y) {
 
 /**
  * Equip starting torch for fog of war
+ * NOTE: Starting torch removed from loadout - player must find torch in starter chest
  */
 function equipStartingTorch() {
-    if (!game.player || !game.player.equipped) return;
-
-    // Get torch from equipment data
-    const torch = typeof DEFENSE_ARMOR !== 'undefined' ? DEFENSE_ARMOR['torch'] : null;
-
-    if (torch) {
-        // Equip directly to OFF slot
-        game.player.equipped.OFF = { ...torch };
-        console.log('[Init] Equipped starting torch (+2 vision range)');
-
-        // Recalculate stats if function exists
-        if (typeof recalculatePlayerStats === 'function') {
-            recalculatePlayerStats(game.player);
-        }
-    } else {
-        // Fallback: create inline torch item
-        game.player.equipped.OFF = {
-            id: 'torch',
-            name: 'Torch',
-            slot: 'OFF',
-            visionBonus: 2,
-            description: 'A simple torch that illuminates the darkness.'
-        };
-        console.log('[Init] Equipped fallback torch (+2 vision range)');
-    }
+    // Starting torch is now in the starter chest instead of being auto-equipped
+    // Player spawns without a torch and must open the nearby chest to get one
+    console.log('[Init] No starting torch - player must find one in starter chest');
 }
 
 /**

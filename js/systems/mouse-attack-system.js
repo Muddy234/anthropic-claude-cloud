@@ -184,12 +184,17 @@ function getMouseWorldPosition() {
 
 /**
  * Get direction from player to mouse in radians
+ * Uses displayX/displayY for accurate visual alignment during movement
  */
 function getDirectionToMouse() {
     if (!game.player) return 0;
 
-    const dx = mouseWorldX - game.player.gridX;
-    const dy = mouseWorldY - game.player.gridY;
+    // Use display position for visual accuracy (gridX/gridY can lag behind during movement)
+    const playerX = game.player.displayX !== undefined ? game.player.displayX : game.player.gridX;
+    const playerY = game.player.displayY !== undefined ? game.player.displayY : game.player.gridY;
+
+    const dx = mouseWorldX - playerX;
+    const dy = mouseWorldY - playerY;
 
     return Math.atan2(dy, dx);
 }
@@ -334,25 +339,7 @@ function performRangedAttack(player, direction, isSpecial, comboCount) {
     }
     const adjustedDirection = direction + angleOffset;
 
-    // Check for ammo if bow/crossbow (magic weapons don't use ammo)
-    if (!isMagic) {
-        if (weaponType === 'bow' && player.ammo?.arrows <= 0) {
-            if (typeof addMessage === 'function') {
-                addMessage('No arrows!');
-            }
-            return;
-        }
-        if (weaponType === 'crossbow' && player.ammo?.bolts <= 0) {
-            if (typeof addMessage === 'function') {
-                addMessage('No bolts!');
-            }
-            return;
-        }
-
-        // Consume ammo
-        if (weaponType === 'bow') player.ammo.arrows--;
-        if (weaponType === 'crossbow') player.ammo.bolts--;
-    }
+    // Note: Ammo requirement removed - bows and crossbows have unlimited arrows/bolts
 
     // Get player vision range for projectile distance
     const visionRange = typeof VISION_RADIUS !== 'undefined' ? VISION_RADIUS : 8;
@@ -364,11 +351,15 @@ function performRangedAttack(player, direction, isSpecial, comboCount) {
     // Determine element for magic weapons
     const element = weapon?.element || (isMagic ? 'arcane' : 'physical');
 
+    // Use display position for visual accuracy
+    const originX = player.displayX !== undefined ? player.displayX : player.gridX;
+    const originY = player.displayY !== undefined ? player.displayY : player.gridY;
+
     // Create projectile using projectile system
     if (typeof createProjectile === 'function') {
         createProjectile({
-            x: player.gridX,
-            y: player.gridY,
+            x: originX,
+            y: originY,
             dirX: dirX,
             dirY: dirY,
             speed: arcConfig.projectileSpeed || 8,
@@ -384,8 +375,8 @@ function performRangedAttack(player, direction, isSpecial, comboCount) {
         // Fallback: create simple projectile in game state
         if (!game.projectiles) game.projectiles = [];
         game.projectiles.push({
-            x: player.gridX,
-            y: player.gridY,
+            x: originX,
+            y: originY,
             dirX: dirX,
             dirY: dirY,
             speed: arcConfig.projectileSpeed || 8,
@@ -461,9 +452,12 @@ function checkMeleeHits(player, direction, arcConfig, isSpecial) {
     const halfArc = (arcConfig.arcAngle * (Math.PI / 180)) / 2;
     const range = arcConfig.arcRange;
 
-    for (const enemy of game.enemies) {
-        // Skip dead enemies or already hit
-        if (enemy.hp <= 0) continue;
+    // Use a copy of the array to avoid issues with splicing during iteration
+    const enemiesCopy = [...game.enemies];
+
+    for (const enemy of enemiesCopy) {
+        // Skip dead enemies, already hit, or enemies with invalid HP
+        if (!enemy || enemy.hp <= 0 || isNaN(enemy.hp)) continue;
         if (mouseAttackState.hitEnemies.has(enemy)) continue;
 
         // Calculate distance and angle to enemy
@@ -525,8 +519,20 @@ function applyMeleeDamage(player, enemy, isSpecial) {
         }
     }
 
+    // Ensure damage is a valid number (defensive check)
+    if (isNaN(damageResult.finalDamage) || damageResult.finalDamage === undefined) {
+        console.warn('[MouseAttack] Invalid damage calculated, using base damage');
+        damageResult.finalDamage = Math.max(1, baseDamage);
+    }
+
     // Apply damage
     enemy.hp -= damageResult.finalDamage;
+
+    // Ensure HP doesn't become NaN
+    if (isNaN(enemy.hp)) {
+        console.warn('[MouseAttack] Enemy HP became NaN, setting to 0');
+        enemy.hp = 0;
+    }
 
     // Show damage number
     if (typeof showDamageNumber === 'function') {
@@ -539,10 +545,39 @@ function applyMeleeDamage(player, enemy, isSpecial) {
         onCombatHit(player, enemy, damageResult);
     }
 
+    // Trigger aggro - enemy should chase when hit
+    if (enemy.hp > 0) {
+        enemy.state = 'chasing';
+
+        // Initialize combat object if it doesn't exist
+        if (!enemy.combat) {
+            enemy.combat = {
+                isInCombat: false,
+                currentTarget: null,
+                attackCooldown: 0,
+                attackSpeed: enemy.attackSpeed || 1.0,
+                autoRetaliate: true,
+                attackRange: enemy.attackRange || 1
+            };
+        }
+
+        // Engage combat
+        if (typeof engageCombat === 'function') {
+            engageCombat(enemy, player);
+        }
+    }
+
     // Check for death
     if (enemy.hp <= 0) {
         if (typeof handleDeath === 'function') {
             handleDeath(enemy, player);
+        } else {
+            // Fallback: remove enemy directly if handleDeath is unavailable
+            console.warn('[MouseAttack] handleDeath not available, removing enemy directly');
+            const index = game.enemies.indexOf(enemy);
+            if (index > -1) {
+                game.enemies.splice(index, 1);
+            }
         }
     }
 
@@ -559,6 +594,7 @@ function applyMeleeDamage(player, enemy, isSpecial) {
 
 /**
  * Create a visual slash effect
+ * Uses displayX/displayY for accurate visual positioning during movement
  */
 function createSlashEffect(player, direction, arcConfig, isSpecial = false, attackFromLeft = true, comboCount = 1) {
     const slashStyle = arcConfig.slashStyle || 'sweep';
@@ -567,9 +603,13 @@ function createSlashEffect(player, direction, arcConfig, isSpecial = false, atta
     // Attack 1: from left, Attack 2: from right, Attack 3: special (center/both)
     const fromLeft = attackFromLeft;
 
+    // Use display position for visual accuracy
+    const originX = player.displayX !== undefined ? player.displayX : player.gridX;
+    const originY = player.displayY !== undefined ? player.displayY : player.gridY;
+
     mouseAttackState.slashEffects.push({
-        x: player.gridX,
-        y: player.gridY,
+        x: originX,
+        y: originY,
         angle: direction,
         progress: 0,
         duration: 0.2,  // 200ms trail duration

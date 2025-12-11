@@ -294,19 +294,8 @@ function executeMeleeAttack(player, target, weapon, isSkill) {
 // ============================================================================
 
 function executeRangedAttack(player, target, weapon, isSkill) {
-    // Check ammo
+    // Note: Ammo requirement removed - bows and crossbows have unlimited arrows/bolts
     const weaponType = weapon?.weaponType || 'bow';
-    const ammoType = weaponType === 'crossbow' ? 'bolts' : 'arrows';
-
-    if (!player.ammo || player.ammo[ammoType] <= 0) {
-        if (typeof addMessage === 'function') {
-            addMessage(`Out of ${ammoType}!`);
-        }
-        return;
-    }
-
-    // Consume ammo
-    player.ammo[ammoType]--;
 
     // Calculate damage
     let damage = calculateRangedDamage(player, target, weapon, isSkill);
