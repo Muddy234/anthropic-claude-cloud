@@ -466,9 +466,10 @@ function drawSkillsOverlay() {
     const contentX = panelX + 30;
     const contentWidth = panelWidth - 60;
 
-    // Title
-    ctx.fillStyle = colors.gold || '#d4af37';
-    ctx.font = 'bold 28px monospace';
+    // Title - use serif font from design system
+    const fontFamily = typeof UI_FONT_FAMILY !== 'undefined' ? UI_FONT_FAMILY.display : 'Georgia, serif';
+    ctx.fillStyle = colors.gold || '#c9a227';
+    ctx.font = `bold 26px ${fontFamily}`;
     ctx.textAlign = 'center';
     ctx.fillText('SKILLS & ABILITIES', panelX + panelWidth / 2, yOffset);
     yOffset += 15;
@@ -497,15 +498,15 @@ function drawSkillsOverlay() {
     // Draw specialty details for selected proficiency
     drawSpecialtyDetails(ctx, contentX, yOffset, contentWidth, selectedProf, player.skills, colors);
 
-    // Footer instructions
-    ctx.fillStyle = colors.textMuted || '#666666';
-    ctx.font = '12px monospace';
+    // Footer instructions - use serif font
+    ctx.fillStyle = colors.textMuted || '#706850';
+    ctx.font = typeof UI_FONTS !== 'undefined' ? UI_FONTS.small : `12px ${fontFamily}`;
     ctx.textAlign = 'center';
     ctx.fillText('[ESC/K] Close  |  Click vertex or tab to select  |  Use weapons to level up', panelX + panelWidth / 2, panelY + panelHeight - 15);
 }
 
 /**
- * Draw the pentagon radar chart
+ * Draw the pentagon radar chart - Occult style with rune background
  */
 function drawPentagonRadar(ctx, centerX, centerY, proficiencies, colors) {
     const cfg = SKILLS_UI_CONFIG.radar;
@@ -526,62 +527,144 @@ function drawPentagonRadar(ctx, centerX, centerY, proficiencies, colors) {
         });
     }
 
-    // === BACKGROUND GRID ===
+    // === RUNE/MAGIC CIRCLE BACKGROUND ===
+    drawRuneBackground(ctx, centerX, centerY, radius, colors);
+
+    // === BACKGROUND GRID (Chalky lines) ===
     drawRadarGrid(ctx, centerX, centerY, radius, vertices, colors);
 
     // === PLAYER'S PROFICIENCY POLYGON ===
     drawPlayerPolygon(ctx, centerX, centerY, radius, proficiencies, profConfig, profIds, colors);
 
-    // === VERTEX ICONS ===
-    drawVertexIcons(ctx, centerX, centerY, radius, profConfig, profIds, proficiencies, colors);
+    // === VERTEX GEM SOCKETS ===
+    drawVertexGemSockets(ctx, centerX, centerY, radius, profConfig, profIds, proficiencies, colors);
 
     ctx.restore();
 }
 
 /**
- * Draw the radar grid (pentagon outline + rings)
+ * Draw occult rune/magic circle background behind radar
+ */
+function drawRuneBackground(ctx, centerX, centerY, radius, colors) {
+    // Use the design system's rune pattern if available
+    if (typeof createRunePattern === 'function') {
+        const size = radius * 2.5;
+        const runeCanvas = createRunePattern(size, 'rgba(93, 161, 130, 0.06)');
+        ctx.drawImage(runeCanvas, centerX - size / 2, centerY - size / 2, size, size);
+    } else {
+        // Fallback: draw simple magic circle
+        ctx.save();
+        ctx.strokeStyle = 'rgba(93, 161, 130, 0.08)';
+        ctx.lineWidth = 1;
+
+        // Outer magic circles
+        [1.15, 1.0, 0.5].forEach(scale => {
+            ctx.beginPath();
+            ctx.arc(centerX, centerY, radius * scale, 0, Math.PI * 2);
+            ctx.stroke();
+        });
+
+        // Cross lines
+        ctx.beginPath();
+        ctx.moveTo(centerX - radius * 1.1, centerY);
+        ctx.lineTo(centerX + radius * 1.1, centerY);
+        ctx.moveTo(centerX, centerY - radius * 1.1);
+        ctx.lineTo(centerX, centerY + radius * 1.1);
+        ctx.stroke();
+
+        ctx.restore();
+    }
+}
+
+/**
+ * Draw the radar grid (pentagon outline + rings) - Chalky/rough style
  */
 function drawRadarGrid(ctx, centerX, centerY, radius, vertices, colors) {
     const rings = SKILLS_UI_CONFIG.radar.rings;
+    const profIds = ['blade', 'blunt', 'magic', 'ranged', 'expertise'];
+    const profConfig = SKILLS_UI_CONFIG.proficiencies;
 
-    // Concentric pentagon rings
+    // Use chalky line drawing if available
+    const useChalkLines = typeof drawChalkyLine === 'function';
+
+    // Concentric pentagon rings with chalky style
     for (let ring = 1; ring <= rings; ring++) {
         const ringRadius = radius * (ring / rings);
-        const alpha = 0.1 + (ring / rings) * 0.15;
+        const alpha = 0.08 + (ring / rings) * 0.12;
+        const lineColor = `rgba(239, 228, 176, ${alpha})`; // Parchment color
 
-        ctx.strokeStyle = `rgba(255, 255, 255, ${alpha})`;
-        ctx.lineWidth = ring === rings ? 2 : 1;
-
-        ctx.beginPath();
+        // Draw pentagon ring
+        const ringPoints = [];
         for (let i = 0; i < 5; i++) {
-            const angle = (SKILLS_UI_CONFIG.proficiencies[['blade', 'blunt', 'magic', 'ranged', 'expertise'][i]].angle * Math.PI / 180);
-            const x = centerX + Math.cos(angle) * ringRadius;
-            const y = centerY + Math.sin(angle) * ringRadius;
-            if (i === 0) {
-                ctx.moveTo(x, y);
+            const angle = (profConfig[profIds[i]].angle * Math.PI / 180);
+            ringPoints.push({
+                x: centerX + Math.cos(angle) * ringRadius,
+                y: centerY + Math.sin(angle) * ringRadius
+            });
+        }
+
+        // Connect the points with chalky lines
+        for (let i = 0; i < 5; i++) {
+            const next = (i + 1) % 5;
+            if (useChalkLines && ring === rings) {
+                // Outer ring gets chalky treatment
+                drawChalkyLine(ctx, ringPoints[i].x, ringPoints[i].y,
+                              ringPoints[next].x, ringPoints[next].y, {
+                    color: lineColor,
+                    width: 2,
+                    roughness: 1.5
+                });
             } else {
-                ctx.lineTo(x, y);
+                // Inner rings are simpler
+                ctx.strokeStyle = lineColor;
+                ctx.lineWidth = ring === rings ? 2 : 1;
+                ctx.beginPath();
+                ctx.moveTo(ringPoints[i].x, ringPoints[i].y);
+                ctx.lineTo(ringPoints[next].x, ringPoints[next].y);
+                ctx.stroke();
             }
         }
-        ctx.closePath();
-        ctx.stroke();
     }
 
-    // Radial lines from center to each vertex
-    ctx.strokeStyle = 'rgba(255, 255, 255, 0.1)';
-    ctx.lineWidth = 1;
+    // Radial lines from center to each vertex (chalky)
     for (const vertex of vertices) {
-        ctx.beginPath();
-        ctx.moveTo(centerX, centerY);
-        ctx.lineTo(vertex.x, vertex.y);
-        ctx.stroke();
+        if (useChalkLines) {
+            drawChalkyLine(ctx, centerX, centerY, vertex.x, vertex.y, {
+                color: 'rgba(239, 228, 176, 0.08)',
+                width: 1,
+                roughness: 1
+            });
+        } else {
+            ctx.strokeStyle = 'rgba(239, 228, 176, 0.08)';
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            ctx.moveTo(centerX, centerY);
+            ctx.lineTo(vertex.x, vertex.y);
+            ctx.stroke();
+        }
     }
 
-    // Center dot
-    ctx.fillStyle = colors.border || '#3a3a4a';
+    // Center rune mark (instead of simple dot)
+    ctx.save();
+    ctx.fillStyle = colors.border || '#3a3530';
     ctx.beginPath();
-    ctx.arc(centerX, centerY, 3, 0, Math.PI * 2);
+    ctx.arc(centerX, centerY, 5, 0, Math.PI * 2);
     ctx.fill();
+
+    // Inner star/rune
+    ctx.strokeStyle = 'rgba(239, 228, 176, 0.3)';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    for (let i = 0; i < 5; i++) {
+        const angle = (i / 5) * Math.PI * 2 - Math.PI / 2;
+        const px = centerX + Math.cos(angle) * 3;
+        const py = centerY + Math.sin(angle) * 3;
+        if (i === 0) ctx.moveTo(px, py);
+        else ctx.lineTo(px, py);
+    }
+    ctx.closePath();
+    ctx.stroke();
+    ctx.restore();
 }
 
 /**
@@ -655,9 +738,9 @@ function drawPlayerPolygon(ctx, centerX, centerY, radius, proficiencies, profCon
 }
 
 /**
- * Draw vertex icons and labels
+ * Draw vertex gem sockets with icons
  */
-function drawVertexIcons(ctx, centerX, centerY, radius, profConfig, profIds, proficiencies, colors) {
+function drawVertexGemSockets(ctx, centerX, centerY, radius, profConfig, profIds, proficiencies, colors) {
     const iconOffset = SKILLS_UI_CONFIG.radar.iconOffset;
     const selected = window.skillsUIState.selectedProficiency;
 
@@ -674,56 +757,66 @@ function drawVertexIcons(ctx, centerX, centerY, radius, profConfig, profIds, pro
         const isSelected = selected === profId;
         const isHovered = window.skillsUIState.hoverVertex === profId;
 
-        // Icon circle background
-        const circleRadius = isSelected ? 22 : 18;
+        // Gem socket radius
+        const socketRadius = isSelected ? 16 : 14;
 
-        // Glow for selected/hovered
-        if (isSelected || isHovered) {
-            ctx.shadowColor = config.color;
-            ctx.shadowBlur = 12;
+        // Use design system's gem socket if available
+        if (typeof drawGemSocket === 'function') {
+            drawGemSocket(ctx, iconX, iconY, socketRadius, {
+                gemColor: level > 0 ? config.color : null,
+                borderColor: colors.border || '#3a3530',
+                glowing: level > 10,
+                selected: isSelected
+            });
+        } else {
+            // Fallback: simple circle with glow
+            if (isSelected || isHovered) {
+                ctx.shadowColor = config.color;
+                ctx.shadowBlur = 12;
+            }
+
+            ctx.fillStyle = isSelected ? config.color : colors.bgDark || '#141414';
+            ctx.beginPath();
+            ctx.arc(iconX, iconY, socketRadius, 0, Math.PI * 2);
+            ctx.fill();
+
+            ctx.strokeStyle = isSelected ? colors.textPrimary || '#efe4b0' : config.color;
+            ctx.lineWidth = isSelected ? 3 : 2;
+            ctx.stroke();
+            ctx.shadowBlur = 0;
         }
 
-        // Background circle
-        ctx.fillStyle = isSelected ? config.color : colors.bgDark || '#12121a';
-        ctx.beginPath();
-        ctx.arc(iconX, iconY, circleRadius, 0, Math.PI * 2);
-        ctx.fill();
-
-        // Border
-        ctx.strokeStyle = isSelected ? '#fff' : config.color;
-        ctx.lineWidth = isSelected ? 3 : 2;
-        ctx.stroke();
-        ctx.shadowBlur = 0;
-
-        // Icon letter
-        ctx.fillStyle = isSelected ? '#fff' : config.color;
-        ctx.font = `bold ${isSelected ? 16 : 14}px monospace`;
+        // Icon letter (on top of gem) - use serif font
+        ctx.fillStyle = isSelected ? colors.textPrimary || '#efe4b0' : config.color;
+        const fontFamily = typeof UI_FONT_FAMILY !== 'undefined' ? UI_FONT_FAMILY.display : 'Georgia, serif';
+        ctx.font = `bold ${isSelected ? 14 : 12}px ${fontFamily}`;
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
         ctx.fillText(config.icon, iconX, iconY);
 
         // Level label below icon
-        ctx.fillStyle = colors.textSecondary || '#b0b0b0';
-        ctx.font = '10px monospace';
-        ctx.fillText(`Lv ${level}`, iconX, iconY + circleRadius + 12);
+        ctx.fillStyle = colors.textSecondary || '#b8a878';
+        ctx.font = `10px ${fontFamily}`;
+        ctx.fillText(`Lv ${level}`, iconX, iconY + socketRadius + 10);
 
         // Store clickable area for interaction
         if (!window.skillsUIVertexAreas) window.skillsUIVertexAreas = {};
         window.skillsUIVertexAreas[profId] = {
             x: iconX,
             y: iconY,
-            radius: circleRadius + 5
+            radius: socketRadius + 5
         };
     }
 }
 
 /**
- * Draw proficiency selection tabs below radar
+ * Draw proficiency selection tabs below radar - with dark red selection
  */
 function drawProficiencyTabs(ctx, x, y, width, selectedProf, proficiencies, colors) {
     const profIds = ['blade', 'blunt', 'magic', 'ranged', 'expertise'];
     const tabWidth = width / 5;
     const tabHeight = 32;
+    const fontFamily = typeof UI_FONT_FAMILY !== 'undefined' ? UI_FONT_FAMILY.display : 'Georgia, serif';
 
     ctx.save();
 
@@ -738,12 +831,17 @@ function drawProficiencyTabs(ctx, x, y, width, selectedProf, proficiencies, colo
 
         const tabX = x + (i * tabWidth);
 
-        // Tab background
+        // Tab background - use dark red gradient for selection
         if (isSelected) {
-            const grad = ctx.createLinearGradient(tabX, y, tabX, y + tabHeight);
-            grad.addColorStop(0, config.color);
-            grad.addColorStop(1, 'rgba(0,0,0,0.5)');
-            ctx.fillStyle = grad;
+            // Use selection gradient from design system if available
+            if (typeof drawSelectionHighlight === 'function') {
+                drawSelectionHighlight(ctx, tabX, y, tabWidth, tabHeight, { style: 'gradient' });
+            } else {
+                const grad = ctx.createLinearGradient(tabX, y, tabX, y + tabHeight);
+                grad.addColorStop(0, colors.selectionGradientStart || '#5a2020');
+                grad.addColorStop(1, colors.selectionGradientEnd || '#2a1010');
+                ctx.fillStyle = grad;
+            }
         } else {
             ctx.fillStyle = 'rgba(0, 0, 0, 0.3)';
         }
@@ -766,9 +864,9 @@ function drawProficiencyTabs(ctx, x, y, width, selectedProf, proficiencies, colo
         ctx.lineWidth = isSelected ? 2 : 1;
         ctx.stroke();
 
-        // Tab text
-        ctx.fillStyle = isSelected ? '#fff' : colors.textSecondary;
-        ctx.font = `${isSelected ? 'bold ' : ''}11px monospace`;
+        // Tab text - use serif font
+        ctx.fillStyle = isSelected ? colors.textPrimary || '#efe4b0' : colors.textSecondary || '#b8a878';
+        ctx.font = `${isSelected ? 'bold ' : ''}11px ${fontFamily}`;
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
         ctx.fillText(config.name, tabX + tabWidth / 2, y + tabHeight / 2);
@@ -788,18 +886,19 @@ function drawProficiencyTabs(ctx, x, y, width, selectedProf, proficiencies, colo
 }
 
 /**
- * Draw specialty details for selected proficiency
+ * Draw specialty details for selected proficiency - occult style
  */
 function drawSpecialtyDetails(ctx, x, y, width, selectedProf, skills, colors) {
     const profConfig = SKILLS_UI_CONFIG.proficiencies[selectedProf];
     const specialtyIds = getSpecialtiesForProficiency(selectedProf);
     const profData = skills.proficiencies[selectedProf];
+    const fontFamily = typeof UI_FONT_FAMILY !== 'undefined' ? UI_FONT_FAMILY.display : 'Georgia, serif';
 
     ctx.save();
 
-    // Section header
+    // Section header - serif font
     ctx.fillStyle = profConfig.color;
-    ctx.font = 'bold 16px monospace';
+    ctx.font = `bold 15px ${fontFamily}`;
     ctx.textAlign = 'left';
     ctx.fillText(`${profConfig.name} SPECIALTIES`, x, y);
 
@@ -808,8 +907,8 @@ function drawSpecialtyDetails(ctx, x, y, width, selectedProf, skills, colors) {
     const barX = x + width - barWidth - 50;
     drawSkillXPBar(ctx, barX, y - 10, barWidth, 12, profData.xp, profData.xpToNext, colors, profConfig.color);
 
-    ctx.fillStyle = colors.textMuted;
-    ctx.font = '10px monospace';
+    ctx.fillStyle = colors.textMuted || '#706850';
+    ctx.font = `10px ${fontFamily}`;
     ctx.textAlign = 'right';
     ctx.fillText(`${profData.xp}/${profData.xpToNext} XP`, x + width, y);
 
@@ -824,19 +923,19 @@ function drawSpecialtyDetails(ctx, x, y, width, selectedProf, skills, colors) {
         const isUnlocked = specData.unlocked;
 
         // Specialty row background
-        ctx.fillStyle = isUnlocked ? 'rgba(255, 255, 255, 0.03)' : 'rgba(0, 0, 0, 0.2)';
+        ctx.fillStyle = isUnlocked ? 'rgba(255, 255, 255, 0.02)' : 'rgba(0, 0, 0, 0.15)';
         ctx.fillRect(x - 5, y - 12, width + 10, 36);
 
-        // Specialty name
-        ctx.fillStyle = isUnlocked ? colors.textPrimary : colors.textMuted;
-        ctx.font = '14px monospace';
+        // Specialty name - serif font
+        ctx.fillStyle = isUnlocked ? colors.textPrimary || '#efe4b0' : colors.textMuted || '#706850';
+        ctx.font = `14px ${fontFamily}`;
         ctx.textAlign = 'left';
         ctx.fillText(specName, x + 5, y);
 
         if (isUnlocked) {
             // Level
             ctx.fillStyle = profConfig.color;
-            ctx.font = 'bold 12px monospace';
+            ctx.font = `bold 12px ${fontFamily}`;
             ctx.fillText(`Lv ${specData.level}`, x + 100, y);
 
             // XP progress bar
@@ -852,8 +951,8 @@ function drawSpecialtyDetails(ctx, x, y, width, selectedProf, skills, colors) {
                     const cooldown = skills.actionCooldowns[action.id] || 0;
                     const isReady = cooldown <= 0;
 
-                    ctx.fillStyle = isReady ? colors.success : colors.warning;
-                    ctx.font = 'bold 11px monospace';
+                    ctx.fillStyle = isReady ? colors.success || '#5da182' : colors.warning || '#d4852a';
+                    ctx.font = `bold 11px ${fontFamily}`;
                     ctx.textAlign = 'left';
                     ctx.fillText(`[${iconText}] ${action.name}`, x + 300, y);
 
@@ -866,14 +965,14 @@ function drawSpecialtyDetails(ctx, x, y, width, selectedProf, skills, colors) {
                     }
                 }
             } else {
-                ctx.fillStyle = colors.textMuted;
-                ctx.font = 'italic 11px monospace';
+                ctx.fillStyle = colors.textMuted || '#706850';
+                ctx.font = `italic 11px ${fontFamily}`;
                 ctx.textAlign = 'right';
                 ctx.fillText(`Lv 5 to unlock action`, x + width - 5, y);
             }
         } else {
-            ctx.fillStyle = colors.textMuted;
-            ctx.font = 'italic 12px monospace';
+            ctx.fillStyle = colors.textMuted || '#706850';
+            ctx.font = `italic 12px ${fontFamily}`;
             ctx.fillText('(Use weapon to unlock)', x + 100, y);
         }
 

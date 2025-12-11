@@ -30,17 +30,17 @@ function renderMiniMap(ctx, canvasWidth) {
 
     const cfg = MINIMAP_CONFIG;
 
-    // Get colors from design system
+    // Get colors from design system (updated to warm charcoal palette)
     const colors = typeof UI_COLORS !== 'undefined' ? UI_COLORS : {
-        bgDarkest: '#0a0a0f',
-        bgDark: '#12121a',
-        border: '#3a3a4a',
-        corruption: '#8e44ad',
-        health: '#c0392b',
-        gold: '#d4af37',
-        xp: '#5dade2',
-        textMuted: '#666666',
-        textPrimary: '#ffffff'
+        bgDarkest: '#0d0d0d',
+        bgDark: '#141414',
+        border: '#3a3530',
+        corruption: '#6b3a7d',
+        health: '#a82828',
+        gold: '#c9a227',
+        xp: '#8fafc4',
+        textMuted: '#706850',
+        textPrimary: '#efe4b0'
     };
 
     const centerX = canvasWidth - cfg.size / 2 - cfg.padding;
