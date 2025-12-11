@@ -659,8 +659,8 @@ function drawThemedFloor(tile, x, y, size) {
 // ATMOSPHERIC FOG OF WAR SYSTEM
 // ============================================================================
 // Uses ambient blue-grey instead of hard black for a more atmospheric feel
-// Implements smoothstep falloff for soft penumbra transitions
-// Areas outside torchlight remain visible but heavily desaturated
+// ALL explored areas remain visible - just desaturated outside torchlight
+// Torchlight adds warm orange glow, not visibility blocking
 // ============================================================================
 
 // Ambient fog color (blue-grey instead of pure black)
@@ -669,31 +669,14 @@ const FOG_COLOR = { r: 26, g: 26, b: 45 }; // #1a1a2d
 // Torchlight warm glow color (orange/amber)
 const TORCH_COLOR = { r: 255, g: 147, b: 41 }; // Warm orange #ff9329
 
-// Visibility settings - areas outside torchlight are dimmed but still visible
-const FOG_ALPHA_MAX = 0.55; // Reduced from 0.92 - allows ~45% visibility outside torch
-const DESATURATION_AMOUNT = 0.4; // How much to desaturate areas outside light
-
-/**
- * Apply desaturation filter to an area
- * Simulates the effect of light not reaching certain areas
- * @param {CanvasRenderingContext2D} ctx - Canvas context
- * @param {number} x - X position
- * @param {number} y - Y position
- * @param {number} width - Width of area
- * @param {number} height - Height of area
- * @param {number} amount - Desaturation amount (0-1)
- */
-function applyDesaturationOverlay(ctx, x, y, width, height, amount) {
-    // We use a blue-grey overlay to simulate desaturation
-    // True desaturation would require getImageData which is expensive
-    const desatColor = `rgba(${FOG_COLOR.r}, ${FOG_COLOR.g}, ${FOG_COLOR.b}, ${amount * 0.5})`;
-    ctx.fillStyle = desatColor;
-    ctx.fillRect(x, y, width, height);
-}
+// Visibility settings - explored areas are ALWAYS visible, just dimmed/desaturated
+const REMEMBERED_TILE_DIM = 0.45; // How much to dim remembered tiles (0.45 = 55% brightness)
+const DESATURATION_AMOUNT = 0.5; // How much to desaturate areas outside light
 
 /**
  * Render warm torchlight glow around the player
  * Creates an orange-tinted light effect like real torchlight
+ * This ONLY adds glow, it doesn't block visibility
  */
 function renderTorchlightGlow(ctx, player, camX, camY, tileSize, offsetX) {
     // Get vision range for glow radius
@@ -709,10 +692,10 @@ function renderTorchlightGlow(ctx, player, camX, camY, tileSize, offsetX) {
     let flickerMultiplier = 1.0;
     if (typeof LightSourceSystem !== 'undefined') {
         // Use global flicker offset for player's torch
-        flickerMultiplier = 1 + LightSourceSystem.flickerOffset * 0.15;
+        flickerMultiplier = 1 + LightSourceSystem.flickerOffset * 0.2;
     }
 
-    const glowRadius = fullVisionRange * tileSize * flickerMultiplier;
+    const glowRadius = fullVisionRange * tileSize * flickerMultiplier * 1.2;
 
     // Create radial gradient for warm glow
     const gradient = ctx.createRadialGradient(
@@ -720,11 +703,11 @@ function renderTorchlightGlow(ctx, player, camX, camY, tileSize, offsetX) {
         playerScreenX, playerScreenY, glowRadius
     );
 
-    // Warm orange glow that fades out - use screen blend mode later
-    const intensity = 0.12 * flickerMultiplier; // Subtle but noticeable
+    // Warm orange glow that fades out - more intense for visibility
+    const intensity = 0.18 * flickerMultiplier;
     gradient.addColorStop(0, `rgba(${TORCH_COLOR.r}, ${TORCH_COLOR.g}, ${TORCH_COLOR.b}, ${intensity})`);
-    gradient.addColorStop(0.3, `rgba(${TORCH_COLOR.r}, ${TORCH_COLOR.g}, ${TORCH_COLOR.b}, ${intensity * 0.7})`);
-    gradient.addColorStop(0.6, `rgba(${TORCH_COLOR.r}, ${TORCH_COLOR.g}, ${TORCH_COLOR.b}, ${intensity * 0.3})`);
+    gradient.addColorStop(0.4, `rgba(${TORCH_COLOR.r}, ${TORCH_COLOR.g}, ${TORCH_COLOR.b}, ${intensity * 0.6})`);
+    gradient.addColorStop(0.7, `rgba(${TORCH_COLOR.r}, ${TORCH_COLOR.g}, ${TORCH_COLOR.b}, ${intensity * 0.25})`);
     gradient.addColorStop(1, `rgba(${TORCH_COLOR.r}, ${TORCH_COLOR.g}, ${TORCH_COLOR.b}, 0)`);
 
     ctx.save();
@@ -735,60 +718,12 @@ function renderTorchlightGlow(ctx, player, camX, camY, tileSize, offsetX) {
 }
 
 /**
- * Apply radial gradient fog of war overlay for smooth visibility fade
- * Creates a gradient that spans across tiles for seamless transition
- * Combined with Layer 1.45 shadow overlay to respect shadowcasting
- * Uses ambient blue-grey instead of hard black for atmospheric effect
+ * Apply the torchlight atmosphere effects
+ * - Warm glow around player
+ * - Cookie textures for organic light shapes
+ * NOTE: This does NOT block visibility - that's handled per-tile
  */
 function applyRadialFogOverlay(ctx, player, camX, camY, tileSize, offsetX, viewW, viewH) {
-    // Get vision ranges from VisionSystem
-    const fullVisionRange = typeof VisionSystem !== 'undefined'
-        ? VisionSystem.getPlayerVisionRange()
-        : 4;
-    const fadeDistance = typeof VisionSystem !== 'undefined'
-        ? VisionSystem.config.fadeDistance
-        : 2;
-    const totalRange = fullVisionRange + fadeDistance;
-
-    // Calculate player's screen position
-    const playerScreenX = (player.displayX - camX) * tileSize + offsetX;
-    const playerScreenY = (player.displayY - camY) * tileSize;
-
-    // Calculate radii in pixels
-    const innerRadius = fullVisionRange * tileSize;
-    const outerRadius = totalRange * tileSize;
-
-    // Create radial gradient centered on player
-    const gradient = ctx.createRadialGradient(
-        playerScreenX, playerScreenY, innerRadius,  // Inner circle (full visibility)
-        playerScreenX, playerScreenY, outerRadius   // Outer circle (reduced visibility)
-    );
-
-    // Add color stops using smoothstep curve with ambient blue-grey
-    // We use multiple stops to create a smooth ease-in-ease-out penumbra
-    const steps = 24; // More steps for smoother gradient
-    for (let i = 0; i <= steps; i++) {
-        const t = i / steps; // 0 to 1
-
-        // Apply smoothstep function: t * t * (3 - 2 * t)
-        // This creates a natural ease-in-ease-out transition
-        const smoothT = t * t * (3 - 2 * t);
-
-        // Calculate fog density - reduced max so areas remain visible
-        const fogDensity = smoothT * FOG_ALPHA_MAX;
-
-        // Use ambient blue-grey instead of pure black
-        gradient.addColorStop(t, `rgba(${FOG_COLOR.r}, ${FOG_COLOR.g}, ${FOG_COLOR.b}, ${fogDensity})`);
-    }
-
-    // Draw gradient overlay across entire viewport
-    // Note: Shadowed areas will be overwritten by Layer 1.45
-    ctx.fillStyle = gradient;
-    ctx.fillRect(offsetX, 0, viewW, viewH);
-
-    // Apply desaturation to areas outside light (simulates color fading in darkness)
-    applyDesaturationOverlay(ctx, offsetX, 0, viewW, viewH, DESATURATION_AMOUNT);
-
     // Render warm torchlight glow for orange tint
     renderTorchlightGlow(ctx, player, camX, camY, tileSize, offsetX);
 
@@ -958,46 +893,23 @@ const camY = game.camera.y + (shakeOffset.y / (TILE_SIZE * ZOOM_LEVEL));
                     ctx.strokeRect(screenX, screenY, effectiveTileSize, effectiveTileSize);
                 }
 
-                // FOG OF WAR: Apply atmospheric overlay for remembered (not currently visible) tiles
-                // Note: Visible tile fading handled by radial gradient in Layer 1.4
-                // Uses blue-grey tint - reduced opacity so areas remain visible but desaturated
+                // FOG OF WAR: Apply single dim overlay for remembered (not currently visible) tiles
+                // Uses REMEMBERED_TILE_DIM constant - areas stay VISIBLE but desaturated
+                // Player can see enemies, items, etc outside torchlight
                 if (tile.explored && !tile.visible) {
-                    ctx.fillStyle = `rgba(${FOG_COLOR.r}, ${FOG_COLOR.g}, ${FOG_COLOR.b}, 0.35)`;
+                    ctx.fillStyle = `rgba(${FOG_COLOR.r}, ${FOG_COLOR.g}, ${FOG_COLOR.b}, ${REMEMBERED_TILE_DIM})`;
                     ctx.fillRect(screenX, screenY, effectiveTileSize, effectiveTileSize);
                 }
             }
         }
 
-        // LAYER 1.4: Apply radial gradient for smooth fade, then overlay shadows
+        // LAYER 1.4: Apply torchlight glow effect (warm orange, doesn't block visibility)
         if (typeof applyRadialFogOverlay === 'function') {
             applyRadialFogOverlay(ctx, game.player, camX, camY, effectiveTileSize, TRACKER_WIDTH, viewW, viewH);
         }
 
-        // LAYER 1.45: Overlay atmospheric shadow on shadowed tiles (respects shadowcasting)
-        // Uses blue-grey for atmospheric dungeon feel - reduced opacity for visibility
-        for (let y = 0; y < GRID_HEIGHT; y++) {
-            for (let x = 0; x < GRID_WIDTH; x++) {
-                const tile = game.map[y][x];
-                if (!tile || !tile.explored) continue;
-
-                // Only overlay shadow on explored but not currently visible tiles
-                if (tile.explored && !tile.visible) {
-                    const screenX = (x - camX) * effectiveTileSize + TRACKER_WIDTH;
-                    const screenY = (y - camY) * effectiveTileSize;
-
-                    // Skip tiles that are off-screen
-                    if (screenX + effectiveTileSize < TRACKER_WIDTH || screenX > canvas.width ||
-                        screenY + effectiveTileSize < 0 || screenY > canvas.height) {
-                        continue;
-                    }
-
-                    // Apply atmospheric shadow - reduced opacity so areas remain visible
-                    // Player can still see what's happening, just desaturated
-                    ctx.fillStyle = `rgba(${FOG_COLOR.r}, ${FOG_COLOR.g}, ${FOG_COLOR.b}, 0.4)`;
-                    ctx.fillRect(screenX, screenY, effectiveTileSize, effectiveTileSize);
-                }
-            }
-        }
+        // NOTE: Layer 1.45 removed - single overlay above handles all dimming
+        // No need for double-overlay which was making things too dark
 
         // LAYER 1.5: Draw room perimeter walls with proper corners/edges (NEW!)
         // DISABLED for blob-based dungeons - walls are rendered in Layer 1 based on game.map[y][x].type
