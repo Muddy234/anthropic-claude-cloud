@@ -496,6 +496,32 @@ function applyDamage(entity, damage, source, damageResult) {
         entity.hp = 0;
     }
 
+    // === VISUAL FEEDBACK FOR PLAYER DAMAGE ===
+    if (entity === game.player) {
+        // Trigger screen damage flash (CotDG-style red vignette)
+        if (typeof triggerScreenEffect === 'function') {
+            // Intensity scales with damage percentage
+            const dmgPct = Math.min(1, damage / entity.maxHp);
+            const intensity = 0.2 + dmgPct * 0.4; // 0.2 to 0.6
+            triggerScreenEffect('damage', intensity, 200);
+        }
+
+        // Trigger entity hit flash
+        if (!entity.hitFlash) entity.hitFlash = { active: false, time: 0 };
+        entity.hitFlash.active = true;
+        entity.hitFlash.time = Date.now();
+        entity.hitFlash.duration = 150;
+    }
+
+    // === VISUAL FEEDBACK FOR ENEMY DAMAGE ===
+    if (entity !== game.player) {
+        // Trigger entity hit flash for enemies
+        if (!entity.hitFlash) entity.hitFlash = { active: false, time: 0 };
+        entity.hitFlash.active = true;
+        entity.hitFlash.time = Date.now();
+        entity.hitFlash.duration = 100;
+    }
+
     // Interrupt shout if enemy is shouting
     if (entity !== game.player && entity.ai?.currentState === 'shouting') {
         if (typeof entity.ai.interruptShout === 'function') {
@@ -811,27 +837,128 @@ function calculateDamageFallback(attacker, defender) {
 // VISUAL FEEDBACK
 // ============================================================================
 
+// ============================================================================
+// FLOATING COMBAT TEXT - CotDG Inspired Damage Numbers
+// ============================================================================
 const damageNumbers = [];
 
-function showDamageNumber(entity, damage, color) {
+// Combat text color palette
+const COMBAT_TEXT_COLORS = {
+    normal: '#ffffff',
+    crit: '#ff4444',
+    critGlow: '#ff8888',
+    heal: '#44ff44',
+    healGlow: '#88ff88',
+    miss: '#888888',
+    resist: '#8888ff',
+    poison: '#88ff44',
+    fire: '#ff8844',
+    ice: '#44ddff',
+    lightning: '#ffff44',
+    xp: '#44aaff',
+    gold: '#ffcc00',
+    levelup: '#ffdd00'
+};
+
+/**
+ * Show floating damage number - CotDG style
+ * @param {object} entity - Target entity
+ * @param {number|string} damage - Damage amount or text
+ * @param {string} color - Color override
+ * @param {object} options - Additional options (isCrit, isHeal, type, etc.)
+ */
+function showDamageNumber(entity, damage, color, options = {}) {
     const x = entity.displayX ?? entity.gridX ?? entity.x;
     const y = entity.displayY ?? entity.gridY ?? entity.y;
-    
+
+    // Determine display properties
+    const isCrit = options.isCrit || false;
+    const isHeal = options.isHeal || false;
+    const isMiss = damage === 0 || damage === 'MISS';
+    const type = options.type || 'normal';
+
+    // Calculate font size based on damage magnitude
+    let fontSize = 20;
+    if (typeof damage === 'number' && damage > 0) {
+        fontSize = Math.min(36, 18 + Math.floor(Math.log10(Math.max(1, damage)) * 4));
+    }
+    if (isCrit) fontSize += 6;
+    if (isMiss) fontSize = 16;
+
+    // Determine color
+    let finalColor = color;
+    if (!finalColor) {
+        if (isMiss) finalColor = COMBAT_TEXT_COLORS.miss;
+        else if (isHeal) finalColor = COMBAT_TEXT_COLORS.heal;
+        else if (isCrit) finalColor = COMBAT_TEXT_COLORS.crit;
+        else if (type && COMBAT_TEXT_COLORS[type]) finalColor = COMBAT_TEXT_COLORS[type];
+        else finalColor = COMBAT_TEXT_COLORS.normal;
+    }
+
+    // Random horizontal offset for visual variety
+    const xOffset = (Math.random() - 0.5) * 0.5;
+
     damageNumbers.push({
-        x: x,
+        x: x + xOffset,
         y: y,
         damage: damage,
-        color: color,
-        lifetime: 1.0,
-        yOffset: 0
+        color: finalColor,
+        lifetime: isCrit ? 1.5 : 1.2,
+        maxLifetime: isCrit ? 1.5 : 1.2,
+        yOffset: 0,
+        xVelocity: (Math.random() - 0.5) * 0.3,
+        yVelocity: -1.2 - Math.random() * 0.5,
+        fontSize: fontSize,
+        isCrit: isCrit,
+        isHeal: isHeal,
+        scale: isCrit ? 1.3 : 1.0,
+        scaleDir: -1  // Shrinking for crits
     });
 }
 
+/**
+ * Show XP gain text
+ */
+function showXPGain(entity, amount) {
+    showDamageNumber(entity, `+${amount} XP`, COMBAT_TEXT_COLORS.xp, { type: 'xp' });
+}
+
+/**
+ * Show gold gain text
+ */
+function showGoldGain(entity, amount) {
+    showDamageNumber(entity, `+${amount}G`, COMBAT_TEXT_COLORS.gold, { type: 'gold' });
+}
+
+/**
+ * Show level up text
+ */
+function showLevelUp(entity, level) {
+    showDamageNumber(entity, `LEVEL ${level}!`, COMBAT_TEXT_COLORS.levelup, { isCrit: true, type: 'levelup' });
+}
+
 function updateDamageNumbers(deltaTime) {
+    const dt = deltaTime / 1000;
+
     for (let i = damageNumbers.length - 1; i >= 0; i--) {
         const dmg = damageNumbers[i];
-        dmg.lifetime -= deltaTime / 1000;
-        dmg.yOffset += (deltaTime / 1000) * 0.5;
+        dmg.lifetime -= dt;
+
+        // Apply velocity
+        dmg.x += dmg.xVelocity * dt;
+        dmg.yOffset += dmg.yVelocity * dt;
+
+        // Slow down horizontal movement
+        dmg.xVelocity *= 0.95;
+
+        // Gravity effect (slow down upward, speed up downward)
+        dmg.yVelocity += dt * 2;
+
+        // Crit scale animation
+        if (dmg.isCrit && dmg.scale > 1.0) {
+            dmg.scale -= dt * 2;
+            if (dmg.scale < 1.0) dmg.scale = 1.0;
+        }
 
         if (dmg.lifetime <= 0) {
             damageNumbers.splice(i, 1);
@@ -841,26 +968,50 @@ function updateDamageNumbers(deltaTime) {
 
 function renderDamageNumbers(camX, camY, tileSize, offset) {
     if (typeof ctx === 'undefined') return;
-    
-    ctx.font = 'bold 24px monospace';
+
     ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
 
     for (const dmg of damageNumbers) {
-        const screenX = (dmg.x - camX) * tileSize + offset;
-        const screenY = (dmg.y - camY) * tileSize - (dmg.yOffset * tileSize);
+        const screenX = (dmg.x - camX) * tileSize + offset + tileSize / 2;
+        const screenY = (dmg.y - camY) * tileSize + dmg.yOffset * tileSize;
 
-        const alpha = Math.max(0, dmg.lifetime);
+        // Calculate alpha (fade out in last 30%)
+        const lifetimePct = dmg.lifetime / dmg.maxLifetime;
+        const alpha = lifetimePct < 0.3 ? lifetimePct / 0.3 : 1.0;
+
         ctx.globalAlpha = alpha;
 
-        // Outline
-        ctx.strokeStyle = '#000';
-        ctx.lineWidth = 3;
-        ctx.strokeText(dmg.damage === 0 ? 'MISS' : dmg.damage, screenX, screenY);
+        // Calculate scaled font size
+        const scaledSize = Math.floor(dmg.fontSize * dmg.scale);
+        ctx.font = `bold ${scaledSize}px monospace`;
+
+        // Format display text
+        const displayText = dmg.damage === 0 ? 'MISS' : dmg.damage.toString();
+
+        // Glow effect for crits/heals
+        if (dmg.isCrit || dmg.isHeal) {
+            ctx.shadowColor = dmg.color;
+            ctx.shadowBlur = 8;
+        }
+
+        // Outline (thicker for larger text)
+        ctx.strokeStyle = '#000000';
+        ctx.lineWidth = Math.max(2, scaledSize / 8);
+        ctx.strokeText(displayText, screenX, screenY);
 
         // Fill
         ctx.fillStyle = dmg.color;
-        ctx.fillText(dmg.damage === 0 ? 'MISS' : dmg.damage, screenX, screenY);
+        ctx.fillText(displayText, screenX, screenY);
 
+        // Extra outline for crits
+        if (dmg.isCrit) {
+            ctx.strokeStyle = '#440000';
+            ctx.lineWidth = 1;
+            ctx.strokeText(displayText, screenX, screenY);
+        }
+
+        ctx.shadowBlur = 0;
         ctx.globalAlpha = 1.0;
     }
 }
@@ -977,6 +1128,10 @@ if (typeof window !== 'undefined') {
     window.getDistance = getDistance;
     window.getCurrentRoom = getCurrentRoom;
     window.showDamageNumber = showDamageNumber;
+    window.showXPGain = showXPGain;
+    window.showGoldGain = showGoldGain;
+    window.showLevelUp = showLevelUp;
+    window.COMBAT_TEXT_COLORS = COMBAT_TEXT_COLORS;
     window.updateDamageNumbers = updateDamageNumbers;
     window.renderDamageNumbers = renderDamageNumbers;
     window.damageNumbers = damageNumbers;

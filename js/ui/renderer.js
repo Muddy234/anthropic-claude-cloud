@@ -101,38 +101,84 @@ function drawInventoryOverlay() {
         game.selectedItemIndex = 0;
     }
 
-    ctx.fillStyle = 'rgba(0, 0, 0, 0.9)';
+    // Get colors from design system
+    const colors = typeof UI_COLORS !== 'undefined' ? UI_COLORS : {
+        bgDarkest: '#0a0a0f',
+        bgDark: '#12121a',
+        bgMedium: '#1a1a24',
+        border: '#3a3a4a',
+        gold: '#d4af37',
+        corruption: '#8e44ad',
+        health: '#c0392b',
+        success: '#27ae60',
+        textPrimary: '#ffffff',
+        textSecondary: '#b0b0b0',
+        textMuted: '#666666'
+    };
+
+    // Background vignette
+    const vignetteGrad = ctx.createRadialGradient(
+        canvas.width / 2, canvas.height / 2, canvas.height * 0.3,
+        canvas.width / 2, canvas.height / 2, canvas.height
+    );
+    vignetteGrad.addColorStop(0, 'rgba(0, 0, 0, 0.6)');
+    vignetteGrad.addColorStop(1, 'rgba(0, 0, 0, 0.92)');
+    ctx.fillStyle = vignetteGrad;
     ctx.fillRect(TRACKER_WIDTH, 0, canvas.width - TRACKER_WIDTH, canvas.height);
+
     const cx = TRACKER_WIDTH + (canvas.width - TRACKER_WIDTH) / 2;
     const cy = canvas.height / 2;
 
     // Scale panel to fit screen if necessary
     const maxW = canvas.width - TRACKER_WIDTH - 40;
     const maxH = canvas.height - 40;
-    const w = Math.min(1200, maxW), h = Math.min(800, maxH);
+    const w = Math.min(1000, maxW), h = Math.min(700, maxH);
     const x = Math.max(TRACKER_WIDTH + 20, cx - w / 2);
     const y = Math.max(20, cy - h / 2);
+    const radius = 8;
 
-    ctx.fillStyle = '#1a1a1a';
-    ctx.strokeStyle = '#3498db';
-    ctx.lineWidth = 4;
-    ctx.fillRect(x, y, w, h);
-    ctx.strokeRect(x, y, w, h);
+    // Use shared panel drawing if available
+    if (typeof drawOverlayPanel === 'function') {
+        drawOverlayPanel(ctx, x, y, w, h, colors);
+    } else {
+        // Fallback panel
+        ctx.fillStyle = colors.bgDark;
+        ctx.fillRect(x, y, w, h);
+        ctx.strokeStyle = colors.border;
+        ctx.lineWidth = 2;
+        ctx.strokeRect(x, y, w, h);
+    }
 
-    // Updated tabs - removed INSPECT
-    const tabs = ['WEAPONS', 'ARMOR', 'CONSUMABLES', 'ITEMS', 'EQUIPPED'];
+    // Updated tabs - CotDG style
+    const tabs = ['WEAPONS', 'ARMOR', 'CONSUME', 'ITEMS', 'EQUIPPED'];
     const tabW = w / tabs.length;
-    ctx.font = 'bold 18px monospace';
+    const tabH = 36;
+    ctx.font = 'bold 14px monospace';
     ctx.textAlign = 'center';
 
     for (let i = 0; i < tabs.length; i++) {
         const tx = x + i * tabW;
-        ctx.fillStyle = game.inventoryTab === i ? '#3498db' : '#333';
-        ctx.fillRect(tx, y, tabW, 40);
-        ctx.strokeStyle = '#111';
-        ctx.strokeRect(tx, y, tabW, 40);
-        ctx.fillStyle = game.inventoryTab === i ? '#fff' : '#888';
-        ctx.fillText(tabs[i], tx + tabW / 2, y + 26);
+        const isActive = game.inventoryTab === i;
+
+        // Tab background
+        if (isActive) {
+            const tabGrad = ctx.createLinearGradient(tx, y, tx, y + tabH);
+            tabGrad.addColorStop(0, colors.gold || '#d4af37');
+            tabGrad.addColorStop(1, '#8b6914');
+            ctx.fillStyle = tabGrad;
+        } else {
+            ctx.fillStyle = colors.bgMedium || '#1a1a24';
+        }
+        ctx.fillRect(tx + 2, y + 2, tabW - 4, tabH - 4);
+
+        // Tab border
+        ctx.strokeStyle = isActive ? (colors.gold || '#d4af37') : (colors.border || '#3a3a4a');
+        ctx.lineWidth = 1;
+        ctx.strokeRect(tx + 2, y + 2, tabW - 4, tabH - 4);
+
+        // Tab text
+        ctx.fillStyle = isActive ? (colors.bgDarkest || '#0a0a0f') : (colors.textMuted || '#888');
+        ctx.fillText(tabs[i], tx + tabW / 2, y + 23);
     }
 
     const contentY = y + 60;
@@ -908,73 +954,130 @@ const camY = game.camera.y + (shakeOffset.y / (TILE_SIZE * ZOOM_LEVEL));
 }
 
 /**
- * Draw the shift countdown timer at the top center of the screen
+ * Draw the shift countdown timer - CotDG Corruption Meter Style
+ * Positioned at bottom-right, above action bar
  */
 function drawShiftCountdown() {
     if (game.state !== 'playing') return;
     if (typeof game.shiftCountdown === 'undefined') return;
 
+    const colors = typeof UI_COLORS !== 'undefined' ? UI_COLORS : {
+        corruption: '#8e44ad',
+        corruptionBright: '#9b59b6',
+        corruptionDark: '#4a235a',
+        bgDark: '#12121a',
+        textPrimary: '#ffffff',
+        healthCritical: '#ff2222'
+    };
+
     const countdown = Math.max(0, game.shiftCountdown);
+    const maxTime = game.shiftMaxTime || 300; // Default 5 minutes
     const minutes = Math.floor(countdown / 60);
     const seconds = Math.floor(countdown % 60);
     const timeStr = `${minutes}:${seconds.toString().padStart(2, '0')}`;
 
-    // Position at top center (accounting for tracker panel on left)
-    const gameAreaWidth = canvas.width - TRACKER_WIDTH;
-    const centerX = TRACKER_WIDTH + gameAreaWidth / 2;
-    const y = 40;
+    // Calculate corruption percentage (inverted - more time passed = more corruption)
+    const corruptionPct = 1 - (countdown / maxTime);
 
-    // Background bar
-    const barWidth = 200;
-    const barHeight = 40;
-    const barX = centerX - barWidth / 2;
-    const barY = y - 25;
+    // Position at bottom-right, above action bar
+    const barWidth = 180;
+    const barHeight = 20;
+    const barX = canvas.width - barWidth - 25;
+    const barY = canvas.height - 110;
 
-    // Color changes based on time remaining
-    let bgColor, textColor, borderColor;
-    if (game.shiftActive) {
-        // Shift active - red pulsing
-        const pulse = Math.sin(Date.now() / 200) * 0.3 + 0.7;
-        bgColor = `rgba(139, 0, 0, ${pulse})`;
-        textColor = '#ff4444';
-        borderColor = '#ff0000';
-    } else if (countdown <= 60) {
-        // Under 1 minute - warning red
-        bgColor = 'rgba(139, 0, 0, 0.9)';
-        textColor = '#ff4444';
-        borderColor = '#ff0000';
-    } else if (countdown <= 180) {
-        // Under 3 minutes - warning orange
-        bgColor = 'rgba(139, 69, 0, 0.9)';
-        textColor = '#ffa500';
-        borderColor = '#ff8c00';
-    } else {
-        // Normal - dark background
-        bgColor = 'rgba(20, 20, 30, 0.9)';
-        textColor = '#ffffff';
-        borderColor = '#444';
+    const pulse = typeof getPulseValue === 'function' ? getPulseValue(0.003) : (Math.sin(Date.now() * 0.003) + 1) / 2;
+
+    ctx.save();
+
+    // === CORRUPTION METER BACKGROUND ===
+    ctx.fillStyle = colors.corruptionDark || '#4a235a';
+    ctx.fillRect(barX, barY, barWidth, barHeight);
+
+    // === CORRUPTION FILL (grows as time passes) ===
+    if (corruptionPct > 0) {
+        // Gradient fill
+        const corrGrad = ctx.createLinearGradient(barX, barY, barX + barWidth * corruptionPct, barY);
+        corrGrad.addColorStop(0, colors.corruptionDark || '#4a235a');
+        corrGrad.addColorStop(0.5, colors.corruption || '#8e44ad');
+        corrGrad.addColorStop(1, colors.corruptionBright || '#9b59b6');
+        ctx.fillStyle = corrGrad;
+        ctx.fillRect(barX, barY, barWidth * corruptionPct, barHeight);
+
+        // Pulsing edge glow when filling
+        if (corruptionPct > 0.1 && corruptionPct < 1) {
+            const edgeX = barX + barWidth * corruptionPct;
+            const glowGrad = ctx.createRadialGradient(edgeX, barY + barHeight/2, 0, edgeX, barY + barHeight/2, 15);
+            glowGrad.addColorStop(0, `rgba(191, 85, 236, ${0.3 + pulse * 0.4})`);
+            glowGrad.addColorStop(1, 'rgba(191, 85, 236, 0)');
+            ctx.fillStyle = glowGrad;
+            ctx.fillRect(edgeX - 15, barY - 5, 30, barHeight + 10);
+        }
+
+        // Shine effect
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.1)';
+        ctx.fillRect(barX, barY, barWidth * corruptionPct, barHeight / 3);
     }
 
-    // Draw background
-    ctx.fillStyle = bgColor;
-    ctx.fillRect(barX, barY, barWidth, barHeight);
-    ctx.strokeStyle = borderColor;
+    // === DANGER STATE (under 60 seconds or shift active) ===
+    if (game.shiftActive || countdown <= 60) {
+        // Pulsing red overlay
+        const dangerPulse = (Math.sin(Date.now() * 0.008) + 1) / 2;
+        ctx.fillStyle = `rgba(255, 34, 34, ${0.2 + dangerPulse * 0.3})`;
+        ctx.fillRect(barX, barY, barWidth, barHeight);
+
+        // Glowing border
+        ctx.shadowColor = colors.healthCritical || '#ff2222';
+        ctx.shadowBlur = 10 + dangerPulse * 10;
+    }
+
+    // === BORDER ===
+    ctx.strokeStyle = game.shiftActive ? (colors.healthCritical || '#ff2222') : (colors.corruption || '#8e44ad');
     ctx.lineWidth = 2;
     ctx.strokeRect(barX, barY, barWidth, barHeight);
 
-    // Draw timer text
-    ctx.fillStyle = textColor;
-    ctx.font = 'bold 24px monospace';
+    // Reset shadow
+    ctx.shadowColor = 'transparent';
+    ctx.shadowBlur = 0;
+
+    // === TIME TEXT ===
+    ctx.font = 'bold 12px monospace';
     ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillStyle = colors.textPrimary || '#ffffff';
+    ctx.shadowColor = 'rgba(0, 0, 0, 0.9)';
+    ctx.shadowBlur = 3;
 
     if (game.shiftActive) {
-        ctx.fillText('MELTDOWN', centerX, y + 5);
+        ctx.fillStyle = colors.healthCritical || '#ff2222';
+        ctx.fillText('ESCAPE!', barX + barWidth / 2, barY + barHeight / 2);
     } else {
-        ctx.fillText(timeStr, centerX, y + 5);
+        ctx.fillText(timeStr, barX + barWidth / 2, barY + barHeight / 2);
     }
 
-    // Label above timer
+    // === LABEL ===
+    ctx.shadowBlur = 0;
+    ctx.font = '10px monospace';
     ctx.fillStyle = '#888';
-    ctx.font = '12px monospace';
-    ctx.fillText(game.shiftActive ? 'ESCAPE NOW' : 'TIME REMAINING', centerX, barY - 5);
+    ctx.textAlign = 'left';
+    ctx.fillText('SHIFT', barX, barY - 6);
+
+    // === CORRUPTION PERCENTAGE ===
+    ctx.textAlign = 'right';
+    ctx.fillStyle = colors.corruptionBright || '#9b59b6';
+    ctx.fillText(`${Math.floor(corruptionPct * 100)}%`, barX + barWidth, barY - 6);
+
+    ctx.restore();
+
+    // === SCREEN EFFECTS (corruption vignette when high) ===
+    if (typeof updateScreenEffects === 'function') {
+        updateScreenEffects(ctx, canvas.width, canvas.height);
+    }
+
+    // Auto-trigger corruption screen effect when danger
+    if (corruptionPct > 0.8 && typeof triggerScreenEffect === 'function') {
+        // Only trigger occasionally to avoid constant effect
+        if (Math.random() < 0.02) {
+            triggerScreenEffect('corruption', 0.15, 500);
+        }
+    }
 }

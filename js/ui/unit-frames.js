@@ -1,46 +1,37 @@
 // ============================================================================
-// UNIT FRAMES - WoW-style player and enemy frames
+// UNIT FRAMES - Curse of the Dead Gods Inspired Design
 // ============================================================================
-// Displays player and enemy portraits with HP, MP, and status effects
+// Stylized player and enemy frames with animated bars and visual polish
 // ============================================================================
 
-// Unit frame configuration
+// Unit frame configuration - uses design system
 const UNIT_FRAME_CONFIG = {
-    // Player frame (top-left)
+    // Player frame (top-left, after sidebar)
     player: {
-        x: 90,  // Start after sidebar
-        y: 20,
-        width: 250,
-        height: 90
+        x: 90,
+        y: 16,
+        width: 260,
+        height: 85
     },
     // Enemy frame (next to player)
     enemy: {
-        x: 360,  // Next to player frame
-        y: 20,
-        width: 250,
-        height: 90
+        x: 370,
+        y: 16,
+        width: 260,
+        height: 85
     },
     // Portrait
-    portraitSize: 60,
-    portraitPadding: 8,
+    portraitSize: 56,
+    portraitPadding: 10,
     // Bars
-    barHeight: 18,
-    barSpacing: 4,
+    barHeight: 16,
+    barSpacing: 3,
     // Status effects
-    statusIconSize: 20,
+    statusIconSize: 18,
     statusIconSpacing: 2,
-    statusMaxIcons: 10,
+    statusMaxIcons: 8,
     statusRows: 2,
-    statusCols: 5,
-    // Colors
-    bgColor: 'rgba(20, 20, 20, 0.85)',
-    borderColor: '#444',
-    hpColor: '#e74c3c',
-    hpBgColor: '#3a1515',
-    mpColor: '#3498db',
-    mpBgColor: '#15233a',
-    textColor: '#ffffff',
-    levelColor: '#f1c40f'
+    statusCols: 4
 };
 
 /**
@@ -60,117 +51,208 @@ function renderUnitFrames(ctx) {
 }
 
 /**
- * Render player unit frame
+ * Render player unit frame - CotDG style
  */
 function renderPlayerFrame(ctx) {
     const cfg = UNIT_FRAME_CONFIG;
     const frame = cfg.player;
     const player = game.player;
 
-    // Background
-    ctx.fillStyle = cfg.bgColor;
+    // Get colors from design system (with fallbacks)
+    const colors = typeof UI_COLORS !== 'undefined' ? UI_COLORS : {
+        bgDark: '#12121a',
+        bgMedium: '#1a1a24',
+        border: '#3a3a4a',
+        mana: '#2980b9',
+        manaBright: '#3498db',
+        healthCritical: '#ff2222',
+        textPrimary: '#ffffff',
+        gold: '#d4af37'
+    };
+
+    ctx.save();
+
+    // === PANEL BACKGROUND with gradient ===
+    const panelGrad = ctx.createLinearGradient(frame.x, frame.y, frame.x, frame.y + frame.height);
+    panelGrad.addColorStop(0, colors.bgMedium || '#1a1a24');
+    panelGrad.addColorStop(1, colors.bgDark || '#12121a');
+    ctx.fillStyle = panelGrad;
     ctx.fillRect(frame.x, frame.y, frame.width, frame.height);
 
     // Border
-    ctx.strokeStyle = cfg.borderColor;
+    ctx.strokeStyle = colors.border || '#3a3a4a';
     ctx.lineWidth = 2;
     ctx.strokeRect(frame.x, frame.y, frame.width, frame.height);
 
-    // Portrait (circular)
+    // Inner accent line (top) - blue for player
+    ctx.strokeStyle = colors.manaBright || '#3498db';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(frame.x + 2, frame.y + 2);
+    ctx.lineTo(frame.x + frame.width - 2, frame.y + 2);
+    ctx.stroke();
+
+    // === PORTRAIT ===
     const portraitX = frame.x + cfg.portraitPadding + cfg.portraitSize / 2;
     const portraitY = frame.y + frame.height / 2;
 
-    ctx.save();
+    // Portrait glow based on health
+    const hpPct = player.hp / player.maxHp;
+
+    // Outer glow for critical health
+    if (hpPct < 0.25) {
+        const pulse = typeof getPulseValue === 'function' ? getPulseValue(0.006) : 0.5;
+        ctx.shadowColor = `rgba(231, 76, 60, ${0.3 + pulse * 0.4})`;
+        ctx.shadowBlur = 15;
+    }
+
+    // Portrait background circle
+    ctx.fillStyle = colors.mana || '#2980b9';
     ctx.beginPath();
     ctx.arc(portraitX, portraitY, cfg.portraitSize / 2, 0, Math.PI * 2);
-    ctx.clip();
-
-    // Portrait background (player color)
-    ctx.fillStyle = '#2ecc71';
     ctx.fill();
 
-    // Portrait icon
-    ctx.font = 'bold 30px Arial';
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillStyle = '#ffffff';
-    ctx.fillText('😊', portraitX, portraitY);
-
-    ctx.restore();
+    // Reset shadow
+    ctx.shadowColor = 'transparent';
+    ctx.shadowBlur = 0;
 
     // Portrait border
-    ctx.strokeStyle = cfg.borderColor;
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.arc(portraitX, portraitY, cfg.portraitSize / 2, 0, Math.PI * 2);
+    ctx.strokeStyle = hpPct < 0.25 ? (colors.healthCritical || '#ff2222') : (colors.manaBright || '#3498db');
+    ctx.lineWidth = 3;
     ctx.stroke();
 
-    // Name and level
-    const textX = frame.x + cfg.portraitPadding * 2 + cfg.portraitSize + 5;
-    const textY = frame.y + 15;
+    // Portrait content - clip to circle
+    ctx.save();
+    ctx.beginPath();
+    ctx.arc(portraitX, portraitY, cfg.portraitSize / 2 - 3, 0, Math.PI * 2);
+    ctx.clip();
 
-    ctx.font = 'bold 14px monospace';
+    // Simple player icon (P)
+    ctx.fillStyle = colors.manaBright || '#3498db';
+    ctx.font = 'bold 28px Arial';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('P', portraitX, portraitY + 2);
+    ctx.restore();
+
+    // === NAME AND LEVEL ===
+    const textX = frame.x + cfg.portraitPadding * 2 + cfg.portraitSize + 8;
+    const textY = frame.y + 18;
+
+    // Player name with shadow
+    ctx.font = '14px monospace';
     ctx.textAlign = 'left';
-    ctx.fillStyle = cfg.textColor;
-    ctx.fillText('PLAYER', textX, textY);
+    ctx.fillStyle = colors.textPrimary || '#ffffff';
+    ctx.shadowColor = 'rgba(0, 0, 0, 0.8)';
+    ctx.shadowBlur = 2;
+    ctx.fillText('ADVENTURER', textX, textY);
 
-    ctx.font = 'bold 12px monospace';
-    ctx.fillStyle = cfg.levelColor;
-    ctx.fillText(`Lv ${player.level}`, textX + 70, textY);
+    // Level badge
+    ctx.font = '12px monospace';
+    ctx.fillStyle = colors.gold || '#d4af37';
+    ctx.fillText(`LV.${player.level}`, textX + 95, textY);
 
-    // HP Bar
+    ctx.shadowBlur = 0;
+
+    // === HEALTH BAR (Animated) ===
     const barX = textX;
-    const barY = textY + 10;
-    const barWidth = frame.width - (cfg.portraitPadding * 2 + cfg.portraitSize + 15);
+    const barY = textY + 8;
+    const barWidth = frame.width - (cfg.portraitPadding * 2 + cfg.portraitSize + 20);
 
-    drawResourceBar(ctx, barX, barY, barWidth, cfg.barHeight,
-                    player.hp, player.maxHp, cfg.hpColor, cfg.hpBgColor, 'HP');
+    // Get animated HP value
+    const displayHp = typeof updateAnimatedBar === 'function'
+        ? updateAnimatedBar('player_hp', player.hp, player.maxHp, 0.016)
+        : player.hp;
 
-    // MP Bar
+    drawHealthBarStyled(ctx, barX, barY, barWidth, cfg.barHeight, displayHp, player.maxHp, player.hp);
+
+    // === MANA BAR ===
     const mpBarY = barY + cfg.barHeight + cfg.barSpacing;
-    drawResourceBar(ctx, barX, mpBarY, barWidth, cfg.barHeight,
-                    player.mp, player.maxMp, cfg.mpColor, cfg.mpBgColor, 'MP');
+    drawManaBarStyled(ctx, barX, mpBarY, barWidth, cfg.barHeight - 2, player.mp || 0, player.maxMp || 100);
 
-    // Status effects (below bars)
-    const statusY = frame.y + frame.height - cfg.statusIconSize - 5;
-    renderStatusEffects(ctx, barX, statusY, player.statusEffects || []);
+    // === STAMINA PIPS (CotDG style diamonds) ===
+    const staminaY = frame.y + frame.height - 14;
+    drawStaminaPips(ctx, barX, staminaY, player.stamina, player.maxStamina);
+
+    ctx.restore();
 }
 
 /**
- * Render enemy unit frame
+ * Render enemy unit frame - CotDG style
  */
 function renderEnemyFrame(ctx, enemy) {
     const cfg = UNIT_FRAME_CONFIG;
     const frame = cfg.enemy;
 
-    // Background
-    ctx.fillStyle = cfg.bgColor;
+    // Get colors from design system (with fallbacks)
+    const colors = typeof UI_COLORS !== 'undefined' ? UI_COLORS : {
+        bgDark: '#12121a',
+        bgMedium: '#1a1a24',
+        border: '#3a3a4a',
+        health: '#c0392b',
+        healthDark: '#8b1a1a',
+        textPrimary: '#ffffff',
+        textMuted: '#666666'
+    };
+
+    // Tier colors
+    const tierColors = {
+        'TIER_3': '#888888',
+        'TIER_2': '#2ecc71',
+        'TIER_1': '#3498db',
+        'ELITE': '#9b59b6',
+        'BOSS': '#f39c12'
+    };
+    const tierColor = tierColors[enemy.tier] || '#888888';
+
+    ctx.save();
+
+    // === PANEL BACKGROUND with gradient ===
+    const panelGrad = ctx.createLinearGradient(frame.x, frame.y, frame.x, frame.y + frame.height);
+    panelGrad.addColorStop(0, colors.bgMedium || '#1a1a24');
+    panelGrad.addColorStop(1, colors.bgDark || '#12121a');
+    ctx.fillStyle = panelGrad;
     ctx.fillRect(frame.x, frame.y, frame.width, frame.height);
 
-    // Border (red for hostile)
-    ctx.strokeStyle = '#e74c3c';
+    // Border (tier colored)
+    ctx.strokeStyle = tierColor;
     ctx.lineWidth = 2;
     ctx.strokeRect(frame.x, frame.y, frame.width, frame.height);
 
-    // Portrait (circular)
+    // Inner accent line (top) - red for enemy
+    ctx.strokeStyle = colors.health || '#c0392b';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(frame.x + 2, frame.y + 2);
+    ctx.lineTo(frame.x + frame.width - 2, frame.y + 2);
+    ctx.stroke();
+
+    // === PORTRAIT ===
     const portraitX = frame.x + cfg.portraitPadding + cfg.portraitSize / 2;
     const portraitY = frame.y + frame.height / 2;
 
-    ctx.save();
+    // Portrait background
+    ctx.fillStyle = colors.healthDark || '#8b1a1a';
     ctx.beginPath();
     ctx.arc(portraitX, portraitY, cfg.portraitSize / 2, 0, Math.PI * 2);
-    ctx.clip();
-
-    // Portrait background (enemy color)
-    ctx.fillStyle = '#e74c3c';
     ctx.fill();
 
-    // Try to draw enemy sprite
+    // Portrait border (tier colored)
+    ctx.strokeStyle = tierColor;
+    ctx.lineWidth = 3;
+    ctx.stroke();
+
+    // Portrait content - enemy sprite
+    ctx.save();
+    ctx.beginPath();
+    ctx.arc(portraitX, portraitY, cfg.portraitSize / 2 - 3, 0, Math.PI * 2);
+    ctx.clip();
+
     let spriteDrawn = false;
     if (typeof getEnemySpriteFrame === 'function') {
         const frameData = getEnemySpriteFrame(enemy);
         if (frameData) {
-            const scale = cfg.portraitSize / Math.max(frameData.frameWidth, frameData.frameHeight);
+            const scale = (cfg.portraitSize - 6) / Math.max(frameData.frameWidth, frameData.frameHeight);
             const drawWidth = frameData.frameWidth * scale;
             const drawHeight = frameData.frameHeight * scale;
             const spriteX = portraitX - drawWidth / 2;
@@ -187,142 +269,247 @@ function renderEnemyFrame(ctx, enemy) {
         }
     }
 
-    // Fallback: emoji
     if (!spriteDrawn) {
-        ctx.font = 'bold 30px Arial';
+        ctx.fillStyle = tierColor;
+        ctx.font = 'bold 24px Arial';
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
-        ctx.fillStyle = '#ffffff';
-        ctx.fillText('👹', portraitX, portraitY);
+        ctx.fillText('E', portraitX, portraitY + 2);
+    }
+    ctx.restore();
+
+    // === NAME AND LEVEL ===
+    const textX = frame.x + cfg.portraitPadding * 2 + cfg.portraitSize + 8;
+    const textY = frame.y + 18;
+
+    // Enemy name
+    ctx.font = '14px monospace';
+    ctx.textAlign = 'left';
+    ctx.fillStyle = colors.textPrimary || '#ffffff';
+    ctx.shadowColor = 'rgba(0, 0, 0, 0.8)';
+    ctx.shadowBlur = 2;
+    const enemyName = (enemy.name || 'Enemy').substring(0, 12);
+    ctx.fillText(enemyName, textX, textY);
+
+    // Level
+    ctx.font = '12px monospace';
+    ctx.fillStyle = tierColor;
+    ctx.fillText(`LV.${enemy.level || 1}`, textX + 95, textY);
+
+    ctx.shadowBlur = 0;
+
+    // === HEALTH BAR (Animated) ===
+    const barX = textX;
+    const barY = textY + 8;
+    const barWidth = frame.width - (cfg.portraitPadding * 2 + cfg.portraitSize + 20);
+
+    // Get animated HP value
+    const displayHp = typeof updateAnimatedBar === 'function'
+        ? updateAnimatedBar(`enemy_${enemy.id || 'target'}_hp`, enemy.hp, enemy.maxHp, 0.016)
+        : enemy.hp;
+
+    drawHealthBarStyled(ctx, barX, barY, barWidth, cfg.barHeight, displayHp, enemy.maxHp, enemy.hp);
+
+    // === ELEMENT/TYPE INDICATOR ===
+    const typeY = barY + cfg.barHeight + cfg.barSpacing + 2;
+    const element = enemy.element || 'physical';
+
+    const elementColors = typeof UI_COLORS !== 'undefined' && UI_COLORS.elements
+        ? UI_COLORS.elements
+        : { fire: '#e67e22', water: '#3498db', earth: '#8b4513', nature: '#27ae60', shadow: '#9b59b6', death: '#555555', physical: '#95a5a6' };
+    const elemColor = elementColors[element] || '#95a5a6';
+
+    // Element pip
+    ctx.fillStyle = elemColor;
+    ctx.beginPath();
+    ctx.arc(barX + 6, typeY + 5, 5, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Type text
+    ctx.font = '10px monospace';
+    ctx.fillStyle = colors.textMuted || '#666666';
+    ctx.textAlign = 'left';
+    ctx.fillText(element.toUpperCase(), barX + 16, typeY + 8);
+
+    // Tier indicator
+    const tierIndicator = enemy.tierIndicator || '';
+    if (tierIndicator) {
+        ctx.fillStyle = tierColor;
+        ctx.font = '12px monospace';
+        ctx.textAlign = 'right';
+        ctx.fillText(tierIndicator, frame.x + frame.width - 10, typeY + 8);
     }
 
     ctx.restore();
-
-    // Portrait border
-    ctx.strokeStyle = '#e74c3c';
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.arc(portraitX, portraitY, cfg.portraitSize / 2, 0, Math.PI * 2);
-    ctx.stroke();
-
-    // Name and level
-    const textX = frame.x + cfg.portraitPadding * 2 + cfg.portraitSize + 5;
-    const textY = frame.y + 15;
-
-    ctx.font = 'bold 14px monospace';
-    ctx.textAlign = 'left';
-    ctx.fillStyle = cfg.textColor;
-    const enemyName = enemy.name || 'Enemy';
-    ctx.fillText(enemyName.substring(0, 15), textX, textY);
-
-    ctx.font = 'bold 12px monospace';
-    ctx.fillStyle = cfg.levelColor;
-    ctx.fillText(`Lv ${enemy.level || 1}`, textX + 120, textY);
-
-    // HP Bar
-    const barX = textX;
-    const barY = textY + 10;
-    const barWidth = frame.width - (cfg.portraitPadding * 2 + cfg.portraitSize + 15);
-
-    drawResourceBar(ctx, barX, barY, barWidth, cfg.barHeight,
-                    enemy.hp, enemy.maxHp, cfg.hpColor, cfg.hpBgColor, 'HP');
-
-    // Enemy has no MP bar, but show tier/type
-    const typeY = barY + cfg.barHeight + cfg.barSpacing;
-    ctx.font = '11px monospace';
-    ctx.fillStyle = '#888';
-    const tierIndicator = enemy.tierIndicator || '';
-    const element = enemy.element || 'physical';
-    ctx.fillText(`${tierIndicator} ${element}`, barX, typeY + 10);
-
-    // Status effects (below bars)
-    const statusY = frame.y + frame.height - cfg.statusIconSize - 5;
-    renderStatusEffects(ctx, barX, statusY, enemy.statusEffects || []);
 }
 
 /**
- * Draw a resource bar (HP/MP)
+ * Draw stylized health bar with shine and damage trail
  */
-function drawResourceBar(ctx, x, y, width, height, current, max, color, bgColor, label) {
-    const pct = Math.max(0, Math.min(1, current / max));
+function drawHealthBarStyled(ctx, x, y, width, height, displayHp, maxHp, actualHp) {
+    const displayPct = Math.max(0, Math.min(1, displayHp / maxHp));
+    const actualPct = Math.max(0, Math.min(1, actualHp / maxHp));
+
+    const colors = typeof UI_COLORS !== 'undefined' ? UI_COLORS : {
+        healthDark: '#8b1a1a',
+        healthBright: '#e74c3c',
+        health: '#c0392b',
+        border: '#3a3a4a',
+        textPrimary: '#ffffff'
+    };
+
+    ctx.save();
 
     // Background
-    ctx.fillStyle = bgColor;
+    ctx.fillStyle = colors.healthDark || '#8b1a1a';
+    ctx.fillRect(x, y, width, height);
+
+    // Damage trail (shows where health was)
+    if (displayPct > actualPct) {
+        ctx.fillStyle = 'rgba(231, 76, 60, 0.5)';
+        ctx.fillRect(x, y, width * displayPct, height);
+    }
+
+    // Main health fill with gradient
+    if (actualPct > 0) {
+        const healthGrad = ctx.createLinearGradient(x, y, x, y + height);
+        if (actualPct > 0.5) {
+            healthGrad.addColorStop(0, colors.healthBright || '#e74c3c');
+            healthGrad.addColorStop(0.5, colors.health || '#c0392b');
+            healthGrad.addColorStop(1, '#8b1a1a');
+        } else if (actualPct > 0.25) {
+            healthGrad.addColorStop(0, '#e67e22');
+            healthGrad.addColorStop(1, '#d35400');
+        } else {
+            // Critical - pulsing
+            const pulse = typeof getPulseValue === 'function' ? getPulseValue(0.006) : 0.5;
+            healthGrad.addColorStop(0, `rgb(${231 + pulse * 24}, ${76 - pulse * 40}, ${60 - pulse * 30})`);
+            healthGrad.addColorStop(1, '#8b1a1a');
+        }
+        ctx.fillStyle = healthGrad;
+        ctx.fillRect(x, y, width * actualPct, height);
+
+        // Shine effect
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.15)';
+        ctx.fillRect(x, y, width * actualPct, height / 3);
+    }
+
+    // Border
+    ctx.strokeStyle = colors.border || '#3a3a4a';
+    ctx.lineWidth = 1;
+    ctx.strokeRect(x, y, width, height);
+
+    // HP Text
+    ctx.font = '12px monospace';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillStyle = colors.textPrimary || '#ffffff';
+    ctx.shadowColor = 'rgba(0, 0, 0, 0.9)';
+    ctx.shadowBlur = 3;
+    ctx.fillText(`${Math.ceil(actualHp)}/${maxHp}`, x + width / 2, y + height / 2 + 1);
+
+    ctx.restore();
+}
+
+/**
+ * Draw stylized mana bar
+ */
+function drawManaBarStyled(ctx, x, y, width, height, current, max) {
+    const pct = Math.max(0, Math.min(1, current / max));
+
+    const colors = typeof UI_COLORS !== 'undefined' ? UI_COLORS : {
+        manaDark: '#1a3a5c',
+        manaBright: '#3498db',
+        mana: '#2980b9',
+        border: '#3a3a4a',
+        textSecondary: '#b0b0b0'
+    };
+
+    ctx.save();
+
+    // Background
+    ctx.fillStyle = colors.manaDark || '#1a3a5c';
     ctx.fillRect(x, y, width, height);
 
     // Fill
-    ctx.fillStyle = color;
-    ctx.fillRect(x, y, width * pct, height);
+    if (pct > 0) {
+        const manaGrad = ctx.createLinearGradient(x, y, x, y + height);
+        manaGrad.addColorStop(0, colors.manaBright || '#3498db');
+        manaGrad.addColorStop(1, colors.mana || '#2980b9');
+        ctx.fillStyle = manaGrad;
+        ctx.fillRect(x, y, width * pct, height);
+
+        // Shine
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.1)';
+        ctx.fillRect(x, y, width * pct, height / 3);
+    }
 
     // Border
-    ctx.strokeStyle = '#000';
+    ctx.strokeStyle = colors.border || '#3a3a4a';
     ctx.lineWidth = 1;
     ctx.strokeRect(x, y, width, height);
 
     // Text
-    ctx.font = 'bold 11px monospace';
+    ctx.font = '10px monospace';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.fillStyle = '#ffffff';
-    ctx.shadowColor = '#000';
-    ctx.shadowBlur = 3;
-    ctx.fillText(`${Math.ceil(current)}/${max}`, x + width / 2, y + height / 2);
-    ctx.shadowBlur = 0;
+    ctx.fillStyle = colors.textSecondary || '#b0b0b0';
+    ctx.shadowColor = 'rgba(0, 0, 0, 0.8)';
+    ctx.shadowBlur = 2;
+    ctx.fillText(`${Math.ceil(current)}/${max}`, x + width / 2, y + height / 2 + 1);
+
+    ctx.restore();
 }
 
 /**
- * Render status effect icons (2 rows of 5)
+ * Draw stamina pips (CotDG diamond style)
  */
-function renderStatusEffects(ctx, x, y, effects) {
-    const cfg = UNIT_FRAME_CONFIG;
-    const maxDisplay = Math.min(effects.length, cfg.statusMaxIcons);
+function drawStaminaPips(ctx, x, y, current, max) {
+    const pipSize = 8;
+    const pipSpacing = 3;
+    const pipsToShow = Math.min(max, 10); // Cap visual display at 10
 
-    for (let i = 0; i < maxDisplay; i++) {
-        const row = Math.floor(i / cfg.statusCols);
-        const col = i % cfg.statusCols;
-        const iconX = x + col * (cfg.statusIconSize + cfg.statusIconSpacing);
-        const iconY = y + row * (cfg.statusIconSize + cfg.statusIconSpacing);
-
-        const effect = effects[i];
-        drawStatusIcon(ctx, iconX, iconY, cfg.statusIconSize, effect);
-    }
-}
-
-/**
- * Draw a single status effect icon
- */
-function drawStatusIcon(ctx, x, y, size, effect) {
-    // Background
-    const isDebuff = effect.type === 'debuff' || effect.harmful;
-    ctx.fillStyle = isDebuff ? 'rgba(231, 76, 60, 0.3)' : 'rgba(46, 204, 113, 0.3)';
-    ctx.fillRect(x, y, size, size);
-
-    // Border
-    ctx.strokeStyle = isDebuff ? '#e74c3c' : '#2ecc71';
-    ctx.lineWidth = 1;
-    ctx.strokeRect(x, y, size, size);
-
-    // Icon (use emoji or first letter)
-    const iconMap = {
-        'burning': '🔥',
-        'frozen': '❄️',
-        'poisoned': '☠️',
-        'bleeding': '🩸',
-        'stunned': '💫',
-        'slowed': '🐌',
-        'haste': '⚡',
-        'strength': '💪',
-        'defense': '🛡️',
-        'regeneration': '💚'
+    const colors = typeof UI_COLORS !== 'undefined' ? UI_COLORS : {
+        staminaBright: '#2ecc71',
+        stamina: '#27ae60',
+        bgLight: '#252530',
+        border: '#3a3a4a'
     };
 
-    const icon = iconMap[effect.name?.toLowerCase()] || effect.name?.charAt(0) || '?';
+    ctx.save();
 
-    ctx.font = `${size - 6}px Arial`;
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillStyle = '#ffffff';
-    ctx.fillText(icon, x + size / 2, y + size / 2);
+    for (let i = 0; i < pipsToShow; i++) {
+        const pipX = x + i * (pipSize + pipSpacing);
+        const pipY = y;
+
+        const isFilled = i < current;
+
+        // Diamond shape
+        ctx.beginPath();
+        ctx.moveTo(pipX + pipSize / 2, pipY);
+        ctx.lineTo(pipX + pipSize, pipY + pipSize / 2);
+        ctx.lineTo(pipX + pipSize / 2, pipY + pipSize);
+        ctx.lineTo(pipX, pipY + pipSize / 2);
+        ctx.closePath();
+
+        // Fill
+        if (isFilled) {
+            const staminaGrad = ctx.createLinearGradient(pipX, pipY, pipX, pipY + pipSize);
+            staminaGrad.addColorStop(0, colors.staminaBright || '#2ecc71');
+            staminaGrad.addColorStop(1, colors.stamina || '#27ae60');
+            ctx.fillStyle = staminaGrad;
+        } else {
+            ctx.fillStyle = colors.bgLight || '#252530';
+        }
+        ctx.fill();
+
+        // Border
+        ctx.strokeStyle = isFilled ? (colors.stamina || '#27ae60') : (colors.border || '#3a3a4a');
+        ctx.lineWidth = 1;
+        ctx.stroke();
+    }
+
+    ctx.restore();
 }
 
 /**
@@ -360,7 +547,7 @@ function initUnitFrameHandlers() {
         }
     });
 
-    // Left-click anywhere to clear target (if not clicking UI elements or interactables)
+    // Left-click anywhere to clear target (if not clicking UI elements)
     canvas.addEventListener('click', (e) => {
         if (game.state !== 'playing') return;
         if (!game.player?.combat?.currentTarget) return;
@@ -409,7 +596,6 @@ function initUnitFrameHandlers() {
                 Math.floor(e.gridX) === gridX && Math.floor(e.gridY) === gridY
             );
             if (clickedEnemy) {
-                // Clicking on enemy - don't clear target (let left-click-init handle it)
                 return;
             }
         }
@@ -419,7 +605,6 @@ function initUnitFrameHandlers() {
             const mx = game.merchant.x !== undefined ? game.merchant.x : game.merchant.gridX;
             const my = game.merchant.y !== undefined ? game.merchant.y : game.merchant.gridY;
             if (gridX === mx && gridY === my) {
-                // Clicking on NPC - don't clear
                 return;
             }
         }
@@ -430,7 +615,7 @@ function initUnitFrameHandlers() {
         }
     });
 
-    console.log('✅ Unit frame handlers initialized');
+    console.log('Unit frame handlers initialized');
 }
 
 // Initialize on load
@@ -442,4 +627,4 @@ if (typeof window !== 'undefined') {
 window.renderUnitFrames = renderUnitFrames;
 window.UNIT_FRAME_CONFIG = UNIT_FRAME_CONFIG;
 
-console.log('✅ Unit frames loaded');
+console.log('Unit frames loaded (CotDG style)');
