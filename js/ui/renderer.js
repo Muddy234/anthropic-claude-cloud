@@ -655,10 +655,40 @@ function drawThemedFloor(tile, x, y, size) {
     ctx.fillRect(x, y, size, size);
 }
 
+// ============================================================================
+// ATMOSPHERIC FOG OF WAR SYSTEM
+// ============================================================================
+// Uses ambient blue-grey instead of hard black for a more atmospheric feel
+// Implements smoothstep falloff for soft penumbra transitions
+// ============================================================================
+
+// Ambient fog color (blue-grey instead of pure black)
+const FOG_COLOR = { r: 26, g: 26, b: 45 }; // #1a1a2d
+const FOG_ALPHA_MAX = 0.92; // Maximum darkness level
+
+/**
+ * Apply desaturation filter to an area
+ * Simulates the effect of light not reaching certain areas
+ * @param {CanvasRenderingContext2D} ctx - Canvas context
+ * @param {number} x - X position
+ * @param {number} y - Y position
+ * @param {number} width - Width of area
+ * @param {number} height - Height of area
+ * @param {number} amount - Desaturation amount (0-1)
+ */
+function applyDesaturationOverlay(ctx, x, y, width, height, amount) {
+    // We use a blue-grey overlay to simulate desaturation
+    // True desaturation would require getImageData which is expensive
+    const desatColor = `rgba(${FOG_COLOR.r}, ${FOG_COLOR.g}, ${FOG_COLOR.b}, ${amount * 0.3})`;
+    ctx.fillStyle = desatColor;
+    ctx.fillRect(x, y, width, height);
+}
+
 /**
  * Apply radial gradient fog of war overlay for smooth visibility fade
  * Creates a gradient that spans across tiles for seamless transition
  * Combined with Layer 1.45 shadow overlay to respect shadowcasting
+ * Uses ambient blue-grey instead of hard black for atmospheric effect
  */
 function applyRadialFogOverlay(ctx, player, camX, camY, tileSize, offsetX, viewW, viewH) {
     // Get vision ranges from VisionSystem
@@ -684,25 +714,89 @@ function applyRadialFogOverlay(ctx, player, camX, camY, tileSize, offsetX, viewW
         playerScreenX, playerScreenY, outerRadius   // Outer circle (full darkness)
     );
 
-    // Add color stops to approximate smoothstep curve
-    // We use multiple stops to create a smooth ease-in-ease-out effect
-    const steps = 20; // Number of gradient steps for smooth interpolation
+    // Add color stops using smoothstep curve with ambient blue-grey
+    // We use multiple stops to create a smooth ease-in-ease-out penumbra
+    const steps = 24; // More steps for smoother gradient
     for (let i = 0; i <= steps; i++) {
         const t = i / steps; // 0 to 1
 
         // Apply smoothstep function: t * t * (3 - 2 * t)
+        // This creates a natural ease-in-ease-out transition
         const smoothT = t * t * (3 - 2 * t);
 
-        // Calculate darkness (0 = transparent, 0.8 = nearly opaque)
-        const darkness = smoothT * 0.8;
+        // Calculate fog density (0 = transparent, FOG_ALPHA_MAX = nearly opaque)
+        const fogDensity = smoothT * FOG_ALPHA_MAX;
 
-        gradient.addColorStop(t, `rgba(0, 0, 0, ${darkness})`);
+        // Use ambient blue-grey instead of pure black
+        gradient.addColorStop(t, `rgba(${FOG_COLOR.r}, ${FOG_COLOR.g}, ${FOG_COLOR.b}, ${fogDensity})`);
     }
 
     // Draw gradient overlay across entire viewport
     // Note: Shadowed areas will be overwritten by Layer 1.45
     ctx.fillStyle = gradient;
     ctx.fillRect(offsetX, 0, viewW, viewH);
+
+    // Apply subtle desaturation to the outer edge of vision
+    // This simulates colors fading at the edge of torchlight
+    applyDesaturationOverlay(ctx, offsetX, 0, viewW, viewH, 0.15);
+
+    // Render light source cookie textures for organic shapes
+    if (typeof LightSourceSystem !== 'undefined' && LightSourceSystem.config.useCookieTextures) {
+        renderLightCookies(ctx, camX, camY, tileSize, offsetX);
+    }
+}
+
+/**
+ * Render cookie textures for each active light source
+ * Creates irregular, organic light shapes instead of perfect circles
+ */
+function renderLightCookies(ctx, camX, camY, tileSize, offsetX) {
+    if (typeof LightSourceSystem === 'undefined') return;
+
+    const sources = LightSourceSystem.getActiveSources();
+
+    ctx.save();
+    // Use 'destination-out' to carve out lighter areas in the fog
+    ctx.globalCompositeOperation = 'destination-out';
+
+    sources.forEach(source => {
+        if (!source.active || !source.flicker) return;
+
+        // Get source position
+        let srcX = source.gridX;
+        let srcY = source.gridY;
+        if (source.attachedTo) {
+            srcX = source.attachedTo.gridX ?? source.attachedTo.x ?? srcX;
+            srcY = source.attachedTo.gridY ?? source.attachedTo.y ?? srcY;
+        }
+
+        // Calculate screen position
+        const screenX = (srcX - camX) * tileSize + offsetX;
+        const screenY = (srcY - camY) * tileSize;
+
+        // Get flicker multiplier for animated radius
+        const flickerMultiplier = LightSourceSystem.getSourceFlicker(source);
+        const effectiveRadius = source.radius * flickerMultiplier * tileSize;
+
+        // Get cookie texture
+        const cookieSize = Math.ceil(effectiveRadius * 3);
+        const cookie = LightSourceSystem.getCookieTexture(source, cookieSize);
+
+        if (cookie) {
+            // Draw cookie texture centered on light source
+            // The cookie texture creates irregular light edges
+            ctx.globalAlpha = 0.15 * source.intensity; // Subtle effect
+            ctx.drawImage(
+                cookie,
+                screenX - cookieSize / 2,
+                screenY - cookieSize / 2,
+                cookieSize,
+                cookieSize
+            );
+        }
+    });
+
+    ctx.restore();
 }
 
 function render() {
@@ -782,9 +876,9 @@ const camY = game.camera.y + (shakeOffset.y / (TILE_SIZE * ZOOM_LEVEL));
                     continue;
                 }
 
-                // FOG OF WAR: Render unexplored tiles as dark gray
+                // FOG OF WAR: Render unexplored tiles with ambient blue-grey
                 if (!tile.explored) {
-                    ctx.fillStyle = '#2a2a2a';
+                    ctx.fillStyle = `rgb(${FOG_COLOR.r}, ${FOG_COLOR.g}, ${FOG_COLOR.b})`;
                     ctx.fillRect(screenX, screenY, effectiveTileSize, effectiveTileSize);
                     continue;
                 }
@@ -812,10 +906,11 @@ const camY = game.camera.y + (shakeOffset.y / (TILE_SIZE * ZOOM_LEVEL));
                     ctx.strokeRect(screenX, screenY, effectiveTileSize, effectiveTileSize);
                 }
 
-                // FOG OF WAR: Apply darkness overlay for remembered (not currently visible) tiles
+                // FOG OF WAR: Apply atmospheric overlay for remembered (not currently visible) tiles
                 // Note: Visible tile fading handled by radial gradient in Layer 1.4
+                // Uses blue-grey tint for atmospheric feel instead of pure black
                 if (tile.explored && !tile.visible) {
-                    ctx.fillStyle = 'rgba(0, 0, 0, 0.65)';
+                    ctx.fillStyle = `rgba(${FOG_COLOR.r}, ${FOG_COLOR.g}, ${FOG_COLOR.b}, 0.7)`;
                     ctx.fillRect(screenX, screenY, effectiveTileSize, effectiveTileSize);
                 }
             }
@@ -826,13 +921,14 @@ const camY = game.camera.y + (shakeOffset.y / (TILE_SIZE * ZOOM_LEVEL));
             applyRadialFogOverlay(ctx, game.player, camX, camY, effectiveTileSize, TRACKER_WIDTH, viewW, viewH);
         }
 
-        // LAYER 1.45: Overlay full darkness on shadowed tiles (respects shadowcasting)
+        // LAYER 1.45: Overlay atmospheric shadow on shadowed tiles (respects shadowcasting)
+        // Uses blue-grey for atmospheric dungeon feel
         for (let y = 0; y < GRID_HEIGHT; y++) {
             for (let x = 0; x < GRID_WIDTH; x++) {
                 const tile = game.map[y][x];
                 if (!tile || !tile.explored) continue;
 
-                // Only overlay darkness on explored but not currently visible tiles
+                // Only overlay shadow on explored but not currently visible tiles
                 if (tile.explored && !tile.visible) {
                     const screenX = (x - camX) * effectiveTileSize + TRACKER_WIDTH;
                     const screenY = (y - camY) * effectiveTileSize;
@@ -843,8 +939,9 @@ const camY = game.camera.y + (shakeOffset.y / (TILE_SIZE * ZOOM_LEVEL));
                         continue;
                     }
 
-                    // Apply shadow darkness (overwrites radial gradient in shadowed areas)
-                    ctx.fillStyle = 'rgba(0, 0, 0, 0.65)';
+                    // Apply atmospheric shadow (overwrites radial gradient in shadowed areas)
+                    // Uses blue-grey for atmospheric dungeon feel
+                    ctx.fillStyle = `rgba(${FOG_COLOR.r}, ${FOG_COLOR.g}, ${FOG_COLOR.b}, 0.75)`;
                     ctx.fillRect(screenX, screenY, effectiveTileSize, effectiveTileSize);
                 }
             }
