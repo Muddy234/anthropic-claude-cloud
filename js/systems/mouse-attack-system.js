@@ -594,33 +594,44 @@ function applyMeleeDamage(player, enemy, isSpecial) {
 
 /**
  * Create a visual slash effect
- * Uses displayX/displayY for accurate visual positioning during movement
+ * Uses sprite-based combat effects from combat-effect-system.js
  */
 function createSlashEffect(player, direction, arcConfig, isSpecial = false, attackFromLeft = true, comboCount = 1) {
     const slashStyle = arcConfig.slashStyle || 'sweep';
-
-    // Use combo-based attack side for all weapons
-    // Attack 1: from left, Attack 2: from right, Attack 3: special (center/both)
-    const fromLeft = attackFromLeft;
 
     // Use display position for visual accuracy
     const originX = player.displayX !== undefined ? player.displayX : player.gridX;
     const originY = player.displayY !== undefined ? player.displayY : player.gridY;
 
-    mouseAttackState.slashEffects.push({
-        x: originX,
-        y: originY,
-        angle: direction,
-        progress: 0,
-        duration: 0.2,  // 200ms trail duration
-        arcAngle: arcConfig.arcAngle * (Math.PI / 180),
-        range: arcConfig.arcRange,
-        color: '#ffffff',  // White slash
-        slashStyle: slashStyle,
-        isSpecial: isSpecial,
-        fromLeft: fromLeft,  // Attack side based on combo
-        comboCount: comboCount  // Current combo number (1, 2, or 3)
-    });
+    // Map slashStyle to damage type for sprite selection
+    let damageType = 'default';
+    if (slashStyle === 'jab' || slashStyle === 'slam') {
+        damageType = 'blunt';  // Unarmed, mace, hammer
+    } else if (slashStyle === 'alternate' || slashStyle === 'sweep' || slashStyle === 'chop') {
+        damageType = 'blade';  // Knife, sword, axe
+    } else if (slashStyle === 'thrust') {
+        damageType = 'pierce';  // Polearm, spear
+    }
+
+    // Convert direction angle to facing direction string
+    let facing = 'right';
+    if (direction !== undefined) {
+        // direction is in radians, convert to cardinal direction
+        const deg = ((direction * 180 / Math.PI) + 360) % 360;
+        if (deg >= 315 || deg < 45) facing = 'right';
+        else if (deg >= 45 && deg < 135) facing = 'down';
+        else if (deg >= 135 && deg < 225) facing = 'left';
+        else facing = 'up';
+    }
+
+    // Spawn sprite-based effect using combat-effect-system
+    if (typeof spawnMeleeEffect === 'function') {
+        // Position the effect slightly in front of the player in attack direction
+        const offsetDist = 0.3;
+        const effectX = originX + Math.cos(direction || 0) * offsetDist;
+        const effectY = originY + Math.sin(direction || 0) * offsetDist;
+        spawnMeleeEffect(effectX, effectY, damageType, facing);
+    }
 }
 
 /**
