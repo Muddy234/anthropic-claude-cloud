@@ -359,9 +359,9 @@ function renderLootPiles(ctx, camX, camY, tileSize, offsetX) {
         const screenX = (pile.x - camX) * tileSize + offsetX + padding;
         const screenY = (pile.y - camY) * tileSize + padding;
 
-        // FOG OF WAR: Skip loot on non-visible tiles (items not shown when remembered)
+        // FOG OF WAR: Show loot on EXPLORED tiles (with brightness-based dimming)
         const tile = game.map[pile.y]?.[pile.x];
-        if (!tile || !tile.visible) {
+        if (!tile || !tile.explored) {
             continue;
         }
 
@@ -371,13 +371,19 @@ function renderLootPiles(ctx, camX, camY, tileSize, offsetX) {
             continue;
         }
 
+        // Get tile brightness for distance-based dimming
+        const brightness = typeof getTileBrightness === 'function'
+            ? getTileBrightness(pile.x, pile.y)
+            : 1.0;
+
         // Calculate fade for last 10 seconds
         const age = Date.now() - pile.spawnTime;
         const timeLeft = LOOT_CONFIG.despawnTime - age;
-        let alpha = 1.0;
+        let alpha = brightness; // Start with brightness-based alpha
         if (timeLeft < 10000) {
             // Blink effect in last 10 seconds
-            alpha = (Math.sin(age / 150) + 1) / 2 * 0.7 + 0.3;
+            const blinkAlpha = (Math.sin(age / 150) + 1) / 2 * 0.7 + 0.3;
+            alpha = brightness * blinkAlpha;
         }
 
         ctx.globalAlpha = alpha;

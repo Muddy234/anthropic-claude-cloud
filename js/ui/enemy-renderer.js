@@ -600,22 +600,32 @@ function drawEnemyHealthBar(ctx, x, y, width, hp, maxHp, isTargeted, barHeight) 
 }
 
 /**
- * Render all enemies (only those visible to the player)
- * Call this from your main render function instead of the inline enemy loop
+ * Render all enemies on EXPLORED tiles (with distance-based dimming)
+ * Enemies outside torchlight are visible but dimmed
  */
 function renderAllEnemies(ctx, camX, camY, tileSize, offsetX) {
     if (!game.enemies) return;
 
     for (const enemy of game.enemies) {
-        // FOG OF WAR: Only render enemies that are visible to the player
-        if (enemy.isVisible === false) continue;
-
-        // Also check tile visibility as fallback
         const enemyTileX = Math.floor(enemy.gridX);
         const enemyTileY = Math.floor(enemy.gridY);
-        if (game.map[enemyTileY]?.[enemyTileX]?.visible === false) continue;
+        const tile = game.map[enemyTileY]?.[enemyTileX];
+
+        // Only render enemies on EXPLORED tiles (not just visible)
+        if (!tile || !tile.explored) continue;
+
+        // Get brightness for this tile (uses smooth gradient from torch)
+        const brightness = typeof getTileBrightness === 'function'
+            ? getTileBrightness(enemyTileX, enemyTileY)
+            : 1.0;
+
+        // Apply brightness as globalAlpha for dimming effect
+        ctx.save();
+        ctx.globalAlpha = brightness;
 
         drawEnemy(ctx, enemy, camX, camY, tileSize, offsetX);
+
+        ctx.restore();
     }
 }
 

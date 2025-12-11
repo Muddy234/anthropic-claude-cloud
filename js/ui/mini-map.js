@@ -207,10 +207,14 @@ function drawMinimapEntities(ctx, cx, cy, cfg, playerGridX, playerGridY, colors)
             if (dist > radius - 5) continue;
 
             const tile = game.map[enemyY]?.[enemyX];
-            if (!tile || !tile.visible) continue;
+            if (!tile || !tile.explored) continue; // Show on explored tiles
 
             const minimapX = cx + (dx * cfg.tileSize);
             const minimapY = cy + (dy * cfg.tileSize);
+
+            // Get brightness for dimming outside torch
+            const brightness = typeof getTileBrightness === 'function' ? getTileBrightness(enemyX, enemyY) : 1.0;
+            ctx.globalAlpha = brightness;
 
             // Enemy dot with glow
             ctx.shadowColor = colors.health || '#c0392b';
@@ -220,6 +224,7 @@ function drawMinimapEntities(ctx, cx, cy, cfg, playerGridX, playerGridY, colors)
             ctx.arc(minimapX, minimapY, cfg.tileSize * 0.8, 0, Math.PI * 2);
             ctx.fill();
             ctx.shadowBlur = 0;
+            ctx.globalAlpha = 1;
         }
     }
 
@@ -236,14 +241,17 @@ function drawMinimapEntities(ctx, cx, cy, cfg, playerGridX, playerGridY, colors)
             if (dist > radius - 5) continue;
 
             const tile = game.map[lootY]?.[lootX];
-            if (!tile || !tile.visible) continue;
+            if (!tile || !tile.explored) continue; // Show on explored tiles
+
+            // Get brightness for dimming outside torch
+            const brightness = typeof getTileBrightness === 'function' ? getTileBrightness(lootX, lootY) : 1.0;
 
             const minimapX = cx + (dx * cfg.tileSize);
             const minimapY = cy + (dy * cfg.tileSize);
 
-            // Loot diamond with pulse
+            // Loot diamond with pulse (dimmed by brightness)
             ctx.fillStyle = colors.gold || '#d4af37';
-            ctx.globalAlpha = pulse;
+            ctx.globalAlpha = pulse * brightness;
             ctx.save();
             ctx.translate(minimapX, minimapY);
             ctx.rotate(Math.PI / 4);
@@ -268,7 +276,11 @@ function drawMinimapEntities(ctx, cx, cy, cfg, playerGridX, playerGridY, colors)
             if (dist > radius - 5) continue;
 
             const tile = game.map[chestY]?.[chestX];
-            if (!tile || !tile.visible) continue;
+            if (!tile || !tile.explored) continue; // Show on explored tiles
+
+            // Get brightness for dimming outside torch
+            const brightness = typeof getTileBrightness === 'function' ? getTileBrightness(chestX, chestY) : 1.0;
+            ctx.globalAlpha = brightness;
 
             const minimapX = cx + (dx * cfg.tileSize);
             const minimapY = cy + (dy * cfg.tileSize);
@@ -278,6 +290,7 @@ function drawMinimapEntities(ctx, cx, cy, cfg, playerGridX, playerGridY, colors)
             ctx.lineWidth = 1;
             ctx.strokeRect(minimapX - cfg.tileSize * 0.6, minimapY - cfg.tileSize * 0.6,
                           cfg.tileSize * 1.2, cfg.tileSize * 1.2);
+            ctx.globalAlpha = 1;
         }
     }
 }

@@ -658,9 +658,8 @@ function drawThemedFloor(tile, x, y, size) {
 // ============================================================================
 // ATMOSPHERIC FOG OF WAR SYSTEM
 // ============================================================================
-// Uses ambient blue-grey instead of hard black for a more atmospheric feel
-// ALL explored areas remain visible - just desaturated outside torchlight
-// Torchlight adds warm orange glow, not visibility blocking
+// ALL explored areas remain visible - just dimmed/desaturated outside torchlight
+// Smooth 2-tile gradient from torch edge to dimmed zone
 // ============================================================================
 
 // Ambient fog color (blue-grey instead of pure black)
@@ -669,33 +668,94 @@ const FOG_COLOR = { r: 26, g: 26, b: 45 }; // #1a1a2d
 // Torchlight warm glow color (orange/amber)
 const TORCH_COLOR = { r: 255, g: 147, b: 41 }; // Warm orange #ff9329
 
-// Visibility settings - explored areas are ALWAYS visible, just dimmed/desaturated
-const REMEMBERED_TILE_DIM = 0.45; // How much to dim remembered tiles (0.45 = 55% brightness)
-const DESATURATION_AMOUNT = 0.5; // How much to desaturate areas outside light
+// Visibility settings
+const MIN_BRIGHTNESS = 0.55; // 55% brightness outside torch (45% dimmed)
+const FADE_DISTANCE = 2; // 2 tile gradient from torch edge
 
 /**
- * Render warm torchlight glow around the player
- * Creates an orange-tinted light effect like real torchlight
- * This ONLY adds glow, it doesn't block visibility
+ * Calculate tile brightness based on distance from player
+ * Returns 1.0 (full brightness) inside torch, smooth gradient in fade zone, MIN_BRIGHTNESS outside
+ * @param {number} tileX - Tile X position
+ * @param {number} tileY - Tile Y position
+ * @returns {number} - Brightness from MIN_BRIGHTNESS to 1.0
  */
-function renderTorchlightGlow(ctx, player, camX, camY, tileSize, offsetX) {
-    // Get vision range for glow radius
-    const fullVisionRange = typeof VisionSystem !== 'undefined'
+function getTileBrightness(tileX, tileY) {
+    if (!game.player) return MIN_BRIGHTNESS;
+
+    const playerX = game.player.gridX;
+    const playerY = game.player.gridY;
+
+    // Get torch/vision radius
+    const torchRadius = typeof VisionSystem !== 'undefined'
         ? VisionSystem.getPlayerVisionRange()
         : 4;
 
-    // Calculate player's screen position
+    // Calculate distance from player
+    const dx = tileX - playerX;
+    const dy = tileY - playerY;
+    const distance = Math.sqrt(dx * dx + dy * dy);
+
+    // Inside torch radius = full brightness
+    if (distance <= torchRadius) {
+        return 1.0;
+    }
+
+    // In fade zone = smooth gradient
+    const fadeStart = torchRadius;
+    const fadeEnd = torchRadius + FADE_DISTANCE;
+
+    if (distance < fadeEnd) {
+        // Calculate progress through fade zone (0 at torch edge, 1 at fade end)
+        const fadeProgress = (distance - fadeStart) / FADE_DISTANCE;
+
+        // Smoothstep for natural transition
+        const smoothProgress = fadeProgress * fadeProgress * (3 - 2 * fadeProgress);
+
+        // Interpolate from 1.0 to MIN_BRIGHTNESS
+        return 1.0 - (smoothProgress * (1.0 - MIN_BRIGHTNESS));
+    }
+
+    // Beyond fade zone = minimum brightness
+    return MIN_BRIGHTNESS;
+}
+
+/**
+ * Get the dim overlay alpha for a tile (inverse of brightness)
+ * @param {number} tileX - Tile X position
+ * @param {number} tileY - Tile Y position
+ * @returns {number} - Alpha for fog overlay (0 = no fog, higher = more dimmed)
+ */
+function getTileDimAmount(tileX, tileY) {
+    const brightness = getTileBrightness(tileX, tileY);
+    // Convert brightness to dim amount
+    // brightness 1.0 = dim 0, brightness 0.55 = dim 0.45
+    return 1.0 - brightness;
+}
+
+// Export for use by other renderers
+window.getTileBrightness = getTileBrightness;
+window.getTileDimAmount = getTileDimAmount;
+
+/**
+ * Render warm torchlight glow around the player
+ * Glow blends into the dimmed areas using the same gradient
+ */
+function renderTorchlightGlow(ctx, player, camX, camY, tileSize, offsetX) {
+    const torchRadius = typeof VisionSystem !== 'undefined'
+        ? VisionSystem.getPlayerVisionRange()
+        : 4;
+
     const playerScreenX = (player.displayX - camX) * tileSize + offsetX;
     const playerScreenY = (player.displayY - camY) * tileSize;
 
-    // Get flicker intensity for animated glow
+    // Get flicker for animated glow
     let flickerMultiplier = 1.0;
     if (typeof LightSourceSystem !== 'undefined') {
-        // Use global flicker offset for player's torch
         flickerMultiplier = 1 + LightSourceSystem.flickerOffset * 0.2;
     }
 
-    const glowRadius = fullVisionRange * tileSize * flickerMultiplier * 1.2;
+    // Glow extends to the fade zone edge
+    const glowRadius = (torchRadius + FADE_DISTANCE) * tileSize * flickerMultiplier;
 
     // Create radial gradient for warm glow
     const gradient = ctx.createRadialGradient(
@@ -703,28 +763,27 @@ function renderTorchlightGlow(ctx, player, camX, camY, tileSize, offsetX) {
         playerScreenX, playerScreenY, glowRadius
     );
 
-    // Warm orange glow that fades out - more intense for visibility
-    const intensity = 0.18 * flickerMultiplier;
+    // Warm orange glow that follows the same falloff as brightness
+    const intensity = 0.2 * flickerMultiplier;
+    const torchEdge = torchRadius / (torchRadius + FADE_DISTANCE); // Where torch radius ends in gradient
+
     gradient.addColorStop(0, `rgba(${TORCH_COLOR.r}, ${TORCH_COLOR.g}, ${TORCH_COLOR.b}, ${intensity})`);
-    gradient.addColorStop(0.4, `rgba(${TORCH_COLOR.r}, ${TORCH_COLOR.g}, ${TORCH_COLOR.b}, ${intensity * 0.6})`);
-    gradient.addColorStop(0.7, `rgba(${TORCH_COLOR.r}, ${TORCH_COLOR.g}, ${TORCH_COLOR.b}, ${intensity * 0.25})`);
+    gradient.addColorStop(torchEdge * 0.5, `rgba(${TORCH_COLOR.r}, ${TORCH_COLOR.g}, ${TORCH_COLOR.b}, ${intensity * 0.8})`);
+    gradient.addColorStop(torchEdge, `rgba(${TORCH_COLOR.r}, ${TORCH_COLOR.g}, ${TORCH_COLOR.b}, ${intensity * 0.5})`);
     gradient.addColorStop(1, `rgba(${TORCH_COLOR.r}, ${TORCH_COLOR.g}, ${TORCH_COLOR.b}, 0)`);
 
     ctx.save();
-    ctx.globalCompositeOperation = 'screen'; // Additive blending for glow
+    ctx.globalCompositeOperation = 'screen';
     ctx.fillStyle = gradient;
     ctx.fillRect(playerScreenX - glowRadius, playerScreenY - glowRadius, glowRadius * 2, glowRadius * 2);
     ctx.restore();
 }
 
 /**
- * Apply the torchlight atmosphere effects
- * - Warm glow around player
- * - Cookie textures for organic light shapes
- * NOTE: This does NOT block visibility - that's handled per-tile
+ * Apply fog overlay and torchlight effects
  */
 function applyRadialFogOverlay(ctx, player, camX, camY, tileSize, offsetX, viewW, viewH) {
-    // Render warm torchlight glow for orange tint
+    // Render warm torchlight glow
     renderTorchlightGlow(ctx, player, camX, camY, tileSize, offsetX);
 
     // Render light source cookie textures for organic shapes
@@ -893,12 +952,14 @@ const camY = game.camera.y + (shakeOffset.y / (TILE_SIZE * ZOOM_LEVEL));
                     ctx.strokeRect(screenX, screenY, effectiveTileSize, effectiveTileSize);
                 }
 
-                // FOG OF WAR: Apply single dim overlay for remembered (not currently visible) tiles
-                // Uses REMEMBERED_TILE_DIM constant - areas stay VISIBLE but desaturated
-                // Player can see enemies, items, etc outside torchlight
-                if (tile.explored && !tile.visible) {
-                    ctx.fillStyle = `rgba(${FOG_COLOR.r}, ${FOG_COLOR.g}, ${FOG_COLOR.b}, ${REMEMBERED_TILE_DIM})`;
-                    ctx.fillRect(screenX, screenY, effectiveTileSize, effectiveTileSize);
+                // FOG OF WAR: Apply distance-based dimming overlay for explored tiles
+                // Uses smooth gradient from torch edge outward
+                if (tile.explored) {
+                    const dimAmount = getTileDimAmount(x, y);
+                    if (dimAmount > 0.01) {
+                        ctx.fillStyle = `rgba(${FOG_COLOR.r}, ${FOG_COLOR.g}, ${FOG_COLOR.b}, ${dimAmount})`;
+                        ctx.fillRect(screenX, screenY, effectiveTileSize, effectiveTileSize);
+                    }
                 }
             }
         }
