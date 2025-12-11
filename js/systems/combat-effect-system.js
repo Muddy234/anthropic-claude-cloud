@@ -36,13 +36,10 @@ const EFFECT_LOADER_STATUS = {
  */
 const COMBAT_EFFECT_CONFIG = {
     // Melee slash effects (orange/red curved trails)
+    // Note: Each variant has different file naming - see SLASH_FILE_PATTERNS
     slash: {
         basePath: 'assets/spritesheet/slash',
         variants: 10,
-        framePattern: 'png/skash_{frame}.png',  // Note: typo "skash" is in the actual files
-        frameCount: 12,
-        frameStart: 1,
-        frameDigits: 5,  // 00001 format
         fps: 24,
         defaultSize: 96,  // Display size in pixels
         offsetY: -0.3,    // Offset above target (in tiles)
@@ -76,6 +73,21 @@ const COMBAT_EFFECT_CONFIG = {
         offsetY: -0.1,
         loop: false
     }
+};
+
+// Slash effects have inconsistent file naming per variant
+// This maps each variant to its specific pattern
+const SLASH_FILE_PATTERNS = {
+    1:  { prefix: 'skash',           digits: 5, start: 1,  count: 12 },  // skash_00001.png
+    2:  { prefix: 'slash2',          digits: 5, start: 1,  count: 12 },  // slash2_00001.png
+    3:  { prefix: 'slash3',          digits: 5, start: 1,  count: 12 },  // slash3_00001.png
+    4:  { prefix: 'slash4',          digits: 5, start: 1,  count: 12 },  // slash4_00001.png
+    5:  { prefix: 'slash5-animation', digits: 2, start: 0, count: 12 },  // slash5-animation_00.png
+    6:  { prefix: 'slash6',          digits: 5, start: 1,  count: 11 },  // slash6_00001.png (11 frames)
+    7:  { prefix: 'slash7',          digits: 5, start: 1,  count: 6  },  // slash7_00001.png (6 frames)
+    8:  { prefix: 'slash8',          digits: 5, start: 1,  count: 8  },  // slash8_00001.png (8 frames)
+    9:  { prefix: 'slash9',          digits: 5, start: 1,  count: 9  },  // slash9_00001.png (9 frames)
+    10: { prefix: 'slash10.spine',   digits: 2, start: 0,  count: 10 }   // slash10.spine_00.png
 };
 
 // Map effect types to visual categories for easy selection
@@ -133,6 +145,7 @@ function loadCombatEffectSprites() {
     EFFECT_LOADER_STATUS.isReady = false;
     EFFECT_LOADER_STATUS.loadedEffects = 0;
     EFFECT_LOADER_STATUS.failedEffects = [];
+    EFFECT_LOADER_STATUS.totalEffects = 0;
 
     const loadPromises = [];
 
@@ -145,15 +158,23 @@ function loadCombatEffectSprites() {
             const cacheKey = `${effectType}_${variant}`;
             EFFECT_SPRITE_CACHE[cacheKey] = [];
 
-            // Determine frame count for this variant
-            const frameCount = config.frameCounts
-                ? config.frameCounts[variant - 1]
-                : config.frameCount;
+            // Determine frame count and start for this variant
+            let frameCount, frameStart;
+            if (effectType === 'slash') {
+                // Use slash-specific patterns
+                const pattern = SLASH_FILE_PATTERNS[variant];
+                if (!pattern) continue;
+                frameCount = pattern.count;
+                frameStart = pattern.start;
+            } else {
+                frameCount = config.frameCount;
+                frameStart = config.frameStart;
+            }
 
             EFFECT_LOADER_STATUS.totalEffects += frameCount;
 
             // Load each frame
-            for (let frame = config.frameStart; frame < config.frameStart + frameCount; frame++) {
+            for (let frame = frameStart; frame < frameStart + frameCount; frame++) {
                 const promise = loadEffectFrame(effectType, variant, frame, config, cacheKey);
                 loadPromises.push(promise);
             }
@@ -182,9 +203,14 @@ function loadEffectFrame(effectType, variant, frame, config, cacheKey) {
         // Build the path first
         let path;
         if (effectType === 'slash') {
-            // Format: assets/spritesheet/slash1/png/skash_00001.png
-            const paddedFrame = String(frame).padStart(config.frameDigits, '0');
-            path = `${config.basePath}${variant}/png/skash_${paddedFrame}.png`;
+            // Use variant-specific pattern from SLASH_FILE_PATTERNS
+            const pattern = SLASH_FILE_PATTERNS[variant];
+            if (!pattern) {
+                reject(`No pattern for slash variant ${variant}`);
+                return;
+            }
+            const paddedFrame = String(frame).padStart(pattern.digits, '0');
+            path = `${config.basePath}${variant}/png/${pattern.prefix}_${paddedFrame}.png`;
         } else {
             // Format: assets/spritesheet/magic_effect/1/1.png
             path = `${config.basePath}/${variant}/${frame}.png`;
@@ -193,8 +219,13 @@ function loadEffectFrame(effectType, variant, frame, config, cacheKey) {
         const img = new Image();
 
         img.onload = () => {
-            // Store frame at correct index
-            const frameIndex = frame - config.frameStart;
+            // Store frame at correct index (account for variant-specific start)
+            let frameStart = config.frameStart || 0;
+            if (effectType === 'slash') {
+                const pattern = SLASH_FILE_PATTERNS[variant];
+                if (pattern) frameStart = pattern.start;
+            }
+            const frameIndex = frame - frameStart;
             EFFECT_SPRITE_CACHE[cacheKey][frameIndex] = img;
             EFFECT_LOADER_STATUS.loadedEffects++;
             resolve();
