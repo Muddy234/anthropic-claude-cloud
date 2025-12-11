@@ -339,6 +339,16 @@ function applyProjectileDamage(config) {
         showDamageNumber(target, damage, color);
     }
 
+    // === SPAWN COMBAT VISUAL EFFECT ===
+    const targetX = target.displayX ?? target.gridX ?? target.x;
+    const targetY = target.displayY ?? target.gridY ?? target.y;
+    if (config.isMagic && typeof spawnMagicEffect === 'function') {
+        spawnMagicEffect(targetX, targetY, config.element || 'default');
+    } else if (!config.isMagic && typeof spawnImpactEffect === 'function') {
+        // Ranged physical projectile hit - spawn impact effect
+        spawnImpactEffect(targetX, targetY, 'default');
+    }
+
     // Message
     if (typeof addMessage === 'function' && config.attacker === game.player) {
         const attackType = config.isSkill ? 'skill shot' : config.isMagic ? 'spell' : 'shot';

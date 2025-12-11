@@ -410,6 +410,15 @@ function performAttack(attacker, defender) {
         onCombatHit(attacker, defender, result);
     }
 
+    // === SPAWN COMBAT VISUAL EFFECT ===
+    if (typeof spawnMeleeEffect === 'function') {
+        const weapon = attacker.equipped?.MAIN;
+        const damageType = weapon?.damageType || 'default';
+        const targetX = defender.displayX ?? defender.gridX ?? defender.x;
+        const targetY = defender.displayY ?? defender.gridY ?? defender.y;
+        spawnMeleeEffect(targetX, targetY, damageType, attacker.facing || 'right');
+    }
+
     // Build message
     let message = `${attacker.name || 'You'} hit ${defender.name || 'target'} for ${result.finalDamage}!`;
 

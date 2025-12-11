@@ -1022,6 +1022,9 @@ const camY = game.camera.y + (shakeOffset.y / (TILE_SIZE * ZOOM_LEVEL));
         // Melee slash effects (mouse-driven combat)
         if (typeof drawSlashEffects === 'function') { drawSlashEffects(ctx, camX, camY, effectiveTileSize, TRACKER_WIDTH); }
 
+        // Combat effects (sprite-based slash, magic, explosions)
+        if (typeof renderCombatEffects === 'function') { renderCombatEffects(ctx, camX, camY, effectiveTileSize, TRACKER_WIDTH); }
+
         if (typeof renderDamageNumbers === 'function') { renderDamageNumbers(camX, camY, effectiveTileSize, TRACKER_WIDTH); }
         ctx.restore();
 

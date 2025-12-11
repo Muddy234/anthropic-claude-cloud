@@ -1,0 +1,480 @@
+// ============================================================================
+// COMBAT EFFECT SYSTEM - The Shifting Chasm
+// ============================================================================
+// Manages combat visual effects: slash animations, magic effects, explosions
+// Loads individual PNG frames and plays them as animations
+// ============================================================================
+
+// ============================================================================
+// EFFECT SPRITE CACHE
+// ============================================================================
+
+/**
+ * Cache for loaded effect sprites
+ * Structure: { 'effectType_N': [Image, Image, ...] }
+ */
+const EFFECT_SPRITE_CACHE = {};
+
+/**
+ * Tracks effect sprite loading status
+ */
+const EFFECT_LOADER_STATUS = {
+    isLoading: false,
+    isReady: false,
+    totalEffects: 0,
+    loadedEffects: 0,
+    failedEffects: []
+};
+
+// ============================================================================
+// EFFECT CONFIGURATIONS
+// ============================================================================
+
+/**
+ * Configuration for all combat effect types
+ * Each effect type has variants (1-10 for slash/magic, 1-5 for explosion)
+ */
+const COMBAT_EFFECT_CONFIG = {
+    // Melee slash effects (orange/red curved trails)
+    slash: {
+        basePath: 'assets/spritesheet/slash',
+        variants: 10,
+        framePattern: 'png/skash_{frame}.png',  // Note: typo "skash" is in the actual files
+        frameCount: 12,
+        frameStart: 1,
+        frameDigits: 5,  // 00001 format
+        fps: 24,
+        defaultSize: 96,  // Display size in pixels
+        offsetY: -0.3,    // Offset above target (in tiles)
+        loop: false
+    },
+
+    // Magic spell effects (various colors)
+    magic: {
+        basePath: 'assets/spritesheet/magic_effect',
+        variants: 10,
+        framePattern: '{frame}.png',
+        frameCount: 8,  // All variants have 8 frames (1.png to 8.png)
+        frameStart: 1,
+        frameDigits: 0,  // No padding (1.png, 2.png)
+        fps: 16,
+        defaultSize: 80,
+        offsetY: -0.2,
+        loop: false
+    },
+
+    // Explosion/impact effects
+    explosion: {
+        basePath: 'assets/spritesheet/explosion_effects',
+        variants: 5,
+        framePattern: '{frame}.png',
+        frameCount: 9,  // All variants have 9 frames (1.png to 9.png)
+        frameStart: 1,
+        frameDigits: 0,
+        fps: 20,
+        defaultSize: 96,
+        offsetY: -0.1,
+        loop: false
+    }
+};
+
+// Map effect types to visual categories for easy selection
+const EFFECT_MAPPINGS = {
+    // Melee weapon attacks -> slash effects
+    melee: {
+        default: { type: 'slash', variants: [1, 2, 3, 4, 5] },
+        blade: { type: 'slash', variants: [1, 2, 3, 6, 7] },      // Swords, daggers
+        blunt: { type: 'slash', variants: [4, 5, 8, 9, 10] },     // Hammers, maces
+        pierce: { type: 'slash', variants: [1, 3, 5, 7, 9] }      // Spears, rapiers
+    },
+
+    // Magic attacks -> magic effects
+    magic: {
+        default: { type: 'magic', variants: [1, 2, 3, 4, 5] },
+        fire: { type: 'magic', variants: [3, 5, 7] },             // Orange/red effects
+        ice: { type: 'magic', variants: [1, 4, 6] },              // Blue/white effects
+        lightning: { type: 'magic', variants: [2, 8] },           // Yellow effects
+        arcane: { type: 'magic', variants: [5, 9, 10] },          // Purple effects
+        nature: { type: 'magic', variants: [4, 6] },              // Green effects
+        dark: { type: 'magic', variants: [7, 9, 10] },            // Dark effects
+        holy: { type: 'magic', variants: [1, 2, 8] }              // Light effects
+    },
+
+    // Impact/hit effects -> explosion effects
+    impact: {
+        default: { type: 'explosion', variants: [1, 2, 3, 4, 5] },
+        fire: { type: 'explosion', variants: [2, 3, 4] },         // Fire explosions
+        death: { type: 'explosion', variants: [1, 5] }            // Green/dark smoke
+    }
+};
+
+// ============================================================================
+// ACTIVE EFFECTS
+// ============================================================================
+
+/**
+ * Array of currently playing effects
+ */
+const activeEffects = [];
+
+// ============================================================================
+// SPRITE LOADING
+// ============================================================================
+
+/**
+ * Load all combat effect sprites
+ * Should be called during game initialization
+ */
+function loadCombatEffectSprites() {
+    EFFECT_LOADER_STATUS.isLoading = true;
+    EFFECT_LOADER_STATUS.isReady = false;
+    EFFECT_LOADER_STATUS.loadedEffects = 0;
+    EFFECT_LOADER_STATUS.failedEffects = [];
+
+    const loadPromises = [];
+
+    // Load each effect type
+    for (const effectType in COMBAT_EFFECT_CONFIG) {
+        const config = COMBAT_EFFECT_CONFIG[effectType];
+
+        // Load each variant
+        for (let variant = 1; variant <= config.variants; variant++) {
+            const cacheKey = `${effectType}_${variant}`;
+            EFFECT_SPRITE_CACHE[cacheKey] = [];
+
+            // Determine frame count for this variant
+            const frameCount = config.frameCounts
+                ? config.frameCounts[variant - 1]
+                : config.frameCount;
+
+            EFFECT_LOADER_STATUS.totalEffects += frameCount;
+
+            // Load each frame
+            for (let frame = config.frameStart; frame < config.frameStart + frameCount; frame++) {
+                const promise = loadEffectFrame(effectType, variant, frame, config, cacheKey);
+                loadPromises.push(promise);
+            }
+        }
+    }
+
+    // Wait for all sprites to load
+    Promise.allSettled(loadPromises).then(() => {
+        EFFECT_LOADER_STATUS.isLoading = false;
+        EFFECT_LOADER_STATUS.isReady = true;
+
+        console.log('✨ Combat Effect Sprites Loaded:');
+        console.log(`   Loaded: ${EFFECT_LOADER_STATUS.loadedEffects}/${EFFECT_LOADER_STATUS.totalEffects}`);
+
+        if (EFFECT_LOADER_STATUS.failedEffects.length > 0) {
+            console.warn(`   Failed: ${EFFECT_LOADER_STATUS.failedEffects.length}`);
+        }
+    });
+}
+
+/**
+ * Load a single effect frame
+ */
+function loadEffectFrame(effectType, variant, frame, config, cacheKey) {
+    return new Promise((resolve, reject) => {
+        const img = new Image();
+
+        img.onload = () => {
+            // Store frame at correct index
+            const frameIndex = frame - config.frameStart;
+            EFFECT_SPRITE_CACHE[cacheKey][frameIndex] = img;
+            EFFECT_LOADER_STATUS.loadedEffects++;
+            resolve();
+        };
+
+        img.onerror = () => {
+            const errorMsg = `Failed to load effect: ${effectType}/${variant}/frame${frame}`;
+            EFFECT_LOADER_STATUS.failedEffects.push(errorMsg);
+            reject(errorMsg);
+        };
+
+        // Build the path
+        let path;
+        if (effectType === 'slash') {
+            // Format: assets/spritesheet/slash1/png/skash_00001.png
+            const paddedFrame = String(frame).padStart(config.frameDigits, '0');
+            path = `${config.basePath}${variant}/png/skash_${paddedFrame}.png`;
+        } else {
+            // Format: assets/spritesheet/magic_effect/1/1.png
+            path = `${config.basePath}/${variant}/${frame}.png`;
+        }
+
+        img.src = path;
+    });
+}
+
+/**
+ * Check if combat effect sprites are ready
+ */
+function areCombatEffectsReady() {
+    return EFFECT_LOADER_STATUS.isReady;
+}
+
+// ============================================================================
+// EFFECT SPAWNING
+// ============================================================================
+
+/**
+ * Spawn a combat effect at a position
+ * @param {string} category - Effect category ('melee', 'magic', 'impact')
+ * @param {string} subType - Sub-type for variant selection (e.g., 'blade', 'fire')
+ * @param {number} x - World X position (grid coords)
+ * @param {number} y - World Y position (grid coords)
+ * @param {Object} options - Additional options
+ */
+function spawnCombatEffect(category, subType, x, y, options = {}) {
+    if (!EFFECT_LOADER_STATUS.isReady) {
+        return null;  // Effects not loaded yet
+    }
+
+    // Get effect mapping
+    const mapping = EFFECT_MAPPINGS[category]?.[subType] || EFFECT_MAPPINGS[category]?.default;
+    if (!mapping) {
+        console.warn(`[CombatEffect] Unknown effect category/type: ${category}/${subType}`);
+        return null;
+    }
+
+    // Pick a random variant from the available options
+    const variantIndex = Math.floor(Math.random() * mapping.variants.length);
+    const variant = mapping.variants[variantIndex];
+
+    const config = COMBAT_EFFECT_CONFIG[mapping.type];
+    const cacheKey = `${mapping.type}_${variant}`;
+    const frames = EFFECT_SPRITE_CACHE[cacheKey];
+
+    if (!frames || frames.length === 0) {
+        return null;  // No frames loaded for this effect
+    }
+
+    // Create the effect instance
+    const effect = {
+        type: mapping.type,
+        variant: variant,
+        frames: frames,
+        x: x,
+        y: y + (config.offsetY || 0),
+        currentFrame: 0,
+        frameTimer: 0,
+        fps: options.fps || config.fps,
+        size: options.size || config.defaultSize,
+        rotation: options.rotation || 0,
+        scale: options.scale || 1.0,
+        alpha: 1.0,
+        loop: config.loop,
+        active: true,
+        // Direction for slash effects
+        direction: options.direction || 'right',
+        // Color tint (optional)
+        tint: options.tint || null
+    };
+
+    activeEffects.push(effect);
+    return effect;
+}
+
+/**
+ * Spawn a melee attack effect
+ */
+function spawnMeleeEffect(x, y, damageType, direction) {
+    const subType = damageType || 'default';
+
+    // Calculate rotation based on attack direction
+    let rotation = 0;
+    if (direction === 'up') rotation = -Math.PI / 2;
+    else if (direction === 'down') rotation = Math.PI / 2;
+    else if (direction === 'left') rotation = Math.PI;
+
+    return spawnCombatEffect('melee', subType, x, y, {
+        direction: direction,
+        rotation: rotation
+    });
+}
+
+/**
+ * Spawn a magic spell effect
+ */
+function spawnMagicEffect(x, y, element) {
+    const subType = element || 'default';
+    return spawnCombatEffect('magic', subType, x, y, {
+        scale: 1.2
+    });
+}
+
+/**
+ * Spawn an impact/explosion effect
+ */
+function spawnImpactEffect(x, y, element) {
+    const subType = element || 'default';
+    return spawnCombatEffect('impact', subType, x, y, {
+        scale: 1.0
+    });
+}
+
+// ============================================================================
+// UPDATE LOOP
+// ============================================================================
+
+/**
+ * Update all active combat effects
+ * @param {number} deltaTime - Time since last frame in milliseconds
+ */
+function updateCombatEffects(deltaTime) {
+    const dt = deltaTime / 1000;
+
+    for (let i = activeEffects.length - 1; i >= 0; i--) {
+        const effect = activeEffects[i];
+
+        if (!effect.active) {
+            activeEffects.splice(i, 1);
+            continue;
+        }
+
+        // Update frame timer
+        effect.frameTimer += dt;
+
+        // Time per frame
+        const frameTime = 1.0 / effect.fps;
+
+        // Advance frame if enough time passed
+        if (effect.frameTimer >= frameTime) {
+            effect.frameTimer -= frameTime;
+            effect.currentFrame++;
+
+            // Check if animation complete
+            if (effect.currentFrame >= effect.frames.length) {
+                if (effect.loop) {
+                    effect.currentFrame = 0;
+                } else {
+                    effect.active = false;
+                    activeEffects.splice(i, 1);
+                }
+            }
+        }
+
+        // Fade out in last 20% of animation
+        const progress = effect.currentFrame / effect.frames.length;
+        if (progress > 0.8) {
+            effect.alpha = (1 - progress) / 0.2;
+        }
+    }
+}
+
+// ============================================================================
+// RENDERING
+// ============================================================================
+
+/**
+ * Render all active combat effects
+ * @param {CanvasRenderingContext2D} ctx - Canvas context
+ * @param {number} camX - Camera X position
+ * @param {number} camY - Camera Y position
+ * @param {number} tileSize - Tile size in pixels
+ * @param {number} offsetX - Screen offset X (tracker width)
+ */
+function renderCombatEffects(ctx, camX, camY, tileSize, offsetX) {
+    const trackerWidth = offsetX || 0;
+
+    for (const effect of activeEffects) {
+        if (!effect.active) continue;
+
+        const frame = effect.frames[effect.currentFrame];
+        if (!frame) continue;
+
+        // Calculate screen position (centered on tile)
+        const screenX = (effect.x - camX) * tileSize + trackerWidth + tileSize / 2;
+        const screenY = (effect.y - camY) * tileSize + tileSize / 2;
+
+        // Calculate display size
+        const displaySize = effect.size * effect.scale;
+        const halfSize = displaySize / 2;
+
+        ctx.save();
+
+        // Apply alpha
+        ctx.globalAlpha = effect.alpha;
+
+        // Translate to position
+        ctx.translate(screenX, screenY);
+
+        // Apply rotation
+        if (effect.rotation) {
+            ctx.rotate(effect.rotation);
+        }
+
+        // Flip horizontally for left-facing effects
+        if (effect.direction === 'left') {
+            ctx.scale(-1, 1);
+        }
+
+        // Draw the sprite frame
+        ctx.drawImage(
+            frame,
+            -halfSize, -halfSize,
+            displaySize, displaySize
+        );
+
+        ctx.restore();
+    }
+}
+
+// ============================================================================
+// SYSTEM MANAGER REGISTRATION
+// ============================================================================
+
+const CombatEffectSystemDef = {
+    name: 'combat-effect-system',
+
+    init(game) {
+        // Start loading effect sprites
+        loadCombatEffectSprites();
+        console.log('✅ Combat Effect System initialized');
+    },
+
+    update(dt) {
+        updateCombatEffects(dt);
+    },
+
+    cleanup() {
+        activeEffects.length = 0;
+    }
+};
+
+// Register with SystemManager (after combat system at priority 51)
+if (typeof SystemManager !== 'undefined') {
+    SystemManager.register('combat-effect-system', CombatEffectSystemDef, 51);
+} else {
+    console.warn('⚠️ SystemManager not found - combat-effect-system running standalone');
+}
+
+// ============================================================================
+// EXPORTS
+// ============================================================================
+
+if (typeof window !== 'undefined') {
+    // Cache and status
+    window.EFFECT_SPRITE_CACHE = EFFECT_SPRITE_CACHE;
+    window.EFFECT_LOADER_STATUS = EFFECT_LOADER_STATUS;
+    window.COMBAT_EFFECT_CONFIG = COMBAT_EFFECT_CONFIG;
+    window.EFFECT_MAPPINGS = EFFECT_MAPPINGS;
+    window.activeEffects = activeEffects;
+
+    // Loading
+    window.loadCombatEffectSprites = loadCombatEffectSprites;
+    window.areCombatEffectsReady = areCombatEffectsReady;
+
+    // Spawning
+    window.spawnCombatEffect = spawnCombatEffect;
+    window.spawnMeleeEffect = spawnMeleeEffect;
+    window.spawnMagicEffect = spawnMagicEffect;
+    window.spawnImpactEffect = spawnImpactEffect;
+
+    // Update/Render
+    window.updateCombatEffects = updateCombatEffects;
+    window.renderCombatEffects = renderCombatEffects;
+}
+
+console.log('✅ Combat Effect System loaded');
