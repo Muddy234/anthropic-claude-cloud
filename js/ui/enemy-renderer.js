@@ -371,6 +371,17 @@ function drawEnemy(ctx, enemy, camX, camY, tileSize, offsetX) {
         }
     }
 
+    // Check for damage hit flash (red flash when taking damage)
+    let hitFlash = false;
+    if (enemy.hitFlash?.active) {
+        const elapsed = Date.now() - enemy.hitFlash.time;
+        if (elapsed < (enemy.hitFlash.duration || 100)) {
+            hitFlash = true;
+        } else {
+            enemy.hitFlash.active = false;
+        }
+    }
+
     const ex = (enemy.displayX - camX) * tileSize + offsetX;
     const ey = (enemy.displayY - camY) * tileSize;
     const cx = ex + tileSize / 2;
@@ -394,6 +405,15 @@ function drawEnemy(ctx, enemy, camX, camY, tileSize, offsetX) {
             // Pulsing white flash that rapidly blinks
             const flashPulse = Math.sin(Date.now() / 30) > 0 ? 0.8 : 0.3;
             ctx.fillStyle = `rgba(255, 255, 255, ${flashPulse})`;
+            ctx.fillRect(ex, ey, tileSize, tileSize);
+        }
+
+        // Draw damage hit flash overlay (red flash when taking damage)
+        if (hitFlash) {
+            const elapsed = Date.now() - enemy.hitFlash.time;
+            const duration = enemy.hitFlash.duration || 100;
+            const flashIntensity = 1 - (elapsed / duration);
+            ctx.fillStyle = `rgba(255, 60, 60, ${flashIntensity * 0.6})`;
             ctx.fillRect(ex, ey, tileSize, tileSize);
         }
 
@@ -483,6 +503,17 @@ function drawEnemy(ctx, enemy, camX, camY, tileSize, offsetX) {
         // Pulsing white flash that rapidly blinks
         const flashPulse = Math.sin(Date.now() / 30) > 0 ? 0.8 : 0.3;
         ctx.fillStyle = `rgba(255, 255, 255, ${flashPulse})`;
+        ctx.beginPath();
+        ctx.arc(cx, cy, radius + 3, 0, Math.PI * 2);
+        ctx.fill();
+    }
+
+    // Draw damage hit flash overlay for circle enemies (red flash when taking damage)
+    if (hitFlash) {
+        const elapsed = Date.now() - enemy.hitFlash.time;
+        const duration = enemy.hitFlash.duration || 100;
+        const flashIntensity = 1 - (elapsed / duration);
+        ctx.fillStyle = `rgba(255, 60, 60, ${flashIntensity * 0.6})`;
         ctx.beginPath();
         ctx.arc(cx, cy, radius + 3, 0, Math.PI * 2);
         ctx.fill();
