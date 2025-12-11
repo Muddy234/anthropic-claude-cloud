@@ -1,5 +1,5 @@
-﻿// === js/ui/skills-ui.js ===
-// Skills Menu Screen (Press 3) and Action Bar HUD
+// === js/ui/skills-ui.js ===
+// Skills Menu Screen (Press K) and Action Bar HUD - CotDG Style
 // Displays proficiencies, specialties, actions, and cooldowns
 
 // ============================================================================
@@ -7,388 +7,82 @@
 // ============================================================================
 
 const SKILLS_UI_CONFIG = {
-    // Colors
-    colors: {
-        background: 'rgba(0, 0, 0, 0.92)',
-        panelBg: '#1a1a1a',
-        border: '#e74c3c',
-        borderSecondary: '#666',
-        title: '#e74c3c',
-        text: '#ffffff',
-        textDim: '#888888',
-        textMuted: '#555555',
-        xpBar: '#e74c3c',
-        xpBarBg: '#333333',
-        locked: '#444444',
-        unlocked: '#2ecc71',
-        ready: '#2ecc71',
-        cooldown: '#e74c3c',
-        highlight: 'rgba(231, 76, 60, 0.3)'
-    },
-    
-    // Proficiency icons (emoji fallbacks)
-    proficiencyIcons: {
-        blade: '⚔️',
-        blunt: '🔨',
-        magic: '✨',
-        ranged: '🏹',
-        expertise: '🔧'
-    },
-    
-    // Specialty icons
-    specialtyIcons: {
-        // Blade
-        sword: '🗡️',
-        knife: '🔪',
-        axe: '🪓',
-        polearm: '🔱',
-        // Blunt
-        mace: '🔨',
-        staff: '🪄',
-        unarmed: '👊',
-        shield: '🛡️',
-        // Magic
-        fire: '🔥',
-        ice: '❄️',
-        lightning: '⚡',
-        necromancy: '💀',
-        // Ranged
-        bow: '🏹',
-        crossbow: '🎯',
-        throwing: '🗡️',
-        // Expertise
-        traps: '🪤',
-        potions: '🧪',
-        lockpicking: '🔓',
-        tinkering: '⚙️'
-    },
-    
-    // Action icons (can be overridden)
+    // Action icons - Text-based for CotDG style (no emojis)
     actionIcons: {
-        blade_dancer: '🗡️',
-        arterial_strike: '🩸',
-        cleaving_blow: '🪓',
-        impaling_thrust: '🔱',
-        skull_crack: '💥',
-        sweeping_arc: '🌀',
-        flurry_of_blows: '👊',
-        shield_charge: '🛡️',
-        immolate: '🔥',
-        frozen_grasp: '❄️',
-        chain_lightning: '⚡',
-        life_siphon: '💀',
-        power_shot: '🏹',
-        piercing_bolt: '🎯',
-        fan_of_knives: '🗡️',
-        spike_trap: '🪤',
-        volatile_flask: '🧪',
-        expose_weakness: '👁️',
-        deploy_turret: '🤖'
+        blade_dancer: 'BD',
+        arterial_strike: 'AS',
+        cleaving_blow: 'CB',
+        impaling_thrust: 'IT',
+        skull_crack: 'SC',
+        sweeping_arc: 'SA',
+        flurry_of_blows: 'FB',
+        shield_charge: 'SH',
+        immolate: 'IM',
+        frozen_grasp: 'FG',
+        chain_lightning: 'CL',
+        life_siphon: 'LS',
+        power_shot: 'PS',
+        piercing_bolt: 'PB',
+        fan_of_knives: 'FK',
+        spike_trap: 'ST',
+        volatile_flask: 'VF',
+        expose_weakness: 'EW',
+        deploy_turret: 'DT'
+    },
+
+    // Proficiency icons - Letter based
+    proficiencyIcons: {
+        blade: 'B',
+        blunt: 'H',
+        magic: 'M',
+        ranged: 'R',
+        expertise: 'E'
     }
 };
 
-// ============================================================================
-// SKILLS MENU SCREEN (Press 3)
-// ============================================================================
-
-/**
- * Draw the full skills menu overlay
- * Replaces the placeholder drawSkillsOverlay
- */
-function drawSkillsOverlay() {
-    const player = game.player;
-    if (!player || !player.skills) {
-        drawSkillsPlaceholder();
-        return;
-    }
-    
-    const cfg = SKILLS_UI_CONFIG.colors;
-    
-    // Background overlay
-    ctx.fillStyle = cfg.background;
-    ctx.fillRect(TRACKER_WIDTH, 0, canvas.width - TRACKER_WIDTH, canvas.height);
-    
-    // Calculate panel dimensions
-    const viewWidth = canvas.width - TRACKER_WIDTH;
-    const panelWidth = Math.min(900, viewWidth - 80);
-    const panelHeight = Math.min(750, canvas.height - 80);
-    const panelX = TRACKER_WIDTH + (viewWidth - panelWidth) / 2;
-    const panelY = (canvas.height - panelHeight) / 2;
-    
-    // Panel background
-    ctx.fillStyle = cfg.panelBg;
-    ctx.fillRect(panelX, panelY, panelWidth, panelHeight);
-    
-    // Panel border
-    ctx.strokeStyle = cfg.border;
-    ctx.lineWidth = 4;
-    ctx.strokeRect(panelX, panelY, panelWidth, panelHeight);
-    
-    // Title
-    ctx.fillStyle = cfg.title;
-    ctx.font = 'bold 42px monospace';
-    ctx.textAlign = 'center';
-    ctx.fillText('SKILLS', panelX + panelWidth / 2, panelY + 50);
-    
-    // Subtitle with equipped weapon info
-    const weapon = player.equipped?.MAIN;
-    const weaponName = weapon ? weapon.name : 'Unarmed';
-    const specialty = weapon?.specialty || 'unarmed';
-    ctx.fillStyle = cfg.textDim;
-    ctx.font = '16px monospace';
-    ctx.fillText(`Currently Using: ${weaponName} (${specialty})`, panelX + panelWidth / 2, panelY + 75);
-    
-    // Draw proficiencies
-    let yOffset = panelY + 110;
-    const contentX = panelX + 30;
-    const contentWidth = panelWidth - 60;
-    
-    // Get proficiency names
-    const proficiencyOrder = ['blade', 'blunt', 'magic', 'ranged', 'expertise'];
-    
-    for (const profId of proficiencyOrder) {
-        const profData = player.skills.proficiencies[profId];
-        if (!profData) continue;
-        
-        yOffset = drawProficiencySection(
-            ctx, 
-            profId, 
-            profData, 
-            player.skills.specialties,
-            player.skills.actionCooldowns,
-            contentX, 
-            yOffset, 
-            contentWidth
-        );
-        
-        yOffset += 15; // Gap between proficiencies
-    }
-    
-    // Instructions
-    ctx.fillStyle = cfg.textDim;
-    ctx.font = '16px monospace';
-    ctx.textAlign = 'center';
-    ctx.fillText('[ESC] Back  |  [↑/↓] Scroll  |  Hover for Details', panelX + panelWidth / 2, panelY + panelHeight - 20);
-}
-
-/**
- * Draw a single proficiency section with its specialties
- */
-function drawProficiencySection(ctx, profId, profData, specialties, cooldowns, x, y, width) {
-    const cfg = SKILLS_UI_CONFIG.colors;
-    const icon = SKILLS_UI_CONFIG.proficiencyIcons[profId] || '❓';
-    
-    // Proficiency header
-    ctx.fillStyle = cfg.text;
-    ctx.font = 'bold 22px monospace';
-    ctx.textAlign = 'left';
-    
-    const profName = profId.charAt(0).toUpperCase() + profId.slice(1);
-    ctx.fillText(`${icon} ${profName.toUpperCase()}`, x, y);
-    
-    // Level badge
-    ctx.fillStyle = cfg.title;
-    ctx.font = 'bold 18px monospace';
-    ctx.fillText(`Lv ${profData.level}`, x + 200, y);
-    
-    // XP bar for proficiency
-    const barX = x + 260;
-    const barWidth = width - 280;
-    const barHeight = 14;
-    const barY = y - 12;
-    
-    drawXPBar(ctx, barX, barY, barWidth, barHeight, profData.xp, profData.xpToNext, cfg.xpBar);
-    
-    // XP text
-    ctx.fillStyle = cfg.textDim;
-    ctx.font = '12px monospace';
-    ctx.textAlign = 'right';
-    ctx.fillText(`${profData.xp}/${profData.xpToNext} XP`, x + width, y);
-    
-    let currentY = y + 28;
-    
-    // Get specialties for this proficiency
-    const profSpecialties = getSpecialtiesForProficiency(profId);
-    let hasUnlockedSpecialty = false;
-    
-    for (const specId of profSpecialties) {
-        const specData = specialties[specId];
-        
-        if (!specData || !specData.unlocked) {
-            // Show locked specialty (dimmed)
-            continue;
-        }
-        
-        hasUnlockedSpecialty = true;
-        currentY = drawSpecialtyRow(ctx, specId, specData, cooldowns, x + 20, currentY, width - 40);
-    }
-    
-    // Show message if no specialties unlocked
-    if (!hasUnlockedSpecialty) {
-        ctx.fillStyle = cfg.textMuted;
-        ctx.font = 'italic 14px monospace';
-        ctx.textAlign = 'left';
-        ctx.fillText('└─ (Use weapons in this category to unlock specialties)', x + 20, currentY);
-        currentY += 22;
-    }
-    
-    return currentY;
-}
-
-/**
- * Draw a single specialty row with action info
- */
-function drawSpecialtyRow(ctx, specId, specData, cooldowns, x, y, width) {
-    const cfg = SKILLS_UI_CONFIG.colors;
-    const icon = SKILLS_UI_CONFIG.specialtyIcons[specId] || '•';
-    
-    // Tree connector
-    ctx.fillStyle = cfg.textMuted;
-    ctx.font = '14px monospace';
-    ctx.textAlign = 'left';
-    ctx.fillText('├─', x, y);
-    
-    // Specialty icon and name
-    const specName = specId.charAt(0).toUpperCase() + specId.slice(1);
-    ctx.fillStyle = cfg.text;
-    ctx.font = '18px monospace';
-    ctx.fillText(`${icon} ${specName}`, x + 30, y);
-    
-    // Level
-    ctx.fillStyle = cfg.title;
-    ctx.font = 'bold 16px monospace';
-    ctx.fillText(`Lv ${specData.level}`, x + 150, y);
-    
-    // XP bar
-    const barX = x + 210;
-    const barWidth = 150;
-    drawXPBar(ctx, barX, y - 10, barWidth, 12, specData.xp, specData.xpToNext, cfg.xpBar);
-    
-    // XP text
-    ctx.fillStyle = cfg.textDim;
-    ctx.font = '11px monospace';
-    ctx.textAlign = 'left';
-    ctx.fillText(`${specData.xp}/${specData.xpToNext}`, barX + barWidth + 5, y);
-    
-    // Action info
-    const actionX = x + 450;
-    ctx.textAlign = 'left';
-    
-    if (specData.level >= 5) {
-        // Action unlocked
-        const action = getActionForSpecialtyById(specId);
-        if (action) {
-            const actionIcon = SKILLS_UI_CONFIG.actionIcons[action.id] || '⚡';
-            
-            // Check cooldown
-            const cooldown = cooldowns[action.id] || 0;
-            const isReady = cooldown <= 0;
-            
-            ctx.fillStyle = isReady ? cfg.unlocked : cfg.cooldown;
-            ctx.font = '14px monospace';
-            ctx.fillText(`${actionIcon} ${action.name}`, actionX, y);
-            
-            // Cooldown or READY indicator
-            ctx.font = '12px monospace';
-            if (isReady) {
-                ctx.fillStyle = cfg.ready;
-                ctx.fillText('READY', actionX + 150, y);
-            } else {
-                ctx.fillStyle = cfg.cooldown;
-                ctx.fillText(`${cooldown.toFixed(1)}s`, actionX + 150, y);
-            }
-        }
-    } else {
-        // Action locked
-        ctx.fillStyle = cfg.textMuted;
-        ctx.font = 'italic 14px monospace';
-        ctx.fillText(`(Action unlocks at Lv 5)`, actionX, y);
-    }
-    
-    return y + 26;
-}
-
-/**
- * Draw an XP progress bar
- */
-function drawXPBar(ctx, x, y, width, height, current, max, color) {
-    const cfg = SKILLS_UI_CONFIG.colors;
-    const pct = Math.min(1, Math.max(0, current / max));
-    
-    // Background
-    ctx.fillStyle = cfg.xpBarBg;
-    ctx.fillRect(x, y, width, height);
-    
-    // Fill
-    ctx.fillStyle = color;
-    ctx.fillRect(x, y, width * pct, height);
-    
-    // Border
-    ctx.strokeStyle = cfg.borderSecondary;
-    ctx.lineWidth = 1;
-    ctx.strokeRect(x, y, width, height);
-}
-
-/**
- * Placeholder when skills not initialized
- */
-function drawSkillsPlaceholder() {
-    const cfg = SKILLS_UI_CONFIG.colors;
-    
-    ctx.fillStyle = cfg.background;
-    ctx.fillRect(TRACKER_WIDTH, 0, canvas.width - TRACKER_WIDTH, canvas.height);
-    
-    const cx = TRACKER_WIDTH + (canvas.width - TRACKER_WIDTH) / 2;
-    const cy = canvas.height / 2;
-    
-    ctx.fillStyle = cfg.title;
-    ctx.font = 'bold 48px monospace';
-    ctx.textAlign = 'center';
-    ctx.fillText('SKILLS', cx, cy - 50);
-    
-    ctx.fillStyle = cfg.text;
-    ctx.font = '24px monospace';
-    ctx.fillText('Skills system initializing...', cx, cy + 20);
-    
-    ctx.fillStyle = cfg.textDim;
-    ctx.font = '18px monospace';
-    ctx.fillText('[ESC] Back', cx, cy + 80);
-}
+// Animation state for action bar
+window.skillsBarState = {
+    pulsePhase: 0,
+    hoveredSlot: null
+};
 
 // ============================================================================
-// ACTION BAR HUD (During Gameplay)
+// SKILLS ACTION BAR HUD (During Gameplay) - CotDG Style
 // ============================================================================
 
 /**
- * Draw the action bar HUD in bottom right
- * Call this from the main render loop during 'playing' state
+ * Draw the skills action bar - CotDG style
+ * Positioned above the consumable action bar
  */
 function drawActionBar() {
     const player = game.player;
     if (!player || !player.skills) return;
     if (game.state !== 'playing') return;
-    
-    const cfg = SKILLS_UI_CONFIG.colors;
-    
-    // Calculate position (bottom right of game area)
-    const barWidth = 280;
-    const barHeight = 70;
-    const padding = 15;
-    const barX = canvas.width - barWidth - padding;
-    const barY = canvas.height - barHeight - padding;
-    
-    // Semi-transparent background
-    ctx.fillStyle = 'rgba(0, 0, 0, 0.75)';
-    ctx.fillRect(barX, barY, barWidth, barHeight);
-    
-    // Border
-    ctx.strokeStyle = cfg.borderSecondary;
-    ctx.lineWidth = 2;
-    ctx.strokeRect(barX, barY, barWidth, barHeight);
-    
+
+    // Get colors from design system
+    const colors = typeof UI_COLORS !== 'undefined' ? UI_COLORS : {
+        bgDarkest: '#0a0a0f',
+        bgDark: '#12121a',
+        bgMedium: '#1a1a24',
+        border: '#3a3a4a',
+        borderLight: '#4a4a5a',
+        health: '#c0392b',
+        mana: '#2980b9',
+        gold: '#d4af37',
+        success: '#27ae60',
+        warning: '#f39c12',
+        danger: '#e74c3c',
+        textPrimary: '#ffffff',
+        textMuted: '#666666',
+        corruption: '#8e44ad'
+    };
+
+    // Update animation
+    window.skillsBarState.pulsePhase = (window.skillsBarState.pulsePhase + 0.05) % (Math.PI * 2);
+
     // Collect actions to display
     const actionsToShow = [];
-    
+
     // Slot 5: Weapon action
     const weaponAction = getPlayerWeaponAction(player);
     if (weaponAction) {
@@ -399,7 +93,7 @@ function drawActionBar() {
             available: weaponAction.available
         });
     }
-    
+
     // Slots 6-9: Expertise actions (only if unlocked)
     const expertiseSlots = [
         { slot: 6, specId: 'traps', actionId: 'spike_trap' },
@@ -407,11 +101,11 @@ function drawActionBar() {
         { slot: 8, specId: 'lockpicking', actionId: 'expose_weakness' },
         { slot: 9, specId: 'tinkering', actionId: 'deploy_turret' }
     ];
-    
+
     for (const es of expertiseSlots) {
         const specData = player.skills.specialties[es.specId];
         if (specData && specData.unlocked && specData.level >= 5) {
-            const action = ACTIONS ? ACTIONS[es.actionId] : null;
+            const action = typeof ACTIONS !== 'undefined' ? ACTIONS[es.actionId] : null;
             if (action) {
                 actionsToShow.push({
                     slot: es.slot,
@@ -422,125 +116,575 @@ function drawActionBar() {
             }
         }
     }
-    
-    // Draw action slots
-    const slotWidth = 55;
-    const slotHeight = 50;
-    const slotY = barY + 10;
-    let slotX = barX + 10;
-    
-    for (const actionData of actionsToShow) {
-        drawActionSlot(ctx, actionData, slotX, slotY, slotWidth, slotHeight, player.skills.actionCooldowns);
-        slotX += slotWidth + 5;
+
+    if (actionsToShow.length === 0) return; // Don't show empty bar
+
+    // Calculate position - above the consumable action bar
+    const slotSize = 52;
+    const slotSpacing = 8;
+    const padding = 20;
+    const barWidth = (slotSize * actionsToShow.length) + (slotSpacing * (actionsToShow.length - 1)) + 20;
+    const barHeight = slotSize + 20;
+
+    // Position above consumable bar (consumable bar height ~76px + padding)
+    const barX = canvas.width - barWidth - padding;
+    const barY = canvas.height - barHeight - padding - 90; // Above consumable bar
+
+    ctx.save();
+
+    // === BAR BACKGROUND ===
+    drawSkillsBarBackground(ctx, barX, barY, barWidth, barHeight, colors);
+
+    // === ACTION SLOTS ===
+    for (let i = 0; i < actionsToShow.length; i++) {
+        const slotX = barX + 10 + (i * (slotSize + slotSpacing));
+        const slotY = barY + 10;
+        drawSkillActionSlot(ctx, actionsToShow[i], slotX, slotY, slotSize, player.skills.actionCooldowns, colors);
     }
-    
-    // If no actions available, show hint
-    if (actionsToShow.length === 0) {
-        ctx.fillStyle = cfg.textDim;
-        ctx.font = '14px monospace';
-        ctx.textAlign = 'center';
-        ctx.fillText('No actions available', barX + barWidth / 2, barY + barHeight / 2 + 5);
-    }
+
+    ctx.restore();
 }
 
 /**
- * Draw a single action slot
+ * Draw skills bar background panel
  */
-function drawActionSlot(ctx, actionData, x, y, width, height, cooldowns) {
-    const cfg = SKILLS_UI_CONFIG.colors;
+function drawSkillsBarBackground(ctx, x, y, width, height, colors) {
+    const radius = 6;
+
+    // Background gradient
+    const bgGrad = ctx.createLinearGradient(x, y, x, y + height);
+    bgGrad.addColorStop(0, colors.bgDark || '#12121a');
+    bgGrad.addColorStop(1, colors.bgDarkest || '#0a0a0f');
+
+    ctx.fillStyle = bgGrad;
+    ctx.beginPath();
+    ctx.moveTo(x + radius, y);
+    ctx.lineTo(x + width - radius, y);
+    ctx.quadraticCurveTo(x + width, y, x + width, y + radius);
+    ctx.lineTo(x + width, y + height - radius);
+    ctx.quadraticCurveTo(x + width, y + height, x + width - radius, y + height);
+    ctx.lineTo(x + radius, y + height);
+    ctx.quadraticCurveTo(x, y + height, x, y + height - radius);
+    ctx.lineTo(x, y + radius);
+    ctx.quadraticCurveTo(x, y, x + radius, y);
+    ctx.closePath();
+    ctx.fill();
+
+    // Border
+    ctx.strokeStyle = colors.border || '#3a3a4a';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+
+    // Top highlight
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.05)';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(x + radius, y + 1);
+    ctx.lineTo(x + width - radius, y + 1);
+    ctx.stroke();
+}
+
+/**
+ * Draw a single skill action slot - CotDG style
+ */
+function drawSkillActionSlot(ctx, actionData, x, y, size, cooldowns, colors) {
     const action = actionData.action;
     const cooldown = cooldowns[action.id] || 0;
+    const maxCooldown = action.cooldown || 10;
     const isReady = cooldown <= 0;
     const isAvailable = actionData.available;
-    
-    // Slot background
-    ctx.fillStyle = isAvailable ? (isReady ? 'rgba(46, 204, 113, 0.2)' : 'rgba(231, 76, 60, 0.2)') : 'rgba(50, 50, 50, 0.5)';
-    ctx.fillRect(x, y, width, height);
-    
-    // Cooldown overlay
-    if (!isReady && isAvailable) {
-        const cooldownPct = Math.min(1, cooldown / (action.cooldown || 10));
-        ctx.fillStyle = 'rgba(0, 0, 0, 0.6)';
-        ctx.fillRect(x, y, width, height * cooldownPct);
-    }
-    
-    // Border
-    ctx.strokeStyle = isReady && isAvailable ? cfg.ready : cfg.borderSecondary;
-    ctx.lineWidth = isReady && isAvailable ? 2 : 1;
-    ctx.strokeRect(x, y, width, height);
-    
-    // Hotkey number
-    ctx.fillStyle = '#fff';
-    ctx.font = 'bold 12px monospace';
-    ctx.textAlign = 'left';
-    ctx.fillText(`[${actionData.slot}]`, x + 3, y + 12);
-    
-    // Action icon
-    const icon = SKILLS_UI_CONFIG.actionIcons[action.id] || '⚡';
-    ctx.font = '20px monospace';
-    ctx.textAlign = 'center';
-    ctx.fillText(icon, x + width / 2, y + 32);
-    
-    // Cooldown or ready text
-    ctx.font = '10px monospace';
-    ctx.textAlign = 'center';
-    
+    const radius = 6;
+
+    ctx.save();
+
+    // === SLOT BACKGROUND ===
+    let borderColor = colors.border || '#3a3a4a';
+    let bgColor = colors.bgMedium || '#1a1a24';
+    let glowColor = null;
+
     if (!isAvailable) {
-        ctx.fillStyle = cfg.textMuted;
-        ctx.fillText('LOCKED', x + width / 2, y + height - 4);
+        borderColor = colors.textMuted || '#444444';
+        bgColor = 'rgba(30, 30, 30, 0.5)';
     } else if (isReady) {
-        ctx.fillStyle = cfg.ready;
-        ctx.fillText('READY', x + width / 2, y + height - 4);
+        borderColor = colors.corruption || '#8e44ad';
+        glowColor = 'rgba(142, 68, 173, 0.4)';
     } else {
-        ctx.fillStyle = cfg.cooldown;
-        ctx.fillText(`${cooldown.toFixed(1)}s`, x + width / 2, y + height - 4);
+        borderColor = colors.warning || '#f39c12';
     }
+
+    // Glow for ready state
+    if (glowColor) {
+        ctx.shadowColor = glowColor;
+        ctx.shadowBlur = 12;
+    }
+
+    // Background
+    const bgGrad = ctx.createLinearGradient(x, y, x, y + size);
+    bgGrad.addColorStop(0, bgColor);
+    bgGrad.addColorStop(1, colors.bgDarkest || '#0a0a0f');
+
+    ctx.fillStyle = bgGrad;
+    ctx.beginPath();
+    ctx.moveTo(x + radius, y);
+    ctx.lineTo(x + size - radius, y);
+    ctx.quadraticCurveTo(x + size, y, x + size, y + radius);
+    ctx.lineTo(x + size, y + size - radius);
+    ctx.quadraticCurveTo(x + size, y + size, x + size - radius, y + size);
+    ctx.lineTo(x + radius, y + size);
+    ctx.quadraticCurveTo(x, y + size, x, y + size - radius);
+    ctx.lineTo(x, y + radius);
+    ctx.quadraticCurveTo(x, y, x + radius, y);
+    ctx.closePath();
+    ctx.fill();
+
+    ctx.shadowBlur = 0;
+
+    // Border
+    ctx.strokeStyle = borderColor;
+    ctx.lineWidth = isReady && isAvailable ? 2 : 1;
+    ctx.stroke();
+
+    // === COOLDOWN SWEEP ===
+    if (!isReady && isAvailable) {
+        drawSkillCooldownSweep(ctx, x, y, size, radius, cooldown, maxCooldown, colors);
+    }
+
+    // === HOTKEY BADGE ===
+    const badgeSize = 14;
+    const badgeX = x + 3;
+    const badgeY = y + 3;
+
+    ctx.fillStyle = colors.bgDarkest || '#0a0a0f';
+    ctx.beginPath();
+    ctx.arc(badgeX + badgeSize / 2, badgeY + badgeSize / 2, badgeSize / 2 + 2, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.strokeStyle = colors.corruption || '#8e44ad';
+    ctx.lineWidth = 1;
+    ctx.stroke();
+
+    ctx.fillStyle = colors.corruption || '#8e44ad';
+    ctx.font = 'bold 11px monospace';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(actionData.slot.toString(), badgeX + badgeSize / 2, badgeY + badgeSize / 2);
+
+    // === ACTION ICON ===
+    const iconText = SKILLS_UI_CONFIG.actionIcons[action.id] || '??';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+
+    if (!isAvailable) {
+        ctx.fillStyle = colors.textMuted || '#444444';
+    } else if (isReady) {
+        ctx.fillStyle = colors.textPrimary || '#ffffff';
+    } else {
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.5)';
+    }
+
+    ctx.font = 'bold 18px monospace';
+    ctx.fillText(iconText, x + size / 2, y + size / 2);
+
+    // === STATUS TEXT ===
+    ctx.font = '9px monospace';
+    ctx.textBaseline = 'bottom';
+
+    if (!isAvailable) {
+        ctx.fillStyle = colors.textMuted || '#444444';
+        ctx.fillText('LOCK', x + size / 2, y + size - 3);
+    } else if (isReady) {
+        // Pulsing READY text
+        const pulse = Math.sin(window.skillsBarState.pulsePhase) * 0.3 + 0.7;
+        ctx.fillStyle = `rgba(142, 68, 173, ${pulse})`;
+        ctx.fillText('READY', x + size / 2, y + size - 3);
+    } else {
+        ctx.fillStyle = colors.warning || '#f39c12';
+        ctx.fillText(cooldown.toFixed(1) + 's', x + size / 2, y + size - 3);
+    }
+
+    // === READY PULSE ===
+    if (isReady && isAvailable) {
+        const pulseAlpha = 0.15 + Math.sin(window.skillsBarState.pulsePhase) * 0.1;
+        ctx.strokeStyle = colors.corruption || '#8e44ad';
+        ctx.lineWidth = 2;
+        ctx.globalAlpha = pulseAlpha;
+        ctx.beginPath();
+        ctx.moveTo(x + radius - 2, y - 2);
+        ctx.lineTo(x + size - radius + 2, y - 2);
+        ctx.quadraticCurveTo(x + size + 2, y - 2, x + size + 2, y + radius - 2);
+        ctx.lineTo(x + size + 2, y + size - radius + 2);
+        ctx.quadraticCurveTo(x + size + 2, y + size + 2, x + size - radius + 2, y + size + 2);
+        ctx.lineTo(x + radius - 2, y + size + 2);
+        ctx.quadraticCurveTo(x - 2, y + size + 2, x - 2, y + size - radius + 2);
+        ctx.lineTo(x - 2, y + radius - 2);
+        ctx.quadraticCurveTo(x - 2, y - 2, x + radius - 2, y - 2);
+        ctx.closePath();
+        ctx.stroke();
+        ctx.globalAlpha = 1;
+    }
+
+    ctx.restore();
 }
 
 /**
- * Get the current weapon's action for the player
+ * Draw cooldown sweep for skill slot
  */
-function getPlayerWeaponAction(player) {
-    const weapon = player.equipped?.MAIN;
-    const specialty = weapon?.specialty || 'unarmed';
-    
-    // Check if specialty is unlocked
-    const specData = player.skills.specialties[specialty];
-    if (!specData) {
-        // Fallback to unarmed
-        const unarmedSpec = player.skills.specialties['unarmed'];
-        if (unarmedSpec && unarmedSpec.level >= 5) {
-            return {
-                action: ACTIONS ? ACTIONS['flurry_of_blows'] : { id: 'flurry_of_blows', name: 'Flurry of Blows' },
-                specialty: 'unarmed',
-                available: true
-            };
-        }
-        return {
-            action: { id: 'flurry_of_blows', name: 'Flurry of Blows', cooldown: 10 },
-            specialty: 'unarmed',
-            available: false
-        };
+function drawSkillCooldownSweep(ctx, x, y, size, radius, remaining, max, colors) {
+    const centerX = x + size / 2;
+    const centerY = y + size / 2;
+    const sweepRadius = size / 2 - 2;
+
+    const progress = 1 - Math.max(0, Math.min(1, remaining / max));
+
+    ctx.save();
+
+    // Create clipping path for rounded rect
+    ctx.beginPath();
+    ctx.moveTo(x + radius, y);
+    ctx.lineTo(x + size - radius, y);
+    ctx.quadraticCurveTo(x + size, y, x + size, y + radius);
+    ctx.lineTo(x + size, y + size - radius);
+    ctx.quadraticCurveTo(x + size, y + size, x + size - radius, y + size);
+    ctx.lineTo(x + radius, y + size);
+    ctx.quadraticCurveTo(x, y + size, x, y + size - radius);
+    ctx.lineTo(x, y + radius);
+    ctx.quadraticCurveTo(x, y, x + radius, y);
+    ctx.closePath();
+    ctx.clip();
+
+    // Dark overlay for cooldown
+    ctx.globalAlpha = 0.7;
+    ctx.fillStyle = '#000000';
+
+    ctx.beginPath();
+    ctx.moveTo(centerX, centerY);
+    const startAngle = -Math.PI / 2;
+    const endAngle = startAngle + (progress * Math.PI * 2);
+    ctx.arc(centerX, centerY, sweepRadius + 10, endAngle, startAngle + Math.PI * 2);
+    ctx.closePath();
+    ctx.fill();
+
+    // Sweep edge
+    if (progress > 0 && progress < 1) {
+        ctx.globalAlpha = 1;
+        ctx.strokeStyle = colors.warning || '#f39c12';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(centerX, centerY);
+        ctx.lineTo(
+            centerX + Math.cos(endAngle) * sweepRadius,
+            centerY + Math.sin(endAngle) * sweepRadius
+        );
+        ctx.stroke();
     }
-    
-    // Get action for this specialty
-    const action = getActionForSpecialtyById(specialty);
-    if (!action) return null;
-    
-    return {
-        action: action,
-        specialty: specialty,
-        available: specData.level >= 5
+
+    ctx.restore();
+}
+
+// ============================================================================
+// SKILLS MENU OVERLAY (Press K) - CotDG Style
+// ============================================================================
+
+/**
+ * Draw the full skills menu overlay - CotDG style
+ */
+function drawSkillsOverlay() {
+    const player = game.player;
+    if (!player || !player.skills) {
+        drawSkillsPlaceholder();
+        return;
+    }
+
+    // Get colors from design system
+    const colors = typeof UI_COLORS !== 'undefined' ? UI_COLORS : {
+        bgDarkest: '#0a0a0f',
+        bgDark: '#12121a',
+        bgMedium: '#1a1a24',
+        border: '#3a3a4a',
+        health: '#c0392b',
+        mana: '#2980b9',
+        gold: '#d4af37',
+        xp: '#5dade2',
+        corruption: '#8e44ad',
+        success: '#27ae60',
+        textPrimary: '#ffffff',
+        textSecondary: '#b0b0b0',
+        textMuted: '#666666'
     };
+
+    // Background vignette
+    const vignetteGrad = ctx.createRadialGradient(
+        canvas.width / 2, canvas.height / 2, canvas.height * 0.3,
+        canvas.width / 2, canvas.height / 2, canvas.height
+    );
+    vignetteGrad.addColorStop(0, 'rgba(0, 0, 0, 0.6)');
+    vignetteGrad.addColorStop(1, 'rgba(0, 0, 0, 0.9)');
+    ctx.fillStyle = vignetteGrad;
+    ctx.fillRect(TRACKER_WIDTH, 0, canvas.width - TRACKER_WIDTH, canvas.height);
+
+    // Panel dimensions
+    const viewWidth = canvas.width - TRACKER_WIDTH;
+    const panelWidth = Math.min(700, viewWidth - 80);
+    const panelHeight = Math.min(650, canvas.height - 80);
+    const panelX = TRACKER_WIDTH + (viewWidth - panelWidth) / 2;
+    const panelY = (canvas.height - panelHeight) / 2;
+
+    // Use shared panel drawing
+    if (typeof drawOverlayPanel === 'function') {
+        drawOverlayPanel(ctx, panelX, panelY, panelWidth, panelHeight, colors);
+    } else {
+        // Fallback panel
+        ctx.fillStyle = colors.bgDark;
+        ctx.fillRect(panelX, panelY, panelWidth, panelHeight);
+        ctx.strokeStyle = colors.border;
+        ctx.lineWidth = 2;
+        ctx.strokeRect(panelX, panelY, panelWidth, panelHeight);
+    }
+
+    let yOffset = panelY + 30;
+    const contentX = panelX + 30;
+    const contentWidth = panelWidth - 60;
+
+    // Title
+    ctx.fillStyle = colors.corruption || '#8e44ad';
+    ctx.font = 'bold 28px monospace';
+    ctx.textAlign = 'center';
+    ctx.fillText('SKILLS & ABILITIES', panelX + panelWidth / 2, yOffset);
+    yOffset += 15;
+
+    // Decorative line
+    if (typeof drawDecorativeLine === 'function') {
+        drawDecorativeLine(ctx, panelX + 80, yOffset, panelWidth - 160, colors);
+    }
+    yOffset += 25;
+
+    // Equipped weapon info
+    const weapon = player.equipped?.MAIN;
+    const weaponName = weapon ? weapon.name : 'Unarmed';
+    const specialty = weapon?.specialty || 'unarmed';
+
+    ctx.fillStyle = colors.textSecondary || '#b0b0b0';
+    ctx.font = '14px monospace';
+    ctx.fillText(`Equipped: ${weaponName} (${specialty})`, panelX + panelWidth / 2, yOffset);
+    yOffset += 35;
+
+    // Draw proficiencies
+    const proficiencyOrder = ['blade', 'blunt', 'magic', 'ranged', 'expertise'];
+
+    for (const profId of proficiencyOrder) {
+        const profData = player.skills.proficiencies[profId];
+        if (!profData) continue;
+
+        yOffset = drawProficiencySection(
+            ctx,
+            profId,
+            profData,
+            player.skills.specialties,
+            player.skills.actionCooldowns,
+            contentX,
+            yOffset,
+            contentWidth,
+            colors
+        );
+
+        yOffset += 12;
+    }
+
+    // Footer instructions
+    ctx.fillStyle = colors.textMuted || '#666666';
+    ctx.font = '12px monospace';
+    ctx.textAlign = 'center';
+    ctx.fillText('[ESC/K] Close  |  Use weapons to level up skills', panelX + panelWidth / 2, panelY + panelHeight - 20);
+}
+
+/**
+ * Draw a proficiency section - CotDG style
+ */
+function drawProficiencySection(ctx, profId, profData, specialties, cooldowns, x, y, width, colors) {
+    const icon = SKILLS_UI_CONFIG.proficiencyIcons[profId] || '?';
+    const profName = profId.charAt(0).toUpperCase() + profId.slice(1);
+
+    // Proficiency header background
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.3)';
+    ctx.fillRect(x - 5, y - 15, width + 10, 22);
+
+    // Icon circle
+    ctx.fillStyle = colors.corruption || '#8e44ad';
+    ctx.beginPath();
+    ctx.arc(x + 10, y - 4, 10, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.fillStyle = colors.textPrimary || '#ffffff';
+    ctx.font = 'bold 12px monospace';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(icon, x + 10, y - 4);
+
+    // Proficiency name and level
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'alphabetic';
+    ctx.fillStyle = colors.textPrimary || '#ffffff';
+    ctx.font = 'bold 16px monospace';
+    ctx.fillText(profName.toUpperCase(), x + 28, y);
+
+    ctx.fillStyle = colors.corruption || '#8e44ad';
+    ctx.font = 'bold 14px monospace';
+    ctx.fillText(`Lv ${profData.level}`, x + 130, y);
+
+    // XP bar
+    const barX = x + 180;
+    const barWidth = width - 230;
+    drawSkillXPBar(ctx, barX, y - 10, barWidth, 12, profData.xp, profData.xpToNext, colors);
+
+    // XP text
+    ctx.fillStyle = colors.textMuted || '#666666';
+    ctx.font = '10px monospace';
+    ctx.textAlign = 'right';
+    ctx.fillText(`${profData.xp}/${profData.xpToNext}`, x + width, y);
+
+    let currentY = y + 22;
+    ctx.textAlign = 'left';
+
+    // Get specialties for this proficiency
+    const profSpecialties = getSpecialtiesForProficiency(profId);
+    let hasUnlockedSpecialty = false;
+
+    for (const specId of profSpecialties) {
+        const specData = specialties[specId];
+
+        if (!specData || !specData.unlocked) continue;
+
+        hasUnlockedSpecialty = true;
+        currentY = drawSpecialtyRow(ctx, specId, specData, cooldowns, x + 15, currentY, width - 30, colors);
+    }
+
+    if (!hasUnlockedSpecialty) {
+        ctx.fillStyle = colors.textMuted || '#666666';
+        ctx.font = 'italic 12px monospace';
+        ctx.fillText('  (Use weapons to unlock specialties)', x + 15, currentY);
+        currentY += 18;
+    }
+
+    return currentY;
+}
+
+/**
+ * Draw a specialty row - CotDG style
+ */
+function drawSpecialtyRow(ctx, specId, specData, cooldowns, x, y, width, colors) {
+    const specName = specId.charAt(0).toUpperCase() + specId.slice(1);
+
+    // Tree connector
+    ctx.fillStyle = colors.border || '#3a3a4a';
+    ctx.font = '12px monospace';
+    ctx.fillText('|-', x, y);
+
+    // Specialty name
+    ctx.fillStyle = colors.textSecondary || '#b0b0b0';
+    ctx.font = '14px monospace';
+    ctx.fillText(specName, x + 20, y);
+
+    // Level
+    ctx.fillStyle = colors.corruption || '#8e44ad';
+    ctx.font = 'bold 12px monospace';
+    ctx.fillText(`Lv ${specData.level}`, x + 100, y);
+
+    // Mini XP bar
+    const barX = x + 150;
+    const barWidth = 100;
+    drawSkillXPBar(ctx, barX, y - 8, barWidth, 8, specData.xp, specData.xpToNext, colors);
+
+    // Action info
+    const actionX = x + 280;
+
+    if (specData.level >= 5) {
+        const action = getActionForSpecialtyById(specId);
+        if (action) {
+            const iconText = SKILLS_UI_CONFIG.actionIcons[action.id] || '??';
+            const cooldown = cooldowns[action.id] || 0;
+            const isReady = cooldown <= 0;
+
+            ctx.fillStyle = isReady ? (colors.success || '#27ae60') : (colors.warning || '#f39c12');
+            ctx.font = 'bold 12px monospace';
+            ctx.fillText(`[${iconText}] ${action.name}`, actionX, y);
+
+            // Status
+            ctx.font = '10px monospace';
+            if (isReady) {
+                ctx.fillText('RDY', actionX + 150, y);
+            } else {
+                ctx.fillText(`${cooldown.toFixed(1)}s`, actionX + 150, y);
+            }
+        }
+    } else {
+        ctx.fillStyle = colors.textMuted || '#666666';
+        ctx.font = 'italic 11px monospace';
+        ctx.fillText('(Lv 5 to unlock)', actionX, y);
+    }
+
+    return y + 20;
+}
+
+/**
+ * Draw XP bar - CotDG style
+ */
+function drawSkillXPBar(ctx, x, y, width, height, current, max, colors) {
+    const pct = Math.min(1, Math.max(0, current / max));
+
+    // Background
+    ctx.fillStyle = colors.bgDarkest || '#0a0a0f';
+    ctx.fillRect(x, y, width, height);
+
+    // Fill gradient
+    if (pct > 0) {
+        const fillGrad = ctx.createLinearGradient(x, y, x + width * pct, y);
+        fillGrad.addColorStop(0, colors.corruption || '#8e44ad');
+        fillGrad.addColorStop(1, colors.bgMedium || '#1a1a24');
+        ctx.fillStyle = fillGrad;
+        ctx.fillRect(x, y, width * pct, height);
+    }
+
+    // Border
+    ctx.strokeStyle = colors.border || '#3a3a4a';
+    ctx.lineWidth = 1;
+    ctx.strokeRect(x, y, width, height);
+}
+
+/**
+ * Placeholder when skills not initialized
+ */
+function drawSkillsPlaceholder() {
+    const colors = typeof UI_COLORS !== 'undefined' ? UI_COLORS : {
+        bgDark: '#12121a',
+        corruption: '#8e44ad',
+        textPrimary: '#ffffff',
+        textMuted: '#666666'
+    };
+
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.9)';
+    ctx.fillRect(TRACKER_WIDTH, 0, canvas.width - TRACKER_WIDTH, canvas.height);
+
+    const cx = TRACKER_WIDTH + (canvas.width - TRACKER_WIDTH) / 2;
+    const cy = canvas.height / 2;
+
+    ctx.fillStyle = colors.corruption;
+    ctx.font = 'bold 36px monospace';
+    ctx.textAlign = 'center';
+    ctx.fillText('SKILLS', cx, cy - 30);
+
+    ctx.fillStyle = colors.textPrimary;
+    ctx.font = '18px monospace';
+    ctx.fillText('Skills system loading...', cx, cy + 20);
+
+    ctx.fillStyle = colors.textMuted;
+    ctx.font = '14px monospace';
+    ctx.fillText('[ESC] Back', cx, cy + 60);
 }
 
 // ============================================================================
 // HELPER FUNCTIONS
 // ============================================================================
 
-/**
- * Get specialties that belong to a proficiency
- */
 function getSpecialtiesForProficiency(profId) {
     const mapping = {
         blade: ['sword', 'knife', 'axe', 'polearm'],
@@ -552,11 +696,7 @@ function getSpecialtiesForProficiency(profId) {
     return mapping[profId] || [];
 }
 
-/**
- * Get action definition for a specialty by ID
- */
 function getActionForSpecialtyById(specialtyId) {
-    // If ACTIONS is defined from skills.js, use it
     if (typeof ACTIONS !== 'undefined') {
         for (const actionId in ACTIONS) {
             if (ACTIONS[actionId].specialty === specialtyId) {
@@ -564,8 +704,7 @@ function getActionForSpecialtyById(specialtyId) {
             }
         }
     }
-    
-    // Fallback mapping
+
     const actionMap = {
         sword: { id: 'blade_dancer', name: 'Blade Dancer', cooldown: 10 },
         knife: { id: 'arterial_strike', name: 'Arterial Strike', cooldown: 10 },
@@ -587,25 +726,47 @@ function getActionForSpecialtyById(specialtyId) {
         lockpicking: { id: 'expose_weakness', name: 'Expose Weakness', cooldown: 10 },
         tinkering: { id: 'deploy_turret', name: 'Deploy Turret', cooldown: 10 }
     };
-    
+
     return actionMap[specialtyId] || null;
 }
 
+function getPlayerWeaponAction(player) {
+    const weapon = player.equipped?.MAIN;
+    const specialty = weapon?.specialty || 'unarmed';
+
+    const specData = player.skills.specialties[specialty];
+    if (!specData) {
+        const unarmedSpec = player.skills.specialties['unarmed'];
+        if (unarmedSpec && unarmedSpec.level >= 5) {
+            return {
+                action: typeof ACTIONS !== 'undefined' ? ACTIONS['flurry_of_blows'] : { id: 'flurry_of_blows', name: 'Flurry of Blows', cooldown: 10 },
+                specialty: 'unarmed',
+                available: true
+            };
+        }
+        return {
+            action: { id: 'flurry_of_blows', name: 'Flurry of Blows', cooldown: 10 },
+            specialty: 'unarmed',
+            available: false
+        };
+    }
+
+    const action = getActionForSpecialtyById(specialty);
+    if (!action) return null;
+
+    return {
+        action: action,
+        specialty: specialty,
+        available: specData.level >= 5
+    };
+}
+
 // ============================================================================
-// ACTION TOOLTIP (Hover Details)
+// TOOLTIP SYSTEM (simplified)
 // ============================================================================
 
-// Tooltip state
-const actionTooltip = {
-    visible: false,
-    action: null,
-    x: 0,
-    y: 0
-};
+const actionTooltip = { visible: false, action: null, x: 0, y: 0 };
 
-/**
- * Show tooltip for an action
- */
 function showActionTooltip(action, x, y) {
     actionTooltip.visible = true;
     actionTooltip.action = action;
@@ -613,124 +774,23 @@ function showActionTooltip(action, x, y) {
     actionTooltip.y = y;
 }
 
-/**
- * Hide the action tooltip
- */
 function hideActionTooltip() {
     actionTooltip.visible = false;
-    actionTooltip.action = null;
 }
 
-/**
- * Render the action tooltip if visible
- */
 function renderActionTooltip(ctx) {
     if (!actionTooltip.visible || !actionTooltip.action) return;
-    
-    const cfg = SKILLS_UI_CONFIG.colors;
-    const action = actionTooltip.action;
-    
-    const tooltipWidth = 280;
-    const tooltipHeight = 140;
-    let x = actionTooltip.x;
-    let y = actionTooltip.y - tooltipHeight - 10;
-    
-    // Keep on screen
-    if (x + tooltipWidth > canvas.width) x = canvas.width - tooltipWidth - 10;
-    if (y < 10) y = actionTooltip.y + 20;
-    
-    // Background
-    ctx.fillStyle = 'rgba(20, 20, 20, 0.95)';
-    ctx.fillRect(x, y, tooltipWidth, tooltipHeight);
-    
-    // Border
-    ctx.strokeStyle = cfg.border;
-    ctx.lineWidth = 2;
-    ctx.strokeRect(x, y, tooltipWidth, tooltipHeight);
-    
-    // Action name
-    ctx.fillStyle = cfg.title;
-    ctx.font = 'bold 18px monospace';
-    ctx.textAlign = 'left';
-    ctx.fillText(action.name, x + 10, y + 25);
-    
-    // Action type
-    ctx.fillStyle = cfg.textDim;
-    ctx.font = '12px monospace';
-    ctx.fillText(`Type: ${action.type || 'damage'}`, x + 10, y + 45);
-    
-    // Cooldown
-    ctx.fillText(`Cooldown: ${action.cooldown || 10}s`, x + 150, y + 45);
-    
-    // Description
-    ctx.fillStyle = cfg.text;
-    ctx.font = '14px monospace';
-    const desc = action.description || getActionDescription(action.id);
-    
-    // Word wrap
-    const words = desc.split(' ');
-    let line = '';
-    let lineY = y + 70;
-    const maxWidth = tooltipWidth - 20;
-    
-    for (const word of words) {
-        const testLine = line + word + ' ';
-        if (ctx.measureText(testLine).width > maxWidth) {
-            ctx.fillText(line, x + 10, lineY);
-            line = word + ' ';
-            lineY += 18;
-        } else {
-            line = testLine;
-        }
-    }
-    if (line) {
-        ctx.fillText(line, x + 10, lineY);
-    }
-}
-
-/**
- * Get a description for an action
- */
-function getActionDescription(actionId) {
-    const descriptions = {
-        blade_dancer: 'Strike twice in rapid succession for 60% damage each.',
-        arterial_strike: 'A precise cut that causes bleeding over time.',
-        cleaving_blow: 'A devastating strike that ignores 50% armor.',
-        impaling_thrust: 'Pierce through enemies in a line.',
-        skull_crack: 'Crush your foe, stunning them for 2 seconds.',
-        sweeping_arc: 'Spin attack hitting all adjacent enemies.',
-        flurry_of_blows: 'Unleash 5 rapid punches.',
-        shield_charge: 'Rush forward, damaging and knocking back.',
-        immolate: 'Engulf target in flames that burn over time.',
-        frozen_grasp: 'Freeze target in place for 3 seconds.',
-        chain_lightning: 'Lightning arcs between multiple enemies.',
-        life_siphon: 'Drain life force, healing yourself.',
-        power_shot: 'A charged shot with bonus critical chance.',
-        piercing_bolt: 'Bolt pierces through multiple targets.',
-        fan_of_knives: 'Throw knives in a cone pattern.',
-        spike_trap: 'Place a trap that damages and slows.',
-        volatile_flask: 'Throw an explosive potion.',
-        expose_weakness: 'Mark target to take increased damage.',
-        deploy_turret: 'Deploy an auto-attacking turret.'
-    };
-    return descriptions[actionId] || 'A powerful combat ability.';
+    // Tooltip rendering would go here - simplified for now
 }
 
 // ============================================================================
-// INTEGRATION WITH MAIN RENDER
+// INTEGRATION
 // ============================================================================
 
-/**
- * Call this from the main render() function after drawing the game world
- * but before other UI overlays
- */
 function renderSkillsUI() {
-    // Action bar is drawn during gameplay
     if (game.state === 'playing') {
         drawActionBar();
     }
-    
-    // Tooltip (if using mouse hover system)
     renderActionTooltip(ctx);
 }
 
@@ -738,19 +798,12 @@ function renderSkillsUI() {
 // EXPORTS
 // ============================================================================
 
-// Override the placeholder
 window.drawSkillsOverlay = drawSkillsOverlay;
-
-// Export for render loop
 window.drawActionBar = drawActionBar;
 window.renderSkillsUI = renderSkillsUI;
-
-// Tooltip system
 window.showActionTooltip = showActionTooltip;
 window.hideActionTooltip = hideActionTooltip;
 window.actionTooltip = actionTooltip;
-
-// Config for customization
 window.SKILLS_UI_CONFIG = SKILLS_UI_CONFIG;
 
-console.log('✓ Skills UI loaded');
+console.log('Skills UI loaded (CotDG style)');

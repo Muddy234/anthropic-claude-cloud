@@ -45,58 +45,93 @@ function getInfoLinkAtPoint(px, py) {
 }
 
 /**
- * Render the right-click context menu
+ * Render the right-click context menu - CotDG style
  */
 function renderContextMenu(ctx) {
     const contextMenu = getContextMenu();
     if (!contextMenu.visible) return;
 
-    const menuWidth = 120;
-    const optionHeight = 25;
+    // Get colors from design system
+    const colors = typeof UI_COLORS !== 'undefined' ? UI_COLORS : {
+        bgDarkest: '#0a0a0f',
+        bgDark: '#12121a',
+        border: '#3a3a4a',
+        health: '#c0392b',
+        textPrimary: '#ffffff',
+        textMuted: '#666666'
+    };
+
+    const menuWidth = 140;
+    const optionHeight = 28;
     const menuX = contextMenu.x;
     const menuY = contextMenu.y;
-    const menuHeight = contextMenu.options.length * optionHeight;
+    const menuHeight = contextMenu.options.length * optionHeight + 8;
+    const radius = 6;
 
-    // Menu background
-    ctx.fillStyle = 'rgba(0, 0, 0, 0.9)';
-    ctx.fillRect(menuX, menuY, menuWidth, menuHeight);
+    // Menu shadow
+    ctx.shadowColor = 'rgba(0, 0, 0, 0.5)';
+    ctx.shadowBlur = 10;
+    ctx.shadowOffsetX = 3;
+    ctx.shadowOffsetY = 3;
+
+    // Menu background gradient
+    const bgGrad = ctx.createLinearGradient(menuX, menuY, menuX, menuY + menuHeight);
+    bgGrad.addColorStop(0, colors.bgDark || '#12121a');
+    bgGrad.addColorStop(1, colors.bgDarkest || '#0a0a0f');
+    ctx.fillStyle = bgGrad;
+
+    // Rounded rect
+    ctx.beginPath();
+    ctx.moveTo(menuX + radius, menuY);
+    ctx.lineTo(menuX + menuWidth - radius, menuY);
+    ctx.quadraticCurveTo(menuX + menuWidth, menuY, menuX + menuWidth, menuY + radius);
+    ctx.lineTo(menuX + menuWidth, menuY + menuHeight - radius);
+    ctx.quadraticCurveTo(menuX + menuWidth, menuY + menuHeight, menuX + menuWidth - radius, menuY + menuHeight);
+    ctx.lineTo(menuX + radius, menuY + menuHeight);
+    ctx.quadraticCurveTo(menuX, menuY + menuHeight, menuX, menuY + menuHeight - radius);
+    ctx.lineTo(menuX, menuY + radius);
+    ctx.quadraticCurveTo(menuX, menuY, menuX + radius, menuY);
+    ctx.closePath();
+    ctx.fill();
+
+    ctx.shadowBlur = 0;
 
     // Menu border
-    ctx.strokeStyle = '#666';
+    ctx.strokeStyle = colors.border || '#3a3a4a';
     ctx.lineWidth = 2;
-    ctx.strokeRect(menuX, menuY, menuWidth, menuHeight);
+    ctx.stroke();
 
     // Draw options
-    ctx.font = '14px monospace';
+    ctx.font = '13px monospace';
     ctx.textAlign = 'left';
-    
+
     for (let i = 0; i < contextMenu.options.length; i++) {
         const option = contextMenu.options[i];
-        const optionY = menuY + (i * optionHeight);
+        const optionY = menuY + 4 + (i * optionHeight);
 
-        // Hover effect (check mouse position)
+        // Hover effect
         const rect = canvas.getBoundingClientRect();
         const mouseX = window.mouseX || 0;
         const mouseY = window.mouseY || 0;
-        
+
         if (mouseX >= menuX && mouseX <= menuX + menuWidth &&
             mouseY >= optionY && mouseY <= optionY + optionHeight) {
             // Hover background
-            ctx.fillStyle = 'rgba(255, 255, 255, 0.2)';
-            ctx.fillRect(menuX, optionY, menuWidth, optionHeight);
+            ctx.fillStyle = 'rgba(142, 68, 173, 0.3)';
+            ctx.fillRect(menuX + 4, optionY, menuWidth - 8, optionHeight);
         }
 
         // Option text
-        ctx.fillStyle = option.action === 'cancel' ? '#999' : '#fff';
-        ctx.fillText(option.text, menuX + 10, optionY + 17);
+        ctx.fillStyle = option.action === 'cancel' ? (colors.textMuted || '#666') : (colors.textPrimary || '#fff');
+        ctx.fillText(option.text, menuX + 12, optionY + 18);
 
         // Separator line
         if (i < contextMenu.options.length - 1) {
-            ctx.strokeStyle = '#333';
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.1)';
             ctx.lineWidth = 1;
             ctx.beginPath();
-            ctx.moveTo(menuX + 5, optionY + optionHeight);
-            ctx.lineTo(menuX + menuWidth - 5, optionY + optionHeight);
+            ctx.moveTo(menuX + 8, optionY + optionHeight);
+            ctx.lineTo(menuX + menuWidth - 8, optionY + optionHeight);
             ctx.stroke();
         }
     }
@@ -628,12 +663,23 @@ function renderInfoPopup(ctx) {
 }
 
 /**
- * Render the inspect popup - Enhanced with tabs
+ * Render the inspect popup - CotDG style with tabs
  * Position: Bottom-right, Size: 300x400, Game continues running
  */
 function renderInspectPopup(ctx) {
     const inspectPopup = getInspectPopup();
     if (!inspectPopup.visible) return;
+
+    // Get colors from design system
+    const colors = typeof UI_COLORS !== 'undefined' ? UI_COLORS : {
+        bgDarkest: '#0a0a0f',
+        bgDark: '#12121a',
+        bgMedium: '#1a1a24',
+        border: '#3a3a4a',
+        corruption: '#8e44ad',
+        textPrimary: '#ffffff',
+        textMuted: '#666666'
+    };
 
     // Auto-close if enemy is dead or no longer exists
     if (inspectPopup.targetType === 'enemy') {
@@ -651,22 +697,88 @@ function renderInspectPopup(ctx) {
     const margin = 20;
     const popupX = canvas.width - popupWidth - margin;
     const popupY = canvas.height - popupHeight - margin;
+    const radius = 8;
 
-    // Get tier color for border
-    let borderColor = '#888888';
+    // Get tier color for accent
+    let tierColor = colors.border || '#3a3a4a';
     if (inspectPopup.targetType === 'enemy' && inspectPopup.target) {
         const tier = inspectPopup.target.tier || 'TIER_3';
-        borderColor = TIER_COLORS[tier] || '#888888';
+        tierColor = TIER_COLORS[tier] || colors.border;
     }
 
-    // Popup background (semi-transparent so game is visible)
-    ctx.fillStyle = 'rgba(15, 15, 20, 0.92)';
-    ctx.fillRect(popupX, popupY, popupWidth, popupHeight);
+    ctx.save();
 
-    // Popup border (tier colored)
-    ctx.strokeStyle = borderColor;
-    ctx.lineWidth = 3;
-    ctx.strokeRect(popupX, popupY, popupWidth, popupHeight);
+    // Popup shadow
+    ctx.shadowColor = 'rgba(0, 0, 0, 0.6)';
+    ctx.shadowBlur = 15;
+    ctx.shadowOffsetX = 5;
+    ctx.shadowOffsetY = 5;
+
+    // Popup background gradient
+    const bgGrad = ctx.createLinearGradient(popupX, popupY, popupX, popupY + popupHeight);
+    bgGrad.addColorStop(0, colors.bgMedium || '#1a1a24');
+    bgGrad.addColorStop(0.5, colors.bgDark || '#12121a');
+    bgGrad.addColorStop(1, colors.bgDarkest || '#0a0a0f');
+    ctx.fillStyle = bgGrad;
+
+    // Rounded rect
+    ctx.beginPath();
+    ctx.moveTo(popupX + radius, popupY);
+    ctx.lineTo(popupX + popupWidth - radius, popupY);
+    ctx.quadraticCurveTo(popupX + popupWidth, popupY, popupX + popupWidth, popupY + radius);
+    ctx.lineTo(popupX + popupWidth, popupY + popupHeight - radius);
+    ctx.quadraticCurveTo(popupX + popupWidth, popupY + popupHeight, popupX + popupWidth - radius, popupY + popupHeight);
+    ctx.lineTo(popupX + radius, popupY + popupHeight);
+    ctx.quadraticCurveTo(popupX, popupY + popupHeight, popupX, popupY + popupHeight - radius);
+    ctx.lineTo(popupX, popupY + radius);
+    ctx.quadraticCurveTo(popupX, popupY, popupX + radius, popupY);
+    ctx.closePath();
+    ctx.fill();
+
+    ctx.shadowBlur = 0;
+
+    // Border
+    ctx.strokeStyle = colors.border || '#3a3a4a';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+
+    // Corner accents (tier colored)
+    const accentSize = 12;
+    ctx.strokeStyle = tierColor;
+    ctx.lineWidth = 2;
+
+    // Top-left
+    ctx.beginPath();
+    ctx.moveTo(popupX, popupY + accentSize);
+    ctx.lineTo(popupX, popupY);
+    ctx.lineTo(popupX + accentSize, popupY);
+    ctx.stroke();
+
+    // Top-right
+    ctx.beginPath();
+    ctx.moveTo(popupX + popupWidth - accentSize, popupY);
+    ctx.lineTo(popupX + popupWidth, popupY);
+    ctx.lineTo(popupX + popupWidth, popupY + accentSize);
+    ctx.stroke();
+
+    // Bottom-left
+    ctx.beginPath();
+    ctx.moveTo(popupX, popupY + popupHeight - accentSize);
+    ctx.lineTo(popupX, popupY + popupHeight);
+    ctx.lineTo(popupX + accentSize, popupY + popupHeight);
+    ctx.stroke();
+
+    // Bottom-right
+    ctx.beginPath();
+    ctx.moveTo(popupX + popupWidth - accentSize, popupY + popupHeight);
+    ctx.lineTo(popupX + popupWidth, popupY + popupHeight);
+    ctx.lineTo(popupX + popupWidth, popupY + popupHeight - accentSize);
+    ctx.stroke();
+
+    ctx.restore();
+
+    // Note: borderColor is now tierColor for the rest of the function
+    const borderColor = tierColor;
 
     // === HEADER: Name + Tier indicator + Level ===
     const headerY = popupY + 25;
