@@ -600,24 +600,36 @@ function drawEnemyHealthBar(ctx, x, y, width, hp, maxHp, isTargeted, barHeight) 
 }
 
 /**
- * Render all enemies on EXPLORED tiles (with distance-based dimming)
- * Enemies outside torchlight are visible but dimmed
+ * Render all enemies on ALL tiles (with distance-based dimming)
+ * - Enemies in torchlight: full brightness
+ * - Enemies on explored tiles outside torch: dimmed based on distance
+ * - Enemies on unexplored tiles: maximum dimming (same as far explored tiles)
  */
 function renderAllEnemies(ctx, camX, camY, tileSize, offsetX) {
     if (!game.enemies) return;
+
+    // MIN_BRIGHTNESS constant for unexplored tiles (matches renderer.js)
+    const MIN_BRIGHTNESS = 0.55;
 
     for (const enemy of game.enemies) {
         const enemyTileX = Math.floor(enemy.gridX);
         const enemyTileY = Math.floor(enemy.gridY);
         const tile = game.map[enemyTileY]?.[enemyTileX];
 
-        // Only render enemies on EXPLORED tiles (not just visible)
-        if (!tile || !tile.explored) continue;
+        // Skip if no tile data
+        if (!tile) continue;
 
-        // Get brightness for this tile (uses smooth gradient from torch)
-        const brightness = typeof getTileBrightness === 'function'
-            ? getTileBrightness(enemyTileX, enemyTileY)
-            : 1.0;
+        // Determine brightness based on tile exploration status
+        let brightness;
+        if (tile.explored) {
+            // Distance-based dimming for explored tiles
+            brightness = typeof getTileBrightness === 'function'
+                ? getTileBrightness(enemyTileX, enemyTileY)
+                : 1.0;
+        } else {
+            // Maximum dimming for unexplored tiles
+            brightness = MIN_BRIGHTNESS;
+        }
 
         // Apply brightness as globalAlpha for dimming effect
         ctx.save();

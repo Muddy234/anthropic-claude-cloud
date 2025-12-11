@@ -922,14 +922,7 @@ const camY = game.camera.y + (shakeOffset.y / (TILE_SIZE * ZOOM_LEVEL));
                     continue;
                 }
 
-                // FOG OF WAR: Render unexplored tiles with ambient blue-grey
-                if (!tile.explored) {
-                    ctx.fillStyle = `rgb(${FOG_COLOR.r}, ${FOG_COLOR.g}, ${FOG_COLOR.b})`;
-                    ctx.fillRect(screenX, screenY, effectiveTileSize, effectiveTileSize);
-                    continue;
-                }
-
-                // Render the tile normally
+                // Render ALL tiles (explored or not) - fog of war just dims, doesn't hide
                 if (tile.type === 'floor') {
                     drawFloorTile(ctx, tile, x, y, screenX, screenY, effectiveTileSize);
                 } else if (tile.type === 'doorway') {
@@ -952,14 +945,21 @@ const camY = game.camera.y + (shakeOffset.y / (TILE_SIZE * ZOOM_LEVEL));
                     ctx.strokeRect(screenX, screenY, effectiveTileSize, effectiveTileSize);
                 }
 
-                // FOG OF WAR: Apply distance-based dimming overlay for explored tiles
-                // Uses smooth gradient from torch edge outward
+                // FOG OF WAR: Apply dimming overlay to ALL tiles
+                // - Explored tiles: distance-based dimming (full brightness near torch, dimmed far away)
+                // - Unexplored tiles: maximum dimming (same as explored tiles outside torch)
+                let dimAmount;
                 if (tile.explored) {
-                    const dimAmount = getTileDimAmount(x, y);
-                    if (dimAmount > 0.01) {
-                        ctx.fillStyle = `rgba(${FOG_COLOR.r}, ${FOG_COLOR.g}, ${FOG_COLOR.b}, ${dimAmount})`;
-                        ctx.fillRect(screenX, screenY, effectiveTileSize, effectiveTileSize);
-                    }
+                    // Distance-based dimming for explored tiles
+                    dimAmount = getTileDimAmount(x, y);
+                } else {
+                    // Maximum dimming for unexplored tiles (45% dimmed)
+                    dimAmount = 1.0 - MIN_BRIGHTNESS;
+                }
+
+                if (dimAmount > 0.01) {
+                    ctx.fillStyle = `rgba(${FOG_COLOR.r}, ${FOG_COLOR.g}, ${FOG_COLOR.b}, ${dimAmount})`;
+                    ctx.fillRect(screenX, screenY, effectiveTileSize, effectiveTileSize);
                 }
             }
         }

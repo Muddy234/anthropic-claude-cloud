@@ -139,15 +139,21 @@ function drawMinimapGrid(ctx, cx, cy, radius, colors) {
 
 /**
  * Draw a single tile on the minimap - CotDG style
+ * Now shows ALL tiles - unexplored tiles are dimmed but visible
  */
 function drawMinimapTileCotDG(ctx, x, y, size, tile, colors) {
-    // Unexplored - completely dark
-    if (!tile.explored) {
-        return; // Don't draw unexplored tiles
+    // Determine alpha based on exploration state
+    // - Explored + visible: full brightness
+    // - Explored + not visible: 40% brightness
+    // - Unexplored: minimum brightness (same as far explored tiles)
+    const MIN_BRIGHTNESS = 0.55;
+    let alpha;
+    if (tile.explored) {
+        alpha = tile.visible ? 1.0 : 0.4;
+    } else {
+        // Unexplored tiles are visible but heavily dimmed
+        alpha = MIN_BRIGHTNESS * 0.4; // Extra dim for mini-map
     }
-
-    // Dim if not currently visible
-    const alpha = tile.visible ? 1.0 : 0.4;
     ctx.globalAlpha = alpha;
 
     // Floor types
@@ -207,13 +213,19 @@ function drawMinimapEntities(ctx, cx, cy, cfg, playerGridX, playerGridY, colors)
             if (dist > radius - 5) continue;
 
             const tile = game.map[enemyY]?.[enemyX];
-            if (!tile || !tile.explored) continue; // Show on explored tiles
+            if (!tile) continue;
 
             const minimapX = cx + (dx * cfg.tileSize);
             const minimapY = cy + (dy * cfg.tileSize);
 
-            // Get brightness for dimming outside torch
-            const brightness = typeof getTileBrightness === 'function' ? getTileBrightness(enemyX, enemyY) : 1.0;
+            // Get brightness - explored tiles use distance-based, unexplored use minimum
+            const MIN_BRIGHTNESS = 0.55;
+            let brightness;
+            if (tile.explored) {
+                brightness = typeof getTileBrightness === 'function' ? getTileBrightness(enemyX, enemyY) : 1.0;
+            } else {
+                brightness = MIN_BRIGHTNESS;
+            }
             ctx.globalAlpha = brightness;
 
             // Enemy dot with glow
@@ -241,10 +253,16 @@ function drawMinimapEntities(ctx, cx, cy, cfg, playerGridX, playerGridY, colors)
             if (dist > radius - 5) continue;
 
             const tile = game.map[lootY]?.[lootX];
-            if (!tile || !tile.explored) continue; // Show on explored tiles
+            if (!tile) continue;
 
-            // Get brightness for dimming outside torch
-            const brightness = typeof getTileBrightness === 'function' ? getTileBrightness(lootX, lootY) : 1.0;
+            // Get brightness - explored tiles use distance-based, unexplored use minimum
+            const MIN_BRIGHTNESS = 0.55;
+            let brightness;
+            if (tile.explored) {
+                brightness = typeof getTileBrightness === 'function' ? getTileBrightness(lootX, lootY) : 1.0;
+            } else {
+                brightness = MIN_BRIGHTNESS;
+            }
 
             const minimapX = cx + (dx * cfg.tileSize);
             const minimapY = cy + (dy * cfg.tileSize);
@@ -276,10 +294,16 @@ function drawMinimapEntities(ctx, cx, cy, cfg, playerGridX, playerGridY, colors)
             if (dist > radius - 5) continue;
 
             const tile = game.map[chestY]?.[chestX];
-            if (!tile || !tile.explored) continue; // Show on explored tiles
+            if (!tile) continue;
 
-            // Get brightness for dimming outside torch
-            const brightness = typeof getTileBrightness === 'function' ? getTileBrightness(chestX, chestY) : 1.0;
+            // Get brightness - explored tiles use distance-based, unexplored use minimum
+            const MIN_BRIGHTNESS = 0.55;
+            let brightness;
+            if (tile.explored) {
+                brightness = typeof getTileBrightness === 'function' ? getTileBrightness(chestX, chestY) : 1.0;
+            } else {
+                brightness = MIN_BRIGHTNESS;
+            }
             ctx.globalAlpha = brightness;
 
             const minimapX = cx + (dx * cfg.tileSize);
