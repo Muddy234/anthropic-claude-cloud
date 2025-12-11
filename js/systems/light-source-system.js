@@ -5,6 +5,191 @@
 // in darkness scenarios. Integrates with vision system for safe zones.
 // ============================================================================
 
+// ============================================================================
+// PERLIN NOISE IMPLEMENTATION
+// ============================================================================
+// Used for organic torchlight flicker - creates smooth, natural variations
+// Based on Ken Perlin's improved noise algorithm
+// ============================================================================
+
+const PerlinNoise = {
+    // Permutation table for noise generation
+    p: [],
+
+    // Initialize with seed
+    init(seed = 0) {
+        const perm = [];
+        for (let i = 0; i < 256; i++) perm[i] = i;
+
+        // Fisher-Yates shuffle with seed
+        let s = seed;
+        for (let i = 255; i > 0; i--) {
+            s = (s * 16807) % 2147483647;
+            const j = s % (i + 1);
+            [perm[i], perm[j]] = [perm[j], perm[i]];
+        }
+
+        // Duplicate for overflow handling
+        this.p = new Array(512);
+        for (let i = 0; i < 512; i++) {
+            this.p[i] = perm[i & 255];
+        }
+    },
+
+    // Fade function for smooth interpolation: 6t^5 - 15t^4 + 10t^3
+    fade(t) {
+        return t * t * t * (t * (t * 6 - 15) + 10);
+    },
+
+    // Linear interpolation
+    lerp(a, b, t) {
+        return a + t * (b - a);
+    },
+
+    // Gradient function
+    grad(hash, x, y) {
+        const h = hash & 3;
+        const u = h < 2 ? x : y;
+        const v = h < 2 ? y : x;
+        return ((h & 1) === 0 ? u : -u) + ((h & 2) === 0 ? v : -v);
+    },
+
+    // 2D Perlin noise at coordinates (x, y)
+    // Returns value in range [-1, 1]
+    noise2D(x, y) {
+        // Find unit square containing point
+        const X = Math.floor(x) & 255;
+        const Y = Math.floor(y) & 255;
+
+        // Find relative x, y in square
+        x -= Math.floor(x);
+        y -= Math.floor(y);
+
+        // Compute fade curves
+        const u = this.fade(x);
+        const v = this.fade(y);
+
+        // Hash coordinates of 4 square corners
+        const A = this.p[X] + Y;
+        const B = this.p[X + 1] + Y;
+
+        // Blend results from 4 corners
+        return this.lerp(
+            this.lerp(this.grad(this.p[A], x, y), this.grad(this.p[B], x - 1, y), u),
+            this.lerp(this.grad(this.p[A + 1], x, y - 1), this.grad(this.p[B + 1], x - 1, y - 1), u),
+            v
+        );
+    },
+
+    // Fractal Brownian Motion - layered noise for more organic feel
+    // Combines multiple octaves of noise at different frequencies
+    fbm(x, y, octaves = 3, persistence = 0.5) {
+        let total = 0;
+        let frequency = 1;
+        let amplitude = 1;
+        let maxValue = 0;
+
+        for (let i = 0; i < octaves; i++) {
+            total += this.noise2D(x * frequency, y * frequency) * amplitude;
+            maxValue += amplitude;
+            amplitude *= persistence;
+            frequency *= 2;
+        }
+
+        return total / maxValue;
+    }
+};
+
+// Initialize Perlin noise with random seed
+PerlinNoise.init(Date.now());
+
+// ============================================================================
+// COOKIE TEXTURE GENERATOR
+// ============================================================================
+// Creates irregular light shapes like real torches cast
+// ============================================================================
+
+const LightCookieSystem = {
+    cookies: new Map(), // Cache generated cookie textures
+
+    /**
+     * Generate a cookie texture for a light source
+     * @param {string} id - Unique identifier for caching
+     * @param {number} size - Size of texture in pixels
+     * @param {number} irregularity - How irregular the shape is (0-1)
+     * @returns {HTMLCanvasElement} - Cookie texture canvas
+     */
+    generateCookie(id, size = 128, irregularity = 0.3) {
+        // Check cache first
+        if (this.cookies.has(id)) {
+            return this.cookies.get(id);
+        }
+
+        const canvas = document.createElement('canvas');
+        canvas.width = size;
+        canvas.height = size;
+        const ctx = canvas.getContext('2d');
+
+        const centerX = size / 2;
+        const centerY = size / 2;
+        const baseRadius = size / 2 - 4;
+
+        // Generate irregular shape using noise
+        const points = 64; // Number of points around the circumference
+        const angleStep = (Math.PI * 2) / points;
+
+        ctx.beginPath();
+        for (let i = 0; i <= points; i++) {
+            const angle = i * angleStep;
+
+            // Use Perlin noise to vary the radius
+            // Use the ID as part of the noise coordinate for unique shapes
+            const noiseX = Math.cos(angle) * 2 + (id.charCodeAt(0) || 0);
+            const noiseY = Math.sin(angle) * 2 + (id.charCodeAt(1) || 0);
+            const noiseValue = PerlinNoise.noise2D(noiseX, noiseY);
+
+            // Apply irregularity to radius
+            const radiusVariation = 1 + noiseValue * irregularity;
+            const radius = baseRadius * radiusVariation;
+
+            const x = centerX + Math.cos(angle) * radius;
+            const y = centerY + Math.sin(angle) * radius;
+
+            if (i === 0) {
+                ctx.moveTo(x, y);
+            } else {
+                ctx.lineTo(x, y);
+            }
+        }
+        ctx.closePath();
+
+        // Create radial gradient for soft edges
+        const gradient = ctx.createRadialGradient(
+            centerX, centerY, 0,
+            centerX, centerY, baseRadius
+        );
+        gradient.addColorStop(0, 'rgba(255, 255, 255, 1)');
+        gradient.addColorStop(0.5, 'rgba(255, 255, 255, 0.8)');
+        gradient.addColorStop(0.8, 'rgba(255, 255, 255, 0.3)');
+        gradient.addColorStop(1, 'rgba(255, 255, 255, 0)');
+
+        ctx.fillStyle = gradient;
+        ctx.fill();
+
+        // Cache the cookie
+        this.cookies.set(id, canvas);
+
+        return canvas;
+    },
+
+    /**
+     * Clear cached cookies (call when light sources are removed)
+     */
+    clearCache() {
+        this.cookies.clear();
+    }
+};
+
 const LightSourceSystem = {
     // ========================================================================
     // CONFIGURATION
@@ -12,8 +197,12 @@ const LightSourceSystem = {
     config: {
         debugLogging: false,
         defaultPlayerLightRadius: 3,
-        flickerIntensity: 0.1,
-        flickerSpeed: 200  // ms
+        flickerIntensity: 0.25,      // Increased from 0.1 - more dramatic flicker
+        flickerSpeed: 12,            // Slightly faster for more lively feel
+        flickerOctaves: 3,           // More octaves for complex organic movement
+        flickerPersistence: 0.6,     // How much each octave contributes
+        useCookieTextures: true,     // Enable irregular light shapes
+        cookieIrregularity: 0.3      // Slightly more irregular shapes
     },
 
     // ========================================================================
@@ -25,8 +214,9 @@ const LightSourceSystem = {
     darknessTransitionSpeed: 0.5,  // Per second
     visibilityCache: null,   // Cached visibility grid
     cacheValid: false,
-    lastFlickerTime: 0,
-    flickerOffset: 0,
+    noiseTime: 0,            // Time accumulator for Perlin noise
+    flickerOffset: 0,        // Current global flicker offset (legacy compat)
+    sourceFlickers: new Map(), // Per-source flicker values for organic variation
 
     // ========================================================================
     // LIGHT SOURCE TYPES
@@ -168,7 +358,14 @@ const LightSourceSystem = {
             damageToUndead: config.damageToUndead ?? defaults.damageToUndead ?? false,
 
             // Rendering
-            flickerPhase: Math.random() * Math.PI * 2
+            flickerPhase: Math.random() * Math.PI * 2,
+
+            // Perlin noise offset for unique flicker pattern per source
+            noiseOffsetX: Math.random() * 1000,
+            noiseOffsetY: Math.random() * 1000,
+
+            // Cookie texture for irregular light shape
+            cookieId: config.id || `cookie_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
         };
 
         this.sources.set(source.id, source);
@@ -260,6 +457,41 @@ const LightSourceSystem = {
     // ========================================================================
 
     /**
+     * Get Perlin noise flicker value for a specific light source
+     * Each source has unique noise offset for organic variation
+     * @param {object} source - Light source object
+     * @returns {number} - Flicker multiplier (0.9 to 1.1 range approximately)
+     */
+    getSourceFlicker(source) {
+        if (!source.flicker) return 1.0;
+
+        // Use Perlin noise for smooth, organic flicker
+        // Each source uses its unique noise offset for variation
+        const noiseX = this.noiseTime * this.config.flickerSpeed / 1000 + source.noiseOffsetX;
+        const noiseY = source.noiseOffsetY;
+
+        // Use FBM for more complex, layered flicker
+        // More octaves and persistence creates more organic, lively movement
+        const noiseValue = PerlinNoise.fbm(
+            noiseX,
+            noiseY,
+            this.config.flickerOctaves,
+            this.config.flickerPersistence || 0.5
+        );
+
+        // Add a secondary faster flicker for more "alive" feel
+        const fastFlicker = PerlinNoise.noise2D(
+            noiseX * 3, // Faster
+            noiseY + 100
+        ) * 0.1; // Subtle high-frequency variation
+
+        // Convert noise (-1 to 1) to flicker multiplier
+        // Apply configured intensity
+        const combinedNoise = noiseValue + fastFlicker;
+        return 1 + combinedNoise * this.config.flickerIntensity;
+    },
+
+    /**
      * Calculate visibility at a specific point
      * @param {number} x - Grid X
      * @param {number} y - Grid Y
@@ -287,17 +519,17 @@ const LightSourceSystem = {
             // Calculate distance
             const dist = Math.sqrt((x - srcX) ** 2 + (y - srcY) ** 2);
 
-            // Apply flicker to radius
-            let effectiveRadius = source.radius;
-            if (source.flicker) {
-                effectiveRadius *= (1 + this.flickerOffset * this.config.flickerIntensity);
-            }
+            // Apply Perlin noise flicker to radius for organic effect
+            const flickerMultiplier = this.getSourceFlicker(source);
+            let effectiveRadius = source.radius * flickerMultiplier;
 
             // If within light radius
             if (dist <= effectiveRadius) {
-                // Light falloff (linear)
-                const falloff = 1 - (dist / effectiveRadius);
-                const lightContribution = falloff * source.intensity;
+                // SmoothStep falloff for soft penumbra (instead of linear)
+                // Creates a more natural light edge
+                const t = dist / effectiveRadius;
+                const smoothFalloff = 1 - (t * t * (3 - 2 * t)); // Smoothstep
+                const lightContribution = smoothFalloff * source.intensity * flickerMultiplier;
                 visibility = Math.min(1, visibility + lightContribution);
             }
         });
@@ -462,12 +694,22 @@ const LightSourceSystem = {
             this.invalidateCache();
         }
 
-        // Update flicker
-        this.lastFlickerTime += dt;
-        if (this.lastFlickerTime >= this.config.flickerSpeed) {
-            this.lastFlickerTime = 0;
-            this.flickerOffset = Math.sin(Date.now() / 100) * 0.5 + Math.sin(Date.now() / 73) * 0.3;
-        }
+        // Advance Perlin noise time for organic flicker
+        this.noiseTime += dt;
+
+        // Update global flickerOffset for player torchlight
+        // Uses FBM with fast flicker overlay for lively feel
+        const baseFlicker = PerlinNoise.fbm(
+            this.noiseTime * this.config.flickerSpeed / 1000,
+            0,
+            this.config.flickerOctaves,
+            this.config.flickerPersistence || 0.5
+        );
+        const fastFlicker = PerlinNoise.noise2D(
+            this.noiseTime * this.config.flickerSpeed / 1000 * 3,
+            50
+        ) * 0.12;
+        this.flickerOffset = baseFlicker + fastFlicker;
 
         // Update each source
         this.sources.forEach((source, id) => {
@@ -520,11 +762,33 @@ const LightSourceSystem = {
         this.sources.clear();
         this.globalDarkness = 0;
         this.targetDarkness = 0;
+        this.noiseTime = 0;
+        this.sourceFlickers.clear();
         this.invalidateCache();
+
+        // Clear cookie texture cache
+        LightCookieSystem.clearCache();
 
         if (this.config.debugLogging) {
             console.log('[LightSource] System cleaned up');
         }
+    },
+
+    /**
+     * Get cookie texture for a light source (for rendering)
+     * @param {object} source - Light source object
+     * @param {number} size - Texture size in pixels
+     * @returns {HTMLCanvasElement|null} - Cookie texture or null if disabled
+     */
+    getCookieTexture(source, size = 128) {
+        if (!this.config.useCookieTextures) return null;
+        if (!source.flicker) return null; // Only flickering sources get cookies
+
+        return LightCookieSystem.generateCookie(
+            source.cookieId,
+            size,
+            this.config.cookieIrregularity
+        );
     },
 
     // ========================================================================
@@ -677,5 +941,7 @@ if (typeof SystemManager !== 'undefined') {
 // EXPORTS
 // ============================================================================
 window.LightSourceSystem = LightSourceSystem;
+window.PerlinNoise = PerlinNoise;
+window.LightCookieSystem = LightCookieSystem;
 
-console.log('✅ Light Source System loaded');
+console.log('✅ Light Source System loaded (with Perlin noise flicker & cookie textures)');

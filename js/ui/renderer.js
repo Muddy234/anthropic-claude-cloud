@@ -655,54 +655,194 @@ function drawThemedFloor(tile, x, y, size) {
     ctx.fillRect(x, y, size, size);
 }
 
+// ============================================================================
+// ATMOSPHERIC FOG OF WAR SYSTEM
+// ============================================================================
+// ALL explored areas remain visible - just dimmed/desaturated outside torchlight
+// Smooth 2-tile gradient from torch edge to dimmed zone
+// ============================================================================
+
+// Ambient fog color (blue-grey instead of pure black)
+const FOG_COLOR = { r: 26, g: 26, b: 45 }; // #1a1a2d
+
+// Torchlight warm glow color (orange/amber)
+const TORCH_COLOR = { r: 255, g: 147, b: 41 }; // Warm orange #ff9329
+
+// Visibility settings
+const MIN_BRIGHTNESS = 0.55; // 55% brightness outside torch (45% dimmed)
+const FADE_DISTANCE = 2; // 2 tile gradient from torch edge
+
 /**
- * Apply radial gradient fog of war overlay for smooth visibility fade
- * Creates a gradient that spans across tiles for seamless transition
- * Combined with Layer 1.45 shadow overlay to respect shadowcasting
+ * Calculate tile brightness based on distance from player
+ * Returns 1.0 (full brightness) inside torch, smooth gradient in fade zone, MIN_BRIGHTNESS outside
+ * @param {number} tileX - Tile X position
+ * @param {number} tileY - Tile Y position
+ * @returns {number} - Brightness from MIN_BRIGHTNESS to 1.0
  */
-function applyRadialFogOverlay(ctx, player, camX, camY, tileSize, offsetX, viewW, viewH) {
-    // Get vision ranges from VisionSystem
-    const fullVisionRange = typeof VisionSystem !== 'undefined'
+function getTileBrightness(tileX, tileY) {
+    if (!game.player) return MIN_BRIGHTNESS;
+
+    const playerX = game.player.gridX;
+    const playerY = game.player.gridY;
+
+    // Get torch/vision radius
+    const torchRadius = typeof VisionSystem !== 'undefined'
         ? VisionSystem.getPlayerVisionRange()
         : 4;
-    const fadeDistance = typeof VisionSystem !== 'undefined'
-        ? VisionSystem.config.fadeDistance
-        : 2;
-    const totalRange = fullVisionRange + fadeDistance;
 
-    // Calculate player's screen position
+    // Calculate distance from player
+    const dx = tileX - playerX;
+    const dy = tileY - playerY;
+    const distance = Math.sqrt(dx * dx + dy * dy);
+
+    // Inside torch radius = full brightness
+    if (distance <= torchRadius) {
+        return 1.0;
+    }
+
+    // In fade zone = smooth gradient
+    const fadeStart = torchRadius;
+    const fadeEnd = torchRadius + FADE_DISTANCE;
+
+    if (distance < fadeEnd) {
+        // Calculate progress through fade zone (0 at torch edge, 1 at fade end)
+        const fadeProgress = (distance - fadeStart) / FADE_DISTANCE;
+
+        // Smoothstep for natural transition
+        const smoothProgress = fadeProgress * fadeProgress * (3 - 2 * fadeProgress);
+
+        // Interpolate from 1.0 to MIN_BRIGHTNESS
+        return 1.0 - (smoothProgress * (1.0 - MIN_BRIGHTNESS));
+    }
+
+    // Beyond fade zone = minimum brightness
+    return MIN_BRIGHTNESS;
+}
+
+/**
+ * Get the dim overlay alpha for a tile (inverse of brightness)
+ * @param {number} tileX - Tile X position
+ * @param {number} tileY - Tile Y position
+ * @returns {number} - Alpha for fog overlay (0 = no fog, higher = more dimmed)
+ */
+function getTileDimAmount(tileX, tileY) {
+    const brightness = getTileBrightness(tileX, tileY);
+    // Convert brightness to dim amount
+    // brightness 1.0 = dim 0, brightness 0.55 = dim 0.45
+    return 1.0 - brightness;
+}
+
+// Export for use by other renderers
+window.getTileBrightness = getTileBrightness;
+window.getTileDimAmount = getTileDimAmount;
+
+/**
+ * Render warm torchlight glow around the player
+ * Glow blends into the dimmed areas using the same gradient
+ */
+function renderTorchlightGlow(ctx, player, camX, camY, tileSize, offsetX) {
+    const torchRadius = typeof VisionSystem !== 'undefined'
+        ? VisionSystem.getPlayerVisionRange()
+        : 4;
+
     const playerScreenX = (player.displayX - camX) * tileSize + offsetX;
     const playerScreenY = (player.displayY - camY) * tileSize;
 
-    // Calculate radii in pixels
-    const innerRadius = fullVisionRange * tileSize;
-    const outerRadius = totalRange * tileSize;
-
-    // Create radial gradient centered on player
-    const gradient = ctx.createRadialGradient(
-        playerScreenX, playerScreenY, innerRadius,  // Inner circle (full visibility)
-        playerScreenX, playerScreenY, outerRadius   // Outer circle (full darkness)
-    );
-
-    // Add color stops to approximate smoothstep curve
-    // We use multiple stops to create a smooth ease-in-ease-out effect
-    const steps = 20; // Number of gradient steps for smooth interpolation
-    for (let i = 0; i <= steps; i++) {
-        const t = i / steps; // 0 to 1
-
-        // Apply smoothstep function: t * t * (3 - 2 * t)
-        const smoothT = t * t * (3 - 2 * t);
-
-        // Calculate darkness (0 = transparent, 0.8 = nearly opaque)
-        const darkness = smoothT * 0.8;
-
-        gradient.addColorStop(t, `rgba(0, 0, 0, ${darkness})`);
+    // Get flicker for animated glow
+    let flickerMultiplier = 1.0;
+    if (typeof LightSourceSystem !== 'undefined') {
+        flickerMultiplier = 1 + LightSourceSystem.flickerOffset * 0.2;
     }
 
-    // Draw gradient overlay across entire viewport
-    // Note: Shadowed areas will be overwritten by Layer 1.45
+    // Glow extends to the fade zone edge
+    const glowRadius = (torchRadius + FADE_DISTANCE) * tileSize * flickerMultiplier;
+
+    // Create radial gradient for warm glow
+    const gradient = ctx.createRadialGradient(
+        playerScreenX, playerScreenY, 0,
+        playerScreenX, playerScreenY, glowRadius
+    );
+
+    // Warm orange glow that follows the same falloff as brightness
+    const intensity = 0.2 * flickerMultiplier;
+    const torchEdge = torchRadius / (torchRadius + FADE_DISTANCE); // Where torch radius ends in gradient
+
+    gradient.addColorStop(0, `rgba(${TORCH_COLOR.r}, ${TORCH_COLOR.g}, ${TORCH_COLOR.b}, ${intensity})`);
+    gradient.addColorStop(torchEdge * 0.5, `rgba(${TORCH_COLOR.r}, ${TORCH_COLOR.g}, ${TORCH_COLOR.b}, ${intensity * 0.8})`);
+    gradient.addColorStop(torchEdge, `rgba(${TORCH_COLOR.r}, ${TORCH_COLOR.g}, ${TORCH_COLOR.b}, ${intensity * 0.5})`);
+    gradient.addColorStop(1, `rgba(${TORCH_COLOR.r}, ${TORCH_COLOR.g}, ${TORCH_COLOR.b}, 0)`);
+
+    ctx.save();
+    ctx.globalCompositeOperation = 'screen';
     ctx.fillStyle = gradient;
-    ctx.fillRect(offsetX, 0, viewW, viewH);
+    ctx.fillRect(playerScreenX - glowRadius, playerScreenY - glowRadius, glowRadius * 2, glowRadius * 2);
+    ctx.restore();
+}
+
+/**
+ * Apply fog overlay and torchlight effects
+ */
+function applyRadialFogOverlay(ctx, player, camX, camY, tileSize, offsetX, viewW, viewH) {
+    // Render warm torchlight glow
+    renderTorchlightGlow(ctx, player, camX, camY, tileSize, offsetX);
+
+    // Render light source cookie textures for organic shapes
+    if (typeof LightSourceSystem !== 'undefined' && LightSourceSystem.config.useCookieTextures) {
+        renderLightCookies(ctx, camX, camY, tileSize, offsetX);
+    }
+}
+
+/**
+ * Render cookie textures for each active light source
+ * Creates irregular, organic light shapes instead of perfect circles
+ */
+function renderLightCookies(ctx, camX, camY, tileSize, offsetX) {
+    if (typeof LightSourceSystem === 'undefined') return;
+
+    const sources = LightSourceSystem.getActiveSources();
+
+    ctx.save();
+    // Use 'destination-out' to carve out lighter areas in the fog
+    ctx.globalCompositeOperation = 'destination-out';
+
+    sources.forEach(source => {
+        if (!source.active || !source.flicker) return;
+
+        // Get source position
+        let srcX = source.gridX;
+        let srcY = source.gridY;
+        if (source.attachedTo) {
+            srcX = source.attachedTo.gridX ?? source.attachedTo.x ?? srcX;
+            srcY = source.attachedTo.gridY ?? source.attachedTo.y ?? srcY;
+        }
+
+        // Calculate screen position
+        const screenX = (srcX - camX) * tileSize + offsetX;
+        const screenY = (srcY - camY) * tileSize;
+
+        // Get flicker multiplier for animated radius
+        const flickerMultiplier = LightSourceSystem.getSourceFlicker(source);
+        const effectiveRadius = source.radius * flickerMultiplier * tileSize;
+
+        // Get cookie texture
+        const cookieSize = Math.ceil(effectiveRadius * 3);
+        const cookie = LightSourceSystem.getCookieTexture(source, cookieSize);
+
+        if (cookie) {
+            // Draw cookie texture centered on light source
+            // The cookie texture creates irregular light edges
+            ctx.globalAlpha = 0.15 * source.intensity; // Subtle effect
+            ctx.drawImage(
+                cookie,
+                screenX - cookieSize / 2,
+                screenY - cookieSize / 2,
+                cookieSize,
+                cookieSize
+            );
+        }
+    });
+
+    ctx.restore();
 }
 
 function render() {
@@ -782,14 +922,7 @@ const camY = game.camera.y + (shakeOffset.y / (TILE_SIZE * ZOOM_LEVEL));
                     continue;
                 }
 
-                // FOG OF WAR: Render unexplored tiles as dark gray
-                if (!tile.explored) {
-                    ctx.fillStyle = '#2a2a2a';
-                    ctx.fillRect(screenX, screenY, effectiveTileSize, effectiveTileSize);
-                    continue;
-                }
-
-                // Render the tile normally
+                // Render ALL tiles (explored or not) - fog of war just dims, doesn't hide
                 if (tile.type === 'floor') {
                     drawFloorTile(ctx, tile, x, y, screenX, screenY, effectiveTileSize);
                 } else if (tile.type === 'doorway') {
@@ -812,43 +945,32 @@ const camY = game.camera.y + (shakeOffset.y / (TILE_SIZE * ZOOM_LEVEL));
                     ctx.strokeRect(screenX, screenY, effectiveTileSize, effectiveTileSize);
                 }
 
-                // FOG OF WAR: Apply darkness overlay for remembered (not currently visible) tiles
-                // Note: Visible tile fading handled by radial gradient in Layer 1.4
-                if (tile.explored && !tile.visible) {
-                    ctx.fillStyle = 'rgba(0, 0, 0, 0.65)';
+                // FOG OF WAR: Apply dimming overlay to ALL tiles
+                // - Explored tiles: distance-based dimming (full brightness near torch, dimmed far away)
+                // - Unexplored tiles: maximum dimming (same as explored tiles outside torch)
+                let dimAmount;
+                if (tile.explored) {
+                    // Distance-based dimming for explored tiles
+                    dimAmount = getTileDimAmount(x, y);
+                } else {
+                    // Maximum dimming for unexplored tiles (45% dimmed)
+                    dimAmount = 1.0 - MIN_BRIGHTNESS;
+                }
+
+                if (dimAmount > 0.01) {
+                    ctx.fillStyle = `rgba(${FOG_COLOR.r}, ${FOG_COLOR.g}, ${FOG_COLOR.b}, ${dimAmount})`;
                     ctx.fillRect(screenX, screenY, effectiveTileSize, effectiveTileSize);
                 }
             }
         }
 
-        // LAYER 1.4: Apply radial gradient for smooth fade, then overlay shadows
+        // LAYER 1.4: Apply torchlight glow effect (warm orange, doesn't block visibility)
         if (typeof applyRadialFogOverlay === 'function') {
             applyRadialFogOverlay(ctx, game.player, camX, camY, effectiveTileSize, TRACKER_WIDTH, viewW, viewH);
         }
 
-        // LAYER 1.45: Overlay full darkness on shadowed tiles (respects shadowcasting)
-        for (let y = 0; y < GRID_HEIGHT; y++) {
-            for (let x = 0; x < GRID_WIDTH; x++) {
-                const tile = game.map[y][x];
-                if (!tile || !tile.explored) continue;
-
-                // Only overlay darkness on explored but not currently visible tiles
-                if (tile.explored && !tile.visible) {
-                    const screenX = (x - camX) * effectiveTileSize + TRACKER_WIDTH;
-                    const screenY = (y - camY) * effectiveTileSize;
-
-                    // Skip tiles that are off-screen
-                    if (screenX + effectiveTileSize < TRACKER_WIDTH || screenX > canvas.width ||
-                        screenY + effectiveTileSize < 0 || screenY > canvas.height) {
-                        continue;
-                    }
-
-                    // Apply shadow darkness (overwrites radial gradient in shadowed areas)
-                    ctx.fillStyle = 'rgba(0, 0, 0, 0.65)';
-                    ctx.fillRect(screenX, screenY, effectiveTileSize, effectiveTileSize);
-                }
-            }
-        }
+        // NOTE: Layer 1.45 removed - single overlay above handles all dimming
+        // No need for double-overlay which was making things too dark
 
         // LAYER 1.5: Draw room perimeter walls with proper corners/edges (NEW!)
         // DISABLED for blob-based dungeons - walls are rendered in Layer 1 based on game.map[y][x].type

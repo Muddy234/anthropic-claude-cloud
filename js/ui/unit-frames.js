@@ -60,36 +60,48 @@ function renderPlayerFrame(ctx) {
 
     // Get colors from design system (with fallbacks)
     const colors = typeof UI_COLORS !== 'undefined' ? UI_COLORS : {
-        bgDark: '#12121a',
-        bgMedium: '#1a1a24',
-        border: '#3a3a4a',
-        mana: '#2980b9',
-        manaBright: '#3498db',
-        healthCritical: '#ff2222',
-        textPrimary: '#ffffff',
-        gold: '#d4af37'
+        bgDark: '#141414',
+        bgMedium: '#1c1c1c',
+        border: '#3a3530',
+        mana: '#7a89c2',
+        manaBright: '#9aa8d4',
+        healthCritical: '#ff3030',
+        textPrimary: '#efe4b0',
+        gold: '#c9a227'
     };
+
+    const fontFamily = typeof UI_FONT_FAMILY !== 'undefined' ? UI_FONT_FAMILY.display : 'Georgia, serif';
 
     ctx.save();
 
     // === PANEL BACKGROUND with gradient ===
     const panelGrad = ctx.createLinearGradient(frame.x, frame.y, frame.x, frame.y + frame.height);
-    panelGrad.addColorStop(0, colors.bgMedium || '#1a1a24');
-    panelGrad.addColorStop(1, colors.bgDark || '#12121a');
+    panelGrad.addColorStop(0, colors.bgMedium || '#1c1c1c');
+    panelGrad.addColorStop(0.5, colors.bgDark || '#141414');
+    panelGrad.addColorStop(1, colors.bgDarkest || '#0d0d0d');
     ctx.fillStyle = panelGrad;
     ctx.fillRect(frame.x, frame.y, frame.width, frame.height);
 
-    // Border
-    ctx.strokeStyle = colors.border || '#3a3a4a';
-    ctx.lineWidth = 2;
+    // Border (thicker)
+    ctx.strokeStyle = colors.border || '#3a3530';
+    ctx.lineWidth = 3;
     ctx.strokeRect(frame.x, frame.y, frame.width, frame.height);
 
-    // Inner accent line (top) - blue for player
-    ctx.strokeStyle = colors.manaBright || '#3498db';
+    // === CORNER ANCHORS - "bolt" the frame to the screen ===
+    if (typeof drawCornerAnchors === 'function') {
+        drawCornerAnchors(ctx, frame.x, frame.y, frame.width, frame.height, {
+            color: colors.mana || '#7a89c2',
+            size: 10,
+            thickness: 2
+        });
+    }
+
+    // Inner accent line (top) - spectral blue for player
+    ctx.strokeStyle = colors.manaBright || '#9aa8d4';
     ctx.lineWidth = 2;
     ctx.beginPath();
-    ctx.moveTo(frame.x + 2, frame.y + 2);
-    ctx.lineTo(frame.x + frame.width - 2, frame.y + 2);
+    ctx.moveTo(frame.x + 4, frame.y + 4);
+    ctx.lineTo(frame.x + frame.width - 4, frame.y + 4);
     ctx.stroke();
 
     // === PORTRAIT ===
@@ -139,17 +151,17 @@ function renderPlayerFrame(ctx) {
     const textX = frame.x + cfg.portraitPadding * 2 + cfg.portraitSize + 8;
     const textY = frame.y + 18;
 
-    // Player name with shadow
-    ctx.font = '14px monospace';
+    // Player name with shadow - serif font
+    ctx.font = `bold 14px ${fontFamily}`;
     ctx.textAlign = 'left';
-    ctx.fillStyle = colors.textPrimary || '#ffffff';
-    ctx.shadowColor = 'rgba(0, 0, 0, 0.8)';
-    ctx.shadowBlur = 2;
+    ctx.fillStyle = colors.textPrimary || '#efe4b0';
+    ctx.shadowColor = 'rgba(0, 0, 0, 0.9)';
+    ctx.shadowBlur = 3;
     ctx.fillText('ADVENTURER', textX, textY);
 
-    // Level badge
-    ctx.font = '12px monospace';
-    ctx.fillStyle = colors.gold || '#d4af37';
+    // Level badge - serif font
+    ctx.font = `bold 11px ${fontFamily}`;
+    ctx.fillStyle = colors.gold || '#c9a227';
     ctx.fillText(`LV.${player.level}`, textX + 95, textY);
 
     ctx.shadowBlur = 0;

@@ -30,17 +30,17 @@ function renderMiniMap(ctx, canvasWidth) {
 
     const cfg = MINIMAP_CONFIG;
 
-    // Get colors from design system
+    // Get colors from design system (updated to warm charcoal palette)
     const colors = typeof UI_COLORS !== 'undefined' ? UI_COLORS : {
-        bgDarkest: '#0a0a0f',
-        bgDark: '#12121a',
-        border: '#3a3a4a',
-        corruption: '#8e44ad',
-        health: '#c0392b',
-        gold: '#d4af37',
-        xp: '#5dade2',
-        textMuted: '#666666',
-        textPrimary: '#ffffff'
+        bgDarkest: '#0d0d0d',
+        bgDark: '#141414',
+        border: '#3a3530',
+        corruption: '#6b3a7d',
+        health: '#a82828',
+        gold: '#c9a227',
+        xp: '#8fafc4',
+        textMuted: '#706850',
+        textPrimary: '#efe4b0'
     };
 
     const centerX = canvasWidth - cfg.size / 2 - cfg.padding;
@@ -139,15 +139,21 @@ function drawMinimapGrid(ctx, cx, cy, radius, colors) {
 
 /**
  * Draw a single tile on the minimap - CotDG style
+ * Now shows ALL tiles - unexplored tiles are dimmed but visible
  */
 function drawMinimapTileCotDG(ctx, x, y, size, tile, colors) {
-    // Unexplored - completely dark
-    if (!tile.explored) {
-        return; // Don't draw unexplored tiles
+    // Determine alpha based on exploration state
+    // - Explored + visible: full brightness
+    // - Explored + not visible: 40% brightness
+    // - Unexplored: minimum brightness (same as far explored tiles)
+    const MIN_BRIGHTNESS = 0.55;
+    let alpha;
+    if (tile.explored) {
+        alpha = tile.visible ? 1.0 : 0.4;
+    } else {
+        // Unexplored tiles are visible but heavily dimmed
+        alpha = MIN_BRIGHTNESS * 0.4; // Extra dim for mini-map
     }
-
-    // Dim if not currently visible
-    const alpha = tile.visible ? 1.0 : 0.4;
     ctx.globalAlpha = alpha;
 
     // Floor types
@@ -207,10 +213,20 @@ function drawMinimapEntities(ctx, cx, cy, cfg, playerGridX, playerGridY, colors)
             if (dist > radius - 5) continue;
 
             const tile = game.map[enemyY]?.[enemyX];
-            if (!tile || !tile.visible) continue;
+            if (!tile) continue;
 
             const minimapX = cx + (dx * cfg.tileSize);
             const minimapY = cy + (dy * cfg.tileSize);
+
+            // Get brightness - explored tiles use distance-based, unexplored use minimum
+            const MIN_BRIGHTNESS = 0.55;
+            let brightness;
+            if (tile.explored) {
+                brightness = typeof getTileBrightness === 'function' ? getTileBrightness(enemyX, enemyY) : 1.0;
+            } else {
+                brightness = MIN_BRIGHTNESS;
+            }
+            ctx.globalAlpha = brightness;
 
             // Enemy dot with glow
             ctx.shadowColor = colors.health || '#c0392b';
@@ -220,6 +236,7 @@ function drawMinimapEntities(ctx, cx, cy, cfg, playerGridX, playerGridY, colors)
             ctx.arc(minimapX, minimapY, cfg.tileSize * 0.8, 0, Math.PI * 2);
             ctx.fill();
             ctx.shadowBlur = 0;
+            ctx.globalAlpha = 1;
         }
     }
 
@@ -236,14 +253,23 @@ function drawMinimapEntities(ctx, cx, cy, cfg, playerGridX, playerGridY, colors)
             if (dist > radius - 5) continue;
 
             const tile = game.map[lootY]?.[lootX];
-            if (!tile || !tile.visible) continue;
+            if (!tile) continue;
+
+            // Get brightness - explored tiles use distance-based, unexplored use minimum
+            const MIN_BRIGHTNESS = 0.55;
+            let brightness;
+            if (tile.explored) {
+                brightness = typeof getTileBrightness === 'function' ? getTileBrightness(lootX, lootY) : 1.0;
+            } else {
+                brightness = MIN_BRIGHTNESS;
+            }
 
             const minimapX = cx + (dx * cfg.tileSize);
             const minimapY = cy + (dy * cfg.tileSize);
 
-            // Loot diamond with pulse
+            // Loot diamond with pulse (dimmed by brightness)
             ctx.fillStyle = colors.gold || '#d4af37';
-            ctx.globalAlpha = pulse;
+            ctx.globalAlpha = pulse * brightness;
             ctx.save();
             ctx.translate(minimapX, minimapY);
             ctx.rotate(Math.PI / 4);
@@ -268,7 +294,17 @@ function drawMinimapEntities(ctx, cx, cy, cfg, playerGridX, playerGridY, colors)
             if (dist > radius - 5) continue;
 
             const tile = game.map[chestY]?.[chestX];
-            if (!tile || !tile.visible) continue;
+            if (!tile) continue;
+
+            // Get brightness - explored tiles use distance-based, unexplored use minimum
+            const MIN_BRIGHTNESS = 0.55;
+            let brightness;
+            if (tile.explored) {
+                brightness = typeof getTileBrightness === 'function' ? getTileBrightness(chestX, chestY) : 1.0;
+            } else {
+                brightness = MIN_BRIGHTNESS;
+            }
+            ctx.globalAlpha = brightness;
 
             const minimapX = cx + (dx * cfg.tileSize);
             const minimapY = cy + (dy * cfg.tileSize);
@@ -278,6 +314,7 @@ function drawMinimapEntities(ctx, cx, cy, cfg, playerGridX, playerGridY, colors)
             ctx.lineWidth = 1;
             ctx.strokeRect(minimapX - cfg.tileSize * 0.6, minimapY - cfg.tileSize * 0.6,
                           cfg.tileSize * 1.2, cfg.tileSize * 1.2);
+            ctx.globalAlpha = 1;
         }
     }
 }

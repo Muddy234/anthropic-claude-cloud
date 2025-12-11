@@ -23,6 +23,9 @@ const VisionSystem = {
     init(gameRef) {
         console.log('[Vision] Initializing fog of war system...');
 
+        // Clear visibility tracking array
+        this._visibleTiles = [];
+
         // Initialize all tiles as unexplored
         if (gameRef.map) {
             for (let y = 0; y < gameRef.map.length; y++) {
@@ -122,19 +125,24 @@ const VisionSystem = {
     // VISIBILITY MANAGEMENT
     // ========================================================================
 
+    // Track visible tiles for efficient clearing
+    _visibleTiles: [],
+
     /**
      * Clear current visibility (keep explored state)
+     * Optimized: only clears tiles that were previously visible
      */
     clearVisibility() {
-        for (let y = 0; y < game.map.length; y++) {
-            for (let x = 0; x < game.map[y].length; x++) {
-                const tile = game.map[y][x];
-                if (tile) {
-                    tile.visible = false;
-                    tile.visibility = 0;
-                }
+        // Only clear tiles that were marked visible last frame
+        for (const coords of this._visibleTiles) {
+            const tile = game.map[coords.y]?.[coords.x];
+            if (tile) {
+                tile.visible = false;
+                tile.visibility = 0;
             }
         }
+        // Reset the tracking array
+        this._visibleTiles = [];
     },
 
     /**
@@ -145,6 +153,10 @@ const VisionSystem = {
 
         const tile = game.map[y][x];
         if (tile) {
+            // Track this tile if it's newly visible
+            if (!tile.visible) {
+                this._visibleTiles.push({ x, y });
+            }
             tile.visible = true;
             tile.explored = true;
             tile.visibility = Math.max(tile.visibility, visibility);
