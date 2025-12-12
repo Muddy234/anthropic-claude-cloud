@@ -629,16 +629,16 @@ function createSlashEffect(player, direction, arcConfig, isSpecial = false, atta
 
     // Spawn sprite-based effect using combat-effect-system
     if (typeof spawnMeleeEffect === 'function') {
-        // Position the effect in front of the player where the weapon would be
-        // Different weapons have different reach distances
-        let offsetDist = 0.7;  // Default offset (about 3/4 tile ahead)
+        // Position the effect in front of the player based on weapon reach
+        // Values based on weapon range stats from weapons-melee.js/weapons-ranged.js
+        let offsetDist = 1.25;  // Default offset matches most melee weapons
         switch (weaponType) {
-            case 'unarmed': offsetDist = 0.5; break;  // Punches - close range
-            case 'knife':   offsetDist = 0.6; break;  // Knife - short reach
-            case 'sword':   offsetDist = 0.8; break;  // Sword - medium reach
-            case 'axe':     offsetDist = 0.75; break; // Axe - medium reach
-            case 'mace':    offsetDist = 0.7; break;  // Mace - medium reach
-            case 'polearm': offsetDist = 1.0; break;  // Polearm - long reach
+            case 'unarmed': offsetDist = 1.0;  break;  // Punches - close range
+            case 'knife':   offsetDist = 1.25; break;  // Knife - range: 1.25
+            case 'sword':   offsetDist = 1.25; break;  // Sword - range: 1.25
+            case 'axe':     offsetDist = 1.25; break;  // Axe - range: 1.25
+            case 'mace':    offsetDist = 1.25; break;  // Mace - range: 1.25
+            case 'polearm': offsetDist = 2.0;  break;  // Polearm - range: 2.0
         }
 
         const effectX = originX + Math.cos(direction || 0) * offsetDist;
