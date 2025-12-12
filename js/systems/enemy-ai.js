@@ -735,8 +735,16 @@ const AIManager = {
         enemy.ai = null;
     },
     
+    // Configuration for distance-based AI culling
+    AI_CULL_DISTANCE: 25,      // Full AI updates within this range
+    AI_SLEEP_DISTANCE: 40,     // Minimal updates beyond this range
+
     update(dt) {
         if (!this.game) return;
+
+        const player = this.game.player;
+        const px = player?.gridX || 0;
+        const py = player?.gridY || 0;
 
         // Force all enemies to alert/aggressive when shift is active
         if (this.game.shiftActive) {
@@ -755,7 +763,28 @@ const AIManager = {
             });
         }
 
-        this.ais.forEach(ai => ai.update(dt, this.game));
+        // Distance-based AI culling for performance
+        this.ais.forEach(ai => {
+            const enemy = ai.enemy;
+            const dx = enemy.gridX - px;
+            const dy = enemy.gridY - py;
+            const distSq = dx * dx + dy * dy;
+
+            // Full AI updates for nearby enemies
+            if (distSq <= this.AI_CULL_DISTANCE * this.AI_CULL_DISTANCE) {
+                ai.update(dt, this.game);
+            }
+            // Reduced updates for mid-range enemies (every 500ms)
+            else if (distSq <= this.AI_SLEEP_DISTANCE * this.AI_SLEEP_DISTANCE) {
+                ai.thinkTimer += dt;
+                if (ai.thinkTimer >= 500) {
+                    ai.thinkTimer = 0;
+                    ai.update(dt, this.game);
+                }
+            }
+            // Sleeping enemies beyond sleep distance - no AI updates
+            // They'll wake up when player gets closer
+        });
     },
     
     getAI(enemy) { return this.ais.get(enemy.id); }

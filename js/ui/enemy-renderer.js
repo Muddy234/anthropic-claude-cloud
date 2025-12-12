@@ -611,7 +611,19 @@ function renderAllEnemies(ctx, camX, camY, tileSize, offsetX) {
     // MIN_BRIGHTNESS constant for unexplored tiles (matches renderer.js)
     const MIN_BRIGHTNESS = 0.55;
 
+    // Calculate view bounds for frustum culling (with 2 tile margin)
+    const viewLeft = camX - 2;
+    const viewRight = camX + (ctx.canvas.width - offsetX) / tileSize + 2;
+    const viewTop = camY - 2;
+    const viewBottom = camY + ctx.canvas.height / tileSize + 2;
+
     for (const enemy of game.enemies) {
+        // Frustum culling - skip enemies far outside view
+        if (enemy.gridX < viewLeft || enemy.gridX > viewRight ||
+            enemy.gridY < viewTop || enemy.gridY > viewBottom) {
+            continue;
+        }
+
         const enemyTileX = Math.floor(enemy.gridX);
         const enemyTileY = Math.floor(enemy.gridY);
         const tile = game.map[enemyTileY]?.[enemyTileX];
