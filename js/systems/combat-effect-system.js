@@ -495,14 +495,10 @@ if (typeof SystemManager !== 'undefined') {
     SystemManager.register('combat-effect-system', CombatEffectSystemDef, 51);
 } else {
     console.warn('⚠️ SystemManager not found - combat-effect-system running standalone');
-    // Start loading immediately if no SystemManager
-    loadCombatEffectSprites();
-}
-
-// Also start loading immediately as a fallback
-// This ensures sprites are loaded even if SystemManager init is delayed
-if (!EFFECT_LOADER_STATUS.isLoading && !EFFECT_LOADER_STATUS.isReady) {
-    loadCombatEffectSprites();
+    // Start loading immediately if no SystemManager (only if not already loading)
+    if (!EFFECT_LOADER_STATUS.isLoading && !EFFECT_LOADER_STATUS.isReady) {
+        loadCombatEffectSprites();
+    }
 }
 
 // ============================================================================

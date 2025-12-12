@@ -410,14 +410,8 @@ function performAttack(attacker, defender) {
         onCombatHit(attacker, defender, result);
     }
 
-    // === SPAWN COMBAT VISUAL EFFECT ===
-    if (typeof spawnMeleeEffect === 'function') {
-        const weapon = attacker.equipped?.MAIN;
-        const damageType = weapon?.damageType || 'default';
-        const targetX = defender.displayX ?? defender.gridX ?? defender.x;
-        const targetY = defender.displayY ?? defender.gridY ?? defender.y;
-        spawnMeleeEffect(targetX, targetY, damageType, attacker.facing || 'right');
-    }
+    // Note: Visual combat effects are handled by mouse-attack-system.js for player attacks
+    // Enemy attacks don't spawn visual slash effects (to reduce visual clutter and lag)
 
     // Build message
     let message = `${attacker.name || 'You'} hit ${defender.name || 'target'} for ${result.finalDamage}!`;
