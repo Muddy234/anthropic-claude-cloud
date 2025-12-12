@@ -93,12 +93,20 @@ const SLASH_FILE_PATTERNS = {
 // Map effect types to visual categories for easy selection
 // Each element uses ONE consistent variant for visual consistency
 const EFFECT_MAPPINGS = {
-    // Melee weapon attacks -> slash effects
+    // Melee weapon attacks -> slash effects (by weapon/slashStyle)
     melee: {
-        default: { type: 'slash', variant: 1 },
-        blade: { type: 'slash', variant: 2 },      // Swords, daggers
-        blunt: { type: 'slash', variant: 4 },      // Hammers, maces
-        pierce: { type: 'slash', variant: 3 }      // Spears, rapiers
+        default:   { type: 'slash', variant: 1, scale: 1.0 },
+        // Specific weapon types
+        knife:     { type: 'slash', variant: 1, scale: 1.0 },   // Slash1 - small quick slashes
+        sword:     { type: 'slash', variant: 1, scale: 1.4 },   // Slash1 - larger sword arcs
+        mace:      { type: 'slash', variant: 5, scale: 1.2 },   // Slash5 - heavy impact
+        polearm:   { type: 'slash', variant: 9, scale: 1.3 },   // Slash9 - long thrust/sweep
+        axe:       { type: 'slash', variant: 5, scale: 1.3 },   // Slash5 - chopping motion
+        unarmed:   { type: 'slash', variant: 1, scale: 0.8 },   // Slash1 - small punches
+        // Fallback by damage type
+        blade:     { type: 'slash', variant: 1, scale: 1.2 },   // Generic blade
+        blunt:     { type: 'slash', variant: 5, scale: 1.2 },   // Generic blunt
+        pierce:    { type: 'slash', variant: 9, scale: 1.2 }    // Generic pierce
     },
 
     // Magic attacks -> magic effects (one variant per element for consistency)
@@ -287,6 +295,9 @@ function spawnCombatEffect(category, subType, x, y, options = {}) {
     }
 
     // Create the effect instance
+    // Use mapping scale as default, allow options to override
+    const effectScale = options.scale || mapping.scale || 1.0;
+
     const effect = {
         type: mapping.type,
         variant: variant,
@@ -298,7 +309,7 @@ function spawnCombatEffect(category, subType, x, y, options = {}) {
         fps: options.fps || config.fps,
         size: options.size || config.defaultSize,
         rotation: options.rotation || 0,
-        scale: options.scale || 1.0,
+        scale: effectScale,
         alpha: 1.0,
         loop: config.loop,
         active: true,

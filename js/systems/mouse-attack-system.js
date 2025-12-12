@@ -603,14 +603,17 @@ function createSlashEffect(player, direction, arcConfig, isSpecial = false, atta
     const originX = player.displayX !== undefined ? player.displayX : player.gridX;
     const originY = player.displayY !== undefined ? player.displayY : player.gridY;
 
-    // Map slashStyle to damage type for sprite selection
-    let damageType = 'default';
-    if (slashStyle === 'jab' || slashStyle === 'slam') {
-        damageType = 'blunt';  // Unarmed, mace, hammer
-    } else if (slashStyle === 'alternate' || slashStyle === 'sweep' || slashStyle === 'chop') {
-        damageType = 'blade';  // Knife, sword, axe
-    } else if (slashStyle === 'thrust') {
-        damageType = 'pierce';  // Polearm, spear
+    // Map slashStyle to specific weapon type for sprite selection
+    // This allows each weapon to have its own unique visual effect
+    let weaponType = 'default';
+    switch (slashStyle) {
+        case 'jab':       weaponType = 'unarmed'; break;  // Punches
+        case 'alternate': weaponType = 'knife';   break;  // Quick knife slashes
+        case 'sweep':     weaponType = 'sword';   break;  // Sword arcs
+        case 'chop':      weaponType = 'axe';     break;  // Axe chops
+        case 'slam':      weaponType = 'mace';    break;  // Mace/hammer impacts
+        case 'thrust':    weaponType = 'polearm'; break;  // Spear/polearm thrusts
+        default:          weaponType = 'sword';   break;  // Default to sword
     }
 
     // Convert direction angle to facing direction string
@@ -630,7 +633,7 @@ function createSlashEffect(player, direction, arcConfig, isSpecial = false, atta
         const offsetDist = 0.3;
         const effectX = originX + Math.cos(direction || 0) * offsetDist;
         const effectY = originY + Math.sin(direction || 0) * offsetDist;
-        spawnMeleeEffect(effectX, effectY, damageType, facing);
+        spawnMeleeEffect(effectX, effectY, weaponType, facing);
     }
 }
 
