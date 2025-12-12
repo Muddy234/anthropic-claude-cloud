@@ -149,6 +149,12 @@ const activeEffects = [];
  * Should be called during game initialization
  */
 function loadCombatEffectSprites() {
+    // Prevent duplicate loading
+    if (EFFECT_LOADER_STATUS.isLoading || EFFECT_LOADER_STATUS.isReady) {
+        console.log('[CombatEffect] Sprites already loading or loaded, skipping');
+        return;
+    }
+
     EFFECT_LOADER_STATUS.isLoading = true;
     EFFECT_LOADER_STATUS.isReady = false;
     EFFECT_LOADER_STATUS.loadedEffects = 0;
