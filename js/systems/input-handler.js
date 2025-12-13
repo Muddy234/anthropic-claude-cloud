@@ -222,6 +222,17 @@ window.addEventListener('keydown', e => {
             }
             return;
         }
+
+        // Extraction interaction (E key)
+        if (e.key === 'e' || e.key === 'E') {
+            if (typeof ExtractionSystem !== 'undefined' && ExtractionSystem.initialized) {
+                const point = ExtractionSystem.getPointAtPlayer();
+                if (point && point.isActive()) {
+                    ExtractionSystem.tryExtract(point);
+                    return;
+                }
+            }
+        }
     }
 });
 
@@ -566,11 +577,25 @@ function checkTileInteractions(player) {
 
     if (!tile) return;
 
-    // Exit tile - advance floor
+    // Exit tile - advance floor (legacy - disabled for extraction system)
     if (tile.type === 'exit') {
         addMessage("Found the exit! Descending deeper...");
         advanceToNextFloor();
         return;
+    }
+
+    // Extraction point interaction
+    if (typeof ExtractionSystem !== 'undefined' && ExtractionSystem.initialized) {
+        const point = ExtractionSystem.getPointAtPlayer();
+        if (point && point.isActive()) {
+            // Show extraction prompt
+            if (!game.extractionPromptShown) {
+                addMessage("Press [E] to extract to the surface!", 'info');
+                game.extractionPromptShown = true;
+            }
+        } else {
+            game.extractionPromptShown = false;
+        }
     }
 
     // Merchant interaction
