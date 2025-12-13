@@ -52,6 +52,8 @@
     <script src="js/data/npcs.js"></script>
     <script src="js/data/materials.js"></script>
     <script src="js/data/quests.js"></script>
+    <script src="js/data/crafting-data.js"></script>
+    <script src="js/data/core-data.js"></script>
 
     <!-- ==================== -->
     <!-- UTILS: Helper functions (no registration) -->
@@ -72,7 +74,8 @@
     <script src="js/entities/npc.js"></script>
     <script src="js/entities/boss.js"></script>
     <script src="js/entities/extraction-point.js"></script>
-    
+    <script src="js/entities/core-boss.js"></script>
+
     <!-- ==================== -->
     <!-- GENERATION: Map building (no registration) -->
     <!-- ==================== -->
@@ -91,6 +94,9 @@
 
     <!-- NEW: Village generation -->
     <script src="js/generation/village-generator.js"></script>
+
+    <!-- NEW: Core (final boss) generation -->
+    <script src="js/generation/core-generator.js"></script>
 
     <!-- ==================== -->
     <!-- TESTING: Analysis tools (no registration) -->
@@ -128,6 +134,7 @@
     <script src="js/ui/bank-ui.js"></script>
     <script src="js/ui/loadout-ui.js"></script>
     <script src="js/ui/quest-ui.js"></script>
+    <script src="js/ui/crafting-ui.js"></script>
 
     <!-- DISABLED FOR ACTIVE COMBAT: Auto-walk no longer used -->
     <!-- <script src="js/ui/auto-walk.js"></script> -->
@@ -180,6 +187,12 @@
     <script src="js/systems/extraction-system.js"></script>        <!-- Priority 75: Extraction points -->
     <script src="js/systems/village-system.js"></script>           <!-- Village hub management -->
     <script src="js/systems/quest-system.js"></script>             <!-- Priority 85: Quest tracking -->
+    <script src="js/systems/shortcut-system.js"></script>          <!-- Floor shortcuts -->
+    <script src="js/systems/degradation-system.js"></script>       <!-- Village/floor degradation -->
+    <script src="js/systems/rescue-system.js"></script>            <!-- Death drop/rescue runs -->
+    <script src="js/systems/crafting-system.js"></script>          <!-- Priority 88: Crafting -->
+    <script src="js/systems/core-system.js"></script>              <!-- Priority 95: The Core -->
+    <script src="js/systems/survival-integration.js"></script>     <!-- Priority 1: Integration layer -->
 
     <script src="js/systems/shift-system.js"></script>              <!-- Priority 80 -->
     <script src="js/systems/merchant-shop.js"></script>             <!-- Priority 90 -->
