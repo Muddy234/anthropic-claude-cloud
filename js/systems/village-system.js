@@ -257,8 +257,13 @@ const VillageSystem = {
     _onChasmEntrance() {
         console.log('[VillageSystem] Player at chasm entrance');
 
-        // Open loadout selection
-        game.state = GAME_STATES ? GAME_STATES.LOADOUT : 'loadout';
+        // Open loadout selection UI
+        if (typeof LoadoutUI !== 'undefined') {
+            LoadoutUI.open();
+        } else {
+            // Fallback: set state directly
+            game.state = GAME_STATES ? GAME_STATES.LOADOUT : 'loadout';
+        }
     },
 
     // ========================================================================

@@ -208,38 +208,28 @@ const LoadoutUI = {
     _startRun() {
         console.log(`[LoadoutUI] Starting run from floor ${this.startingFloor}`);
 
-        // Confirm loadout and get items
-        const { inventory, gold } = LoadoutSystem.confirmLoadout();
+        // Get loadout from LoadoutSystem
+        const loadout = LoadoutSystem ? LoadoutSystem.getLoadout() : null;
 
-        // Start the session
-        if (typeof SessionManager !== 'undefined') {
-            SessionManager.startRun(this.startingFloor);
-
-            // Set up player with loadout
-            if (game.player) {
-                game.player.inventory = inventory;
-                game.player.gold = gold;
-
-                // Equip weapon if selected
-                const weapon = inventory.find(i => i.type === 'weapon');
-                if (weapon) {
-                    game.player.equipped.MAIN = weapon;
-                }
-
-                // Equip armor pieces
-                inventory.filter(i => i.type === 'armor').forEach(armor => {
-                    if (armor.slot) {
-                        game.player.equipped[armor.slot] = armor;
-                    }
-                });
-            }
+        // Confirm loadout (removes items from bank)
+        if (LoadoutSystem) {
+            LoadoutSystem.confirmLoadout();
         }
 
-        // Close UI and start game
+        // Close UI before starting dungeon
         this.active = false;
-        game.state = GAME_STATES ? GAME_STATES.PLAYING : 'playing';
 
-        // TODO: Actually initialize the dungeon for the starting floor
+        // Start dungeon run with loadout
+        if (typeof startDungeonRun === 'function') {
+            startDungeonRun({
+                startingFloor: this.startingFloor,
+                loadout: loadout
+            });
+        } else {
+            console.error('[LoadoutUI] startDungeonRun not found!');
+            game.state = GAME_STATES ? GAME_STATES.VILLAGE : 'village';
+        }
+
         console.log('[LoadoutUI] Run started!');
     },
 

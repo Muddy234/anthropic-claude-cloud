@@ -2,6 +2,7 @@
 // GAME INITIALIZATION - The Shifting Chasm
 // ============================================================================
 // Updated: Registers all new systems, element-based initialization
+// Now supports starting in village hub (Survival Extraction Update)
 // ============================================================================
 
 // ============================================================================
@@ -9,30 +10,260 @@
 // ============================================================================
 
 /**
- * Start a new game - generates dungeon, spawns player, initializes systems
+ * Start the game in the village hub (default start)
+ * This is the new default entry point for the Survival Extraction update
  */
-function startNewGame() {
-    console.log('🎮 Starting new game...');
+function startInVillage() {
+    console.log('🏘️ Starting in Village Hub...');
     console.log('═'.repeat(50));
-    
+
     // === Phase 1: Cleanup ===
     cleanupPreviousGame();
-    
+
+    // === Phase 2: Initialize Persistent State ===
+    initializePersistentState();
+
+    // === Phase 3: Set up Village ===
+    initializeVillage();
+
+    // === Phase 4: Create Player (village version) ===
+    initializeVillagePlayer();
+
+    // === Phase 5: Initialize Systems ===
+    initializeVillageSystems();
+
+    console.log('═'.repeat(50));
+    console.log('✅ Village initialized! Welcome to the surface.');
+}
+
+/**
+ * Initialize persistent state for survival mode
+ */
+function initializePersistentState() {
+    console.log('[Init] Setting up persistent state...');
+
+    // SurvivalIntegration handles this
+    if (typeof SurvivalIntegration !== 'undefined') {
+        SurvivalIntegration.init();
+    }
+}
+
+/**
+ * Initialize the village
+ */
+function initializeVillage() {
+    console.log('[Init] Generating village...');
+
+    // Set game state to village
+    game.state = GAME_STATES ? GAME_STATES.VILLAGE : 'village';
+
+    // Initialize village system
+    if (typeof VillageSystem !== 'undefined') {
+        VillageSystem.init();
+    } else {
+        console.error('[Init] VillageSystem not found!');
+    }
+}
+
+/**
+ * Initialize player for village (minimal, no combat)
+ */
+function initializeVillagePlayer() {
+    console.log('[Init] Setting up village player...');
+
+    // Create basic player object if needed
+    if (!game.player) {
+        game.player = typeof createPlayer === 'function' ? createPlayer() : createDefaultPlayer();
+    }
+
+    // Player position is managed by villageState, not game.player in village mode
+}
+
+/**
+ * Initialize systems needed for village
+ */
+function initializeVillageSystems() {
+    console.log('[Init] Initializing village systems...');
+
+    // Initialize survival systems
+    const villageSystems = [
+        'BankingSystem',
+        'QuestSystem',
+        'CraftingSystem',
+        'ShortcutSystem',
+        'DegradationSystem',
+        'RescueSystem'
+    ];
+
+    villageSystems.forEach(systemName => {
+        if (typeof window[systemName] !== 'undefined' && typeof window[systemName].init === 'function') {
+            try {
+                window[systemName].init();
+                console.log(`  ✅ ${systemName} initialized`);
+            } catch (e) {
+                console.error(`  ❌ ${systemName} failed:`, e);
+            }
+        }
+    });
+}
+
+/**
+ * Start a dungeon run from the village
+ * Called when player confirms loadout at Chasm Entrance
+ * @param {Object} options - { startingFloor, loadout }
+ */
+function startDungeonRun(options = {}) {
+    const { startingFloor = 1, loadout = null } = options;
+
+    console.log(`⛏️ Starting dungeon run on Floor ${startingFloor}...`);
+    console.log('═'.repeat(50));
+
+    // Clean up village state
+    if (typeof VillageSystem !== 'undefined' && VillageSystem._keyHandler) {
+        window.removeEventListener('keydown', VillageSystem._keyHandler);
+    }
+
+    // Set up session state
+    if (typeof sessionState !== 'undefined') {
+        sessionState.runActive = true;
+        sessionState.currentFloor = startingFloor;
+        sessionState.startingFloor = startingFloor;
+        sessionState.inventory = [];
+        sessionState.goldCollected = 0;
+        sessionState.floorsVisited = [startingFloor];
+        sessionState.enemiesKilled = 0;
+        sessionState.runStartTime = Date.now();
+    }
+
+    // Update stats
+    if (typeof persistentState !== 'undefined' && persistentState.stats) {
+        persistentState.stats.totalRuns = (persistentState.stats.totalRuns || 0) + 1;
+    }
+
+    // Reset game state for dungeon
+    resetGameState();
+
+    // Generate the dungeon floor
+    game.floor = startingFloor;
+    generateDungeon();
+
+    // Initialize player for dungeon
+    initializePlayer();
+
+    // Apply loadout if provided
+    if (loadout) {
+        applyLoadoutToPlayer(loadout);
+    }
+
+    // Initialize all dungeon systems
+    initializeAllSystems();
+
+    // Initialize extraction points for this floor
+    if (typeof ExtractionSystem !== 'undefined' && game.rooms) {
+        const spawnRoom = game.rooms.find(r => r.type === 'entrance');
+        ExtractionSystem.init(startingFloor, game.rooms, spawnRoom);
+    }
+
+    // Post-init
+    postInitialization();
+
+    console.log('═'.repeat(50));
+    console.log(`✅ Floor ${startingFloor} ready! Good luck, delver.`);
+    logGameStats();
+}
+
+/**
+ * Apply loadout equipment to player
+ * @param {Object} loadout - { weapon, armor, consumables }
+ */
+function applyLoadoutToPlayer(loadout) {
+    if (!game.player || !loadout) return;
+
+    console.log('[Init] Applying loadout...');
+
+    // Equip weapon
+    if (loadout.weapon && game.player.equipped) {
+        game.player.equipped.MAIN = { ...loadout.weapon };
+        console.log(`  - Weapon: ${loadout.weapon.name}`);
+    }
+
+    // Equip armor
+    if (loadout.armor && game.player.equipped) {
+        game.player.equipped.CHEST = { ...loadout.armor };
+        console.log(`  - Armor: ${loadout.armor.name}`);
+    }
+
+    // Add consumables to inventory
+    if (loadout.consumables && Array.isArray(loadout.consumables)) {
+        loadout.consumables.forEach(item => {
+            if (item) {
+                game.player.inventory = game.player.inventory || [];
+                game.player.inventory.push({ ...item });
+                console.log(`  - Consumable: ${item.name}`);
+            }
+        });
+    }
+}
+
+/**
+ * Return to village from dungeon (after extraction or death)
+ */
+function returnToVillage() {
+    console.log('🏘️ Returning to village...');
+
+    // Clean up dungeon state
+    cleanupPreviousGame();
+
+    // Reset to village
+    game.state = GAME_STATES ? GAME_STATES.VILLAGE : 'village';
+
+    // Re-initialize village
+    if (typeof VillageSystem !== 'undefined') {
+        VillageSystem.init();
+    }
+
+    // Clear session
+    if (typeof sessionState !== 'undefined') {
+        sessionState.runActive = false;
+    }
+
+    console.log('✅ Back in the village.');
+}
+
+/**
+ * Start a new game - now starts in village by default
+ * For Survival Extraction update
+ */
+function startNewGame() {
+    // Start in village hub by default
+    startInVillage();
+}
+
+/**
+ * Legacy function: Start directly in dungeon (for testing or quick play)
+ */
+function startNewGameDungeon() {
+    console.log('🎮 Starting new game (direct dungeon)...');
+    console.log('═'.repeat(50));
+
+    // === Phase 1: Cleanup ===
+    cleanupPreviousGame();
+
     // === Phase 2: Reset Game State ===
     resetGameState();
-    
+
     // === Phase 3: Generate Dungeon ===
     generateDungeon();
-    
+
     // === Phase 4: Create Player ===
     initializePlayer();
-    
+
     // === Phase 5: Initialize All Systems ===
     initializeAllSystems();
-    
+
     // === Phase 6: Post-Init ===
     postInitialization();
-    
+
     console.log('═'.repeat(50));
     console.log('✅ Game initialized successfully!');
     logGameStats();
@@ -719,7 +950,14 @@ function restartGame() {
 // ============================================================================
 
 if (typeof window !== 'undefined') {
+    // Village start functions (Survival Extraction Update)
+    window.startInVillage = startInVillage;
+    window.startDungeonRun = startDungeonRun;
+    window.returnToVillage = returnToVillage;
+
+    // Legacy/core functions
     window.startNewGame = startNewGame;
+    window.startNewGameDungeon = startNewGameDungeon;
     window.restartGame = restartGame;
     window.advanceToNextFloor = advanceToNextFloor;
     window.logGameStats = logGameStats;
