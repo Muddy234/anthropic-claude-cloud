@@ -226,7 +226,9 @@ const DialogueUI = {
 
             case 'open_shop':
                 this.close();
-                if (typeof game !== 'undefined') {
+                if (typeof ShopUI !== 'undefined') {
+                    ShopUI.open(this.currentNPC);
+                } else if (typeof game !== 'undefined') {
                     game.state = GAME_STATES ? GAME_STATES.SHOP : 'shop';
                     game.activeShopNPC = this.currentNPC;
                 }

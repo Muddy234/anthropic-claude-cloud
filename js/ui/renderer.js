@@ -855,7 +855,7 @@ function render() {
 
 if (game.state === 'menu') {
         ctx.fillStyle = '#fff'; ctx.font = '64px monospace'; ctx.textAlign = 'center'; ctx.fillText('THE SHIFTING CHASM', canvas.width / 2, 400); ctx.font = '32px monospace'; ctx.fillText('Press SPACE to Start', canvas.width / 2, 500);
-    } else if (game.state === 'village' || game.state === 'dialogue' || game.state === 'bank' || game.state === 'loadout') {
+    } else if (game.state === 'village' || game.state === 'dialogue' || game.state === 'bank' || game.state === 'loadout' || game.state === 'shop') {
         // VILLAGE STATE RENDERING
         if (typeof VillageSystem !== 'undefined' && VillageSystem.initialized) {
             VillageSystem.render(ctx);
@@ -867,12 +867,15 @@ if (game.state === 'menu') {
             ctx.fillText('Loading Village...', canvas.width / 2, canvas.height / 2);
         }
 
-        // Render overlays for bank and loadout states
+        // Render overlays for bank, loadout, and shop states
         if (game.state === 'bank' && typeof BankUI !== 'undefined') {
             BankUI.render(ctx);
         }
         if (game.state === 'loadout' && typeof LoadoutUI !== 'undefined') {
             LoadoutUI.render(ctx);
+        }
+        if (game.state === 'shop' && typeof ShopUI !== 'undefined') {
+            ShopUI.render(ctx);
         }
     } else if (game.state === 'playing' || game.state === 'merchant' || game.state === 'inventory' || game.state === 'map' || game.state === 'skills' || game.state === 'moveset' || game.state === 'levelup' || game.state === 'character' || game.state === 'shift' || game.state === 'sacrifice' || game.state === 'chest') {
 
