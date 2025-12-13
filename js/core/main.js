@@ -130,11 +130,25 @@ function updateDungeon(dt) {
  * Update village hub state
  */
 function updateVillage(dt) {
-    // Village-specific updates will go here
-    // For now, just show basic debug info
-    document.getElementById('debug').innerText = `Village | State: ${game.state}`;
+    // Debug info
+    document.getElementById('debug').innerText = `Village | NPCs: ${villageState?.npcs?.length || 0} | State: ${game.state}`;
 
-    // TODO: Village movement, NPC interaction, etc.
+    // Update dialogue UI if active
+    if (typeof DialogueUI !== 'undefined' && DialogueUI.active) {
+        DialogueUI.update(dt);
+        return;  // Don't process movement during dialogue
+    }
+
+    // Update NPC interaction indicators
+    if (typeof villageState !== 'undefined' && villageState && villageState.npcs && villageState.player) {
+        const interactionRange = 1.5;
+        villageState.npcs.forEach(npc => {
+            const dx = npc.x - villageState.player.x;
+            const dy = npc.y - villageState.player.y;
+            const dist = Math.sqrt(dx * dx + dy * dy);
+            npc.showInteraction = dist <= interactionRange;
+        });
+    }
 }
 
 /**
