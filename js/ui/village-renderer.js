@@ -20,6 +20,7 @@ const VillageRenderer = {
         fence: '#654321',
         cave_wall: '#2F2F2F',
         cave_floor: '#1A1A1A',
+        cave_entrance: '#3D1F1F',  // Reddish dark - inviting entrance
         rubble: '#555555'
     },
 
@@ -122,6 +123,8 @@ const VillageRenderer = {
                     this._renderStoneTexture(ctx, screenX, screenY, x, y);
                 } else if (tile.type === 'cave_floor') {
                     this._renderCaveTexture(ctx, screenX, screenY);
+                } else if (tile.type === 'cave_entrance') {
+                    this._renderCaveEntranceEffect(ctx, screenX, screenY);
                 }
 
                 // Damage overlay
@@ -181,6 +184,35 @@ const VillageRenderer = {
         gradient.addColorStop(1, 'rgba(0, 0, 0, 0)');
         ctx.fillStyle = gradient;
         ctx.fillRect(screenX, screenY, this.tileSize, this.tileSize);
+    },
+
+    /**
+     * Render cave entrance effect - pulsing glow to draw attention
+     * @private
+     */
+    _renderCaveEntranceEffect(ctx, screenX, screenY) {
+        // Pulsing orange/red glow to indicate entrance
+        const pulse = (Math.sin(Date.now() / 500) + 1) / 2;  // 0 to 1
+
+        // Inner glow
+        const gradient = ctx.createRadialGradient(
+            screenX + this.tileSize / 2, screenY + this.tileSize / 2, 0,
+            screenX + this.tileSize / 2, screenY + this.tileSize / 2, this.tileSize
+        );
+        gradient.addColorStop(0, `rgba(255, 100, 50, ${0.4 + pulse * 0.3})`);
+        gradient.addColorStop(0.5, `rgba(200, 50, 0, ${0.2 + pulse * 0.2})`);
+        gradient.addColorStop(1, 'rgba(0, 0, 0, 0)');
+        ctx.fillStyle = gradient;
+        ctx.fillRect(screenX, screenY, this.tileSize, this.tileSize);
+
+        // Arrow indicator pointing down (into chasm)
+        ctx.fillStyle = `rgba(255, 200, 100, ${0.6 + pulse * 0.4})`;
+        ctx.beginPath();
+        ctx.moveTo(screenX + this.tileSize / 2, screenY + this.tileSize - 4);
+        ctx.lineTo(screenX + this.tileSize / 2 - 6, screenY + this.tileSize - 12);
+        ctx.lineTo(screenX + this.tileSize / 2 + 6, screenY + this.tileSize - 12);
+        ctx.closePath();
+        ctx.fill();
     },
 
     /**

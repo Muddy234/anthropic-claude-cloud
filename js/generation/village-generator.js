@@ -272,8 +272,20 @@ const VillageGenerator = {
                         };
                         building.interiorTiles.push({ x, y });
                     } else if (building.type === 'entrance') {
-                        // Chasm entrance
-                        if (isEdge) {
+                        // Chasm entrance - cave with accessible entry
+                        const isEntranceGap = dx === Math.floor(building.width / 2) &&
+                                              dy === building.height - 1;
+
+                        if (isEntranceGap) {
+                            // Create walkable entrance to the chasm
+                            map[y][x] = {
+                                type: 'cave_entrance',
+                                walkable: true,
+                                buildingId: building.id,
+                                isExitPoint: true
+                            };
+                            building.interiorTiles.push({ x, y });
+                        } else if (isEdge) {
                             map[y][x] = {
                                 type: 'cave_wall',
                                 walkable: false,
