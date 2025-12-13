@@ -417,6 +417,139 @@ const ExtractionSystem = {
 };
 
 // ============================================================================
+// RENDERING
+// ============================================================================
+
+/**
+ * Render extraction points in main game view
+ * @param {CanvasRenderingContext2D} ctx
+ * @param {number} camX - Camera X offset
+ * @param {number} camY - Camera Y offset
+ * @param {number} tileSize - Tile size in pixels
+ * @param {number} offsetX - UI offset (tracker width)
+ */
+function renderExtractionPoints(ctx, camX, camY, tileSize, offsetX) {
+    const points = ExtractionSystem.points || [];
+    if (points.length === 0) return;
+
+    const time = Date.now();
+
+    points.forEach(point => {
+        // Skip collapsed points
+        if (point.status === 'collapsed') return;
+
+        const screenX = (point.x - camX) * tileSize + offsetX;
+        const screenY = (point.y - camY) * tileSize;
+
+        // Check if on screen
+        if (screenX < -tileSize * 2 || screenX > ctx.canvas.width + tileSize * 2) return;
+        if (screenY < -tileSize * 2 || screenY > ctx.canvas.height + tileSize * 2) return;
+
+        // Check if tile is visible
+        const tileX = Math.floor(point.x);
+        const tileY = Math.floor(point.y);
+        const tile = game?.map?.[tileY]?.[tileX];
+        if (tile && !tile.visible && !tile.explored) return;
+
+        // Determine colors and effects based on status
+        let baseColor = '#00ffff';
+        let glowColor = 'rgba(0, 255, 255, 0.6)';
+        let pulseSpeed = 1500;
+        let particleCount = 6;
+
+        if (point.status === 'warning' || point.isWarning?.()) {
+            baseColor = '#ffaa00';
+            glowColor = 'rgba(255, 170, 0, 0.6)';
+            pulseSpeed = 800;
+            particleCount = 10;
+        } else if (point.status === 'collapsing') {
+            baseColor = '#ff3333';
+            glowColor = 'rgba(255, 50, 50, 0.8)';
+            pulseSpeed = 200;
+            particleCount = 15;
+        }
+
+        const pulse = Math.sin(time / pulseSpeed * Math.PI) * 0.3 + 0.7;
+        const size = tileSize * 0.8;
+        const centerX = screenX + tileSize / 2;
+        const centerY = screenY + tileSize / 2;
+
+        ctx.save();
+
+        // Draw large glow underneath
+        const gradient = ctx.createRadialGradient(
+            centerX, centerY, 0,
+            centerX, centerY, tileSize * 1.5
+        );
+        gradient.addColorStop(0, glowColor);
+        gradient.addColorStop(0.5, glowColor.replace('0.6', '0.2').replace('0.8', '0.3'));
+        gradient.addColorStop(1, 'transparent');
+        ctx.fillStyle = gradient;
+        ctx.globalAlpha = pulse;
+        ctx.fillRect(centerX - tileSize * 1.5, centerY - tileSize * 1.5, tileSize * 3, tileSize * 3);
+
+        // Draw rotating particles
+        ctx.globalAlpha = pulse * 0.8;
+        for (let i = 0; i < particleCount; i++) {
+            const angle = (time / 2000 + i / particleCount) * Math.PI * 2;
+            const radius = tileSize * 0.6;
+            const px = centerX + Math.cos(angle) * radius;
+            const py = centerY + Math.sin(angle) * radius;
+
+            ctx.fillStyle = baseColor;
+            ctx.beginPath();
+            ctx.arc(px, py, 3, 0, Math.PI * 2);
+            ctx.fill();
+        }
+
+        // Draw main shaft symbol (upward arrow/triangle)
+        ctx.globalAlpha = 1;
+        ctx.fillStyle = baseColor;
+        ctx.shadowColor = baseColor;
+        ctx.shadowBlur = 15;
+
+        // Outer ring
+        ctx.strokeStyle = baseColor;
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.arc(centerX, centerY, size * 0.7, 0, Math.PI * 2);
+        ctx.stroke();
+
+        // Inner filled circle
+        ctx.beginPath();
+        ctx.arc(centerX, centerY, size * 0.4, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Upward arrow above
+        ctx.beginPath();
+        ctx.moveTo(centerX, centerY - size * 1.2);
+        ctx.lineTo(centerX - size * 0.4, centerY - size * 0.6);
+        ctx.lineTo(centerX + size * 0.4, centerY - size * 0.6);
+        ctx.closePath();
+        ctx.fill();
+
+        // Label
+        ctx.shadowBlur = 0;
+        ctx.fillStyle = '#ffffff';
+        ctx.font = 'bold 10px monospace';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'top';
+        ctx.fillText('EXTRACT', centerX, centerY + size * 0.9);
+
+        // Time remaining if warning
+        if (point.status === 'warning' || point.status === 'collapsing') {
+            const timeRemaining = point.getTimeRemaining?.() || 0;
+            const seconds = Math.ceil(timeRemaining / 1000);
+            ctx.fillStyle = point.status === 'collapsing' ? '#ff3333' : '#ffaa00';
+            ctx.font = 'bold 12px monospace';
+            ctx.fillText(`${seconds}s`, centerX, centerY + size * 1.2);
+        }
+
+        ctx.restore();
+    });
+}
+
+// ============================================================================
 // REGISTER WITH SYSTEM MANAGER
 // ============================================================================
 
@@ -429,5 +562,6 @@ if (typeof SystemManager !== 'undefined') {
 // ============================================================================
 
 window.ExtractionSystem = ExtractionSystem;
+window.renderExtractionPoints = renderExtractionPoints;
 
 console.log('[ExtractionSystem] Extraction system loaded');

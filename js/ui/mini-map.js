@@ -192,11 +192,90 @@ function drawMinimapTileCotDG(ctx, x, y, size, tile, colors) {
 }
 
 /**
- * Draw entities (enemies, loot, NPCs)
+ * Draw entities (enemies, loot, NPCs, extraction points)
  */
 function drawMinimapEntities(ctx, cx, cy, cfg, playerGridX, playerGridY, colors) {
     const pulse = Math.sin(window.minimapState.pulsePhase) * 0.3 + 0.7;
+    const fastPulse = Math.sin(window.minimapState.pulsePhase * 2) * 0.4 + 0.6;
     const radius = cfg.size / 2;
+
+    // Draw extraction points FIRST (so they're behind other entities but very visible)
+    const extractionPoints = (typeof ExtractionSystem !== 'undefined' && ExtractionSystem.points)
+        ? ExtractionSystem.points
+        : (sessionState?.extractionPoints || []);
+
+    for (const point of extractionPoints) {
+        // Skip collapsed points
+        if (point.status === 'collapsed') continue;
+
+        const pointX = Math.floor(point.x || point.gridX);
+        const pointY = Math.floor(point.y || point.gridY);
+
+        const dx = pointX - playerGridX;
+        const dy = pointY - playerGridY;
+        const dist = Math.sqrt(dx * dx + dy * dy) * cfg.tileSize;
+
+        if (dist > radius - 5) continue;
+
+        const minimapX = cx + (dx * cfg.tileSize);
+        const minimapY = cy + (dy * cfg.tileSize);
+
+        // Determine color based on status
+        let pointColor = '#00ffff'; // Cyan for active
+        let glowColor = '#00ffff';
+        let pointPulse = pulse;
+
+        if (point.status === 'warning' || point.isWarning?.()) {
+            pointColor = '#ffaa00'; // Orange for warning
+            glowColor = '#ff6600';
+            pointPulse = fastPulse; // Faster pulse
+        } else if (point.status === 'collapsing') {
+            pointColor = '#ff0000'; // Red for collapsing
+            glowColor = '#ff0000';
+            pointPulse = Math.random() > 0.5 ? 1 : 0.3; // Flashing
+        }
+
+        // Draw extraction point with strong glow
+        ctx.save();
+
+        // Outer glow ring
+        ctx.shadowColor = glowColor;
+        ctx.shadowBlur = 12;
+        ctx.strokeStyle = pointColor;
+        ctx.lineWidth = 2;
+        ctx.globalAlpha = pointPulse;
+        ctx.beginPath();
+        ctx.arc(minimapX, minimapY, cfg.tileSize * 1.8, 0, Math.PI * 2);
+        ctx.stroke();
+
+        // Inner filled circle
+        ctx.shadowBlur = 8;
+        ctx.fillStyle = pointColor;
+        ctx.globalAlpha = pointPulse * 0.8;
+        ctx.beginPath();
+        ctx.arc(minimapX, minimapY, cfg.tileSize * 1.2, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Center dot
+        ctx.shadowBlur = 0;
+        ctx.fillStyle = '#ffffff';
+        ctx.globalAlpha = 1;
+        ctx.beginPath();
+        ctx.arc(minimapX, minimapY, cfg.tileSize * 0.4, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Up arrow indicator (shows it's an exit)
+        ctx.fillStyle = '#ffffff';
+        ctx.globalAlpha = pointPulse;
+        ctx.beginPath();
+        ctx.moveTo(minimapX, minimapY - cfg.tileSize * 2.5);
+        ctx.lineTo(minimapX - cfg.tileSize * 0.6, minimapY - cfg.tileSize * 1.5);
+        ctx.lineTo(minimapX + cfg.tileSize * 0.6, minimapY - cfg.tileSize * 1.5);
+        ctx.closePath();
+        ctx.fill();
+
+        ctx.restore();
+    }
 
     // Draw enemies
     if (game.enemies) {

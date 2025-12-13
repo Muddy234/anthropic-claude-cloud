@@ -1002,7 +1002,12 @@ const camY = game.camera.y + (shakeOffset.y / (TILE_SIZE * ZOOM_LEVEL));
         if (typeof renderLootPiles === 'function') {
             renderLootPiles(ctx, camX, camY, effectiveTileSize, TRACKER_WIDTH);
         }
-        
+
+        // LAYER 2.5: Draw extraction points
+        if (typeof renderExtractionPoints === 'function') {
+            renderExtractionPoints(ctx, camX, camY, effectiveTileSize, TRACKER_WIDTH);
+        }
+
         // LAYER 3: Draw decorations
         if (typeof renderRoomDecorations === 'function') {
             renderRoomDecorations(camX, camY, effectiveTileSize, TRACKER_WIDTH);
