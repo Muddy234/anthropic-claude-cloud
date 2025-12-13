@@ -22,11 +22,21 @@ const ExtractionSystem = {
 
     /**
      * Initialize extraction system for a floor
-     * @param {number} floor - Floor number
+     * @param {number} floor - Floor number (optional - skips spawn if not provided)
      * @param {Array} rooms - Room array
      * @param {Object} spawnRoom - Player spawn room
      */
     init(floor, rooms, spawnRoom) {
+        // If called without parameters (e.g., from SystemManager.initAll), just reset state
+        if (floor === undefined || !rooms) {
+            this.points = [];
+            this.collapseQueue = [];
+            this.initialized = false;
+            this.allCollapsed = false;
+            console.log('[ExtractionSystem] Reset (awaiting floor initialization)');
+            return;
+        }
+
         // Spawn extraction points
         this.points = ExtractionSpawner.spawnExtractionPoints(floor, rooms, spawnRoom);
 
