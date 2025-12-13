@@ -866,6 +866,14 @@ if (game.state === 'menu') {
             ctx.textAlign = 'center';
             ctx.fillText('Loading Village...', canvas.width / 2, canvas.height / 2);
         }
+
+        // Render overlays for bank and loadout states
+        if (game.state === 'bank' && typeof BankUI !== 'undefined') {
+            BankUI.render(ctx);
+        }
+        if (game.state === 'loadout' && typeof LoadoutUI !== 'undefined') {
+            LoadoutUI.render(ctx);
+        }
     } else if (game.state === 'playing' || game.state === 'merchant' || game.state === 'inventory' || game.state === 'map' || game.state === 'skills' || game.state === 'moveset' || game.state === 'levelup' || game.state === 'character' || game.state === 'shift' || game.state === 'sacrifice' || game.state === 'chest') {
 
 const effectiveTileSize = TILE_SIZE * ZOOM_LEVEL;
