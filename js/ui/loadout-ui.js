@@ -187,18 +187,12 @@ const LoadoutUI = {
      * @private
      */
     _adjustStartingFloor(delta) {
-        const shortcuts = persistentState?.shortcuts || [];
-        const unlockedFloors = [1];  // Floor 1 always available
-
-        shortcuts.forEach(s => {
-            if (s.unlocked) {
-                unlockedFloors.push(s.toFloor);
-            }
-        });
+        // Get unlocked floors from shortcuts (unlockedFloors is an array of floor numbers)
+        const unlockedFloors = persistentState?.shortcuts?.unlockedFloors || [1];
 
         const currentIdx = unlockedFloors.indexOf(this.startingFloor);
         const newIdx = Math.max(0, Math.min(unlockedFloors.length - 1, currentIdx + delta));
-        this.startingFloor = unlockedFloors[newIdx];
+        this.startingFloor = unlockedFloors[newIdx] || 1;
     },
 
     /**
@@ -459,13 +453,14 @@ const LoadoutUI = {
         ctx.fillText('▼', floorX - 30, sectionY + 32);
 
         // Shortcuts info
-        const shortcuts = persistentState?.shortcuts || [];
-        const unlockedCount = shortcuts.filter(s => s.unlocked).length;
+        const unlockedFloors = persistentState?.shortcuts?.unlockedFloors || [1];
+        const unlockedCount = unlockedFloors.length - 1;  // Subtract 1 since floor 1 is always available
+        const maxFloors = 10;  // Approximate max floors for display
 
         ctx.font = '14px Arial';
         ctx.textAlign = 'left';
         ctx.fillStyle = '#888';
-        ctx.fillText(`Shortcuts unlocked: ${unlockedCount}/${shortcuts.length}`, sectionX, sectionY + 70);
+        ctx.fillText(`Shortcuts unlocked: ${unlockedCount}/${maxFloors}`, sectionX, sectionY + 70);
 
         // Value at risk
         const valueAtRisk = LoadoutSystem?.getValueAtRisk() || 0;
