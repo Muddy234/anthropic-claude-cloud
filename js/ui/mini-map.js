@@ -170,17 +170,11 @@ function drawMinimapTileCotDG(ctx, x, y, size, tile, colors) {
         ctx.fillStyle = '#4a4a5a';
         ctx.fillRect(x - size/2, y - size/2, size, size);
     }
-    // Exit - glowing green
+    // OLD EXIT TILE - DISABLED (using extraction points now)
+    // Render as regular floor if any legacy exit tiles exist
     else if (tile.type === 'exit') {
-        const pulse = Math.sin(window.minimapState.pulsePhase * 2) * 0.3 + 0.7;
-        ctx.fillStyle = `rgba(46, 204, 113, ${pulse})`;
+        ctx.fillStyle = '#28283a';  // Same as floor
         ctx.fillRect(x - size/2, y - size/2, size, size);
-
-        // Glow effect
-        ctx.shadowColor = '#2ecc71';
-        ctx.shadowBlur = 5;
-        ctx.fillRect(x - size/2, y - size/2, size, size);
-        ctx.shadowBlur = 0;
     }
     // Doorway
     else if (tile.type === 'doorway') {

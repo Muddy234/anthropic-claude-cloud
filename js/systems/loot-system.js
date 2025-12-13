@@ -252,37 +252,74 @@ function getLootPileAt(x, y) {
 function pickupLootPile(pile) {
     if (!pile || !pile.items) return;
 
-    const messages = [];
+    const pickedUp = [];
+    const leftBehind = [];
 
     for (const item of pile.items) {
-        // Add to inventory
-        addItemToInventory(item);
-        messages.push(item.name);
+        // Try to add to inventory
+        const result = addItemToInventory(item);
+
+        if (result.success && result.added > 0) {
+            pickedUp.push(item.name);
+
+            // If only partial pickup, leave the rest
+            if (result.added < (item.count || 1)) {
+                leftBehind.push({
+                    ...item,
+                    count: (item.count || 1) - result.added
+                });
+            }
+        } else {
+            // Couldn't pick up, leave on ground
+            leftBehind.push(item);
+        }
     }
 
-    // Remove the pile
-    const index = game.groundLoot.indexOf(pile);
-    if (index > -1) {
-        game.groundLoot.splice(index, 1);
-    }
+    // Update pile with items that couldn't be picked up
+    if (leftBehind.length > 0) {
+        pile.items = leftBehind;
+        if (pickedUp.length > 0) {
+            addMessage(`Picked up: ${pickedUp.join(', ')} (inventory full!)`);
+        } else {
+            addMessage('Inventory full!');
+        }
+    } else {
+        // Remove the pile completely
+        const index = game.groundLoot.indexOf(pile);
+        if (index > -1) {
+            game.groundLoot.splice(index, 1);
+        }
 
-    // Show message
-    if (messages.length > 0) {
-        addMessage(`Picked up: ${messages.join(', ')}`);
+        // Show message
+        if (pickedUp.length > 0) {
+            addMessage(`Picked up: ${pickedUp.join(', ')}`);
+        }
     }
 }
 
 /**
- * Add an item to player's inventory with stacking
+ * Add an item to player's inventory with stacking and limits
  * @param {object} item - The item to add
+ * @returns {Object} { success: boolean, added: number, message: string }
  */
 function addItemToInventory(item) {
+    // Use InventoryManager if available for proper stacking and limits
+    if (typeof InventoryManager !== 'undefined') {
+        const itemWithRarity = {
+            ...item,
+            rarity: item.rarity || 'common',
+            favorValue: item.favorValue || getFavorValue(item)
+        };
+        return InventoryManager.addItem(game.player, itemWithRarity, item.count || 1);
+    }
+
+    // Fallback: original behavior (no limits)
     // Check if item is stackable and already exists
     if (LOOT_CONFIG.stackableTypes.includes(item.type)) {
         const existing = game.player.inventory.find(i => i.name === item.name);
         if (existing) {
             existing.count += item.count;
-            return;
+            return { success: true, added: item.count, message: `Picked up ${item.name}` };
         }
     }
 
@@ -295,6 +332,8 @@ function addItemToInventory(item) {
         favorValue: item.favorValue || getFavorValue(item),
         ...item
     });
+
+    return { success: true, added: item.count || 1, message: `Picked up ${item.name}` };
 }
 
 /**

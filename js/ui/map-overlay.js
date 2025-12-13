@@ -224,32 +224,64 @@ function drawMapTile(x, y, size, tile) {
 }
 
 /**
- * Draw exit portal on the map (always visible)
+ * Draw extraction points on the map (replaces old exit portal)
  */
 function drawExitPortal(offsetX, offsetY, tileSize) {
     const cfg = MAP_OVERLAY_CONFIG;
 
-    // Find exit tile
-    for (let y = 0; y < game.map.length; y++) {
-        for (let x = 0; x < game.map[0].length; x++) {
-            const tile = game.map[y]?.[x];
-            if (tile && tile.type === 'exit') {
-                const screenX = offsetX + x * tileSize;
-                const screenY = offsetY + y * tileSize;
+    // Get extraction points from the new system
+    const extractionPoints = (typeof ExtractionSystem !== 'undefined' && ExtractionSystem.points)
+        ? ExtractionSystem.points
+        : [];
 
-                // Draw cyan square for exit
-                ctx.fillStyle = cfg.exitColor;
-                ctx.fillRect(screenX, screenY, tileSize, tileSize);
-
-                // Add pulsing glow effect
-                const pulse = Math.sin(Date.now() / 300) * 0.3 + 0.7;
-                ctx.strokeStyle = `rgba(0, 255, 255, ${pulse})`;
-                ctx.lineWidth = 2;
-                ctx.strokeRect(screenX - 1, screenY - 1, tileSize + 2, tileSize + 2);
-
-                return; // Only one exit
+    if (extractionPoints.length === 0) {
+        // Fallback: check for old exit tile (legacy support)
+        for (let y = 0; y < game.map.length; y++) {
+            for (let x = 0; x < game.map[0].length; x++) {
+                const tile = game.map[y]?.[x];
+                if (tile && tile.type === 'exit') {
+                    const screenX = offsetX + x * tileSize;
+                    const screenY = offsetY + y * tileSize;
+                    ctx.fillStyle = cfg.exitColor;
+                    ctx.fillRect(screenX, screenY, tileSize, tileSize);
+                    return;
+                }
             }
         }
+        return;
+    }
+
+    // Draw each extraction point
+    for (const point of extractionPoints) {
+        if (point.status === 'collapsed') continue;
+
+        const screenX = offsetX + point.x * tileSize;
+        const screenY = offsetY + point.y * tileSize;
+
+        // Color based on status
+        let color = '#00ffff';  // Cyan for active
+        if (point.status === 'warning') {
+            color = '#ffa500';  // Orange for warning
+        } else if (point.status === 'collapsing') {
+            color = '#ff4444';  // Red for collapsing
+        }
+
+        // Draw extraction point
+        ctx.fillStyle = color;
+        ctx.fillRect(screenX, screenY, tileSize, tileSize);
+
+        // Add pulsing glow effect
+        const pulse = Math.sin(Date.now() / 300) * 0.3 + 0.7;
+        ctx.strokeStyle = color.replace('ff', `${Math.floor(pulse * 255).toString(16).padStart(2, '0')}`);
+        ctx.lineWidth = 2;
+        ctx.strokeRect(screenX - 1, screenY - 1, tileSize + 2, tileSize + 2);
+
+        // Draw "E" label for extraction
+        ctx.fillStyle = '#000';
+        ctx.font = `bold ${Math.max(8, tileSize - 2)}px Arial`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText('E', screenX + tileSize / 2, screenY + tileSize / 2);
     }
 }
 

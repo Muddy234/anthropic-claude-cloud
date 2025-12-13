@@ -9,7 +9,7 @@ const LoadoutUI = {
 
     // State
     active: false,
-    currentSection: 0,  // 0=weapons, 1=armor, 2=consumables, 3=confirm
+    currentSection: 0,  // 0=basic, 1=weapons, 2=armor, 3=consumables, 4=confirm
     selectedIndex: 0,
     startingFloor: 1,
 
@@ -17,8 +17,8 @@ const LoadoutUI = {
     PANEL_WIDTH: 1000,
     PANEL_HEIGHT: 650,
 
-    // Sections
-    SECTIONS: ['WEAPON', 'ARMOR', 'CONSUMABLES', 'START'],
+    // Sections (BASIC first for easy access to starter gear)
+    SECTIONS: ['BASIC', 'WEAPON', 'ARMOR', 'CONSUMABLES', 'START'],
 
     // ========================================================================
     // LIFECYCLE
@@ -63,26 +63,27 @@ const LoadoutUI = {
         if (!this.active) return;
 
         const items = this._getCurrentSectionItems();
+        const isStartSection = this.currentSection === 4;  // START is now index 4
+        const isBasicSection = this.currentSection === 0;  // BASIC is index 0
 
         switch (key) {
             case 'ArrowUp':
             case 'w':
             case 'W':
-                if (this.currentSection < 3) {
-                    this.selectedIndex = Math.max(0, this.selectedIndex - 1);
-                } else {
-                    // In confirm section, adjust starting floor
+                if (isStartSection) {
                     this._adjustStartingFloor(1);
+                } else if (!isBasicSection) {
+                    this.selectedIndex = Math.max(0, this.selectedIndex - 1);
                 }
                 break;
 
             case 'ArrowDown':
             case 's':
             case 'S':
-                if (this.currentSection < 3) {
-                    this.selectedIndex = Math.min(items.length - 1, this.selectedIndex + 1);
-                } else {
+                if (isStartSection) {
                     this._adjustStartingFloor(-1);
+                } else if (!isBasicSection) {
+                    this.selectedIndex = Math.min(items.length - 1, this.selectedIndex + 1);
                 }
                 break;
 
@@ -96,7 +97,7 @@ const LoadoutUI = {
             case 'ArrowRight':
             case 'd':
             case 'D':
-                this.currentSection = Math.min(3, this.currentSection + 1);
+                this.currentSection = Math.min(4, this.currentSection + 1);
                 this.selectedIndex = 0;
                 break;
 
@@ -104,10 +105,12 @@ const LoadoutUI = {
             case 'e':
             case 'E':
             case ' ':
-                if (this.currentSection < 3) {
-                    this._selectItem();
-                } else {
+                if (isBasicSection) {
+                    this._selectBasicLoadout();
+                } else if (isStartSection) {
                     this._startRun();
+                } else {
+                    this._selectItem();
                 }
                 break;
 
@@ -116,9 +119,20 @@ const LoadoutUI = {
                 break;
 
             case 'Tab':
-                this.currentSection = (this.currentSection + 1) % 4;
+                this.currentSection = (this.currentSection + 1) % 5;
                 this.selectedIndex = 0;
                 break;
+        }
+    },
+
+    /**
+     * Select basic starter loadout
+     * @private
+     */
+    _selectBasicLoadout() {
+        if (typeof LoadoutSystem !== 'undefined') {
+            LoadoutSystem.selectBasicLoadout();
+            console.log('[LoadoutUI] Basic loadout selected');
         }
     },
 
@@ -131,15 +145,17 @@ const LoadoutUI = {
         const bankItems = persistentState?.bank?.items || [];
 
         switch (this.currentSection) {
-            case 0:  // Weapons
+            case 0:  // Basic - no items list, just a button
+                return [];
+            case 1:  // Weapons
                 return bankItems
                     .map((item, index) => ({ item, index }))
                     .filter(({ item }) => item.type === 'weapon');
-            case 1:  // Armor
+            case 2:  // Armor
                 return bankItems
                     .map((item, index) => ({ item, index }))
                     .filter(({ item }) => item.type === 'armor');
-            case 2:  // Consumables
+            case 3:  // Consumables
                 return bankItems
                     .map((item, index) => ({ item, index }))
                     .filter(({ item }) => item.type === 'consumable');
@@ -160,22 +176,27 @@ const LoadoutUI = {
 
         if (!LoadoutSystem) return;
 
+        // Clear basic loadout when selecting custom items
+        if (LoadoutSystem.isBasicLoadout()) {
+            LoadoutSystem.reset();
+        }
+
         // Check if already selected (toggle off)
         if (LoadoutSystem.isSelected(index)) {
-            if (this.currentSection === 0) {
+            if (this.currentSection === 1) {
                 LoadoutSystem.deselectWeapon();
-            } else if (this.currentSection === 1) {
-                LoadoutSystem.deselectArmor(item.slot);
             } else if (this.currentSection === 2) {
+                LoadoutSystem.deselectArmor(item.slot);
+            } else if (this.currentSection === 3) {
                 LoadoutSystem.removeConsumable(index);
             }
         } else {
             // Select item
-            if (this.currentSection === 0) {
+            if (this.currentSection === 1) {
                 LoadoutSystem.selectWeapon(index);
-            } else if (this.currentSection === 1) {
-                LoadoutSystem.selectArmor(index);
             } else if (this.currentSection === 2) {
+                LoadoutSystem.selectArmor(index);
+            } else if (this.currentSection === 3) {
                 LoadoutSystem.addConsumable(index, item.count || 1);
             }
         }
@@ -255,7 +276,9 @@ const LoadoutUI = {
         this._renderSectionTabs(ctx, panelX, panelY);
 
         // Draw current section content
-        if (this.currentSection < 3) {
+        if (this.currentSection === 0) {
+            this._renderBasicSection(ctx, panelX, panelY);
+        } else if (this.currentSection >= 1 && this.currentSection <= 3) {
             this._renderItemSection(ctx, panelX, panelY);
         } else {
             this._renderConfirmSection(ctx, panelX, panelY);
@@ -298,20 +321,28 @@ const LoadoutUI = {
      * @private
      */
     _renderSectionTabs(ctx, panelX, panelY) {
-        const tabWidth = 120;
+        const tabWidth = 100;  // Reduced to fit 5 tabs
         const tabHeight = 35;
         const startX = panelX + 20;
         const tabY = panelY + 50;
 
         this.SECTIONS.forEach((section, index) => {
-            const tabX = startX + index * (tabWidth + 10);
+            const tabX = startX + index * (tabWidth + 8);
             const isSelected = index === this.currentSection;
+
+            // Highlight BASIC tab with green if selected
+            const isBasicTab = index === 0;
 
             // Tab background
             if (isSelected) {
                 const grad = ctx.createLinearGradient(tabX, tabY, tabX, tabY + tabHeight);
-                grad.addColorStop(0, '#4682B4');
-                grad.addColorStop(1, '#2F4F4F');
+                if (isBasicTab) {
+                    grad.addColorStop(0, '#2ecc71');
+                    grad.addColorStop(1, '#1a8f4e');
+                } else {
+                    grad.addColorStop(0, '#4682B4');
+                    grad.addColorStop(1, '#2F4F4F');
+                }
                 ctx.fillStyle = grad;
             } else {
                 ctx.fillStyle = '#2a2a4e';
@@ -319,16 +350,107 @@ const LoadoutUI = {
             ctx.fillRect(tabX, tabY, tabWidth, tabHeight);
 
             // Tab border
-            ctx.strokeStyle = isSelected ? '#4682B4' : '#4a4a6a';
+            ctx.strokeStyle = isSelected ? (isBasicTab ? '#2ecc71' : '#4682B4') : '#4a4a6a';
             ctx.lineWidth = 2;
             ctx.strokeRect(tabX, tabY, tabWidth, tabHeight);
 
             // Tab text
-            ctx.font = 'bold 12px Arial';
+            ctx.font = 'bold 11px Arial';
             ctx.textAlign = 'center';
             ctx.fillStyle = isSelected ? '#FFF' : '#888';
             ctx.fillText(section, tabX + tabWidth / 2, tabY + 22);
         });
+    },
+
+    /**
+     * Render basic loadout section
+     * @private
+     */
+    _renderBasicSection(ctx, panelX, panelY) {
+        const sectionX = panelX + 30;
+        const sectionY = panelY + 100;
+        const sectionWidth = 500;
+
+        // Background
+        ctx.fillStyle = '#12121a';
+        ctx.fillRect(sectionX, sectionY, sectionWidth, 400);
+        ctx.strokeStyle = '#3a3a5a';
+        ctx.lineWidth = 1;
+        ctx.strokeRect(sectionX, sectionY, sectionWidth, 400);
+
+        // Title
+        ctx.font = 'bold 20px Arial';
+        ctx.textAlign = 'center';
+        ctx.fillStyle = '#4682B4';
+        ctx.fillText('STARTER KIT', sectionX + sectionWidth / 2, sectionY + 40);
+
+        // Description
+        ctx.font = '14px Arial';
+        ctx.fillStyle = '#888';
+        ctx.fillText('Free basic equipment for new delvers', sectionX + sectionWidth / 2, sectionY + 70);
+
+        // Show what's included
+        const basicLoadout = LoadoutSystem?.BASIC_LOADOUT || {};
+        let yOffset = sectionY + 110;
+
+        ctx.font = 'bold 16px Arial';
+        ctx.textAlign = 'left';
+        ctx.fillStyle = '#FFD700';
+        ctx.fillText('Includes:', sectionX + 20, yOffset);
+        yOffset += 30;
+
+        // Weapon
+        if (basicLoadout.weapon) {
+            ctx.font = '14px Arial';
+            ctx.fillStyle = '#e74c3c';
+            ctx.fillText(`⚔ ${basicLoadout.weapon.name}`, sectionX + 30, yOffset);
+            ctx.fillStyle = '#888';
+            ctx.fillText(`  - ${basicLoadout.weapon.description}`, sectionX + 30, yOffset + 18);
+            yOffset += 50;
+        }
+
+        // Consumables
+        if (basicLoadout.consumables && basicLoadout.consumables.length > 0) {
+            basicLoadout.consumables.forEach(cons => {
+                ctx.font = '14px Arial';
+                ctx.fillStyle = '#2ecc71';
+                ctx.fillText(`✚ ${cons.name} x${cons.count || 1}`, sectionX + 30, yOffset);
+                ctx.fillStyle = '#888';
+                ctx.fillText(`  - ${cons.description}`, sectionX + 30, yOffset + 18);
+                yOffset += 50;
+            });
+        }
+
+        // Select button
+        const buttonX = sectionX + sectionWidth / 2 - 100;
+        const buttonY = sectionY + 300;
+        const buttonW = 200;
+        const buttonH = 50;
+        const isSelected = LoadoutSystem?.isBasicLoadout?.();
+
+        // Button glow if selected
+        if (isSelected) {
+            ctx.shadowColor = '#2ecc71';
+            ctx.shadowBlur = 15;
+        }
+
+        ctx.fillStyle = isSelected ? '#2ecc71' : '#4682B4';
+        ctx.fillRect(buttonX, buttonY, buttonW, buttonH);
+        ctx.shadowBlur = 0;
+
+        ctx.strokeStyle = '#FFF';
+        ctx.lineWidth = 2;
+        ctx.strokeRect(buttonX, buttonY, buttonW, buttonH);
+
+        ctx.font = 'bold 16px Arial';
+        ctx.textAlign = 'center';
+        ctx.fillStyle = '#FFF';
+        ctx.fillText(isSelected ? '✓ SELECTED' : 'SELECT BASIC KIT', buttonX + buttonW / 2, buttonY + 32);
+
+        // Hint
+        ctx.font = '12px Arial';
+        ctx.fillStyle = '#666';
+        ctx.fillText('Press [E] or [Enter] to select', sectionX + sectionWidth / 2, sectionY + 380);
     },
 
     /**
@@ -350,12 +472,12 @@ const LoadoutUI = {
         ctx.lineWidth = 1;
         ctx.strokeRect(listX, listY, listWidth, listHeight);
 
-        // Section title
-        const titles = ['Select Weapon', 'Select Armor', 'Select Consumables'];
+        // Section title (adjusted for new indices: 1=weapon, 2=armor, 3=consumables)
+        const titles = ['', 'Select Weapon', 'Select Armor', 'Select Consumables'];
         ctx.font = 'bold 16px Arial';
         ctx.textAlign = 'left';
         ctx.fillStyle = '#888';
-        ctx.fillText(titles[this.currentSection], listX + 10, listY - 5);
+        ctx.fillText(titles[this.currentSection] || '', listX + 10, listY - 5);
 
         if (items.length === 0) {
             ctx.font = '16px Arial';

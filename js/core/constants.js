@@ -406,6 +406,42 @@ const GAME_STATES = {
 };
 
 // ============================================================================
+// INVENTORY CONFIG
+// ============================================================================
+
+const INVENTORY_CONFIG = {
+    // Maximum inventory slots (not counting equipped items)
+    maxSlots: 15,
+
+    // Equipment slots
+    equipmentSlots: {
+        MAIN: 'Main Hand',
+        OFF: 'Off Hand',
+        HEAD: 'Head',
+        CHEST: 'Chest',
+        LEGS: 'Legs',
+        FEET: 'Feet'
+    },
+
+    // Maximum stack sizes by item type
+    maxStacks: {
+        consumable: 99,
+        material: 99,
+        weapon: 1,
+        armor: 1,
+        quest: 1,
+        default: 1
+    },
+
+    // Items that can't be dropped/sold
+    soulbound: ['quest'],
+
+    // Weight system (optional, set to 0 to disable)
+    weightEnabled: false,
+    maxWeight: 100
+};
+
+// ============================================================================
 // MINI-BOSS CONFIG
 // ============================================================================
 
@@ -497,6 +533,7 @@ window.FLOOR_TIER_CONFIG = FLOOR_TIER_CONFIG;
 window.QUEST_CONFIG = QUEST_CONFIG;
 window.SAVE_CONFIG = SAVE_CONFIG;
 window.GAME_STATES = GAME_STATES;
+window.INVENTORY_CONFIG = INVENTORY_CONFIG;
 window.MINIBOSS_CONFIG = MINIBOSS_CONFIG;
 window.PATH_DOWN_CONFIG = PATH_DOWN_CONFIG;
 window.RESCUE_CONFIG = RESCUE_CONFIG;

@@ -19,6 +19,33 @@ const LoadoutSystem = {
     // Track bank indices for removal
     selectedIndices: new Set(),
 
+    // Using basic loadout (doesn't withdraw from bank)
+    usingBasicLoadout: false,
+
+    // ========================================================================
+    // BASIC STARTER LOADOUT - Always available
+    // ========================================================================
+
+    BASIC_LOADOUT: {
+        weapon: {
+            name: 'Rusty Shortsword',
+            type: 'weapon',
+            damage: 5,
+            description: 'A worn but serviceable blade.',
+            proficiency: 'Blade',
+            rarity: 'common'
+        },
+        consumables: [
+            {
+                name: 'Weak Health Potion',
+                type: 'consumable',
+                count: 2,
+                description: 'Restores 25 HP.',
+                healAmount: 25
+            }
+        ]
+    },
+
     // ========================================================================
     // LOADOUT MANAGEMENT
     // ========================================================================
@@ -35,7 +62,31 @@ const LoadoutSystem = {
             gold: 0
         };
         this.selectedIndices.clear();
+        this.usingBasicLoadout = false;
         console.log('[LoadoutSystem] Loadout reset');
+    },
+
+    /**
+     * Select the basic starter loadout (always available)
+     * This doesn't withdraw from bank - provides free starter gear
+     */
+    selectBasicLoadout() {
+        this.reset();
+        this.usingBasicLoadout = true;
+
+        // Copy basic loadout items
+        this.currentLoadout.weapon = { ...this.BASIC_LOADOUT.weapon };
+        this.currentLoadout.consumables = this.BASIC_LOADOUT.consumables.map(c => ({ ...c }));
+
+        console.log('[LoadoutSystem] Basic loadout selected');
+    },
+
+    /**
+     * Check if basic loadout is selected
+     * @returns {boolean}
+     */
+    isBasicLoadout() {
+        return this.usingBasicLoadout;
     },
 
     /**
@@ -258,7 +309,22 @@ const LoadoutSystem = {
     confirmLoadout() {
         const inventory = [];
 
-        // Collect all items to withdraw
+        // BASIC LOADOUT: Items are free, don't withdraw from bank
+        if (this.usingBasicLoadout) {
+            // Add basic loadout items directly to inventory
+            if (this.currentLoadout.weapon) {
+                inventory.push({ ...this.currentLoadout.weapon });
+            }
+            this.currentLoadout.consumables.forEach(cons => {
+                inventory.push({ ...cons });
+            });
+
+            console.log(`[LoadoutSystem] Basic loadout confirmed: ${inventory.length} items`);
+            this.reset();
+            return { inventory, gold: 0 };
+        }
+
+        // CUSTOM LOADOUT: Withdraw items from bank
         const withdrawals = [];
 
         // Weapon

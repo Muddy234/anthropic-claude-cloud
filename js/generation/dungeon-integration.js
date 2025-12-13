@@ -349,24 +349,26 @@ function placeExitInFarthestRoom() {
         }
     }
 
-    // Set exit position in game state
+    // SURVIVAL EXTRACTION UPDATE: Old exit system disabled
+    // Extraction points are now used instead (see ExtractionSystem)
+    // Keeping exitPosition for potential legacy compatibility
     game.exitPosition = { x: exitX, y: exitY };
 
-    // Create exit tile on the map
-    if (game.map[exitY] && game.map[exitY][exitX]) {
-        game.map[exitY][exitX] = {
-            type: 'exit',
-            explored: false,
-            visible: false,
-            room: game.rooms.find(r => r.blob === farthestBlob) || null
-        };
-    }
+    // OLD EXIT TILE CREATION - DISABLED for extraction system
+    // if (game.map[exitY] && game.map[exitY][exitX]) {
+    //     game.map[exitY][exitX] = {
+    //         type: 'exit',
+    //         explored: false,
+    //         visible: false,
+    //         room: game.rooms.find(r => r.blob === farthestBlob) || null
+    //     };
+    // }
 
     // Calculate distance from entrance for logging
     const distFromEntrance = Math.abs(exitX - entranceBlob.connectionPoint.x) +
                              Math.abs(exitY - entranceBlob.connectionPoint.y);
 
-    console.log(`🚪 Exit placed at (${exitX}, ${exitY}) - Distance from entrance: ${distFromEntrance} tiles, Room difficulty: ${farthestBlob.difficulty}`);
+    console.log(`📍 Farthest room at (${exitX}, ${exitY}) - Distance from entrance: ${distFromEntrance} tiles (extraction points placed separately)`);
 }
 
 // ============================================================================
