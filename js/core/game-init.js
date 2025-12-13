@@ -766,39 +766,6 @@ function initializeSystemsManually() {
 // ============================================================================
 
 /**
- * Assign elements to rooms if not already assigned
- */
-function assignRoomElements() {
-    if (!game.rooms) return;
-    
-    for (let i = 0; i < game.rooms.length; i++) {
-        const room = game.rooms[i];
-        
-        if (!room.element) {
-            // Get adjacent rooms for element spreading
-            const adjacentRooms = game.rooms.filter((r, j) => {
-                if (i === j) return false;
-                // Simple adjacency check
-                const dist = Math.abs(r.x - room.x) + Math.abs(r.y - room.y);
-                return dist < 50; // Within range
-            });
-            
-            room.element = typeof selectRoomElement === 'function'
-                ? selectRoomElement(adjacentRooms)
-                : getRandomElement();
-        }
-    }
-}
-
-/**
- * Get random element (fallback)
- */
-function getRandomElement() {
-    const elements = ['fire', 'ice', 'water', 'earth', 'nature', 'death', 'arcane', 'dark', 'holy', 'physical'];
-    return elements[Math.floor(Math.random() * elements.length)];
-}
-
-/**
  * Set player position
  */
 function setPlayerPosition(x, y) {

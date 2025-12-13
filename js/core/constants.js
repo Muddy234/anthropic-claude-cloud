@@ -412,20 +412,28 @@ const SAVE_CONFIG = {
 // ============================================================================
 
 const GAME_STATES = {
+    // Core states
     MENU: 'menu',
     VILLAGE: 'village',
-    LOADING: 'loading',
     PLAYING: 'playing',
-    PAUSED: 'paused',
-    CHEST: 'chest',
+    GAMEOVER: 'gameover',
+
+    // Village overlays
     DIALOGUE: 'dialogue',
     SHOP: 'shop',
     BANK: 'bank',
-    CRAFTING: 'crafting',
     LOADOUT: 'loadout',
+
+    // Dungeon overlays
+    CHEST: 'chest',
     EXTRACTION: 'extraction',
-    GAMEOVER: 'gameover',
-    VICTORY: 'victory'
+    INVENTORY: 'inventory',
+    MAP: 'map',
+    SKILLS: 'skills',
+    CHARACTER: 'character',
+    SHIFT: 'shift',
+    SACRIFICE: 'sacrifice',
+    LEVELUP: 'levelup'
 };
 
 // ============================================================================

@@ -224,14 +224,7 @@ function useItem(index) {
 
     if (itemEffects[item.name]) {
         const msg = itemEffects[item.name](game.player);
-        if (game.combat) {
-            game.combat.log.push(`Used ${item.name}: ${msg}`);
-            game.combat.menuState = 'main';
-            game.combat.playerTurn = false;
-            setTimeout(enemyTurn, 1000);
-        } else {
-            addMessage(`Used ${item.name}: ${msg}`);
-        }
+        addMessage(`Used ${item.name}: ${msg}`);
         item.count--;
         if (item.count <= 0) game.player.inventory.splice(realIndex, 1);
         return true;

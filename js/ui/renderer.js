@@ -12,86 +12,6 @@ window.addEventListener('resize', () => {
     console.log('Canvas resized to:', canvas.width, 'x', canvas.height);
 });
 
-// Create health bar during combat
-function drawHealthBar(x, y, width, hp, maxHp) {
-    const pct = Math.max(0, Math.min(1, hp / maxHp));
-    ctx.fillStyle = '#333'; ctx.fillRect(x, y, width, 20);
-    ctx.fillStyle = pct > 0.5 ? '#2ecc71' : pct > 0.2 ? '#f1c40f' : '#e74c3c';
-    ctx.fillRect(x, y, width * pct, 20);
-    ctx.strokeStyle = '#333'; ctx.strokeRect(x, y, width, 20);
-}
-
-function drawTracker() {
-    if (!game.player) return;
-    ctx.fillStyle = '#0a0a0a'; ctx.fillRect(0, 0, TRACKER_WIDTH, canvas.height);
-    ctx.strokeStyle = '#333'; ctx.lineWidth = 2; ctx.strokeRect(0, 0, TRACKER_WIDTH, canvas.height);
-    let y = 50; const cx = TRACKER_WIDTH / 2;
-    ctx.fillStyle = '#FFD700'; ctx.font = 'bold 32px monospace'; ctx.textAlign = 'center'; ctx.fillText('ADVENTURER', cx, y); y += 40;
-    ctx.fillStyle = '#fff'; ctx.font = '20px monospace'; ctx.fillText(`Level ${game.player.level}`, cx, y); y += 20;
-    const xpNeeded = 100 + (game.player.level - 1) * 150;
-    const xpPct = Math.min(1, game.player.xp / xpNeeded);
-    ctx.fillStyle = '#333'; ctx.fillRect(50, y, TRACKER_WIDTH - 100, 10);
-    ctx.fillStyle = '#3498db'; ctx.fillRect(50, y, (TRACKER_WIDTH - 100) * xpPct, 10);
-    y += 30; ctx.fillStyle = '#888'; ctx.font = '14px monospace'; ctx.fillText(`${game.player.xp} / ${xpNeeded} XP`, cx, y); y += 50;
-    ctx.fillStyle = '#FFD700'; ctx.font = 'bold 24px monospace'; ctx.fillText('STATS', cx, y); y += 30;
-    ctx.fillStyle = '#fff'; ctx.font = '18px monospace'; ctx.textAlign = 'left'; const px = 80;
-    ctx.fillText(`STR: ${game.player.stats.STR}`, px, y); y += 30;
-    ctx.fillText(`AGI: ${game.player.stats.AGI}`, px, y); y += 30;
-    ctx.fillText(`INT: ${game.player.stats.INT}`, px, y); y += 30;
-    ctx.fillText(`STA: ${game.player.stats.STA}`, px, y); y += 30;
-    y += 10;
-    ctx.fillText(`P.DEF: ${Math.floor(game.player.pDef)}`, px, y); y += 30;
-    ctx.fillText(`M.DEF: ${Math.floor(game.player.mDef)}`, px, y); y += 30;
-    y += 10;
-    // HP Bar
-    ctx.fillText(`HP: ${Math.floor(game.player.hp)}/${game.player.maxHp}`, px, y); y += 5;
-    const hpBarWidth = TRACKER_WIDTH - 160;
-    const hpPct = game.player.hp / game.player.maxHp;
-    ctx.fillStyle = '#333'; ctx.fillRect(px, y, hpBarWidth, 15);
-    ctx.fillStyle = '#e74c3c'; ctx.fillRect(px, y, hpBarWidth * hpPct, 15);
-    ctx.strokeStyle = '#fff'; ctx.strokeRect(px, y, hpBarWidth, 15);
-    y += 25;
-
-    // Mana Bar (new system: mp/maxMp)
-    const mp = Math.floor(game.player.mp || 0);
-    const maxMp = game.player.maxMp || 100;
-    ctx.fillStyle = '#fff';
-    ctx.fillText(`MP: ${mp}/${maxMp}`, px, y); y += 5;
-    const mpPct = mp / maxMp;
-    ctx.fillStyle = '#333'; ctx.fillRect(px, y, hpBarWidth, 15);
-    ctx.fillStyle = '#3498db'; ctx.fillRect(px, y, hpBarWidth * mpPct, 15);
-    ctx.strokeStyle = '#fff'; ctx.strokeRect(px, y, hpBarWidth, 15);
-    y += 25;
-
-    // Stamina (text only for now)
-    ctx.fillText(`STM: ${Math.floor(game.player.stamina)}/${game.player.maxStamina}`, px, y); y += 50;
-    ctx.fillStyle = '#9b59b6'; ctx.textAlign = 'center'; ctx.font = 'bold 24px monospace'; ctx.fillText('INVENTORY', cx, y); y += 30;
-    ctx.fillStyle = '#fff'; ctx.font = '16px monospace';
-    if (game.player.inventory.length === 0) { ctx.fillText('Empty', cx, y); } else { for (const item of game.player.inventory) { ctx.fillText(`${item.name} x${item.count}`, cx, y); y += 25; } }
-    ctx.fillStyle = '#888'; ctx.font = '14px monospace'; ctx.fillText('[E] Open Inventory', cx, canvas.height - 30);
-}
-
-function drawInspectPanel() {
-    if (!game.combat || !game.combat.inspecting) return;
-    const enemy = game.combat.enemy;
-    const px = 1200 + (TRACKER_WIDTH / 2), py = 100, pw = 600, ph = 600;
-    const finalX = Math.min(canvas.width - pw - 20, px);
-    ctx.fillStyle = 'rgba(20, 20, 30, 0.95)'; ctx.fillRect(finalX, py, pw, ph);
-    ctx.strokeStyle = '#FFD700'; ctx.lineWidth = 4; ctx.strokeRect(finalX, py, pw, ph);
-    ctx.fillStyle = '#FFD700'; ctx.font = 'bold 36px monospace'; ctx.textAlign = 'center'; ctx.fillText('MONSTER DATA', finalX + pw / 2, py + 50);
-    ctx.fillStyle = enemy.element === 'fire' ? '#e74c3c' : enemy.element === 'nature' ? '#27ae60' : '#8e44ad';
-    ctx.fillRect(finalX + 175, py + 80, 250, 250); ctx.strokeStyle = '#fff'; ctx.lineWidth = 3; ctx.strokeRect(finalX + 175, py + 80, 250, 250);
-    ctx.fillStyle = '#fff'; ctx.font = 'bold 32px monospace'; ctx.textAlign = 'left'; ctx.fillText(enemy.name.toUpperCase(), finalX + 30, py + 380);
-    ctx.font = '18px monospace'; ctx.fillText(`STR: ${enemy.str} AGI: ${enemy.agi} INT: ${enemy.int}`, finalX + 40, py + 450);
-    ctx.fillText(`P.DEF: ${enemy.pDef} M.DEF: ${enemy.mDef}`, finalX + 40, py + 480);
-    ctx.fillStyle = '#ccc'; ctx.font = '16px monospace';
-    const description = enemy.description || (MONSTER_DATA[enemy.name] ? MONSTER_DATA[enemy.name].description : 'No description available.');
-    const words = description.split(' '); let line = '', yo = py + 530;
-    for (let w of words) { if (ctx.measureText(line + w).width > pw - 80) { ctx.fillText(line, finalX + 40, yo); line = w + ' '; yo += 24; } else line += w + ' '; }
-    ctx.fillText(line, finalX + 40, yo);
-    ctx.fillStyle = '#888'; ctx.textAlign = 'center'; ctx.fillText('[I] or [4] to close', finalX + pw / 2, py + ph - 20);
-}
-
 function drawInventoryOverlay() {
     // Initialize scroll offsets if not exists
     if (!game.inventoryScroll) {
@@ -565,12 +485,6 @@ function drawItemInspectPanel(item, x, y, w, h, itemType) {
     }
 }
 
-// Merchant removed - gold system replaced with Altar sacrifice system
-function drawMerchant() {
-    // Merchant functionality disabled
-    game.showMerchant = false;
-}
-
 function drawLevelUpScreen() {
     ctx.fillStyle = 'rgba(0, 0, 0, 0.95)'; ctx.fillRect(0, 0, canvas.width, canvas.height);
     const cx = canvas.width / 2; const cy = canvas.height / 2; const y = cy - 200;
@@ -583,76 +497,6 @@ function drawLevelUpScreen() {
         ly += 40; ctx.textAlign = 'center';
         if (game.levelUpData.attributePoints === 0) { ctx.fillStyle = '#2ecc71'; ctx.fillText('[SPACE] CONFIRM', cx, ly); } else { ctx.fillStyle = '#888'; ctx.fillText('Spend all points to confirm', cx, ly); }
     }
-}
-
-function drawBattleScene() {
-    const enemy = game.combat.enemy; const offset = TRACKER_WIDTH;
-    ctx.fillStyle = '#f8f9fa'; ctx.fillRect(offset, 0, canvas.width - offset, canvas.height);
-    ctx.fillStyle = '#e0e0e0'; ctx.strokeStyle = '#bdc3c7'; ctx.lineWidth = 4;
-    ctx.beginPath(); ctx.ellipse(1400 + (offset / 2), 450, 300, 100, 0, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
-    ctx.beginPath(); ctx.ellipse(500 + offset, 750, 350, 120, 0, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
-    ctx.fillStyle = enemy.element === 'fire' ? '#e74c3c' : enemy.element === 'nature' ? '#27ae60' : '#8e44ad';
-    ctx.fillRect(1250 + (offset / 2), 150, 300, 300);
-    ctx.fillStyle = '#3498db'; ctx.fillRect(350 + offset, 450, 350, 350);
-    ctx.fillStyle = '#fff'; ctx.strokeStyle = '#333'; ctx.fillRect(80 + offset, 80, 540, 120); ctx.strokeRect(80 + offset, 80, 540, 120);
-    ctx.fillStyle = '#000'; ctx.font = 'bold 32px monospace'; ctx.textAlign = 'left'; ctx.fillText(enemy.name.toUpperCase(), 100 + offset, 120);
-    drawHealthBar(120 + offset, 150, 460, enemy.hp, enemy.maxHp);
-    ctx.fillStyle = '#fff'; ctx.fillRect(1180 + (offset / 3), 580, 540, 140); ctx.strokeRect(1180 + (offset / 3), 580, 540, 140);
-    ctx.fillStyle = '#000'; ctx.fillText('ADVENTURER', 1200 + (offset / 3), 620);
-    drawHealthBar(1220 + (offset / 3), 650, 460, game.player.hp, game.player.maxHp);
-    ctx.fillStyle = '#2c3e50'; ctx.fillRect(offset, 830, canvas.width - offset, 250);
-    ctx.fillStyle = '#fff'; ctx.fillRect(offset + 10, 840, canvas.width - offset - 20, 230);
-    ctx.fillStyle = '#000'; ctx.font = '28px monospace';
-    for (let i = 0; i < game.combat.log.length && i < 4; i++) { ctx.fillText(game.combat.log[game.combat.log.length - 1 - i], offset + 40, 1030 - i * 40); }
-    const menuX = 1240 + (offset / 3);
-    if (game.combat.menuState === 'main') {
-        ctx.font = 'bold 36px monospace'; ctx.fillStyle = '#000'; ctx.textAlign = 'left';
-        ctx.fillText('[1] FIGHT', menuX, 900); ctx.fillText('[2] INSPECT', menuX, 960); ctx.fillText('[3] BAG', menuX, 1020); ctx.fillText('[4] RUN', menuX + 300, 900);
-    }
-    if (game.combat.menuState === 'fight_popup') {
-        const px = 1200 + (TRACKER_WIDTH / 2), py = 100, pw = 600, ph = 600; const finalX = Math.min(canvas.width - pw - 20, px);
-        ctx.fillStyle = 'rgba(20, 20, 30, 0.95)'; ctx.fillRect(finalX, py, pw, ph); ctx.strokeStyle = '#FFD700'; ctx.lineWidth = 4; ctx.strokeRect(finalX, py, pw, ph);
-        ctx.fillStyle = '#FFD700'; ctx.font = 'bold 28px monospace'; ctx.textAlign = 'center'; ctx.fillText('SELECT ATTACK', finalX + pw / 2, py + 50);
-        ctx.fillStyle = '#fff'; ctx.font = '22px monospace'; ctx.textAlign = 'left'; let ay = py + 120;
-        for (let i = 0; i < 4; i++) {
-            const ability = game.player.abilities[i];
-            if (ability) {
-                ctx.fillStyle = '#2ecc71'; ctx.fillText(`[${i + 1}] ${ability.name}`, finalX + 40, ay);
-                ctx.fillStyle = '#aaa'; ctx.font = '16px monospace'; ctx.fillText(`Cost: ${ability.cost} ${ability.type === 'stamina' ? 'STM' : 'MANA'} | Dmg: ${ability.baseDmg} | Acc: ${ability.accuracy}%`, finalX + 60, ay + 28); ctx.font = '22px monospace';
-            } else { ctx.fillStyle = '#666'; ctx.fillText(`[${i + 1}] Unselected`, finalX + 40, ay); }
-            ay += 100;
-        }
-        ctx.fillStyle = '#888'; ctx.font = '18px monospace'; ctx.textAlign = 'center'; ctx.fillText('[C] or [ESC] to Cancel', finalX + pw / 2, py + ph - 30);
-    }
-    if (game.combat.menuState === 'bag_popup') {
-        const px = 1200 + (TRACKER_WIDTH / 2), py = 100, pw = 600, ph = 600; const finalX = Math.min(canvas.width - pw - 20, px);
-        ctx.fillStyle = 'rgba(20, 20, 30, 0.95)'; ctx.fillRect(finalX, py, pw, ph); ctx.strokeStyle = '#FFD700'; ctx.lineWidth = 4; ctx.strokeRect(finalX, py, pw, ph);
-        ctx.fillStyle = '#FFD700'; ctx.font = 'bold 28px monospace'; ctx.textAlign = 'center'; ctx.fillText('CONSUMABLES', finalX + pw / 2, py + 50);
-        const consumables = game.player.inventory.filter(i => i.type === 'consumable');
-        if (consumables.length === 0) { ctx.fillStyle = '#888'; ctx.font = '22px monospace'; ctx.fillText('No consumables available', finalX + pw / 2, py + 300); } else {
-            ctx.fillStyle = '#fff'; ctx.font = '22px monospace'; ctx.textAlign = 'left'; let iy = py + 120;
-            consumables.forEach((item, idx) => { if (idx < 9) { ctx.fillText(`[${idx + 1}] ${item.name} x${item.count}`, finalX + 40, iy); iy += 50; } });
-        }
-        ctx.fillStyle = '#888'; ctx.font = '18px monospace'; ctx.textAlign = 'center'; ctx.fillText('[C] or [ESC] to Cancel', finalX + pw / 2, py + ph - 30);
-    }
-    drawInspectPanel();
-}
-
-function drawNotification() {
-    // Placeholder for notification drawing logic
-}
-
-function getFloorColorByTheme(room) {
-    return ['#222', '#2a2a2a', '#333'];
-}
-
-function drawThemedFloor(tile, x, y, size) {
-    const room = game.rooms.find(r => x >= r.x && x < r.x + r.w && y >= r.y && y < r.y + r.h);
-    if (!room) { ctx.fillStyle = '#222'; ctx.fillRect(x, y, size, size); return; }
-    const colors = getFloorColorByTheme(room);
-    const pattern = (room.x + room.y + Math.floor(tile.x) + Math.floor(tile.y)) % colors.length;
-    ctx.fillStyle = colors[pattern];
-    ctx.fillRect(x, y, size, size);
 }
 
 // ============================================================================
@@ -1078,7 +922,6 @@ const camY = game.camera.y + (shakeOffset.y / (TILE_SIZE * ZOOM_LEVEL));
             ctx.fillStyle = '#fff'; ctx.font = '20px monospace'; ctx.textAlign = 'left'; const msgX = TRACKER_WIDTH + 20; const msgY = canvas.height - 40;
             if (game.messageLog.length > 0 && Date.now() - game.lastMessageTime < 3000) { ctx.fillText(game.messageLog[game.messageLog.length - 1].text, msgX, msgY); }
         }
-        drawNotification();
     } else if (game.state === 'gameover') {
         ctx.fillStyle = '#e74c3c'; ctx.font = '64px monospace'; ctx.textAlign = 'center'; ctx.fillText('GAME OVER', canvas.width / 2, 500); ctx.fillStyle = '#fff'; ctx.font = '32px monospace'; ctx.fillText('Press SPACE to Restart', canvas.width / 2, 600);
     }
@@ -1090,13 +933,11 @@ const camY = game.camera.y + (shakeOffset.y / (TILE_SIZE * ZOOM_LEVEL));
     }
 
     // Draw popup menus LAST so they appear on top of action icons
-    if (game.state === 'merchant') drawMerchant();
     if (game.state === 'character' && typeof drawCharacterOverlay === 'function') drawCharacterOverlay();
     if (game.state === 'inventory') drawInventoryOverlay();
     if (game.state === 'map' && typeof drawMapOverlay === 'function') drawMapOverlay();
     if (game.state === 'shift' && typeof drawShiftOverlay === 'function') drawShiftOverlay();
     if (game.state === 'skills') drawSkillsOverlay();
-    if (game.state === 'moveset') drawMoveSetOverlay();
     if (game.state === 'levelup') drawLevelUpScreen();
     if (game.state === 'sacrifice' && typeof renderSacrificeUI === 'function') renderSacrificeUI(ctx);
     if (game.state === 'chest' && typeof renderChestUI === 'function') renderChestUI(ctx);

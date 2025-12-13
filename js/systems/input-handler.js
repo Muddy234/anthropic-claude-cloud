@@ -155,12 +155,6 @@ window.addEventListener('keydown', e => {
         return;
     }
 
-    // Merchant interactions
-    if (game.state === 'merchant') {
-        handleMerchantInput(e);
-        return;
-    }
-
     // Inventory screen handling
     if (game.state === 'inventory') {
         handleInventoryInput(e);
@@ -240,119 +234,6 @@ window.addEventListener('keydown', e => {
 window.addEventListener('keyup', e => {
     keys[e.key] = false;
 });
-
-/**
- * Handle merchant screen input
- */
-function handleMerchantInput(e) {
-    if (!game.merchantMode) game.merchantMode = 'menu';
-
-    if (game.merchantMode === 'menu') {
-        if (e.key === ' ') {
-            game.state = 'playing';
-            game.merchantMode = 'menu';
-            game.merchantMsg = "";
-        }
-        if (e.key === '1') {
-            game.merchantMode = 'buy';
-            game.merchantMsg = "";
-        }
-        if (e.key === '2') {
-            game.merchantMode = 'sell';
-            game.inventoryTab = 0;
-        }
-    } else if (game.merchantMode === 'buy') {
-        if (e.key === 'Escape') {
-            game.merchantMode = 'menu';
-            game.merchantMsg = "";
-        }
-        if (e.key === ' ') {
-            game.state = 'playing';
-            game.merchantMode = 'menu';
-            game.merchantMsg = "";
-        }
-
-        if (e.key === '1') {
-            if (game.gold >= 30) {
-                game.gold -= 30;
-                const pot = game.player.inventory.find(i => i.name === 'Health Potion');
-                if (pot) pot.count++;
-                else game.player.inventory.push({
-                    name: 'Health Potion',
-                    count: 1,
-                    type: 'consumable',
-                    description: 'Restores 50 HP'
-                });
-                game.merchantMsg = "Bought Health Potion!";
-                addMessage("Bought Health Potion");
-            } else {
-                game.merchantMsg = "Not enough gold!";
-            }
-        }
-        // Starter Weapons
-        if (e.key === '2') {
-            const result = typeof purchaseFromMerchant === 'function' 
-                ? purchaseFromMerchant('Rusty Broadsword')
-                : { success: false, message: 'Shop not loaded' };
-            game.merchantMsg = result.message;
-            if (result.success) addMessage(result.message);
-        }
-        if (e.key === '3') {
-            const result = typeof purchaseFromMerchant === 'function' 
-                ? purchaseFromMerchant('Stone Club')
-                : { success: false, message: 'Shop not loaded' };
-            game.merchantMsg = result.message;
-            if (result.success) addMessage(result.message);
-        }
-        if (e.key === '4') {
-            const result = typeof purchaseFromMerchant === 'function' 
-                ? purchaseFromMerchant('Ember Wand')
-                : { success: false, message: 'Shop not loaded' };
-            game.merchantMsg = result.message;
-            if (result.success) addMessage(result.message);
-        }
-        if (e.key === '5') {
-            const result = typeof purchaseFromMerchant === 'function' 
-                ? purchaseFromMerchant('Hunting Shortbow')
-                : { success: false, message: 'Shop not loaded' };
-            game.merchantMsg = result.message;
-            if (result.success) addMessage(result.message);
-        }
-    } else if (game.merchantMode === 'sell') {
-        if (e.key === 'Escape') {
-            game.merchantMode = 'menu';
-        }
-        if (e.key === 'ArrowLeft') {
-            game.inventoryTab = (game.inventoryTab - 1 + 4) % 4;
-        }
-        if (e.key === 'ArrowRight') {
-            game.inventoryTab = (game.inventoryTab + 1) % 4;
-        }
-
-        // Selling items
-        if (['1', '2', '3', '4', '5', '6', '7', '8', '9'].includes(e.key)) {
-            const types = ['weapon', 'armor', 'consumable', 'material'];
-            const targetType = types[game.inventoryTab];
-            const filteredItems = game.player.inventory.filter(i => i.type === targetType);
-            const index = parseInt(e.key) - 1;
-
-            if (index >= 0 && index < filteredItems.length) {
-                const item = filteredItems[index];
-                const itemData = typeof EQUIPMENT_DATA !== 'undefined' ? EQUIPMENT_DATA[item.name] : null;
-                const sellPrice = itemData ? Math.floor(itemData.goldValue / 2) : Math.floor((item.goldValue || 1) / 2);
-
-                game.gold += sellPrice;
-                item.count--;
-                addMessage(`Sold ${item.name} for ${sellPrice} gold`);
-
-                if (item.count <= 0) {
-                    const realIndex = game.player.inventory.indexOf(item);
-                    game.player.inventory.splice(realIndex, 1);
-                }
-            }
-        }
-    }
-}
 
 /**
  * Handle inventory screen input
