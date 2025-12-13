@@ -148,7 +148,8 @@ const SurvivalIntegration = {
      * @private
      */
     _initSubSystems() {
-        // Initialize in order
+        // Initialize systems that don't require game state
+        // Note: ExtractionSystem is initialized per-floor in startRun()
         const systems = [
             'BankingSystem',
             'ShortcutSystem',
@@ -156,9 +157,9 @@ const SurvivalIntegration = {
             'RescueSystem',
             'QuestSystem',
             'CraftingSystem',
-            'ExtractionSystem',
-            'LoadoutSystem',
             'CoreSystem'
+            // ExtractionSystem - initialized when floor is generated
+            // LoadoutSystem - initialized when UI opens
         ];
 
         systems.forEach(systemName => {

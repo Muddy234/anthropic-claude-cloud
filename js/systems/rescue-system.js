@@ -397,25 +397,10 @@ const RescueSystem = {
 };
 
 // ============================================================================
-// RESCUE CONFIG
-// ============================================================================
-
-const RESCUE_CONFIG = {
-    baseDropRate: 0.7,         // 70% of items are recoverable
-    floorPenalty: 0.05,        // 5% fewer recoverable per floor
-    goldDropRate: 0.5,         // 50% of gold is recoverable
-    rareItemProtection: 0.85,  // 85% chance rare+ items are dropped
-    maxRescueAttempts: 3,      // Maximum rescue attempts
-    rescueDecayRate: 0.15,     // 15% items lost per failed attempt
-    timeDecayHours: 48,        // Items fully decay after 48 hours
-    timeDecayRate: 0.02        // 2% decay per hour after 24 hours
-};
-
-// ============================================================================
 // EXPORTS
 // ============================================================================
 
 window.RescueSystem = RescueSystem;
-window.RESCUE_CONFIG = RESCUE_CONFIG;
+// Note: RESCUE_CONFIG is defined in constants.js
 
 console.log('[RescueSystem] Rescue system loaded');
