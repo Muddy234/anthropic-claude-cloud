@@ -55,13 +55,6 @@ window.addEventListener('keydown', e => {
         return;
     }
 
-    // Close sacrifice UI on ESC or Enter to confirm
-    if (game.state === 'sacrifice') {
-        if (typeof handleSacrificeKey === 'function' && handleSacrificeKey(e.key)) {
-            return;
-        }
-    }
-
     // Chest UI input handling
     if (game.state === 'chest') {
         if (typeof handleChestKey === 'function' && handleChestKey(e.key)) {

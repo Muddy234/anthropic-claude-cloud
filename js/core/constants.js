@@ -432,7 +432,6 @@ const GAME_STATES = {
     SKILLS: 'skills',
     CHARACTER: 'character',
     SHIFT: 'shift',
-    SACRIFICE: 'sacrifice',
     LEVELUP: 'levelup'
 };
 

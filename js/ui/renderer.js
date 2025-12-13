@@ -721,7 +721,7 @@ if (game.state === 'menu') {
         if (game.state === 'shop' && typeof ShopUI !== 'undefined') {
             ShopUI.render(ctx);
         }
-    } else if (game.state === 'playing' || game.state === 'merchant' || game.state === 'inventory' || game.state === 'map' || game.state === 'skills' || game.state === 'moveset' || game.state === 'levelup' || game.state === 'character' || game.state === 'shift' || game.state === 'sacrifice' || game.state === 'chest' || game.state === 'extraction') {
+    } else if (game.state === 'playing' || game.state === 'inventory' || game.state === 'map' || game.state === 'skills' || game.state === 'levelup' || game.state === 'character' || game.state === 'shift' || game.state === 'chest' || game.state === 'extraction') {
 
 const effectiveTileSize = TILE_SIZE * ZOOM_LEVEL;
 const viewW = canvas.width - TRACKER_WIDTH;
@@ -939,7 +939,6 @@ const camY = game.camera.y + (shakeOffset.y / (TILE_SIZE * ZOOM_LEVEL));
     if (game.state === 'shift' && typeof drawShiftOverlay === 'function') drawShiftOverlay();
     if (game.state === 'skills') drawSkillsOverlay();
     if (game.state === 'levelup') drawLevelUpScreen();
-    if (game.state === 'sacrifice' && typeof renderSacrificeUI === 'function') renderSacrificeUI(ctx);
     if (game.state === 'chest' && typeof renderChestUI === 'function') renderChestUI(ctx);
     if (game.state === 'extraction' && typeof ExtractionUI !== 'undefined') ExtractionUI.render(ctx);
 
