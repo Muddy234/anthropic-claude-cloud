@@ -5,23 +5,14 @@
 // Track held keys for smooth movement
 const keys = {};
 
-// Context menu state
-const contextMenu = {
-    visible: false,
-    x: 0,
-    y: 0,
-    target: null,  // What was right-clicked
-    targetType: null,  // 'enemy', 'npc', 'item', 'tile'
-    options: []
-};
-
-// Inspect popup state
-const inspectPopup = {
-    visible: false,
-    target: null,
-    targetType: null,
-    tab: 0  // 0=STATS, 1=COMBAT, 2=BEHAVIOR, 3=LORE
-};
+// Context menu and inspect popup state are defined in right-click-init.js
+// We just ensure they exist with defaults if not yet loaded
+if (!window.contextMenu) {
+    window.contextMenu = { visible: false, x: 0, y: 0, target: null, targetType: null, options: [] };
+}
+if (!window.inspectPopup) {
+    window.inspectPopup = { visible: false, target: null, targetType: null, tab: 0 };
+}
 
 // Key down - mark as held
 window.addEventListener('keydown', e => {
@@ -72,16 +63,10 @@ window.addEventListener('keydown', e => {
     }
 
     // PRIORITY 2: Context menu and inspect popup (only if game.state === 'playing')
-    // Close inspect popup on ESC
-    if (e.key === 'Escape' && inspectPopup.visible && game.state === 'playing') {
-        inspectPopup.visible = false;
-        inspectPopup.target = null;
-        inspectPopup.tab = 0;
-        return;
-    }
+    // ESC handling for context menu/inspect popup is in right-click-init.js
 
     // Tab switching for inspect popup
-    if (inspectPopup.visible && inspectPopup.targetType === 'enemy') {
+    if (window.inspectPopup.visible && window.inspectPopup.targetType === 'enemy') {
         // Shift+Tab: Cycle through enemies
         if (e.key === 'Tab' && e.shiftKey) {
             e.preventDefault();
@@ -90,34 +75,27 @@ window.addEventListener('keydown', e => {
                 return tile && tile.visible && enemy.hp > 0;
             });
             if (visibleEnemies.length > 1) {
-                const currentIndex = visibleEnemies.indexOf(inspectPopup.target);
+                const currentIndex = visibleEnemies.indexOf(window.inspectPopup.target);
                 const nextIndex = (currentIndex + 1) % visibleEnemies.length;
-                inspectPopup.target = visibleEnemies[nextIndex];
+                window.inspectPopup.target = visibleEnemies[nextIndex];
             }
             return;
         }
         // Tab: Cycle through tabs
         if (e.key === 'Tab') {
             e.preventDefault();
-            inspectPopup.tab = (inspectPopup.tab + 1) % 4;
+            window.inspectPopup.tab = (window.inspectPopup.tab + 1) % 4;
             return;
         }
         // Arrow keys: Cycle through tabs
         if (e.key === 'ArrowRight') {
-            inspectPopup.tab = (inspectPopup.tab + 1) % 4;
+            window.inspectPopup.tab = (window.inspectPopup.tab + 1) % 4;
             return;
         }
         if (e.key === 'ArrowLeft') {
-            inspectPopup.tab = (inspectPopup.tab + 3) % 4; // +3 is same as -1 mod 4
+            window.inspectPopup.tab = (window.inspectPopup.tab + 3) % 4; // +3 is same as -1 mod 4
             return;
         }
-    }
-
-    // Close context menu on ESC
-    if (e.key === 'Escape' && contextMenu.visible) {
-        contextMenu.visible = false;
-        contextMenu.target = null;
-        return;
     }
 
     // Start new game
@@ -664,12 +642,12 @@ setupCanvasHandlers();
  * Close popups when player is hit
  */
 function onPlayerHit() {
-    if (inspectPopup.visible) {
-        inspectPopup.visible = false;
+    if (window.inspectPopup?.visible) {
+        window.inspectPopup.visible = false;
         addMessage("Inspection interrupted!");
     }
-    if (contextMenu.visible) {
-        contextMenu.visible = false;
+    if (window.contextMenu?.visible) {
+        window.contextMenu.visible = false;
     }
 }
 
@@ -702,12 +680,11 @@ if (typeof SystemManager !== 'undefined') {
 // ============================================================================
 
 window.onPlayerHit = onPlayerHit;
-window.contextMenu = contextMenu;
-window.inspectPopup = inspectPopup;
+// contextMenu and inspectPopup are exported by right-click-init.js
 window.keys = keys;
 window.handleMovementInput = handleMovementInput;
 window.checkTileInteractions = checkTileInteractions;
-window.executeContextAction = executeContextAction;
+// executeContextAction is defined in right-click-init.js
 window.getDirectionFromDelta = getDirectionFromDelta;
 
 console.log('✅ Input handler loaded');
