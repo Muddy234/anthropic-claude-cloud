@@ -594,57 +594,43 @@ function applyMeleeDamage(player, enemy, isSpecial) {
 
 /**
  * Create a visual slash effect
- * Uses sprite-based combat effects from combat-effect-system.js
+ * Uses code-based MeleeSlashEffect system (arc + particles)
  */
 function createSlashEffect(player, direction, arcConfig, isSpecial = false, attackFromLeft = true, comboCount = 1) {
     const slashStyle = arcConfig.slashStyle || 'sweep';
 
-    // Use display position for visual accuracy
-    const originX = player.displayX !== undefined ? player.displayX : player.gridX;
-    const originY = player.displayY !== undefined ? player.displayY : player.gridY;
+    // Use display position for visual accuracy (convert to pixels)
+    const tileSize = typeof TILE_SIZE !== 'undefined' ? TILE_SIZE : 32;
+    const originX = (player.displayX !== undefined ? player.displayX : player.gridX) * tileSize + tileSize / 2;
+    const originY = (player.displayY !== undefined ? player.displayY : player.gridY) * tileSize + tileSize / 2;
 
-    // Map slashStyle to specific weapon type for sprite selection
-    // This allows each weapon to have its own unique visual effect
-    let weaponType = 'default';
-    switch (slashStyle) {
-        case 'jab':       weaponType = 'unarmed'; break;  // Punches
-        case 'alternate': weaponType = 'knife';   break;  // Quick knife slashes
-        case 'sweep':     weaponType = 'sword';   break;  // Sword arcs
-        case 'chop':      weaponType = 'axe';     break;  // Axe chops
-        case 'slam':      weaponType = 'mace';    break;  // Mace/hammer impacts
-        case 'thrust':    weaponType = 'polearm'; break;  // Spear/polearm thrusts
-        default:          weaponType = 'sword';   break;  // Default to sword
+    // Use MeleeSlashEffect system if available (code-based arc + particles)
+    if (typeof MeleeSlashEffect !== 'undefined') {
+        const weapon = player.equipped?.MAIN;
+        MeleeSlashEffect.create(originX, originY, direction, {
+            range: arcConfig.arcRange || 1.25,
+            arcDegrees: arcConfig.arcAngle || 90,
+            slashDuration: isSpecial ? 10 : 8,
+            particlesPerFrame: isSpecial ? 6 : 4,
+            ...MeleeSlashEffect.getWeaponOptions(weapon)
+        });
+        return;
     }
 
-    // Convert direction angle to facing direction string
-    let facing = 'right';
-    if (direction !== undefined) {
-        // direction is in radians, convert to cardinal direction
-        const deg = ((direction * 180 / Math.PI) + 360) % 360;
-        if (deg >= 315 || deg < 45) facing = 'right';
-        else if (deg >= 45 && deg < 135) facing = 'down';
-        else if (deg >= 135 && deg < 225) facing = 'left';
-        else facing = 'up';
-    }
-
-    // Spawn sprite-based effect using combat-effect-system
-    if (typeof spawnMeleeEffect === 'function') {
-        // Position the effect in front of the player based on weapon reach
-        // Values based on weapon range stats from weapons-melee.js/weapons-ranged.js
-        let offsetDist = 1.25;  // Default offset matches most melee weapons
-        switch (weaponType) {
-            case 'unarmed': offsetDist = 1.0;  break;  // Punches - close range
-            case 'knife':   offsetDist = 1.25; break;  // Knife - range: 1.25
-            case 'sword':   offsetDist = 1.25; break;  // Sword - range: 1.25
-            case 'axe':     offsetDist = 1.25; break;  // Axe - range: 1.25
-            case 'mace':    offsetDist = 1.25; break;  // Mace - range: 1.25
-            case 'polearm': offsetDist = 2.0;  break;  // Polearm - range: 2.0
-        }
-
-        const effectX = originX + Math.cos(direction || 0) * offsetDist;
-        const effectY = originY + Math.sin(direction || 0) * offsetDist;
-        spawnMeleeEffect(effectX, effectY, weaponType, facing);
-    }
+    // Fallback: Add to local slashEffects array for legacy rendering
+    mouseAttackState.slashEffects.push({
+        x: player.displayX !== undefined ? player.displayX : player.gridX,
+        y: player.displayY !== undefined ? player.displayY : player.gridY,
+        angle: direction,
+        arcAngle: arcConfig.arcAngle * (Math.PI / 180),
+        range: arcConfig.arcRange,
+        progress: 0,
+        duration: 0.2,
+        slashStyle: slashStyle,
+        isSpecial: isSpecial,
+        fromLeft: attackFromLeft,
+        comboCount: comboCount
+    });
 }
 
 /**
@@ -1547,8 +1533,13 @@ function updateMouseAttackSystem(deltaTime) {
         }
     }
 
-    // Update slash effects
+    // Update legacy slash effects
     updateSlashEffects(deltaTime);
+
+    // Update new code-based MeleeSlashEffect system
+    if (typeof MeleeSlashEffect !== 'undefined') {
+        MeleeSlashEffect.update(deltaTime);
+    }
 }
 
 // ============================================================================

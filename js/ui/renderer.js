@@ -888,8 +888,15 @@ const camY = game.camera.y + (shakeOffset.y / (TILE_SIZE * ZOOM_LEVEL));
         // Projectiles (arrows, bolts, magic)
         if (typeof renderProjectiles === 'function') { renderProjectiles(ctx, camX, camY, effectiveTileSize, TRACKER_WIDTH); }
 
-        // Melee slash effects (mouse-driven combat)
+        // Melee slash effects (mouse-driven combat) - legacy code-based
         if (typeof drawSlashEffects === 'function') { drawSlashEffects(ctx, camX, camY, effectiveTileSize, TRACKER_WIDTH); }
+
+        // New code-based melee slash effects (arc + particles)
+        if (typeof MeleeSlashEffect !== 'undefined') {
+            const cameraPixelX = camX * effectiveTileSize - TRACKER_WIDTH;
+            const cameraPixelY = camY * effectiveTileSize;
+            MeleeSlashEffect.render(ctx, cameraPixelX, cameraPixelY);
+        }
 
         // Combat effects (sprite-based slash, magic, explosions)
         if (typeof renderCombatEffects === 'function') { renderCombatEffects(ctx, camX, camY, effectiveTileSize, TRACKER_WIDTH); }
