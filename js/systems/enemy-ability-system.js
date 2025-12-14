@@ -488,6 +488,7 @@ const EnemyAbilitySystem = {
 
     /**
      * Resolve ability effect (deal damage, apply effects)
+     * Uses centralized applyDamage() and handleDeath() when available
      */
     resolveAbility(enemy, target, ability) {
         // Remove telegraph
@@ -497,28 +498,53 @@ const EnemyAbilitySystem = {
         const inRange = this.isTargetInAbilityArea(enemy, target, ability);
 
         if (inRange && ability.damage > 0) {
-            // Deal damage
-            const damage = this.calculateAbilityDamage(enemy, ability);
+            // Calculate damage using centralized system
+            const damageResult = this.calculateAbilityDamage(enemy, ability, target);
+
+            // Check for miss
+            if (!damageResult.isHit) {
+                if (typeof addMessage === 'function') {
+                    addMessage(`${enemy.name}'s ${ability.name} missed!`);
+                }
+                if (typeof showDamageNumber === 'function') {
+                    showDamageNumber(target, 0, '#888888');
+                }
+                return;
+            }
+
+            const damage = damageResult.damage;
 
             if (target.hp !== undefined) {
-                target.hp -= damage;
+                // Use centralized applyDamage if available
+                if (typeof applyDamage === 'function') {
+                    applyDamage(target, damage, enemy, damageResult.result);
+                } else {
+                    target.hp -= damage;
+                }
 
-                // Show damage number
+                // Show damage number with crit coloring
                 if (typeof showDamageNumber === 'function') {
-                    showDamageNumber(target, damage, this.getAbilityColor(ability));
+                    const color = damageResult.isCrit ? '#ffff00' : this.getAbilityColor(ability);
+                    showDamageNumber(target, damage, color);
                 }
 
                 // Show message
                 if (typeof addMessage === 'function') {
-                    addMessage(`${enemy.name} hits with ${ability.name} for ${damage}!`);
+                    const critText = damageResult.isCrit ? ' CRITICAL!' : '';
+                    addMessage(`${enemy.name} hits with ${ability.name} for ${damage}!${critText}`);
                 }
 
                 // Apply effects
                 this.applyAbilityEffects(enemy, target, ability);
 
-                // Check player death
-                if (target.hp <= 0 && game) {
-                    game.state = 'gameover';
+                // Check death using centralized handleDeath
+                if (target.hp <= 0) {
+                    if (typeof handleDeath === 'function') {
+                        handleDeath(target, enemy);
+                    } else if (game) {
+                        // Fallback for player death
+                        game.state = 'gameover';
+                    }
                 }
             }
         } else if (inRange && ability.damage === 0 && ability.effect) {
@@ -531,10 +557,34 @@ const EnemyAbilitySystem = {
     },
 
     /**
-     * Calculate ability damage with modifiers
+     * Calculate ability damage using centralized DamageCalculator
+     * Falls back to simple formula if DamageCalculator not available
      */
-    calculateAbilityDamage(enemy, ability) {
-        let damage = ability.damage;
+    calculateAbilityDamage(enemy, ability, target) {
+        // Use centralized DamageCalculator if available
+        if (typeof DamageCalculator !== 'undefined' && target) {
+            const result = DamageCalculator.calculateDamage(enemy, target, null);
+
+            // Scale by ability damage ratio (ability.damage is usually base damage)
+            // Use ability damage as a multiplier on the calculated result
+            const abilityMultiplier = ability.damage ? (ability.damage / 10) : 1.0;
+            let damage = Math.floor(result.finalDamage * abilityMultiplier);
+
+            // Apply combo finisher bonus if applicable
+            if (enemy.combat?.comboCount === 3) {
+                damage = Math.floor(damage * 1.5);
+            }
+
+            return {
+                damage: Math.max(1, damage),
+                isCrit: result.isCrit,
+                isHit: result.isHit,
+                result: result
+            };
+        }
+
+        // Fallback: simple damage formula
+        let damage = ability.damage || 10;
 
         // Apply enemy stats if available
         if (enemy.stats) {
@@ -550,14 +600,23 @@ const EnemyAbilitySystem = {
             damage = Math.floor(damage * 1.5);
         }
 
-        return Math.max(1, damage);
+        return {
+            damage: Math.max(1, damage),
+            isCrit: false,
+            isHit: true,
+            result: null
+        };
     },
 
     /**
      * Apply ability effects (stun, slow, bleed, etc.)
+     * Uses centralized applyStatusEffect() from skills-combat-integration when available
      */
     applyAbilityEffects(enemy, target, ability) {
         if (!ability.effect) return;
+
+        // Helper to use centralized status effect system
+        const useStatusEffect = typeof applyStatusEffect === 'function';
 
         switch (ability.effect) {
             case 'knockback':
@@ -569,41 +628,86 @@ const EnemyAbilitySystem = {
                 break;
 
             case 'stun':
-                target.stunned = true;
-                target.stunnedTimer = ability.stunDuration || 1000;
+                if (useStatusEffect) {
+                    applyStatusEffect(target, {
+                        type: 'stun',
+                        duration: ability.stunDuration || 1000,
+                        source: enemy
+                    });
+                } else {
+                    target.stunned = true;
+                    target.stunnedTimer = ability.stunDuration || 1000;
+                }
                 break;
 
             case 'slow':
-                target.slowed = true;
-                target.slowedTimer = ability.slowDuration || 2000;
-                target.slowPercent = ability.slowPercent || 0.5;
+                if (useStatusEffect) {
+                    applyStatusEffect(target, {
+                        type: 'slow',
+                        duration: ability.slowDuration || 2000,
+                        slowPercent: ability.slowPercent || 0.5,
+                        source: enemy
+                    });
+                } else {
+                    target.slowed = true;
+                    target.slowedTimer = ability.slowDuration || 2000;
+                    target.slowPercent = ability.slowPercent || 0.5;
+                }
                 break;
 
             case 'bleed':
-                if (!target.statusEffects) target.statusEffects = [];
-                target.statusEffects.push({
-                    type: 'bleed',
-                    damage: ability.bleedDamage || 3,
-                    duration: ability.bleedDuration || 3000,
-                    tickInterval: 1000,
-                    source: enemy
-                });
+                if (useStatusEffect) {
+                    applyStatusEffect(target, {
+                        type: 'bleed',
+                        damage: ability.bleedDamage || 3,
+                        ticks: Math.ceil((ability.bleedDuration || 3000) / 1000),
+                        interval: 1000,
+                        source: enemy
+                    });
+                } else {
+                    if (!target.statusEffects) target.statusEffects = [];
+                    target.statusEffects.push({
+                        type: 'bleed',
+                        damage: ability.bleedDamage || 3,
+                        duration: ability.bleedDuration || 3000,
+                        tickInterval: 1000,
+                        source: enemy
+                    });
+                }
                 break;
 
             case 'poison':
-                if (!target.statusEffects) target.statusEffects = [];
-                target.statusEffects.push({
-                    type: 'poison',
-                    damage: ability.poisonDamage || 2,
-                    duration: ability.poisonDuration || 3000,
-                    tickInterval: 1000,
-                    source: enemy
-                });
+                if (useStatusEffect) {
+                    applyStatusEffect(target, {
+                        type: 'poison',
+                        damage: ability.poisonDamage || 2,
+                        ticks: Math.ceil((ability.poisonDuration || 3000) / 1000),
+                        interval: 1000,
+                        source: enemy
+                    });
+                } else {
+                    if (!target.statusEffects) target.statusEffects = [];
+                    target.statusEffects.push({
+                        type: 'poison',
+                        damage: ability.poisonDamage || 2,
+                        duration: ability.poisonDuration || 3000,
+                        tickInterval: 1000,
+                        source: enemy
+                    });
+                }
                 break;
 
             case 'root':
-                target.rooted = true;
-                target.rootedTimer = ability.rootDuration || 2000;
+                if (useStatusEffect) {
+                    applyStatusEffect(target, {
+                        type: 'root',
+                        duration: ability.rootDuration || 2000,
+                        source: enemy
+                    });
+                } else {
+                    target.rooted = true;
+                    target.rootedTimer = ability.rootDuration || 2000;
+                }
                 break;
 
             case 'heal_self':
@@ -907,7 +1011,12 @@ const EnemyAbilitySystem = {
                     if (dist <= passive.range) {
                         enemy.auraTimer = (enemy.auraTimer || 0) + dt;
                         if (enemy.auraTimer >= passive.interval) {
-                            game.player.hp -= passive.damage;
+                            // Use centralized applyDamage if available
+                            if (typeof applyDamage === 'function') {
+                                applyDamage(game.player, passive.damage, enemy, null);
+                            } else {
+                                game.player.hp -= passive.damage;
+                            }
                             enemy.auraTimer = 0;
                             if (typeof showDamageNumber === 'function') {
                                 showDamageNumber(game.player, passive.damage, '#ff6600');
@@ -921,9 +1030,19 @@ const EnemyAbilitySystem = {
                 if (game.player) {
                     const dist = this.getDistance(enemy, game.player);
                     if (dist <= passive.range) {
-                        game.player.slowed = true;
-                        game.player.slowPercent = passive.slowPercent;
-                        game.player.slowedTimer = 500;  // Refresh while in range
+                        // Use centralized applyStatusEffect if available
+                        if (typeof applyStatusEffect === 'function') {
+                            applyStatusEffect(game.player, {
+                                type: 'slow',
+                                duration: 500,
+                                slowPercent: passive.slowPercent,
+                                source: enemy
+                            });
+                        } else {
+                            game.player.slowed = true;
+                            game.player.slowPercent = passive.slowPercent;
+                            game.player.slowedTimer = 500;
+                        }
                     }
                 }
                 break;
@@ -969,7 +1088,15 @@ const EnemyAbilitySystem = {
                 if (game.player) {
                     const dist = this.getDistance(enemy, game.player);
                     if (dist <= mechanic.radius) {
-                        game.player.hp -= mechanic.damage;
+                        // Use centralized applyDamage if available
+                        if (typeof applyDamage === 'function') {
+                            applyDamage(game.player, mechanic.damage, enemy, null);
+                        } else {
+                            game.player.hp -= mechanic.damage;
+                        }
+                        if (typeof showDamageNumber === 'function') {
+                            showDamageNumber(game.player, mechanic.damage, '#ff6600');
+                        }
                         if (typeof addMessage === 'function') {
                             addMessage(`${enemy.name} explodes for ${mechanic.damage} damage!`);
                         }
@@ -1035,8 +1162,13 @@ const EnemyAbilitySystem = {
 
     /**
      * Get distance between two entities
+     * Uses CombatSystem.getDistance if available (Chebyshev), otherwise Euclidean fallback
      */
     getDistance(a, b) {
+        if (typeof CombatSystem !== 'undefined' && CombatSystem.getDistance) {
+            return CombatSystem.getDistance(a, b);
+        }
+        // Fallback to Euclidean if CombatSystem not loaded
         const dx = (a.gridX || a.x) - (b.gridX || b.x);
         const dy = (a.gridY || a.y) - (b.gridY || b.y);
         return Math.sqrt(dx * dx + dy * dy);
