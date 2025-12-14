@@ -295,6 +295,32 @@ function drawEnemyOverlays(ctx, enemy, ex, ey, cx, cy, tileSize) {
             ctx.font = 'bold 20px monospace';
             ctx.textAlign = 'center';
             ctx.fillText('?', cx, ey + 10);
+        } else if (state === 'panicked') {
+            // Panicked indicator - flashing exclamation with spiral effect
+            ctx.fillStyle = Math.floor(Date.now() / 150) % 2 ? '#FF6B6B' : '#FFB3B3';
+            ctx.font = 'bold 18px monospace';
+            ctx.textAlign = 'center';
+            ctx.fillText('!!', cx, ey + 10);
+            // Spiral lines showing panic
+            ctx.strokeStyle = 'rgba(255, 107, 107, 0.4)';
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            const panicOffset = (Date.now() % 1000) / 1000 * Math.PI * 2;
+            ctx.arc(cx, cy, tileSize * 0.4, panicOffset, panicOffset + Math.PI);
+            ctx.stroke();
+        } else if (state === 'enraged') {
+            // Enraged indicator - pulsing angry face/symbol
+            const pulse = 1 + 0.2 * Math.sin(Date.now() / 100);
+            ctx.fillStyle = '#FF4444';
+            ctx.font = `bold ${Math.floor(22 * pulse)}px monospace`;
+            ctx.textAlign = 'center';
+            ctx.fillText('💢', cx, ey + 12);
+            // Red glow around enemy
+            ctx.strokeStyle = `rgba(255, 0, 0, ${0.3 + 0.2 * Math.sin(Date.now() / 100)})`;
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.arc(cx, cy, tileSize * 0.6, 0, Math.PI * 2);
+            ctx.stroke();
         }
         if (state === 'shouting') {
             // Shouting indicator - concentric circles

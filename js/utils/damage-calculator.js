@@ -79,7 +79,17 @@ const DamageCalculator = {
         // Step 7: Variance
         result.breakdown.variance = 1 - this.config.baseVariance + (Math.random() * this.config.baseVariance * 2);
 
-        // Step 8: Calculate final damage
+        // Step 8: Social bonuses (for enemies in packs/swarms)
+        result.breakdown.socialMod = 1.0;
+        if (typeof MonsterSocialSystem !== 'undefined' && (attacker.packId || attacker.swarmId)) {
+            const bonuses = MonsterSocialSystem.getAllBonuses(attacker);
+            result.breakdown.socialMod = 1.0 + (bonuses.damage || 0);
+            if (bonuses.damage > 0) {
+                result.messages.push(`Pack bonus +${Math.round(bonuses.damage * 100)}%`);
+            }
+        }
+
+        // Step 9: Calculate final damage
         let damage = result.baseDamage;
 
         // Apply weapon vs armor
@@ -90,6 +100,9 @@ const DamageCalculator = {
 
         // Apply defense
         damage *= result.breakdown.defenseMod;
+
+        // Apply social bonus
+        damage *= result.breakdown.socialMod;
 
         // Apply crit
         damage *= result.breakdown.critMod;
@@ -302,18 +315,24 @@ const DamageCalculator = {
 
     rollHit(attacker, defender) {
         let hitChance = 0.90; // 90% base
-        
+
         // Attacker accuracy from AGI
         const attackerAgi = attacker.stats?.AGI || attacker.stats?.agi || 10;
         hitChance += attackerAgi * 0.002; // +0.2% per AGI
-        
+
         // Defender evasion from AGI
         const defenderAgi = defender.stats?.AGI || defender.stats?.agi || 10;
         hitChance -= defenderAgi * 0.002; // -0.2% per AGI
-        
+
+        // Swarm evasion bonus (for enemies in swarms)
+        if (typeof MonsterSocialSystem !== 'undefined' && defender.swarmId) {
+            const bonuses = MonsterSocialSystem.getAllBonuses(defender);
+            hitChance -= bonuses.evasion || 0;
+        }
+
         // Clamp
         hitChance = Math.max(0.50, Math.min(0.98, hitChance));
-        
+
         return Math.random() < hitChance;
     },
 
@@ -354,6 +373,9 @@ const DamageCalculator = {
         console.log(`  Weapon/Armor: x${result.breakdown.weaponArmorMod.toFixed(2)}`);
         console.log(`  Element: x${result.breakdown.elementMod.toFixed(2)}`);
         console.log(`  Defense: x${result.breakdown.defenseMod.toFixed(2)}`);
+        if (result.breakdown.socialMod !== 1.0) {
+            console.log(`  Social: x${result.breakdown.socialMod.toFixed(2)}`);
+        }
         console.log(`  Crit: x${result.breakdown.critMod.toFixed(2)}`);
         console.log(`  Variance: x${result.breakdown.variance.toFixed(2)}`);
         console.log(`  FINAL: ${result.finalDamage} ${result.messages.join(' ')}`);

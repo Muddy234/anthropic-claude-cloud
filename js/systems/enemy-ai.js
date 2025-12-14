@@ -6,7 +6,8 @@ const AI_STATES = {
     IDLE: 'idle', WANDERING: 'wandering', ALERT: 'alert', CHASING: 'chasing',
     COMBAT: 'combat', SEARCHING: 'searching', RETURNING: 'returning',
     SHOUTING: 'shouting', FOLLOWING: 'following', COMMANDED: 'commanded',
-    CIRCLING: 'circling', DEFENSIVE: 'defensive', SKIRMISHING: 'skirmishing'
+    CIRCLING: 'circling', DEFENSIVE: 'defensive', SKIRMISHING: 'skirmishing',
+    PANICKED: 'panicked', ENRAGED: 'enraged'
 };
 
 const BEHAVIOR_TYPES = {
@@ -62,6 +63,9 @@ class EnemyAI {
 
         // Ally-anchored retreat
         this.retreatAlly = null;
+
+        // Social system position override
+        this.targetPosition = null;
     }
 
     _getTerritorySize() {
@@ -224,6 +228,18 @@ class EnemyAI {
     }
 
     _swarmLogic(game) {
+        // Use MonsterSocialSystem for swarm coordination
+        if (this.enemy.swarmId && typeof MonsterSocialSystem !== 'undefined') {
+            // If we have a target, get our swarm attack position
+            if (this.target) {
+                const pos = MonsterSocialSystem.getSwarmAttackPosition(this.enemy, this.target);
+                if (pos) {
+                    this.targetPosition = pos;
+                }
+            }
+        }
+
+        // Legacy pack logic fallback
         const pack = this.enemy.pack;
         if (!pack) return;
         const leader = pack.members[0];
@@ -293,6 +309,8 @@ class EnemyAI {
                     this._changeState(S.CHASING);
                 } else this._changeState(S.WANDERING);
                 break;
+            case S.PANICKED: this._panicked(dt, game); break;
+            case S.ENRAGED: this._enraged(dt, game); break;
         }
     }
 
@@ -320,6 +338,30 @@ class EnemyAI {
 
     _chase(dt, game) {
         if (!this.target) return;
+
+        // HIGH PRIORITY: Social/Swarm position override
+        // If this enemy has a swarm-assigned position, go there first
+        if (this.enemy.swarmId && this.targetPosition) {
+            const distToPos = this._distXY(this.enemy.gridX, this.enemy.gridY,
+                                           this.targetPosition.x, this.targetPosition.y);
+            if (distToPos > 0.5) {
+                // Move to assigned encirclement position
+                if (!this.enemy.isMoving) {
+                    this._moveToward(this.targetPosition.x, this.targetPosition.y, game, 1.0);
+                }
+                this._face(this.target.gridX, this.target.gridY);
+                return;
+            }
+            // Arrived at position - face player and attack if in range
+            this._face(this.target.gridX, this.target.gridY);
+            const atkRange = this.enemy.combat?.attackRange || 1;
+            if (this._dist(this.target.gridX, this.target.gridY) <= atkRange && this.attackCooldown <= 0) {
+                this._attack(game);
+            }
+            return;
+        }
+
+        // LOW PRIORITY: Default chase behavior
         const atkRange = this.enemy.combat?.attackRange || 1;
         if (this._dist(this.target.gridX, this.target.gridY) <= atkRange) {
             this._face(this.target.gridX, this.target.gridY);
@@ -479,6 +521,60 @@ class EnemyAI {
         const d = this._dist(this.followTarget.gridX, this.followTarget.gridY);
         if (d > 3) this._moveToward(this.followTarget.gridX, this.followTarget.gridY, game, 0.8);
         else if (d < 1.5) this._moveAwayFrom(this.followTarget.gridX, this.followTarget.gridY, game, 0.3);
+    }
+
+    _panicked(dt, game) {
+        // Panicked enemies flee randomly, recover after 3 seconds
+        if (this.stateTimer > 3000) {
+            this._changeState(AI_STATES.WANDERING);
+            return;
+        }
+
+        // Run away from player if visible
+        const player = game.player;
+        if (player) {
+            const dist = this._dist(player.gridX, player.gridY);
+            if (dist < 8) {
+                this._moveAwayFrom(player.gridX, player.gridY, game, 1.2);
+                return;
+            }
+        }
+
+        // Otherwise flee in random direction
+        if (!this.stateData.panicDir || this.stateTimer % 500 < 50) {
+            this.stateData.panicDir = {
+                x: this.enemy.gridX + (Math.random() - 0.5) * 6,
+                y: this.enemy.gridY + (Math.random() - 0.5) * 6
+            };
+        }
+        this._moveToward(this.stateData.panicDir.x, this.stateData.panicDir.y, game, 1.2);
+    }
+
+    _enraged(dt, game) {
+        // Enraged enemies chase player aggressively, attack with bonus damage
+        const player = game.player;
+        if (!player) {
+            this._changeState(AI_STATES.WANDERING);
+            return;
+        }
+
+        // Enrage lasts 5 seconds then reverts to normal chase
+        if (this.stateTimer > 5000) {
+            this.target = player;
+            this._changeState(AI_STATES.CHASING);
+            return;
+        }
+
+        this.target = player;
+        const dist = this._dist(player.gridX, player.gridY);
+        const atkRange = this.enemy.combat?.attackRange || 1;
+
+        if (dist <= atkRange) {
+            this._face(player.gridX, player.gridY);
+            if (this.attackCooldown <= 0) this._attack(game);
+        } else {
+            this._moveToward(player.gridX, player.gridY, game, 1.3); // Faster pursuit
+        }
     }
 
     // MOVEMENT
