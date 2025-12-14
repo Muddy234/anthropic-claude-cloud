@@ -7,7 +7,9 @@ const AI_STATES = {
     COMBAT: 'combat', SEARCHING: 'searching', RETURNING: 'returning',
     SHOUTING: 'shouting', FOLLOWING: 'following', COMMANDED: 'commanded',
     CIRCLING: 'circling', DEFENSIVE: 'defensive', SKIRMISHING: 'skirmishing',
-    PANICKED: 'panicked', ENRAGED: 'enraged'
+    PANICKED: 'panicked', ENRAGED: 'enraged',
+    REACTING: 'reacting',      // Delay before aggro (reaction time)
+    SACRIFICING: 'sacrificing' // Elite consuming a minion
 };
 
 const BEHAVIOR_TYPES = {
@@ -70,6 +72,21 @@ class EnemyAI {
 
         // Social system position override
         this.targetPosition = null;
+
+        // Tier-based behavior (from MONSTER_TIERS)
+        const tierConfig = enemy.tierConfig || MONSTER_TIERS?.[enemy.tier] || null;
+        this.reactionDelay = tierConfig?.senses?.reactionDelay || enemy.perception?.reactionDelay || 0;
+        this.searchBehavior = enemy.behavior?.searchBehavior || tierConfig?.behavior?.searchBehavior || 'none';
+        this.retreatHierarchy = tierConfig?.social?.retreatHierarchy || [];
+        this.packCourage = tierConfig?.social?.packCourage || false;
+        this.packCourageThreshold = tierConfig?.social?.packCourageThreshold || 4;
+        this.isSacrificial = tierConfig?.social?.isSacrificial || false;
+        this.canSacrificeMinions = tierConfig?.social?.canSacrificeMinions || false;
+        this.sacrificeThreshold = tierConfig?.social?.sacrificeThreshold || 0.3;
+        this.sacrificeHeal = tierConfig?.social?.sacrificeHeal || 0.25;
+        this.sacrificeDamageBuff = tierConfig?.social?.sacrificeDamageBuff || 0.2;
+        this.sacrificeTarget = null;
+        this.hasSacrificeBuff = false;
     }
 
     _getTerritorySize() {
@@ -129,9 +146,30 @@ class EnemyAI {
     _stateTransitions(canSee, dist, isLowHP, canFlee, hpPct, aggroRange, deaggroRange, atkRange, isRanged) {
         const S = AI_STATES;
         const state = this.currentState;
+        const fleeThreshold = this.enemy.behavior?.fleeThreshold || 0.25;
 
-        // Common low HP check for combat states
-        if (isLowHP && canFlee && (state === S.CHASING || state === S.COMBAT || state === S.CIRCLING || state === S.SKIRMISHING)) {
+        // PACK COURAGE: Tier 3s with 4+ allies nearby become fearless
+        let effectiveFleeThreshold = fleeThreshold;
+        if (this.packCourage && canFlee) {
+            const nearbyAllies = this._countNearbyAllies(4);
+            if (nearbyAllies >= this.packCourageThreshold) {
+                effectiveFleeThreshold = 0; // Mob mentality - no fear!
+            }
+        }
+        const adjustedLowHP = hpPct <= effectiveFleeThreshold;
+
+        // SACRIFICE CHECK: Elites at low HP can sacrifice minions
+        if (this.canSacrificeMinions && hpPct <= this.sacrificeThreshold && !this.hasSacrificeBuff) {
+            const victim = this._findSacrificialVictim();
+            if (victim) {
+                this.sacrificeTarget = victim;
+                this._changeState(S.SACRIFICING);
+                return;
+            }
+        }
+
+        // Common low HP check for combat states (uses adjusted threshold for pack courage)
+        if (adjustedLowHP && canFlee && (state === S.CHASING || state === S.COMBAT || state === S.CIRCLING || state === S.SKIRMISHING)) {
             this._changeState(S.DEFENSIVE);
             return;
         }
@@ -140,9 +178,26 @@ class EnemyAI {
             case S.IDLE:
             case S.WANDERING:
                 if (canSee && dist <= aggroRange) {
-                    this._changeState(this._shouldShout() ? S.SHOUTING : S.CHASING);
+                    // REACTION DELAY: Dumb enemies hesitate before aggro
+                    if (this.reactionDelay > 0) {
+                        this._changeState(S.REACTING);
+                    } else {
+                        this._changeState(this._shouldShout() ? S.SHOUTING : S.CHASING);
+                    }
                 } else if (this.followTarget) {
                     this._changeState(S.FOLLOWING);
+                }
+                break;
+
+            case S.REACTING:
+                // Wait for reaction delay, then engage
+                if (this.stateTimer >= this.reactionDelay) {
+                    if (canSee) {
+                        this._changeState(this._shouldShout() ? S.SHOUTING : S.CHASING);
+                    } else {
+                        // Lost sight during reaction - back to wandering
+                        this._changeState(S.WANDERING);
+                    }
                 }
                 break;
 
@@ -297,6 +352,8 @@ class EnemyAI {
         switch (this.currentState) {
             case S.IDLE: if (this.stateTimer > 1500) this._changeState(S.WANDERING); break;
             case S.WANDERING: this._wander(dt, game); break;
+            case S.REACTING: this._react(dt, game); break;
+            case S.SACRIFICING: this._sacrifice(dt, game); break;
             case S.ALERT: this._alert(dt, game); break;
             case S.CHASING: this._chase(dt, game); break;
             case S.COMBAT: this._combat(dt, game); break;
@@ -486,23 +543,74 @@ class EnemyAI {
     }
 
     _findRetreatAlly(game) {
+        // CHAIN OF COMMAND RETREATS: Respect tier hierarchy
+        // Tier 3 → retreats to Tier 2, Tier 1, or Elite
+        // Tier 2 → retreats to Elite only
+        // Tier 1/Elite → never retreats (retreatHierarchy is empty)
+
+        if (this.retreatHierarchy.length === 0) {
+            return null; // This tier doesn't retreat to allies
+        }
+
         let bestAlly = null, bestScore = -Infinity;
         for (const other of game.enemies) {
             if (other === this.enemy || other.hp <= 0) continue;
+
+            // Check if this ally's tier is in our retreat hierarchy
+            const allyTier = other.tier || 'TIER_2';
+            if (!this.retreatHierarchy.includes(allyTier)) continue;
+
             const dist = this._dist(other.gridX, other.gridY);
             if (dist > 6) continue;
+
             const allyHpPct = other.hp / other.maxHp;
             if (allyHpPct < 0.5) continue;
-            const score = allyHpPct * 10 - dist;
+
+            // Prefer higher tier allies (Elite > Tier 1 > Tier 2)
+            const tierOrder = { 'TIER_3': 0, 'TIER_2': 1, 'TIER_1': 2, 'ELITE': 3, 'BOSS': 4 };
+            const tierBonus = (tierOrder[allyTier] || 0) * 5;
+
+            const score = allyHpPct * 10 - dist + tierBonus;
             if (score > bestScore) { bestScore = score; bestAlly = other; }
         }
         return bestAlly;
     }
 
     _search(dt, game) {
-        if (!this.lastKnownTargetPos) return;
+        // TIER-SPECIFIC SEARCH PATTERNS:
+        // 'none' (Tier 3): "Must have been the wind" - immediately return to IDLE
+        // 'lastKnown' (Tier 2): Check last known position, then give up
+        // 'tactical' (Tier 1): Throw projectile at last known spot before checking
+        // 'aggressive' (Elite): Command nearby Tier 3s to check the spot
+
+        if (this.searchBehavior === 'none') {
+            // Tier 3: Immediately give up
+            this._changeState(AI_STATES.WANDERING);
+            return;
+        }
+
+        if (!this.lastKnownTargetPos) {
+            this._changeState(AI_STATES.WANDERING);
+            return;
+        }
+
+        // 'aggressive' (Elite): Command minions to search
+        if (this.searchBehavior === 'aggressive' && !this.stateData.commandedSearch) {
+            this.stateData.commandedSearch = true;
+            this._commandMinionSearch(game);
+        }
+
+        // 'tactical' (Tier 1): Throw projectile at last known spot (once)
+        if (this.searchBehavior === 'tactical' && !this.stateData.threwProjectile) {
+            this.stateData.threwProjectile = true;
+            // Visual feedback - checking the brush
+            if (typeof showStatusText === 'function') {
+                showStatusText(this.enemy, 'Checking...', '#FFAA00');
+            }
+        }
+
         if (this._dist(this.lastKnownTargetPos.x, this.lastKnownTargetPos.y) < 1) {
-            // Search sweep - rotate facing
+            // Arrived at last known position - sweep search
             const dirs = ['up', 'right', 'down', 'left'];
             const i = dirs.indexOf(this.enemy.facing);
             if (Math.floor(this.stateTimer / 1500) !== Math.floor((this.stateTimer - dt) / 1500)) {
@@ -510,6 +618,26 @@ class EnemyAI {
             }
         } else {
             this._moveToward(this.lastKnownTargetPos.x, this.lastKnownTargetPos.y, game);
+        }
+    }
+
+    // HELPER: Elite commands nearby Tier 3s to search
+    _commandMinionSearch(game) {
+        for (const other of game.enemies) {
+            if (other === this.enemy || other.hp <= 0) continue;
+            if (this._dist(other.gridX, other.gridY) > 8) continue;
+
+            // Only command Tier 3s (sacrificial = Tier 3)
+            const tierConfig = other.tierConfig || MONSTER_TIERS?.[other.tier];
+            const isTier3 = tierConfig?.social?.isSacrificial || false;
+
+            if (isTier3 && other.ai) {
+                other.ai.lastKnownTargetPos = { ...this.lastKnownTargetPos };
+                other.ai._changeState(AI_STATES.SEARCHING);
+                if (typeof showStatusText === 'function') {
+                    showStatusText(other, 'Yes sir!', '#FFFF00');
+                }
+            }
         }
     }
 
@@ -584,6 +712,95 @@ class EnemyAI {
         } else {
             this._moveToward(player.gridX, player.gridY, game, 1.3); // Faster pursuit
         }
+    }
+
+    _react(dt, game) {
+        // REACTION DELAY: Enemy spotted player but is slow to react
+        // Stand still, look surprised (the "Huh?" moment)
+        const player = game.player;
+        if (player) {
+            this._face(player.gridX, player.gridY);
+        }
+        // State timer handles the transition in _stateTransitions
+    }
+
+    _sacrifice(dt, game) {
+        // SACRIFICE MECHANIC: Elite consuming a Tier 3 minion
+        if (!this.sacrificeTarget || this.sacrificeTarget.hp <= 0) {
+            this.sacrificeTarget = null;
+            this._changeState(AI_STATES.CHASING);
+            return;
+        }
+
+        const victim = this.sacrificeTarget;
+        const dist = this._dist(victim.gridX, victim.gridY);
+
+        // Move toward victim if not close enough
+        if (dist > 1.5) {
+            this._moveToward(victim.gridX, victim.gridY, game, 1.2);
+            return;
+        }
+
+        // Close enough - consume the minion!
+        this._face(victim.gridX, victim.gridY);
+
+        // Kill the victim
+        victim.hp = 0;
+        if (typeof handleDeath === 'function') {
+            handleDeath(victim, this.enemy);
+        }
+
+        // Show visual feedback
+        if (typeof showStatusText === 'function') {
+            showStatusText(victim, 'CONSUMED!', '#8B0000');
+            showStatusText(this.enemy, 'HEALED!', '#00FF00');
+        }
+
+        // Heal the Elite
+        const healAmount = Math.floor(this.enemy.maxHp * this.sacrificeHeal);
+        this.enemy.hp = Math.min(this.enemy.maxHp, this.enemy.hp + healAmount);
+
+        // Apply damage buff
+        this.hasSacrificeBuff = true;
+        this.enemy.sacrificeDamageMult = 1.0 + this.sacrificeDamageBuff;
+
+        // Clear and return to combat
+        this.sacrificeTarget = null;
+        this._changeState(AI_STATES.CHASING);
+    }
+
+    // HELPER: Count nearby allies for pack courage
+    _countNearbyAllies(range) {
+        if (!AIManager.game?.enemies) return 0;
+        let count = 0;
+        for (const other of AIManager.game.enemies) {
+            if (other === this.enemy || other.hp <= 0) continue;
+            if (this._dist(other.gridX, other.gridY) <= range) count++;
+        }
+        return count;
+    }
+
+    // HELPER: Find a sacrificial victim (nearest Tier 3)
+    _findSacrificialVictim() {
+        if (!AIManager.game?.enemies) return null;
+        let best = null, bestDist = Infinity;
+
+        for (const other of AIManager.game.enemies) {
+            if (other === this.enemy || other.hp <= 0) continue;
+
+            // Check if this enemy is sacrificial (Tier 3)
+            const tierConfig = other.tierConfig || MONSTER_TIERS?.[other.tier];
+            const isSacrificial = tierConfig?.social?.isSacrificial || false;
+
+            if (!isSacrificial) continue;
+
+            const dist = this._dist(other.gridX, other.gridY);
+            if (dist < bestDist && dist <= 3) {
+                bestDist = dist;
+                best = other;
+            }
+        }
+        return best;
     }
 
     // MOVEMENT

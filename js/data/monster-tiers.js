@@ -11,14 +11,16 @@ const MONSTER_TIERS = {
         name: 'Tier 3',
         indicator: 'III',
         color: '#888888',
-        
+        description: 'Cowardly conscripts who find courage in numbers',
+
         senses: {
-            visionRange: 3,      // Fog of war: Tier 3 has limited vision
+            visionRange: 3,
             visionConeAngle: 90,
             hearingRange: 6,
-            canSeeInDark: false
+            canSeeInDark: false,
+            reactionDelay: 600  // Slow reaction - player can step back or strike first
         },
-        
+
         communication: {
             shoutRange: 5,
             shoutDelay: 1.5,
@@ -26,14 +28,14 @@ const MONSTER_TIERS = {
             shoutInterruptable: true,
             respondsToAllies: true
         },
-        
+
         behavior: {
             fleeThreshold: 0.3,
             fleeSpeed: 1.2,
             fightsToDeath: false,
             hasMemory: false,
             memoryDuration: 0,
-            searchBehavior: 'none',
+            searchBehavior: 'none',  // "Must have been the wind" - returns to IDLE immediately
             aggroRange: 4,
             deaggroRange: 10,
             attackCooldown: 2.5,
@@ -41,7 +43,15 @@ const MONSTER_TIERS = {
             preferredRange: 1,
             checkHidingSpots: false
         },
-        
+
+        social: {
+            isSacrificial: true,      // Can be consumed by Elites
+            packCourage: true,        // Mob mentality - braver in groups of 4+
+            packCourageThreshold: 4,  // Need 4+ to activate courage
+            retreatHierarchy: ['TIER_2', 'TIER_1', 'ELITE'],  // Retreats to any higher tier
+            canCommand: false
+        },
+
         wandering: {
             defaultPattern: 'random',
             pauseChance: 0.3,
@@ -49,20 +59,22 @@ const MONSTER_TIERS = {
             turnChance: 0.4
         }
     },
-    
+
     TIER_2: {
         tierId: 'TIER_2',
         name: 'Tier 2',
         indicator: 'II',
         color: '#CCAA44',
-        
+        description: 'Disciplined soldiers who follow orders',
+
         senses: {
-            visionRange: 3,      // Fog of war: Tier 2 has limited vision
+            visionRange: 3,
             visionConeAngle: 75,
             hearingRange: 8,
-            canSeeInDark: false
+            canSeeInDark: false,
+            reactionDelay: 300  // Moderate reaction
         },
-        
+
         communication: {
             shoutRange: 7,
             shoutDelay: 1.2,
@@ -70,14 +82,14 @@ const MONSTER_TIERS = {
             shoutInterruptable: true,
             respondsToAllies: true
         },
-        
+
         behavior: {
             fleeThreshold: 0.2,
             fleeSpeed: 1.1,
             fightsToDeath: false,
             hasMemory: false,
             memoryDuration: 0,
-            searchBehavior: 'none',
+            searchBehavior: 'lastKnown',  // Checks last known position
             aggroRange: 5,
             deaggroRange: 12,
             attackCooldown: 2.0,
@@ -85,7 +97,14 @@ const MONSTER_TIERS = {
             preferredRange: 1,
             checkHidingSpots: false
         },
-        
+
+        social: {
+            isSacrificial: false,
+            packCourage: false,
+            retreatHierarchy: ['ELITE'],  // Only retreats to Elites
+            canCommand: false
+        },
+
         wandering: {
             defaultPattern: 'random',
             pauseChance: 0.25,
@@ -93,20 +112,22 @@ const MONSTER_TIERS = {
             turnChance: 0.35
         }
     },
-    
+
     TIER_1: {
         tierId: 'TIER_1',
         name: 'Tier 1',
         indicator: 'I',
         color: '#CC4444',
-        
+        description: 'Veterans who use tactics and check corners',
+
         senses: {
-            visionRange: 4,      // Fog of war: Tier 1 has better vision
+            visionRange: 4,
             visionConeAngle: 60,
             hearingRange: 10,
-            canSeeInDark: false
+            canSeeInDark: false,
+            reactionDelay: 100  // Near-instant reaction
         },
-        
+
         communication: {
             shoutRange: 10,
             shoutDelay: 0.8,
@@ -114,22 +135,30 @@ const MONSTER_TIERS = {
             shoutInterruptable: true,
             respondsToAllies: true
         },
-        
+
         behavior: {
             fleeThreshold: 0,
             fleeSpeed: 1.0,
             fightsToDeath: true,
             hasMemory: true,
             memoryDuration: 10,
-            searchBehavior: 'lastKnown',
+            searchBehavior: 'tactical',  // Throws projectile at last known spot, then checks
             aggroRange: 6,
             deaggroRange: 15,
             attackCooldown: 1.8,
             kitesBehavior: false,
             preferredRange: 1,
-            checkHidingSpots: false
+            checkHidingSpots: true
         },
-        
+
+        social: {
+            isSacrificial: false,
+            packCourage: false,
+            retreatHierarchy: [],  // Never retreats - fights to death
+            canCommand: true,      // Can command Tier 3s
+            commandRange: 8
+        },
+
         wandering: {
             defaultPattern: 'patrol',
             pauseChance: 0.2,
@@ -137,20 +166,22 @@ const MONSTER_TIERS = {
             turnChance: 0.25
         }
     },
-    
+
     ELITE: {
         tierId: 'ELITE',
         name: 'Elite',
         indicator: '★',
         color: '#FFD700',
-        
+        description: 'Cruel commanders who spend the lives of underlings to survive',
+
         senses: {
-            visionRange: 5,      // Fog of war: Elites have excellent vision
+            visionRange: 5,
             visionConeAngle: 45,
             hearingRange: 12,
-            canSeeInDark: true
+            canSeeInDark: true,
+            reactionDelay: 50  // Instant reaction
         },
-        
+
         communication: {
             shoutRange: 15,
             shoutDelay: 0.5,
@@ -158,14 +189,14 @@ const MONSTER_TIERS = {
             shoutInterruptable: false,
             respondsToAllies: true
         },
-        
+
         behavior: {
             fleeThreshold: 0,
             fleeSpeed: 1.0,
             fightsToDeath: true,
             hasMemory: true,
             memoryDuration: 20,
-            searchBehavior: 'aggressive',
+            searchBehavior: 'aggressive',  // Commands nearby Tier 3s to check spots
             checkHidingSpots: true,
             aggroRange: 8,
             deaggroRange: 20,
@@ -173,7 +204,19 @@ const MONSTER_TIERS = {
             kitesBehavior: false,
             preferredRange: 2
         },
-        
+
+        social: {
+            isSacrificial: false,
+            packCourage: false,
+            retreatHierarchy: [],       // Never retreats - holds the line
+            canCommand: true,
+            commandRange: 12,
+            canSacrificeMinions: true,  // Can consume Tier 3s to heal
+            sacrificeThreshold: 0.3,    // Triggers at 30% HP
+            sacrificeHeal: 0.25,        // Heals 25% of max HP
+            sacrificeDamageBuff: 0.2    // +20% damage after sacrifice
+        },
+
         wandering: {
             defaultPattern: 'patrol',
             pauseChance: 0.15,
@@ -187,14 +230,16 @@ const MONSTER_TIERS = {
         name: 'Boss',
         indicator: '☆',
         color: '#FF4444',
-        
+        description: 'Ancient horrors that command absolute fear',
+
         senses: {
             visionRange: 10,
             visionConeAngle: 360,
             hearingRange: 15,
-            canSeeInDark: true
+            canSeeInDark: true,
+            reactionDelay: 0  // Perfect awareness
         },
-        
+
         communication: {
             shoutRange: 20,
             shoutDelay: 0.3,
@@ -202,7 +247,7 @@ const MONSTER_TIERS = {
             shoutInterruptable: false,
             respondsToAllies: false
         },
-        
+
         behavior: {
             fleeThreshold: 0,
             fleeSpeed: 1.0,
@@ -217,7 +262,19 @@ const MONSTER_TIERS = {
             kitesBehavior: false,
             preferredRange: 2
         },
-        
+
+        social: {
+            isSacrificial: false,
+            packCourage: false,
+            retreatHierarchy: [],
+            canCommand: true,
+            commandRange: 20,
+            canSacrificeMinions: true,
+            sacrificeThreshold: 0.4,
+            sacrificeHeal: 0.30,
+            sacrificeDamageBuff: 0.3
+        },
+
         wandering: {
             defaultPattern: 'stationary',
             pauseChance: 0,
@@ -437,32 +494,46 @@ function getMonsterConfig(monsterTypeId) {
 }
 
 // ============================================================
-// FLOOR-BASED STAT SCALING
+// FLOOR-BASED STAT SCALING (Compound/Exponential)
 // ============================================================
 // Monsters grow stronger as players descend deeper into the dungeon
-// Level = Floor number (Floor 1 = Level 1, Floor 5 = Level 5, etc.)
+// Uses compound scaling: multiplier = (1 + rate) ^ (floor - 1)
+// This matches exponential player power growth from gear + skills
+//
+// Split HP/Damage scaling prevents "bullet sponge" syndrome:
+// - HP scales faster so monsters survive player burst damage
+// - Damage scales slower to prevent one-shot frustration
 
 const FLOOR_SCALING = {
-    // Per-floor multiplier increase (floor 1 = 1.0x, floor 2 = 1.12x, etc.)
-    // Formula: multiplier = 1 + (floor - 1) * rate
-    hp: 0.12,        // +12% HP per floor
-    str: 0.12,       // +12% STR per floor
-    agi: 0.12,       // +12% AGI per floor
-    int: 0.12,       // +12% INT per floor
-    pDef: 0.12,      // +12% physical defense per floor
-    mDef: 0.12,      // +12% magic defense per floor
-    xp: 0.10,        // +10% XP per floor (slightly less to not over-reward)
-    gold: 0.10,      // +10% gold per floor
+    // Compound rate per floor: multiplier = (1 + rate) ^ (floor - 1)
+    // Floor 1 = 1.0x, Floor 5 = ~1.52x, Floor 10 = ~2.37x
+
+    // HP scales faster to survive player bursts
+    hp: 0.10,        // +10% compound per floor (1.10^9 = 2.36x at floor 10)
+
+    // Damage scales slower to prevent one-shot kills
+    str: 0.07,       // +7% compound per floor (1.07^9 = 1.84x at floor 10)
+    int: 0.07,       // +7% compound per floor
+
+    // Defense scales moderately
+    agi: 0.06,       // +6% compound per floor
+    pDef: 0.08,      // +8% compound per floor
+    mDef: 0.08,      // +8% compound per floor
+
+    // Rewards scale with challenge
+    xp: 0.08,        // +8% compound per floor
+    gold: 0.08,      // +8% compound per floor
 
     // Cap to prevent infinite scaling
-    maxMultiplier: 3.0,  // Stats can't exceed 3x base (reached at floor ~17)
+    maxMultiplier: 4.0,  // Stats can't exceed 4x base
 
     // Minimum floor (floors below this don't scale)
     minScalingFloor: 1
 };
 
 /**
- * Apply floor-based scaling to monster stats
+ * Apply floor-based COMPOUND scaling to monster stats
+ * Uses exponential formula: base * (1 + rate) ^ (floor - 1)
  * @param {object} baseStats - Base stats from MONSTER_DATA
  * @param {string} monsterName - Monster type name
  * @param {number} floor - Current dungeon floor (1-based)
@@ -476,19 +547,24 @@ function applyTierMultipliers(baseStats, monsterName, floor = 1) {
         floor = cfg.minScalingFloor;
     }
 
-    // Helper to calculate scaled stat
+    // Helper to calculate COMPOUND scaled stat
+    // Formula: base * (1 + rate) ^ (floor - 1)
     const scale = (base, rate) => {
         if (typeof base !== 'number' || isNaN(base)) return base;
-        const mult = Math.min(cfg.maxMultiplier, 1 + (floor - 1) * rate);
+        const mult = Math.min(cfg.maxMultiplier, Math.pow(1 + rate, floor - 1));
         return Math.floor(base * mult);
     };
 
     return {
-        // Combat stats - all scale with floor
+        // HP scales faster (survival)
         hp: scale(baseStats.hp, cfg.hp),
+
+        // Damage stats scale slower (prevent one-shots)
         str: scale(baseStats.str, cfg.str),
-        agi: scale(baseStats.agi, cfg.agi),
         int: scale(baseStats.int, cfg.int),
+
+        // Utility stats
+        agi: scale(baseStats.agi, cfg.agi),
         pDef: scale(baseStats.pDef, cfg.pDef),
         mDef: scale(baseStats.mDef, cfg.mDef),
 

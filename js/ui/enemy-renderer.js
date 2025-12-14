@@ -321,6 +321,31 @@ function drawEnemyOverlays(ctx, enemy, ex, ey, cx, cy, tileSize) {
             ctx.beginPath();
             ctx.arc(cx, cy, tileSize * 0.6, 0, Math.PI * 2);
             ctx.stroke();
+        } else if (state === 'reacting') {
+            // Reacting indicator - "Huh?" moment - slow to notice player
+            ctx.fillStyle = '#AAAAFF';
+            ctx.font = 'bold 18px monospace';
+            ctx.textAlign = 'center';
+            ctx.fillText('?!', cx, ey + 10);
+            // Growing awareness ring
+            const progress = Math.min(enemy.ai?.stateTimer / (enemy.ai?.reactionDelay || 600), 1);
+            ctx.strokeStyle = `rgba(170, 170, 255, ${0.3 + progress * 0.4})`;
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.arc(cx, cy, tileSize * 0.3 + progress * tileSize * 0.3, 0, Math.PI * 2);
+            ctx.stroke();
+        } else if (state === 'sacrificing') {
+            // Sacrificing indicator - Elite consuming a minion
+            ctx.fillStyle = '#8B0000';
+            ctx.font = 'bold 20px monospace';
+            ctx.textAlign = 'center';
+            ctx.fillText('🩸', cx, ey + 12);
+            // Dark aura
+            ctx.strokeStyle = 'rgba(139, 0, 0, 0.6)';
+            ctx.lineWidth = 3;
+            ctx.beginPath();
+            ctx.arc(cx, cy, tileSize * 0.5, 0, Math.PI * 2);
+            ctx.stroke();
         }
         if (state === 'shouting') {
             // Shouting indicator - concentric circles
