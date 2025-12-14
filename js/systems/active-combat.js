@@ -7,6 +7,8 @@
 
 // ============================================================================
 // MAGIC ELEMENT CONFIGURATION
+// Used for: manaCost, cooldown, status effect chances (burnChance, freezeChance, etc.)
+// NOTE: baseDamage values here are legacy - actual damage uses DamageCalculator
 // ============================================================================
 
 const MAGIC_CONFIG = {
@@ -248,37 +250,50 @@ function handleConsumable(player, slot) {
 }
 
 // ============================================================================
-// ATTACK EXECUTION - MELEE
+// ATTACK EXECUTION - MELEE (Uses DamageCalculator)
 // ============================================================================
 
 function executeMeleeAttack(player, target, weapon, isSkill) {
-    // Calculate damage
-    let damage = calculateMeleeDamage(player, target, weapon, isSkill);
+    // Use centralized DamageCalculator
+    const result = typeof DamageCalculator !== 'undefined'
+        ? DamageCalculator.calculateDamage(player, target, null)
+        : { finalDamage: 10, isCrit: false, isHit: true };
+
+    if (!result.isHit) {
+        if (typeof addMessage === 'function') addMessage('You missed!');
+        if (typeof showDamageNumber === 'function') showDamageNumber(target, 0, '#888888');
+        triggerGCD(player);
+        return;
+    }
+
+    // Apply skill multiplier
+    let damage = isSkill ? Math.floor(result.finalDamage * 2) : result.finalDamage;
 
     // Apply damage
     if (typeof applyDamage === 'function') {
-        applyDamage(target, damage, player);
+        applyDamage(target, damage, player, result);
     } else {
         target.hp -= damage;
     }
 
-    // Show damage
+    // Show damage with appropriate color
+    const color = result.isCrit ? '#ffff00' : '#ff4444';
     if (typeof showDamageNumber === 'function') {
-        showDamageNumber(target, damage, '#ff4444');
+        showDamageNumber(target, damage, color);
     }
 
     // Message
     if (typeof addMessage === 'function') {
         const attackName = isSkill ? 'skill attack' : 'attack';
-        addMessage(`You ${attackName} ${target.name} for ${damage} damage!`);
+        const critText = result.isCrit ? ' CRITICAL!' : '';
+        addMessage(`You ${attackName} ${target.name} for ${damage} damage!${critText}`);
     }
 
     // Trigger cooldowns
     triggerGCD(player);
     if (isSkill) {
-        player.actionCooldowns.skillAttack = 10; // Fixed 10s skill cooldown
+        player.actionCooldowns.skillAttack = 10;
     } else {
-        // Base attack uses weapon speed
         const attackSpeed = weapon?.stats?.speed || player.combat?.attackSpeed || 1.0;
         player.actionCooldowns.baseAttack = attackSpeed;
     }
@@ -290,19 +305,29 @@ function executeMeleeAttack(player, target, weapon, isSkill) {
 }
 
 // ============================================================================
-// ATTACK EXECUTION - RANGED
+// ATTACK EXECUTION - RANGED (Uses DamageCalculator)
 // ============================================================================
 
 function executeRangedAttack(player, target, weapon, isSkill) {
-    // Note: Ammo requirement removed - bows and crossbows have unlimited arrows/bolts
     const weaponType = weapon?.weaponType || 'bow';
 
-    // Calculate damage
-    let damage = calculateRangedDamage(player, target, weapon, isSkill);
+    // Use centralized DamageCalculator
+    const result = typeof DamageCalculator !== 'undefined'
+        ? DamageCalculator.calculateDamage(player, target, null)
+        : { finalDamage: 10, isCrit: false, isHit: true };
+
+    if (!result.isHit) {
+        if (typeof addMessage === 'function') addMessage('You missed!');
+        triggerGCD(player);
+        return;
+    }
+
+    // Apply skill multiplier
+    let damage = isSkill ? Math.floor(result.finalDamage * 2) : result.finalDamage;
 
     // Create projectile
     if (typeof createProjectile === 'function') {
-        const speed = weaponType === 'crossbow' ? 10 : 6.7; // tiles/second
+        const speed = weaponType === 'crossbow' ? 10 : 6.7;
         createProjectile({
             x: player.gridX,
             y: player.gridY,
@@ -313,17 +338,19 @@ function executeRangedAttack(player, target, weapon, isSkill) {
             element: weapon?.element || 'physical',
             attacker: player,
             target: target,
-            isSkill: isSkill
+            isSkill: isSkill,
+            isCrit: result.isCrit
         });
     } else {
         // Fallback: instant damage
         if (typeof applyDamage === 'function') {
-            applyDamage(target, damage, player);
+            applyDamage(target, damage, player, result);
         } else {
             target.hp -= damage;
         }
+        const color = result.isCrit ? '#ffff00' : '#ff4444';
         if (typeof showDamageNumber === 'function') {
-            showDamageNumber(target, damage, '#ff4444');
+            showDamageNumber(target, damage, color);
         }
     }
 
@@ -344,7 +371,7 @@ function executeRangedAttack(player, target, weapon, isSkill) {
 }
 
 // ============================================================================
-// ATTACK EXECUTION - MAGIC
+// ATTACK EXECUTION - MAGIC (Uses DamageCalculator)
 // ============================================================================
 
 function executeMagicAttack(player, target, weapon, isSkill) {
@@ -354,7 +381,6 @@ function executeMagicAttack(player, target, weapon, isSkill) {
 
     // Check mana
     if (player.mp < elementConfig.manaCost) {
-        // Out of mana - revert to physical punch
         executeNoManaAttack(player, target);
         return;
     }
@@ -362,8 +388,19 @@ function executeMagicAttack(player, target, weapon, isSkill) {
     // Consume mana
     player.mp -= elementConfig.manaCost;
 
-    // Calculate damage
-    let damage = calculateMagicDamage(player, target, weapon, element, isSkill);
+    // Use centralized DamageCalculator (it handles INT scaling and element modifiers)
+    const result = typeof DamageCalculator !== 'undefined'
+        ? DamageCalculator.calculateDamage(player, target, null)
+        : { finalDamage: 10, isCrit: false, isHit: true };
+
+    if (!result.isHit) {
+        if (typeof addMessage === 'function') addMessage('Your spell missed!');
+        triggerGCD(player);
+        return;
+    }
+
+    // Apply skill multiplier
+    let damage = isSkill ? Math.floor(result.finalDamage * 2) : result.finalDamage;
 
     // Create magic projectile
     if (typeof createProjectile === 'function') {
@@ -372,28 +409,30 @@ function executeMagicAttack(player, target, weapon, isSkill) {
             y: player.gridY,
             targetX: target.gridX,
             targetY: target.gridY,
-            speed: 6.7, // Same as arrows
+            speed: 6.7,
             damage: damage,
             element: element,
             attacker: player,
             target: target,
             isMagic: true,
             isSkill: isSkill,
+            isCrit: result.isCrit,
             elementConfig: elementConfig
         });
     } else {
         // Fallback: instant damage
         if (typeof applyDamage === 'function') {
-            applyDamage(target, damage, player);
+            applyDamage(target, damage, player, result);
         } else {
             target.hp -= damage;
         }
+        const color = result.isCrit ? '#ffff00' : '#00ffff';
         if (typeof showDamageNumber === 'function') {
-            showDamageNumber(target, damage, '#00ffff');
+            showDamageNumber(target, damage, color);
         }
 
-        // Apply status effects (burn/freeze)
-        applyMagicEffects(player, target, element, elementConfig);
+        // Apply status effects (burn/freeze/lifesteal)
+        applyMagicEffects(player, target, element, elementConfig, damage);
     }
 
     // Trigger cooldowns
@@ -441,85 +480,47 @@ function executeNoManaAttack(player, target) {
     player.actionCooldowns.baseAttack = 1.0; // 1s unarmed cooldown
 }
 
-// ============================================================================
-// DAMAGE CALCULATIONS
-// ============================================================================
-
-function calculateMeleeDamage(player, target, weapon, isSkill) {
-    let damage = 0;
-
-    if (weapon?.stats?.damage) {
-        damage = weapon.stats.damage;
-    } else {
-        // Unarmed
-        const str = player.stats?.STR || 10;
-        damage = 5 + Math.floor(str * 0.3);
-    }
-
-    // Add STR scaling
-    const str = player.stats?.STR || 10;
-    damage += Math.floor(str * 0.5);
-
-    // Skill multiplier
-    if (isSkill) {
-        damage *= 2;
-    }
-
-    return Math.floor(damage);
-}
-
-function calculateRangedDamage(player, target, weapon, isSkill) {
-    let damage = weapon?.stats?.damage || 5;
-
-    // Add AGI scaling
-    const agi = player.stats?.AGI || 10;
-    damage += Math.floor(agi * 0.5);
-
-    // Skill multiplier
-    if (isSkill) {
-        damage *= 2;
-    }
-
-    return Math.floor(damage);
-}
-
-function calculateMagicDamage(player, target, weapon, element, isSkill) {
-    const elementConfig = MAGIC_CONFIG[element] || MAGIC_CONFIG.arcane;
-    let baseDamage = elementConfig.baseDamage;
-
-    // INT scaling: baseDamage × (1 + INT/100)
-    const int = player.stats?.INT || 10;
-    let damage = baseDamage * (1 + int / 100);
-
-    // Skill multiplier
-    if (isSkill) {
-        damage *= 2;
-    }
-
-    return Math.floor(damage);
-}
+// Damage calculations removed - now using centralized DamageCalculator from damage-calculator.js
 
 // ============================================================================
-// MAGIC EFFECTS
+// MAGIC EFFECTS - Uses centralized status effect system from skills-combat-integration.js
 // ============================================================================
 
-function applyMagicEffects(player, target, element, elementConfig) {
+function applyMagicEffects(player, target, element, elementConfig, damage) {
+    if (typeof applyStatusEffect !== 'function') return;
+
     // Burn (Fire)
     if (element === 'fire' && elementConfig.burnChance) {
         if (Math.random() < elementConfig.burnChance) {
-            applyBurn(target, elementConfig.burnDuration, elementConfig.burnDamage);
+            applyStatusEffect(target, {
+                type: 'burn',
+                damage: elementConfig.burnDamage,
+                ticks: elementConfig.burnDuration,
+                interval: 1000,
+                source: player
+            });
+            if (typeof addMessage === 'function') {
+                addMessage(`${target.name} is burning!`);
+            }
         }
     }
 
     // Freeze (Ice)
     if (element === 'ice' && elementConfig.freezeChance) {
         if (Math.random() < elementConfig.freezeChance) {
-            applyFreeze(target, elementConfig.freezeDuration);
+            applyStatusEffect(target, {
+                type: 'freeze',
+                duration: elementConfig.freezeDuration * 1000,
+                source: player
+            });
+            if (typeof addMessage === 'function') {
+                addMessage(`${target.name} is frozen!`);
+            }
         }
     }
 
     // Lifesteal (Necromancy)
-    if (element === 'necromancy' && elementConfig.lifestealPercent) {
+    if (element === 'necromancy' && elementConfig.lifestealPercent && damage) {
         const heal = Math.floor(damage * elementConfig.lifestealPercent);
         player.hp = Math.min(player.maxHp, player.hp + heal);
         if (typeof addMessage === 'function') {
@@ -528,41 +529,7 @@ function applyMagicEffects(player, target, element, elementConfig) {
     }
 }
 
-function applyBurn(target, duration, damagePerSec) {
-    // Use existing status effect system if available
-    if (typeof applyStatusEffect === 'function') {
-        applyStatusEffect(target, {
-            type: 'burn',
-            duration: duration,
-            damage: damagePerSec,
-            interval: 1000 // 1 second
-        });
-    }
-
-    if (typeof addMessage === 'function') {
-        addMessage(`${target.name} is burning!`);
-    }
-}
-
-function applyFreeze(target, duration) {
-    // Use existing status effect system if available
-    if (typeof applyStatusEffect === 'function') {
-        applyStatusEffect(target, {
-            type: 'freeze',
-            duration: duration
-        });
-    }
-
-    // Set frozen flag
-    target.isFrozen = true;
-    setTimeout(() => {
-        target.isFrozen = false;
-    }, duration * 1000);
-
-    if (typeof addMessage === 'function') {
-        addMessage(`${target.name} is frozen!`);
-    }
-}
+// applyBurn and applyFreeze removed - use applyStatusEffect from skills-combat-integration.js
 
 // ============================================================================
 // HELPER FUNCTIONS
@@ -606,17 +573,7 @@ function removeItemFromInventory(player, itemId) {
     }
 }
 
-function getDistance(entity1, entity2) {
-    // Use Euclidean distance for ranged/magic attacks
-    const x1 = entity1.gridX ?? entity1.x;
-    const y1 = entity1.gridY ?? entity1.y;
-    const x2 = entity2.gridX ?? entity2.x;
-    const y2 = entity2.gridY ?? entity2.y;
-
-    const dx = x1 - x2;
-    const dy = y1 - y2;
-    return Math.sqrt(dx * dx + dy * dy);
-}
+// getDistance is defined in combat-system.js (uses Chebyshev distance)
 
 // ============================================================================
 // TAB TARGETING

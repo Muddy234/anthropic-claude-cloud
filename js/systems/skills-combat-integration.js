@@ -850,28 +850,17 @@ function executeUtilityAction(player, action, target, specialtyLevel) {
 }
 
 // ============================================================================
-// COMBAT SYSTEM OVERRIDES
+// COMBAT SYSTEM INTEGRATION
 // ============================================================================
 
 /**
- * Override the original handleDeath to use skill-aware version
+ * Install CC support for combat system
+ * NOTE: handleDeath and calculateDamage overrides REMOVED
+ * - combat-system.js handleDeath already has skill XP support
+ * - DamageCalculator handles all damage calculations centrally
  */
 function installCombatOverrides() {
-    // Store original functions
-    if (typeof handleDeath === 'function' && !window._originalHandleDeath) {
-        window._originalHandleDeath = handleDeath;
-        window.handleDeath = handleDeathWithSkills;
-        console.log('âœ“ handleDeath overridden with skill XP support');
-    }
-    
-    // Store original calculateDamage
-    if (typeof calculateDamage === 'function' && !window._originalCalculateDamage) {
-        window._originalCalculateDamage = calculateDamage;
-        window.calculateDamage = calculateDamageWithSkills;
-        console.log('âœ“ calculateDamage overridden with skill multipliers');
-    }
-    
-    // Override updateEntityCombat to check for CC
+    // Override updateEntityCombat to check for CC (stun/freeze prevents actions)
     if (typeof updateEntityCombat === 'function' && !window._originalUpdateEntityCombat) {
         window._originalUpdateEntityCombat = updateEntityCombat;
         window.updateEntityCombat = function(entity, deltaTime) {
@@ -881,7 +870,7 @@ function installCombatOverrides() {
             }
             window._originalUpdateEntityCombat(entity, deltaTime);
         };
-        console.log('âœ“ updateEntityCombat overridden with CC support');
+        console.log('[Skills-Combat] CC support added to updateEntityCombat');
     }
 }
 
@@ -1030,9 +1019,7 @@ window.placeTrap = placeTrap;
 window.placeTurret = placeTurret;
 window.updatePlacedObjects = updatePlacedObjects;
 
-// Combat integration
-window.calculateDamageWithSkills = calculateDamageWithSkills;
-window.handleDeathWithSkills = handleDeathWithSkills;
+// Combat integration (calculateDamageWithSkills and handleDeathWithSkills removed - use DamageCalculator and handleDeath)
 window.executeSkillAction = executeSkillAction;
 window.updateSkillSystems = updateSkillSystems;
 
@@ -1047,15 +1034,15 @@ window.handleActionHotkey = handleActionHotkey;
 // Initialize
 window.initSkillsCombatIntegration = initSkillsCombatIntegration;
 
-console.log('âœ“ Skills-Combat integration loaded');// ============================================================================
-// SYSTEM MANAGER REGISTRATION - Add to end of skills-combat-integration.js
+// ============================================================================
+// SYSTEM MANAGER REGISTRATION
 // ============================================================================
 
 const SkillsCombatSystem = {
     name: 'skills-combat',
     
     init(game) {
-        // Install combat overrides (damage multipliers, etc.)
+        // Install CC support for combat
         installCombatOverrides();
         
         // Initialize player skills if player exists
@@ -1082,9 +1069,10 @@ const SkillsCombatSystem = {
         for (const entityId in statusEffects) {
             delete statusEffects[entityId];
         }
-        
+
         // Clear placed objects
-        placedObjects.length = 0;
+        placedObjects.traps.length = 0;
+        placedObjects.turrets.length = 0;
     }
 };
 
