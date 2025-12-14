@@ -1539,6 +1539,14 @@ function updateMouseAttackSystem(deltaTime) {
     if (typeof MeleeSlashEffect !== 'undefined') {
         MeleeSlashEffect.update(deltaTime);
     }
+
+    // Update monster magic/ranged attack effects
+    if (typeof MonsterMagicEffect !== 'undefined') {
+        MonsterMagicEffect.update(deltaTime);
+    }
+    if (typeof MonsterRangedEffect !== 'undefined') {
+        MonsterRangedEffect.update(deltaTime);
+    }
 }
 
 // ============================================================================

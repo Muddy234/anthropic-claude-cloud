@@ -896,6 +896,14 @@ const camY = game.camera.y + (shakeOffset.y / (TILE_SIZE * ZOOM_LEVEL));
             MeleeSlashEffect.render(ctx, camX, camY, effectiveTileSize, TRACKER_WIDTH);
         }
 
+        // Monster magic/ranged attack effects
+        if (typeof MonsterMagicEffect !== 'undefined') {
+            MonsterMagicEffect.render(ctx, camX, camY, effectiveTileSize, TRACKER_WIDTH);
+        }
+        if (typeof MonsterRangedEffect !== 'undefined') {
+            MonsterRangedEffect.render(ctx, camX, camY, effectiveTileSize, TRACKER_WIDTH);
+        }
+
         // Combat effects (sprite-based slash, magic, explosions)
         if (typeof renderCombatEffects === 'function') { renderCombatEffects(ctx, camX, camY, effectiveTileSize, TRACKER_WIDTH); }
 
