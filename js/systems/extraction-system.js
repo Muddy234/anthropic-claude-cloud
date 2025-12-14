@@ -287,9 +287,19 @@ const ExtractionSystem = {
         const result = SessionManager.extractionSuccess();
 
         if (result.success) {
-            // Transition to village
-            game.state = GAME_STATES ? GAME_STATES.VILLAGE : 'village';
+            // Clear extraction state
             game.activeExtractionPoint = null;
+
+            // Properly return to village (this initializes VillageSystem and positions player correctly)
+            if (typeof returnToVillage === 'function') {
+                returnToVillage();
+            } else {
+                // Fallback: manually set up village
+                game.state = GAME_STATES ? GAME_STATES.VILLAGE : 'village';
+                if (typeof VillageSystem !== 'undefined') {
+                    VillageSystem.init();
+                }
+            }
 
             console.log('[ExtractionSystem] Extraction successful!');
             return true;
