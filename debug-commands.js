@@ -1511,39 +1511,50 @@ const Debug = {
     showExit() {
         console.log('\n🚪 FLOOR EXIT/DESCENT LOCATION:');
 
-        // Check sessionState.pathDown
+        let exitX = null, exitY = null;
+
+        // Check game.exitPosition first (this is what dungeon gen sets)
+        if (typeof game !== 'undefined' && game.exitPosition) {
+            exitX = game.exitPosition.x;
+            exitY = game.exitPosition.y;
+            console.log(`   Exit Position: (${exitX}, ${exitY})`);
+        }
+
+        // Check sessionState.pathDown and sync if needed
         if (typeof sessionState !== 'undefined' && sessionState.pathDown) {
             const pd = sessionState.pathDown;
             if (pd.x !== null && pd.y !== null) {
-                console.log(`   Path Down: (${pd.x}, ${pd.y})`);
+                exitX = pd.x;
+                exitY = pd.y;
                 console.log(`   Discovered: ${pd.discovered ? 'Yes' : 'No'}`);
                 console.log(`   Revealed: ${pd.revealed ? 'Yes' : 'No'}`);
+            } else if (exitX !== null) {
+                // Sync from game.exitPosition
+                sessionState.pathDown.x = exitX;
+                sessionState.pathDown.y = exitY;
+                console.log(`   (Synced pathDown from exitPosition)`);
+            }
 
-                // Teleport option
-                console.log(`\n   To teleport there: debug.teleport(${pd.x}, ${pd.y})`);
-
-                // Also reveal it on the map if it wasn't
-                if (!pd.revealed) {
-                    sessionState.pathDown.revealed = true;
-                    sessionState.pathDown.discovered = true;
-                    console.log('   (Exit has been revealed on map!)');
-                }
-            } else {
-                console.log('   Path down position not set yet');
+            // Reveal it on the map
+            if (exitX !== null && !pd.revealed) {
+                sessionState.pathDown.revealed = true;
+                sessionState.pathDown.discovered = true;
+                console.log('   (Exit has been revealed on map!)');
             }
         }
 
-        // Check game.exitPosition (legacy)
-        if (typeof game !== 'undefined' && game.exitPosition) {
-            console.log(`   Legacy Exit: (${game.exitPosition.x}, ${game.exitPosition.y})`);
-            console.log(`   To teleport: debug.teleport(${game.exitPosition.x}, ${game.exitPosition.y})`);
+        if (exitX !== null && exitY !== null) {
+            console.log(`\n   To teleport: debug.goToExit()`);
+        } else {
+            console.log('   No exit position found on this floor');
         }
 
         // Check for extraction points
-        if (typeof game !== 'undefined' && game.extractionPoints && game.extractionPoints.length > 0) {
+        if (typeof ExtractionSystem !== 'undefined' && ExtractionSystem.points && ExtractionSystem.points.length > 0) {
             console.log('\n📤 EXTRACTION POINTS:');
-            game.extractionPoints.forEach((ep, i) => {
-                console.log(`   ${i + 1}. (${ep.x}, ${ep.y}) - ${ep.active ? 'Active' : 'Inactive'}`);
+            ExtractionSystem.points.forEach((ep, i) => {
+                const status = ep.isActive() ? 'Active' : 'Collapsed';
+                console.log(`   ${i + 1}. (${ep.x}, ${ep.y}) - ${status}`);
             });
         }
 
@@ -1551,18 +1562,24 @@ const Debug = {
     },
 
     goToExit() {
-        // Try sessionState.pathDown first
-        if (typeof sessionState !== 'undefined' && sessionState.pathDown &&
-            sessionState.pathDown.x !== null && sessionState.pathDown.y !== null) {
-            this.teleport(sessionState.pathDown.x, sessionState.pathDown.y);
-            console.log('Teleported to floor descent!');
-            return;
+        let exitX = null, exitY = null;
+
+        // Try game.exitPosition first (primary source)
+        if (typeof game !== 'undefined' && game.exitPosition) {
+            exitX = game.exitPosition.x;
+            exitY = game.exitPosition.y;
         }
 
-        // Try game.exitPosition
-        if (typeof game !== 'undefined' && game.exitPosition) {
-            this.teleport(game.exitPosition.x, game.exitPosition.y);
-            console.log('Teleported to exit position!');
+        // Also check sessionState.pathDown
+        if (typeof sessionState !== 'undefined' && sessionState.pathDown &&
+            sessionState.pathDown.x !== null && sessionState.pathDown.y !== null) {
+            exitX = sessionState.pathDown.x;
+            exitY = sessionState.pathDown.y;
+        }
+
+        if (exitX !== null && exitY !== null) {
+            this.teleport(exitX, exitY);
+            console.log(`Teleported to exit at (${exitX}, ${exitY})!`);
             return;
         }
 

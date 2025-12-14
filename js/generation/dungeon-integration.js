@@ -434,6 +434,22 @@ function placeExitInFarthestRoom() {
     // Keeping exitPosition for potential legacy compatibility
     game.exitPosition = { x: exitX, y: exitY };
 
+    // Sync with sessionState.pathDown for the new system
+    if (typeof sessionState !== 'undefined' && sessionState.pathDown) {
+        sessionState.pathDown.x = exitX;
+        sessionState.pathDown.y = exitY;
+        // Don't auto-discover - player needs to find it or defeat mini-boss
+    }
+
+    // Also sync via SessionManager if available
+    if (typeof SessionManager !== 'undefined' && typeof SessionManager.discoverPathDown === 'function') {
+        // Set the position but don't mark as discovered yet
+        if (sessionState && sessionState.pathDown) {
+            sessionState.pathDown.x = exitX;
+            sessionState.pathDown.y = exitY;
+        }
+    }
+
     // OLD EXIT TILE CREATION - DISABLED for extraction system
     // if (game.map[exitY] && game.map[exitY][exitX]) {
     //     game.map[exitY][exitX] = {
