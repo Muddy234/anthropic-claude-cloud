@@ -30,9 +30,10 @@ const SessionManager = {
         sessionState.currentFloor = startFloor;
         sessionState.floorStartTime = Date.now();
 
-        // Apply loadout
-        sessionState.inventory = loadout.map(item => ({ ...item }));
-        sessionState.gold = gold;
+        // Apply loadout - ensure it's an array
+        const items = Array.isArray(loadout) ? loadout : [];
+        sessionState.inventory = items.map(item => ({ ...item }));
+        sessionState.gold = gold || 0;
 
         // Check for rescue run
         if (persistentState.deathDrop && persistentState.deathDrop.floor) {
@@ -45,7 +46,7 @@ const SessionManager = {
         persistentState.lastPlayed = Date.now();
 
         console.log(`[SessionManager] Starting run #${persistentState.stats.totalRuns} from floor ${startFloor}`);
-        console.log(`[SessionManager] Carrying ${loadout.length} items and ${gold} gold`);
+        console.log(`[SessionManager] Carrying ${items.length} items and ${sessionState.gold} gold`);
 
         return {
             runId: sessionState.runId,
