@@ -649,82 +649,8 @@ const setupCanvasHandlers = () => {
         }
     });
 
-    // RIGHT CLICK - Context menu
-    canvas.addEventListener('contextmenu', (e) => {
-        e.preventDefault();
-
-        if (game.state !== 'playing') return;
-
-        inspectPopup.visible = false;
-
-        const rect = canvas.getBoundingClientRect();
-        const clickX = e.clientX - rect.left;
-        const clickY = e.clientY - rect.top;
-
-        const trackerWidth = typeof TRACKER_WIDTH !== 'undefined' ? TRACKER_WIDTH : 400;
-        const viewX = clickX - trackerWidth;
-        const viewY = clickY;
-
-        if (viewX < 0) return;
-
-        const tileSize = (typeof TILE_SIZE !== 'undefined' ? TILE_SIZE : 32) * 
-                         (typeof ZOOM_LEVEL !== 'undefined' ? ZOOM_LEVEL : 2);
-        const camX = game.camera ? game.camera.x : 0;
-        const camY = game.camera ? game.camera.y : 0;
-
-        const gridX = Math.floor(viewX / tileSize + camX);
-        const gridY = Math.floor(viewY / tileSize + camY);
-
-        let target = null;
-        let targetType = null;
-        let options = [];
-
-        // Check for enemy
-        const clickedEnemy = game.enemies.find(enemy =>
-            Math.floor(enemy.gridX) === gridX && Math.floor(enemy.gridY) === gridY
-        );
-
-        if (clickedEnemy) {
-            target = clickedEnemy;
-            targetType = 'enemy';
-            options = [
-                { text: 'Attack', action: 'attack' },
-                { text: 'Inspect', action: 'inspect' },
-                { text: 'Cancel', action: 'cancel' }
-            ];
-        }
-        // Check for NPC (merchant)
-        else if (game.merchant) {
-            const dx = Math.abs(gridX - game.merchant.x);
-            const dy = Math.abs(gridY - game.merchant.y);
-            if (dx <= 1 && dy <= 1) {
-                target = game.merchant;
-                targetType = 'npc';
-                options = [
-                    { text: 'Talk', action: 'talk' },
-                    { text: 'Inspect', action: 'inspect' },
-                    { text: 'Cancel', action: 'cancel' }
-                ];
-            }
-        }
-
-        // Empty tile
-        if (!target) {
-            target = { x: gridX, y: gridY };
-            targetType = 'tile';
-            options = [
-                { text: 'Walk here', action: 'walk' },
-                { text: 'Cancel', action: 'cancel' }
-            ];
-        }
-
-        contextMenu.visible = true;
-        contextMenu.x = clickX;
-        contextMenu.y = clickY;
-        contextMenu.target = target;
-        contextMenu.targetType = targetType;
-        contextMenu.options = options;
-    });
+    // RIGHT CLICK - Context menu handled by right-click-init.js
+    // Removed duplicate handler to prevent double rendering
 
     console.log('✓ Canvas click handlers initialized');
 };
@@ -732,57 +658,7 @@ const setupCanvasHandlers = () => {
 // Initialize canvas handlers
 setupCanvasHandlers();
 
-/**
- * Execute context menu action
- */
-function executeContextAction(action, target, targetType) {
-    switch (action) {
-        case 'attack':
-            if (targetType === 'enemy') {
-                engageCombat(game.player, target);
-            }
-            break;
-
-        case 'pickup':
-            if (typeof window.pickupLootPile === 'function' && targetType === 'loot') {
-                console.log('Picking up loot pile');
-                window.pickupLootPile(target);
-            }
-            break;
-
-        case 'inspect':
-            inspectPopup.visible = true;
-            inspectPopup.target = target;
-            inspectPopup.targetType = targetType;
-            break;
-
-        case 'talk':
-            if (targetType === 'npc') {
-                game.state = 'merchant';
-                game.merchantMsg = "";
-            }
-            break;
-
-        case 'walk':
-            if (targetType === 'tile') {
-                game.player.manualMoveTarget = { x: target.x, y: target.y };
-                const dx = target.x - game.player.gridX;
-                const dy = target.y - game.player.gridY;
-
-                // Calculate 8-directional movement
-                const dir = getDirectionFromDelta(dx, dy);
-
-                if (dir && typeof startPlayerMove === 'function') {
-                    startPlayerMove(dir);
-                }
-            }
-            break;
-
-        case 'cancel':
-        default:
-            break;
-    }
-}
+// executeContextAction is defined in right-click-init.js
 
 /**
  * Close popups when player is hit
