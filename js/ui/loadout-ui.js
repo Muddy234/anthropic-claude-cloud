@@ -1,50 +1,73 @@
 // === js/ui/loadout-ui.js ===
-// SURVIVAL EXTRACTION UPDATE: Pre-run loadout selection interface
+// ARC RAIDERS STYLE: Pre-run loadout selection with grid-based inventory
 
 // ============================================================================
-// LOADOUT UI
+// LOADOUT UI - Arc Raiders Style
 // ============================================================================
 
 const LoadoutUI = {
 
     // State
     active: false,
-    currentSection: 0,  // 0=basic, 1=weapons, 2=armor, 3=consumables, 4=confirm
+    currentPanel: 1,        // 0=bank, 1=equipment, 2=inventory
     selectedIndex: 0,
+    equipmentSlotIndex: 0,
     startingFloor: 1,
 
-    // Layout
-    PANEL_WIDTH: 1000,
-    PANEL_HEIGHT: 650,
+    // Scroll positions
+    bankScroll: 0,
+    inventoryScroll: 0,
 
-    // Sections (BASIC first for easy access to starter gear)
-    SECTIONS: ['BASIC', 'WEAPON', 'ARMOR', 'CONSUMABLES', 'START'],
+    // Layout
+    PANEL_WIDTH: 1100,
+    PANEL_HEIGHT: 700,
+
+    // Grid settings
+    GRID_COLS: 4,
+    GRID_ROWS: 6,
+    SLOT_SIZE: 50,
+    SLOT_GAP: 6,
+
+    // Equipment slots order
+    EQUIPMENT_SLOTS: ['HEAD', 'MAIN', 'CHEST', 'OFF', 'LEGS', 'FEET'],
+
+    // Selected items for this run (separate from bank)
+    runInventory: [],
+    runEquipment: {
+        HEAD: null,
+        CHEST: null,
+        LEGS: null,
+        FEET: null,
+        MAIN: null,
+        OFF: null
+    },
+    runGold: 0,
 
     // ========================================================================
     // LIFECYCLE
     // ========================================================================
 
-    /**
-     * Open the loadout UI
-     */
     open() {
         this.active = true;
-        this.currentSection = 0;
+        this.currentPanel = 1;  // Start on equipment panel
         this.selectedIndex = 0;
+        this.equipmentSlotIndex = 0;
         this.startingFloor = 1;
+        this.bankScroll = 0;
+        this.inventoryScroll = 0;
 
-        // Reset loadout system
-        if (typeof LoadoutSystem !== 'undefined') {
-            LoadoutSystem.reset();
-        }
+        // Reset run inventory
+        this.runInventory = [];
+        this.runEquipment = {
+            HEAD: null, CHEST: null, LEGS: null, FEET: null,
+            MAIN: null, OFF: null
+        };
+        this.runGold = 0;
 
         game.state = GAME_STATES ? GAME_STATES.LOADOUT : 'loadout';
-        console.log('[LoadoutUI] Opened');
+        console.log('[LoadoutUI] Opened - Arc Raiders style');
     },
 
-    /**
-     * Close the loadout UI
-     */
     close() {
         this.active = false;
         game.state = GAME_STATES ? GAME_STATES.VILLAGE : 'village';
@@ -55,186 +78,372 @@ const LoadoutUI = {
     // INPUT HANDLING
     // ========================================================================
 
-    /**
-     * Handle keyboard input
-     * @param {string} key
-     */
     handleInput(key) {
         if (!this.active) return;
 
-        const items = this._getCurrentSectionItems();
-        const isStartSection = this.currentSection === 4;  // START is now index 4
-        const isBasicSection = this.currentSection === 0;  // BASIC is index 0
-
         switch (key) {
+            // Panel switching
+            case 'ArrowLeft':
+            case 'a':
+            case 'A':
+                if (this.currentPanel === 1) {
+                    // In equipment, move selection or switch panel
+                    if (this.equipmentSlotIndex % 2 === 0) {
+                        this.currentPanel = 0;  // Go to bank
+                        this.selectedIndex = 0;
+                    } else {
+                        this.equipmentSlotIndex--;
+                    }
+                } else if (this.currentPanel === 2) {
+                    // In inventory grid, move left or switch to equipment
+                    if (this.selectedIndex % this.GRID_COLS === 0) {
+                        this.currentPanel = 1;  // Go to equipment
+                        this.equipmentSlotIndex = 1;  // Right side slots
+                    } else {
+                        this.selectedIndex--;
+                    }
+                } else {
+                    // In bank grid, move left
+                    if (this.selectedIndex % this.GRID_COLS > 0) {
+                        this.selectedIndex--;
+                    }
+                }
+                break;
+
+            case 'ArrowRight':
+            case 'd':
+            case 'D':
+                if (this.currentPanel === 0) {
+                    // In bank grid, move right or switch panel
+                    const bankItems = this._getBankItems();
+                    if (this.selectedIndex % this.GRID_COLS === this.GRID_COLS - 1 ||
+                        this.selectedIndex >= bankItems.length - 1) {
+                        this.currentPanel = 1;  // Go to equipment
+                        this.equipmentSlotIndex = 0;  // Left side slots
+                    } else {
+                        this.selectedIndex++;
+                    }
+                } else if (this.currentPanel === 1) {
+                    // In equipment, move or switch to inventory
+                    if (this.equipmentSlotIndex % 2 === 1) {
+                        this.currentPanel = 2;  // Go to inventory
+                        this.selectedIndex = 0;
+                    } else {
+                        this.equipmentSlotIndex++;
+                    }
+                } else {
+                    // In inventory grid, move right
+                    if (this.selectedIndex % this.GRID_COLS < this.GRID_COLS - 1 &&
+                        this.selectedIndex < this.runInventory.length - 1) {
+                        this.selectedIndex++;
+                    }
+                }
+                break;
+
             case 'ArrowUp':
             case 'w':
             case 'W':
-                if (isStartSection) {
-                    this._adjustStartingFloor(1);
-                } else if (!isBasicSection) {
-                    this.selectedIndex = Math.max(0, this.selectedIndex - 1);
+                if (this.currentPanel === 0) {
+                    // Bank grid - move up
+                    if (this.selectedIndex >= this.GRID_COLS) {
+                        this.selectedIndex -= this.GRID_COLS;
+                    } else if (this.bankScroll > 0) {
+                        this.bankScroll--;
+                    }
+                } else if (this.currentPanel === 1) {
+                    // Equipment slots - move up
+                    if (this.equipmentSlotIndex >= 2) {
+                        this.equipmentSlotIndex -= 2;
+                    }
+                } else {
+                    // Inventory grid - move up
+                    if (this.selectedIndex >= this.GRID_COLS) {
+                        this.selectedIndex -= this.GRID_COLS;
+                    }
                 }
                 break;
 
             case 'ArrowDown':
             case 's':
             case 'S':
-                if (isStartSection) {
-                    this._adjustStartingFloor(-1);
-                } else if (!isBasicSection) {
-                    this.selectedIndex = Math.min(items.length - 1, this.selectedIndex + 1);
+                if (this.currentPanel === 0) {
+                    // Bank grid - move down
+                    const bankItems = this._getBankItems();
+                    const maxRows = Math.ceil(bankItems.length / this.GRID_COLS);
+                    if (this.selectedIndex + this.GRID_COLS < bankItems.length) {
+                        this.selectedIndex += this.GRID_COLS;
+                    }
+                } else if (this.currentPanel === 1) {
+                    // Equipment slots - move down
+                    if (this.equipmentSlotIndex < 4) {
+                        this.equipmentSlotIndex += 2;
+                    }
+                } else {
+                    // Inventory grid - move down
+                    if (this.selectedIndex + this.GRID_COLS < this.runInventory.length) {
+                        this.selectedIndex += this.GRID_COLS;
+                    }
                 }
-                break;
-
-            case 'ArrowLeft':
-            case 'a':
-            case 'A':
-                this.currentSection = Math.max(0, this.currentSection - 1);
-                this.selectedIndex = 0;
-                break;
-
-            case 'ArrowRight':
-            case 'd':
-            case 'D':
-                this.currentSection = Math.min(4, this.currentSection + 1);
-                this.selectedIndex = 0;
                 break;
 
             case 'Enter':
             case 'e':
             case 'E':
             case ' ':
-                if (isBasicSection) {
-                    this._selectBasicLoadout();
-                } else if (isStartSection) {
-                    this._startRun();
-                } else {
-                    this._selectItem();
-                }
+                this._handleSelect();
+                break;
+
+            case 'q':
+            case 'Q':
+                // Quick select basic loadout
+                this._selectBasicLoadout();
+                break;
+
+            case 'r':
+            case 'R':
+                // Start run
+                this._startRun();
+                break;
+
+            case 'Tab':
+                // Cycle panels
+                this.currentPanel = (this.currentPanel + 1) % 3;
+                this.selectedIndex = 0;
                 break;
 
             case 'Escape':
                 this.close();
                 break;
 
-            case 'Tab':
-                this.currentSection = (this.currentSection + 1) % 5;
-                this.selectedIndex = 0;
+            case 'PageUp':
+                this._adjustStartingFloor(1);
+                break;
+
+            case 'PageDown':
+                this._adjustStartingFloor(-1);
                 break;
         }
     },
 
-    /**
-     * Select basic starter loadout
-     * @private
-     */
-    _selectBasicLoadout() {
-        if (typeof LoadoutSystem !== 'undefined') {
-            LoadoutSystem.selectBasicLoadout();
-            console.log('[LoadoutUI] Basic loadout selected');
+    _handleSelect() {
+        if (this.currentPanel === 0) {
+            // Bank panel - transfer to inventory or equip
+            this._transferFromBank();
+        } else if (this.currentPanel === 1) {
+            // Equipment panel - unequip to inventory
+            this._unequipItem();
+        } else {
+            // Inventory panel - equip or return to bank
+            this._handleInventorySelect();
         }
     },
 
-    /**
-     * Get items for current section
-     * @returns {Array}
-     * @private
-     */
-    _getCurrentSectionItems() {
+    // ========================================================================
+    // ITEM TRANSFER LOGIC
+    // ========================================================================
+
+    _getBankItems() {
         const bankItems = persistentState?.bank?.items || [];
+        // Filter out items already in run inventory/equipment
+        return bankItems.filter((item, idx) => {
+            // Check if this bank index is already used
+            const inRunInv = this.runInventory.some(ri => ri.bankIndex === idx);
+            const inEquip = Object.values(this.runEquipment).some(e => e && e.bankIndex === idx);
+            return !inRunInv && !inEquip;
+        }).map((item, filteredIdx, arr) => {
+            // Find original bank index
+            let originalIdx = 0;
+            let count = 0;
+            const allBankItems = persistentState?.bank?.items || [];
+            for (let i = 0; i < allBankItems.length; i++) {
+                const inRunInv = this.runInventory.some(ri => ri.bankIndex === i);
+                const inEquip = Object.values(this.runEquipment).some(e => e && e.bankIndex === i);
+                if (!inRunInv && !inEquip) {
+                    if (count === filteredIdx) {
+                        originalIdx = i;
+                        break;
+                    }
+                    count++;
+                }
+            }
+            return { item, bankIndex: originalIdx };
+        });
+    },
 
-        switch (this.currentSection) {
-            case 0:  // Basic - no items list, just a button
-                return [];
-            case 1:  // Weapons
-                return bankItems
-                    .map((item, index) => ({ item, index }))
-                    .filter(({ item }) => item.type === 'weapon');
-            case 2:  // Armor
-                return bankItems
-                    .map((item, index) => ({ item, index }))
-                    .filter(({ item }) => item.type === 'armor');
-            case 3:  // Consumables
-                return bankItems
-                    .map((item, index) => ({ item, index }))
-                    .filter(({ item }) => item.type === 'consumable');
-            default:
-                return [];
+    _transferFromBank() {
+        const bankItems = this._getBankItems();
+        if (this.selectedIndex >= bankItems.length) return;
+
+        const { item, bankIndex } = bankItems[this.selectedIndex];
+
+        // If weapon or armor, try to equip directly
+        if (item.type === 'weapon') {
+            const slot = 'MAIN';  // Default to main hand
+            if (this.runEquipment[slot]) {
+                // Swap - move current to inventory
+                this.runInventory.push(this.runEquipment[slot]);
+            }
+            this.runEquipment[slot] = { ...item, bankIndex };
+            console.log(`[LoadoutUI] Equipped ${item.name} to ${slot}`);
+        } else if (item.type === 'armor') {
+            const slot = item.slot || 'CHEST';
+            if (this.runEquipment[slot]) {
+                // Swap - move current to inventory
+                this.runInventory.push(this.runEquipment[slot]);
+            }
+            this.runEquipment[slot] = { ...item, bankIndex };
+            console.log(`[LoadoutUI] Equipped ${item.name} to ${slot}`);
+        } else {
+            // Consumables/materials go to inventory
+            if (this.runInventory.length < 15) {  // Max inventory slots
+                this.runInventory.push({ ...item, bankIndex });
+                console.log(`[LoadoutUI] Added ${item.name} to inventory`);
+            } else {
+                console.log('[LoadoutUI] Inventory full!');
+            }
         }
     },
 
-    /**
-     * Select current item for loadout
-     * @private
-     */
-    _selectItem() {
-        const items = this._getCurrentSectionItems();
-        if (this.selectedIndex >= items.length) return;
+    _unequipItem() {
+        const slotName = this.EQUIPMENT_SLOTS[this.equipmentSlotIndex];
+        const equipped = this.runEquipment[slotName];
 
-        const { item, index } = items[this.selectedIndex];
+        if (!equipped) return;
 
-        if (!LoadoutSystem) return;
-
-        // Clear basic loadout when selecting custom items
-        if (LoadoutSystem.isBasicLoadout()) {
-            LoadoutSystem.reset();
+        // Move to inventory
+        if (this.runInventory.length < 15) {
+            this.runInventory.push(equipped);
+            this.runEquipment[slotName] = null;
+            console.log(`[LoadoutUI] Unequipped ${equipped.name}`);
+        } else {
+            console.log('[LoadoutUI] Inventory full!');
         }
+    },
 
-        // Check if already selected (toggle off)
-        if (LoadoutSystem.isSelected(index)) {
-            if (this.currentSection === 1) {
-                LoadoutSystem.deselectWeapon();
-            } else if (this.currentSection === 2) {
-                LoadoutSystem.deselectArmor(item.slot);
-            } else if (this.currentSection === 3) {
-                LoadoutSystem.removeConsumable(index);
+    _handleInventorySelect() {
+        if (this.selectedIndex >= this.runInventory.length) return;
+
+        const item = this.runInventory[this.selectedIndex];
+
+        // Try to equip if weapon/armor
+        if (item.type === 'weapon') {
+            const slot = 'MAIN';
+            if (this.runEquipment[slot]) {
+                // Swap
+                const old = this.runEquipment[slot];
+                this.runEquipment[slot] = item;
+                this.runInventory[this.selectedIndex] = old;
+            } else {
+                this.runEquipment[slot] = item;
+                this.runInventory.splice(this.selectedIndex, 1);
+            }
+        } else if (item.type === 'armor') {
+            const slot = item.slot || 'CHEST';
+            if (this.runEquipment[slot]) {
+                // Swap
+                const old = this.runEquipment[slot];
+                this.runEquipment[slot] = item;
+                this.runInventory[this.selectedIndex] = old;
+            } else {
+                this.runEquipment[slot] = item;
+                this.runInventory.splice(this.selectedIndex, 1);
             }
         } else {
-            // Select item
-            if (this.currentSection === 1) {
-                LoadoutSystem.selectWeapon(index);
-            } else if (this.currentSection === 2) {
-                LoadoutSystem.selectArmor(index);
-            } else if (this.currentSection === 3) {
-                LoadoutSystem.addConsumable(index, item.count || 1);
+            // Return consumable to bank (remove from run inventory)
+            this.runInventory.splice(this.selectedIndex, 1);
+            if (this.selectedIndex >= this.runInventory.length && this.selectedIndex > 0) {
+                this.selectedIndex--;
             }
         }
     },
 
-    /**
-     * Adjust starting floor (shortcuts)
-     * @param {number} delta
-     * @private
-     */
-    _adjustStartingFloor(delta) {
-        // Get unlocked floors from shortcuts (unlockedFloors is an array of floor numbers)
-        const unlockedFloors = persistentState?.shortcuts?.unlockedFloors || [1];
+    _selectBasicLoadout() {
+        // Clear current selection
+        this.runInventory = [];
+        this.runEquipment = {
+            HEAD: null, CHEST: null, LEGS: null, FEET: null,
+            MAIN: null, OFF: null
+        };
 
+        // Add basic loadout items (not from bank - free items)
+        const basicWeapon = {
+            name: 'Rusty Shortsword',
+            type: 'weapon',
+            damage: 8,
+            rarity: 'common',
+            attackSpeed: 1.5,
+            attackRange: 1,
+            element: 'physical',
+            isFreeItem: true  // Mark as free (not from bank)
+        };
+
+        this.runEquipment.MAIN = basicWeapon;
+
+        // Add health potions
+        this.runInventory.push({
+            name: 'Weak Health Potion',
+            type: 'consumable',
+            count: 2,
+            rarity: 'common',
+            effect: { type: 'heal', value: 25 },
+            isFreeItem: true
+        });
+
+        console.log('[LoadoutUI] Basic loadout selected');
+    },
+
+    _adjustStartingFloor(delta) {
+        const unlockedFloors = persistentState?.shortcuts?.unlockedFloors || [1];
         const currentIdx = unlockedFloors.indexOf(this.startingFloor);
         const newIdx = Math.max(0, Math.min(unlockedFloors.length - 1, currentIdx + delta));
         this.startingFloor = unlockedFloors[newIdx] || 1;
     },
 
-    /**
-     * Start the run with selected loadout
-     * @private
-     */
     _startRun() {
         console.log(`[LoadoutUI] Starting run from floor ${this.startingFloor}`);
 
-        // Get loadout from LoadoutSystem
-        const loadout = LoadoutSystem ? LoadoutSystem.getLoadout() : null;
+        // Withdraw items from bank that were selected
+        const bankItems = persistentState?.bank?.items || [];
+        const indicesToRemove = new Set();
 
-        // Confirm loadout (removes items from bank)
-        if (LoadoutSystem) {
-            LoadoutSystem.confirmLoadout();
-        }
+        // Collect all bank indices used
+        this.runInventory.forEach(item => {
+            if (item.bankIndex !== undefined && !item.isFreeItem) {
+                indicesToRemove.add(item.bankIndex);
+            }
+        });
+        Object.values(this.runEquipment).forEach(item => {
+            if (item && item.bankIndex !== undefined && !item.isFreeItem) {
+                indicesToRemove.add(item.bankIndex);
+            }
+        });
 
-        // Close UI before starting dungeon
+        // Remove from bank (in reverse order to preserve indices)
+        const sortedIndices = Array.from(indicesToRemove).sort((a, b) => b - a);
+        sortedIndices.forEach(idx => {
+            if (persistentState?.bank?.items) {
+                persistentState.bank.items.splice(idx, 1);
+            }
+        });
+
+        // Build loadout object for the run
+        const loadout = {
+            weapon: this.runEquipment.MAIN,
+            armor: [
+                this.runEquipment.HEAD,
+                this.runEquipment.CHEST,
+                this.runEquipment.LEGS,
+                this.runEquipment.FEET
+            ].filter(a => a !== null),
+            offhand: this.runEquipment.OFF,
+            consumables: this.runInventory.filter(i => i.type === 'consumable'),
+            materials: this.runInventory.filter(i => i.type === 'material'),
+            gold: this.runGold
+        };
+
         this.active = false;
 
-        // Start dungeon run with loadout
+        // Start dungeon run
         if (typeof startDungeonRun === 'function') {
             startDungeonRun({
                 startingFloor: this.startingFloor,
@@ -244,475 +453,399 @@ const LoadoutUI = {
             console.error('[LoadoutUI] startDungeonRun not found!');
             game.state = GAME_STATES ? GAME_STATES.VILLAGE : 'village';
         }
-
-        console.log('[LoadoutUI] Run started!');
     },
 
     // ========================================================================
     // RENDERING
     // ========================================================================
 
-    /**
-     * Render the loadout UI
-     * @param {CanvasRenderingContext2D} ctx
-     */
     render(ctx) {
         if (!this.active) return;
 
         const canvas = ctx.canvas;
 
         // Darken background
-        ctx.fillStyle = 'rgba(0, 0, 0, 0.8)';
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.85)';
         ctx.fillRect(0, 0, canvas.width, canvas.height);
 
         // Calculate panel position
         const panelX = (canvas.width - this.PANEL_WIDTH) / 2;
         const panelY = (canvas.height - this.PANEL_HEIGHT) / 2;
 
-        // Draw panel
+        // Draw main panel
         this._renderPanel(ctx, panelX, panelY);
 
-        // Draw section tabs
-        this._renderSectionTabs(ctx, panelX, panelY);
+        // Draw three columns
+        this._renderBankPanel(ctx, panelX + 20, panelY + 60);
+        this._renderEquipmentPanel(ctx, panelX + 320, panelY + 60);
+        this._renderInventoryPanel(ctx, panelX + 620, panelY + 60);
 
-        // Draw current section content
-        if (this.currentSection === 0) {
-            this._renderBasicSection(ctx, panelX, panelY);
-        } else if (this.currentSection >= 1 && this.currentSection <= 3) {
-            this._renderItemSection(ctx, panelX, panelY);
-        } else {
-            this._renderConfirmSection(ctx, panelX, panelY);
-        }
-
-        // Draw loadout summary
-        this._renderLoadoutSummary(ctx, panelX, panelY);
+        // Draw bottom action bar
+        this._renderActionBar(ctx, panelX, panelY + this.PANEL_HEIGHT - 100);
 
         // Draw controls
         this._renderControls(ctx, panelX, panelY);
     },
 
-    /**
-     * Render panel background
-     * @private
-     */
     _renderPanel(ctx, x, y) {
         // Shadow
         ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
         ctx.fillRect(x + 5, y + 5, this.PANEL_WIDTH, this.PANEL_HEIGHT);
 
         // Background
-        ctx.fillStyle = '#1a1a2e';
+        ctx.fillStyle = '#0d1117';
         ctx.fillRect(x, y, this.PANEL_WIDTH, this.PANEL_HEIGHT);
 
         // Border
-        ctx.strokeStyle = '#4682B4';
-        ctx.lineWidth = 3;
+        ctx.strokeStyle = '#30363d';
+        ctx.lineWidth = 2;
         ctx.strokeRect(x, y, this.PANEL_WIDTH, this.PANEL_HEIGHT);
 
+        // Title bar
+        ctx.fillStyle = '#161b22';
+        ctx.fillRect(x, y, this.PANEL_WIDTH, 50);
+
         // Title
-        ctx.font = 'bold 28px Arial';
+        ctx.font = 'bold 24px Arial';
         ctx.textAlign = 'center';
-        ctx.fillStyle = '#4682B4';
+        ctx.fillStyle = '#58a6ff';
         ctx.fillText('EXPEDITION LOADOUT', x + this.PANEL_WIDTH / 2, y + 35);
+
+        // Floor selector in title bar
+        ctx.font = '14px Arial';
+        ctx.textAlign = 'right';
+        ctx.fillStyle = '#8b949e';
+        ctx.fillText(`Floor ${this.startingFloor}`, x + this.PANEL_WIDTH - 20, y + 30);
+        ctx.font = '10px Arial';
+        ctx.fillText('[PgUp/PgDn]', x + this.PANEL_WIDTH - 20, y + 44);
     },
 
-    /**
-     * Render section tabs
-     * @private
-     */
-    _renderSectionTabs(ctx, panelX, panelY) {
-        const tabWidth = 100;  // Reduced to fit 5 tabs
-        const tabHeight = 35;
-        const startX = panelX + 20;
-        const tabY = panelY + 50;
+    _renderBankPanel(ctx, x, y) {
+        const width = 280;
+        const height = 480;
 
-        this.SECTIONS.forEach((section, index) => {
-            const tabX = startX + index * (tabWidth + 8);
-            const isSelected = index === this.currentSection;
+        // Panel background
+        ctx.fillStyle = this.currentPanel === 0 ? '#1c2128' : '#161b22';
+        ctx.fillRect(x, y, width, height);
+        ctx.strokeStyle = this.currentPanel === 0 ? '#58a6ff' : '#30363d';
+        ctx.lineWidth = this.currentPanel === 0 ? 2 : 1;
+        ctx.strokeRect(x, y, width, height);
 
-            // Highlight BASIC tab with green if selected
-            const isBasicTab = index === 0;
+        // Title
+        ctx.font = 'bold 14px Arial';
+        ctx.textAlign = 'center';
+        ctx.fillStyle = '#8b949e';
+        ctx.fillText('BANK / STASH', x + width / 2, y + 20);
 
-            // Tab background
-            if (isSelected) {
-                const grad = ctx.createLinearGradient(tabX, tabY, tabX, tabY + tabHeight);
-                if (isBasicTab) {
-                    grad.addColorStop(0, '#2ecc71');
-                    grad.addColorStop(1, '#1a8f4e');
-                } else {
-                    grad.addColorStop(0, '#4682B4');
-                    grad.addColorStop(1, '#2F4F4F');
-                }
-                ctx.fillStyle = grad;
-            } else {
-                ctx.fillStyle = '#2a2a4e';
+        // Bank gold
+        const bankGold = persistentState?.bank?.gold || 0;
+        ctx.font = '12px Arial';
+        ctx.fillStyle = '#FFD700';
+        ctx.fillText(`${bankGold}g available`, x + width / 2, y + 38);
+
+        // Item grid
+        const bankItems = this._getBankItems();
+        const gridX = x + 15;
+        const gridY = y + 55;
+
+        this._renderItemGrid(ctx, gridX, gridY, bankItems, this.currentPanel === 0);
+    },
+
+    _renderEquipmentPanel(ctx, x, y) {
+        const width = 280;
+        const height = 480;
+
+        // Panel background
+        ctx.fillStyle = this.currentPanel === 1 ? '#1c2128' : '#161b22';
+        ctx.fillRect(x, y, width, height);
+        ctx.strokeStyle = this.currentPanel === 1 ? '#58a6ff' : '#30363d';
+        ctx.lineWidth = this.currentPanel === 1 ? 2 : 1;
+        ctx.strokeRect(x, y, width, height);
+
+        // Title
+        ctx.font = 'bold 14px Arial';
+        ctx.textAlign = 'center';
+        ctx.fillStyle = '#8b949e';
+        ctx.fillText('EQUIPMENT', x + width / 2, y + 20);
+
+        // Draw equipment slots in paper-doll layout
+        const centerX = x + width / 2;
+        const slotSize = 60;
+        const gap = 10;
+
+        // HEAD (top center)
+        this._renderEquipSlot(ctx, centerX - slotSize/2, y + 50, slotSize,
+            'HEAD', this.runEquipment.HEAD,
+            this.currentPanel === 1 && this.equipmentSlotIndex === 0);
+
+        // MAIN (left) and OFF (right)
+        this._renderEquipSlot(ctx, centerX - slotSize - gap, y + 130, slotSize,
+            'WEAPON', this.runEquipment.MAIN,
+            this.currentPanel === 1 && this.equipmentSlotIndex === 1);
+        this._renderEquipSlot(ctx, centerX + gap, y + 130, slotSize,
+            'OFF', this.runEquipment.OFF,
+            this.currentPanel === 1 && this.equipmentSlotIndex === 2);
+
+        // CHEST (center, between weapon/off)
+        this._renderEquipSlot(ctx, centerX - slotSize/2, y + 130, slotSize,
+            'CHEST', this.runEquipment.CHEST,
+            this.currentPanel === 1 && this.equipmentSlotIndex === 3);
+
+        // LEGS (center below chest)
+        this._renderEquipSlot(ctx, centerX - slotSize/2, y + 210, slotSize,
+            'LEGS', this.runEquipment.LEGS,
+            this.currentPanel === 1 && this.equipmentSlotIndex === 4);
+
+        // FEET (bottom center)
+        this._renderEquipSlot(ctx, centerX - slotSize/2, y + 290, slotSize,
+            'FEET', this.runEquipment.FEET,
+            this.currentPanel === 1 && this.equipmentSlotIndex === 5);
+
+        // Stats summary
+        this._renderStatsSummary(ctx, x + 10, y + 380, width - 20);
+    },
+
+    _renderEquipSlot(ctx, x, y, size, label, item, isSelected) {
+        // Slot background
+        ctx.fillStyle = item ? '#238636' : '#21262d';
+        ctx.fillRect(x, y, size, size);
+
+        // Selection highlight
+        if (isSelected) {
+            ctx.strokeStyle = '#58a6ff';
+            ctx.lineWidth = 3;
+            ctx.strokeRect(x - 2, y - 2, size + 4, size + 4);
+        } else {
+            ctx.strokeStyle = '#30363d';
+            ctx.lineWidth = 1;
+            ctx.strokeRect(x, y, size, size);
+        }
+
+        // Item or label
+        ctx.textAlign = 'center';
+        if (item) {
+            // Item icon/name
+            ctx.font = 'bold 10px Arial';
+            ctx.fillStyle = this._getRarityColor(item.rarity);
+
+            // Truncate name if too long
+            const displayName = item.name.length > 10 ?
+                item.name.substring(0, 9) + '..' : item.name;
+            ctx.fillText(displayName, x + size/2, y + size/2 - 5);
+
+            // Stats
+            ctx.font = '9px Arial';
+            ctx.fillStyle = '#8b949e';
+            if (item.damage) {
+                ctx.fillText(`DMG: ${item.damage}`, x + size/2, y + size/2 + 8);
+            } else if (item.pDef) {
+                ctx.fillText(`DEF: ${item.pDef}`, x + size/2, y + size/2 + 8);
             }
-            ctx.fillRect(tabX, tabY, tabWidth, tabHeight);
-
-            // Tab border
-            ctx.strokeStyle = isSelected ? (isBasicTab ? '#2ecc71' : '#4682B4') : '#4a4a6a';
-            ctx.lineWidth = 2;
-            ctx.strokeRect(tabX, tabY, tabWidth, tabHeight);
-
-            // Tab text
-            ctx.font = 'bold 11px Arial';
-            ctx.textAlign = 'center';
-            ctx.fillStyle = isSelected ? '#FFF' : '#888';
-            ctx.fillText(section, tabX + tabWidth / 2, tabY + 22);
-        });
+        } else {
+            // Empty slot label
+            ctx.font = '10px Arial';
+            ctx.fillStyle = '#484f58';
+            ctx.fillText(label, x + size/2, y + size/2 + 3);
+        }
     },
 
-    /**
-     * Render basic loadout section
-     * @private
-     */
-    _renderBasicSection(ctx, panelX, panelY) {
-        const sectionX = panelX + 30;
-        const sectionY = panelY + 100;
-        const sectionWidth = 500;
+    _renderStatsSummary(ctx, x, y, width) {
+        ctx.font = 'bold 12px Arial';
+        ctx.textAlign = 'left';
+        ctx.fillStyle = '#8b949e';
+        ctx.fillText('STATS', x, y);
+
+        let totalDamage = 0;
+        let totalDef = 0;
+
+        if (this.runEquipment.MAIN) {
+            totalDamage += this.runEquipment.MAIN.damage || 0;
+        }
+        ['HEAD', 'CHEST', 'LEGS', 'FEET'].forEach(slot => {
+            if (this.runEquipment[slot]) {
+                totalDef += this.runEquipment[slot].pDef || 0;
+            }
+        });
+
+        ctx.font = '11px Arial';
+        ctx.fillStyle = '#e74c3c';
+        ctx.fillText(`Damage: ${totalDamage}`, x, y + 18);
+        ctx.fillStyle = '#3498db';
+        ctx.fillText(`Defense: ${totalDef}`, x + 80, y + 18);
+
+        // Item count
+        ctx.fillStyle = '#8b949e';
+        ctx.fillText(`Items: ${this.runInventory.length}/15`, x, y + 36);
+    },
+
+    _renderInventoryPanel(ctx, x, y) {
+        const width = 450;
+        const height = 480;
+
+        // Panel background
+        ctx.fillStyle = this.currentPanel === 2 ? '#1c2128' : '#161b22';
+        ctx.fillRect(x, y, width, height);
+        ctx.strokeStyle = this.currentPanel === 2 ? '#58a6ff' : '#30363d';
+        ctx.lineWidth = this.currentPanel === 2 ? 2 : 1;
+        ctx.strokeRect(x, y, width, height);
+
+        // Title
+        ctx.font = 'bold 14px Arial';
+        ctx.textAlign = 'center';
+        ctx.fillStyle = '#8b949e';
+        ctx.fillText('RUN INVENTORY', x + width / 2, y + 20);
+
+        ctx.font = '12px Arial';
+        ctx.fillText(`${this.runInventory.length}/15 slots`, x + width / 2, y + 38);
+
+        // Item grid with more columns
+        const gridX = x + 15;
+        const gridY = y + 55;
+        const invItems = this.runInventory.map((item, idx) => ({ item, bankIndex: item.bankIndex }));
+
+        this._renderItemGrid(ctx, gridX, gridY, invItems, this.currentPanel === 2, 6);
+    },
+
+    _renderItemGrid(ctx, x, y, items, isActive, cols = 4) {
+        const slotSize = this.SLOT_SIZE;
+        const gap = this.SLOT_GAP;
+        const rows = Math.ceil(items.length / cols) || 1;
+        const maxVisibleRows = 6;
+
+        // Draw grid slots
+        for (let row = 0; row < Math.max(rows, maxVisibleRows); row++) {
+            for (let col = 0; col < cols; col++) {
+                const idx = row * cols + col;
+                const slotX = x + col * (slotSize + gap);
+                const slotY = y + row * (slotSize + gap);
+
+                // Check if within visible area
+                if (row >= maxVisibleRows) continue;
+
+                const item = items[idx];
+                const isSelected = isActive && idx === this.selectedIndex;
+
+                // Slot background
+                ctx.fillStyle = item ? '#21262d' : '#161b22';
+                ctx.fillRect(slotX, slotY, slotSize, slotSize);
+
+                // Selection highlight
+                if (isSelected) {
+                    ctx.strokeStyle = '#58a6ff';
+                    ctx.lineWidth = 2;
+                    ctx.strokeRect(slotX - 1, slotY - 1, slotSize + 2, slotSize + 2);
+                } else {
+                    ctx.strokeStyle = '#30363d';
+                    ctx.lineWidth = 1;
+                    ctx.strokeRect(slotX, slotY, slotSize, slotSize);
+                }
+
+                if (item) {
+                    this._renderItemSlot(ctx, slotX, slotY, slotSize, item.item);
+                }
+            }
+        }
+    },
+
+    _renderItemSlot(ctx, x, y, size, item) {
+        // Rarity border color
+        const rarityColor = this._getRarityColor(item.rarity);
+        ctx.strokeStyle = rarityColor;
+        ctx.lineWidth = 2;
+        ctx.strokeRect(x + 1, y + 1, size - 2, size - 2);
+
+        // Type icon
+        ctx.font = 'bold 16px Arial';
+        ctx.textAlign = 'center';
+        ctx.fillStyle = rarityColor;
+
+        let icon = '?';
+        if (item.type === 'weapon') icon = '⚔';
+        else if (item.type === 'armor') icon = '🛡';
+        else if (item.type === 'consumable') icon = '✚';
+        else if (item.type === 'material') icon = '◆';
+
+        ctx.fillText(icon, x + size/2, y + size/2 + 5);
+
+        // Stack count
+        if (item.count && item.count > 1) {
+            ctx.font = 'bold 10px Arial';
+            ctx.textAlign = 'right';
+            ctx.fillStyle = '#FFF';
+            ctx.fillText(`${item.count}`, x + size - 3, y + size - 3);
+        }
+    },
+
+    _getRarityColor(rarity) {
+        const colors = {
+            common: '#9e9e9e',
+            uncommon: '#2ecc71',
+            rare: '#3498db',
+            epic: '#9b59b6',
+            legendary: '#FFD700'
+        };
+        return colors[rarity] || '#9e9e9e';
+    },
+
+    _renderActionBar(ctx, x, y) {
+        const width = this.PANEL_WIDTH;
+        const height = 80;
 
         // Background
-        ctx.fillStyle = '#12121a';
-        ctx.fillRect(sectionX, sectionY, sectionWidth, 400);
-        ctx.strokeStyle = '#3a3a5a';
+        ctx.fillStyle = '#161b22';
+        ctx.fillRect(x, y, width, height);
+        ctx.strokeStyle = '#30363d';
         ctx.lineWidth = 1;
-        ctx.strokeRect(sectionX, sectionY, sectionWidth, 400);
+        ctx.strokeRect(x, y, width, height);
 
-        // Title
-        ctx.font = 'bold 20px Arial';
-        ctx.textAlign = 'center';
-        ctx.fillStyle = '#4682B4';
-        ctx.fillText('STARTER KIT', sectionX + sectionWidth / 2, sectionY + 40);
+        // Buttons
+        const buttonY = y + 20;
+        const buttonHeight = 40;
 
-        // Description
-        ctx.font = '14px Arial';
-        ctx.fillStyle = '#888';
-        ctx.fillText('Free basic equipment for new delvers', sectionX + sectionWidth / 2, sectionY + 70);
-
-        // Show what's included
-        const basicLoadout = LoadoutSystem?.BASIC_LOADOUT || {};
-        let yOffset = sectionY + 110;
-
-        ctx.font = 'bold 16px Arial';
-        ctx.textAlign = 'left';
-        ctx.fillStyle = '#FFD700';
-        ctx.fillText('Includes:', sectionX + 20, yOffset);
-        yOffset += 30;
-
-        // Weapon
-        if (basicLoadout.weapon) {
-            ctx.font = '14px Arial';
-            ctx.fillStyle = '#e74c3c';
-            ctx.fillText(`⚔ ${basicLoadout.weapon.name}`, sectionX + 30, yOffset);
-            ctx.fillStyle = '#888';
-            ctx.fillText(`  - ${basicLoadout.weapon.description}`, sectionX + 30, yOffset + 18);
-            yOffset += 50;
-        }
-
-        // Consumables
-        if (basicLoadout.consumables && basicLoadout.consumables.length > 0) {
-            basicLoadout.consumables.forEach(cons => {
-                ctx.font = '14px Arial';
-                ctx.fillStyle = '#2ecc71';
-                ctx.fillText(`✚ ${cons.name} x${cons.count || 1}`, sectionX + 30, yOffset);
-                ctx.fillStyle = '#888';
-                ctx.fillText(`  - ${cons.description}`, sectionX + 30, yOffset + 18);
-                yOffset += 50;
-            });
-        }
-
-        // Select button
-        const buttonX = sectionX + sectionWidth / 2 - 100;
-        const buttonY = sectionY + 300;
-        const buttonW = 200;
-        const buttonH = 50;
-        const isSelected = LoadoutSystem?.isBasicLoadout?.();
-
-        // Button glow if selected
-        if (isSelected) {
-            ctx.shadowColor = '#2ecc71';
-            ctx.shadowBlur = 15;
-        }
-
-        ctx.fillStyle = isSelected ? '#2ecc71' : '#4682B4';
-        ctx.fillRect(buttonX, buttonY, buttonW, buttonH);
-        ctx.shadowBlur = 0;
-
-        ctx.strokeStyle = '#FFF';
+        // Basic Kit button
+        ctx.fillStyle = '#238636';
+        ctx.fillRect(x + 50, buttonY, 150, buttonHeight);
+        ctx.strokeStyle = '#2ea043';
         ctx.lineWidth = 2;
-        ctx.strokeRect(buttonX, buttonY, buttonW, buttonH);
-
-        ctx.font = 'bold 16px Arial';
+        ctx.strokeRect(x + 50, buttonY, 150, buttonHeight);
+        ctx.font = 'bold 14px Arial';
         ctx.textAlign = 'center';
         ctx.fillStyle = '#FFF';
-        ctx.fillText(isSelected ? '✓ SELECTED' : 'SELECT BASIC KIT', buttonX + buttonW / 2, buttonY + 32);
+        ctx.fillText('[Q] BASIC KIT', x + 125, buttonY + 26);
 
-        // Hint
-        ctx.font = '12px Arial';
-        ctx.fillStyle = '#666';
-        ctx.fillText('Press [E] or [Enter] to select', sectionX + sectionWidth / 2, sectionY + 380);
-    },
-
-    /**
-     * Render item selection section
-     * @private
-     */
-    _renderItemSection(ctx, panelX, panelY) {
-        const items = this._getCurrentSectionItems();
-        const listX = panelX + 30;
-        const listY = panelY + 100;
-        const listWidth = 500;
-        const listHeight = 400;
-        const itemHeight = 45;
-
-        // List background
-        ctx.fillStyle = '#12121a';
-        ctx.fillRect(listX, listY, listWidth, listHeight);
-        ctx.strokeStyle = '#3a3a5a';
-        ctx.lineWidth = 1;
-        ctx.strokeRect(listX, listY, listWidth, listHeight);
-
-        // Section title (adjusted for new indices: 1=weapon, 2=armor, 3=consumables)
-        const titles = ['', 'Select Weapon', 'Select Armor', 'Select Consumables'];
-        ctx.font = 'bold 16px Arial';
-        ctx.textAlign = 'left';
-        ctx.fillStyle = '#888';
-        ctx.fillText(titles[this.currentSection] || '', listX + 10, listY - 5);
-
-        if (items.length === 0) {
-            ctx.font = '16px Arial';
-            ctx.textAlign = 'center';
-            ctx.fillStyle = '#666';
-            ctx.fillText('No items available', listX + listWidth / 2, listY + 100);
-            return;
-        }
-
-        // Render items
-        const maxVisible = Math.floor(listHeight / itemHeight);
-        const startIdx = Math.max(0, this.selectedIndex - Math.floor(maxVisible / 2));
-        const visibleItems = items.slice(startIdx, startIdx + maxVisible);
-
-        visibleItems.forEach(({ item, index }, idx) => {
-            const realIndex = startIdx + idx;
-            const itemY = listY + 5 + idx * itemHeight;
-            const isSelected = realIndex === this.selectedIndex;
-            const isInLoadout = LoadoutSystem?.isSelected(index);
-
-            // Selection highlight
-            if (isSelected) {
-                ctx.fillStyle = '#3a3a5e';
-                ctx.fillRect(listX + 5, itemY, listWidth - 10, itemHeight - 5);
-            }
-
-            // Loadout indicator
-            if (isInLoadout) {
-                ctx.fillStyle = 'rgba(70, 130, 180, 0.3)';
-                ctx.fillRect(listX + 5, itemY, listWidth - 10, itemHeight - 5);
-
-                // Checkmark
-                ctx.fillStyle = '#4682B4';
-                ctx.font = 'bold 16px Arial';
-                ctx.textAlign = 'left';
-                ctx.fillText('✓', listX + 10, itemY + 28);
-            }
-
-            // Item name
-            const rarityColors = {
-                common: '#FFFFFF',
-                uncommon: '#2ecc71',
-                rare: '#3498db',
-                epic: '#9b59b6',
-                legendary: '#FFD700'
-            };
-            ctx.font = isSelected ? 'bold 15px Arial' : '15px Arial';
-            ctx.textAlign = 'left';
-            ctx.fillStyle = rarityColors[item.rarity] || '#FFFFFF';
-            ctx.fillText(item.name, listX + 35, itemY + 20);
-
-            // Item details
-            ctx.font = '12px Arial';
-            ctx.fillStyle = '#888';
-            if (item.type === 'weapon') {
-                ctx.fillText(`DMG: ${item.damage || item.stats?.damage || '?'}`, listX + 35, itemY + 35);
-            } else if (item.type === 'armor') {
-                ctx.fillText(`${item.slot || '?'} | DEF: ${item.pDef || 0}`, listX + 35, itemY + 35);
-            } else if (item.type === 'consumable') {
-                ctx.fillText(`x${item.count || 1}`, listX + 35, itemY + 35);
-            }
-        });
-    },
-
-    /**
-     * Render confirmation section
-     * @private
-     */
-    _renderConfirmSection(ctx, panelX, panelY) {
-        const sectionX = panelX + 30;
-        const sectionY = panelY + 100;
-
-        // Starting floor selection
-        ctx.font = 'bold 18px Arial';
-        ctx.textAlign = 'left';
-        ctx.fillStyle = '#FFF';
-        ctx.fillText('Starting Floor:', sectionX, sectionY + 30);
-
-        // Floor selector
-        const floorX = sectionX + 200;
-        ctx.fillStyle = '#2a2a4e';
-        ctx.fillRect(floorX - 40, sectionY + 10, 120, 30);
-        ctx.strokeStyle = '#4682B4';
+        // Start Run button
+        ctx.fillStyle = '#58a6ff';
+        ctx.fillRect(x + width - 250, buttonY, 200, buttonHeight);
+        ctx.strokeStyle = '#79c0ff';
         ctx.lineWidth = 2;
-        ctx.strokeRect(floorX - 40, sectionY + 10, 120, 30);
-
-        ctx.font = 'bold 20px Arial';
-        ctx.textAlign = 'center';
-        ctx.fillStyle = '#4682B4';
-        ctx.fillText(`Floor ${this.startingFloor}`, floorX + 20, sectionY + 32);
-
-        // Arrows
-        ctx.fillStyle = '#888';
-        ctx.fillText('▲', floorX + 80, sectionY + 32);
-        ctx.fillText('▼', floorX - 30, sectionY + 32);
-
-        // Shortcuts info
-        const unlockedFloors = persistentState?.shortcuts?.unlockedFloors || [1];
-        const unlockedCount = unlockedFloors.length - 1;  // Subtract 1 since floor 1 is always available
-        const maxFloors = 10;  // Approximate max floors for display
-
-        ctx.font = '14px Arial';
-        ctx.textAlign = 'left';
-        ctx.fillStyle = '#888';
-        ctx.fillText(`Shortcuts unlocked: ${unlockedCount}/${maxFloors}`, sectionX, sectionY + 70);
+        ctx.strokeRect(x + width - 250, buttonY, 200, buttonHeight);
+        ctx.font = 'bold 16px Arial';
+        ctx.fillStyle = '#FFF';
+        ctx.fillText(`[R] START - Floor ${this.startingFloor}`, x + width - 150, buttonY + 27);
 
         // Value at risk
-        const valueAtRisk = LoadoutSystem?.getValueAtRisk() || 0;
-        ctx.fillStyle = valueAtRisk > 0 ? '#e74c3c' : '#888';
-        ctx.fillText(`Value at risk: ${valueAtRisk}g`, sectionX, sectionY + 100);
-
-        // Start button
-        const buttonX = sectionX + 100;
-        const buttonY = sectionY + 150;
-        const buttonW = 200;
-        const buttonH = 50;
-
-        // Button glow
-        ctx.shadowColor = '#4682B4';
-        ctx.shadowBlur = 15;
-
-        ctx.fillStyle = '#4682B4';
-        ctx.fillRect(buttonX, buttonY, buttonW, buttonH);
-
-        ctx.shadowBlur = 0;
-
-        ctx.strokeStyle = '#FFF';
-        ctx.lineWidth = 2;
-        ctx.strokeRect(buttonX, buttonY, buttonW, buttonH);
-
-        ctx.font = 'bold 20px Arial';
-        ctx.textAlign = 'center';
-        ctx.fillStyle = '#FFF';
-        ctx.fillText('BEGIN DESCENT', buttonX + buttonW / 2, buttonY + 33);
-    },
-
-    /**
-     * Render loadout summary
-     * @private
-     */
-    _renderLoadoutSummary(ctx, panelX, panelY) {
-        const summaryX = panelX + 560;
-        const summaryY = panelY + 100;
-        const summaryWidth = 400;
-        const summaryHeight = 400;
-
-        // Background
-        ctx.fillStyle = '#12121a';
-        ctx.fillRect(summaryX, summaryY, summaryWidth, summaryHeight);
-        ctx.strokeStyle = '#4682B4';
-        ctx.lineWidth = 2;
-        ctx.strokeRect(summaryX, summaryY, summaryWidth, summaryHeight);
-
-        // Title
-        ctx.font = 'bold 16px Arial';
-        ctx.textAlign = 'center';
-        ctx.fillStyle = '#4682B4';
-        ctx.fillText('CURRENT LOADOUT', summaryX + summaryWidth / 2, summaryY + 25);
-
-        const loadout = LoadoutSystem?.getLoadout() || { weapon: null, armor: [], consumables: [], gold: 0 };
-        let yOffset = summaryY + 50;
-
-        // Weapon
-        ctx.font = 'bold 14px Arial';
-        ctx.textAlign = 'left';
-        ctx.fillStyle = '#FFD700';
-        ctx.fillText('Weapon:', summaryX + 15, yOffset);
-        ctx.fillStyle = loadout.weapon ? '#FFF' : '#666';
-        ctx.font = '14px Arial';
-        ctx.fillText(loadout.weapon?.name || 'None', summaryX + 100, yOffset);
-        yOffset += 30;
-
-        // Armor
-        ctx.font = 'bold 14px Arial';
-        ctx.fillStyle = '#FFD700';
-        ctx.fillText('Armor:', summaryX + 15, yOffset);
-        yOffset += 5;
-
-        const armorSlots = ['HEAD', 'CHEST', 'LEGS', 'FEET'];
-        armorSlots.forEach(slot => {
-            const piece = loadout.armor.find(a => a.slot === slot);
-            ctx.font = '12px Arial';
-            ctx.fillStyle = '#888';
-            ctx.fillText(`${slot}:`, summaryX + 25, yOffset + 15);
-            ctx.fillStyle = piece ? '#FFF' : '#444';
-            ctx.fillText(piece?.name || '-', summaryX + 80, yOffset + 15);
-            yOffset += 20;
+        let totalValue = 0;
+        this.runInventory.forEach(item => {
+            if (!item.isFreeItem) totalValue += item.sellValue || 10;
         });
-        yOffset += 10;
-
-        // Consumables
-        ctx.font = 'bold 14px Arial';
-        ctx.fillStyle = '#FFD700';
-        ctx.fillText('Consumables:', summaryX + 15, yOffset);
-        yOffset += 5;
-
-        if (loadout.consumables.length === 0) {
-            ctx.font = '12px Arial';
-            ctx.fillStyle = '#666';
-            ctx.fillText('None', summaryX + 25, yOffset + 15);
-            yOffset += 20;
-        } else {
-            loadout.consumables.slice(0, 5).forEach(c => {
-                ctx.font = '12px Arial';
-                ctx.fillStyle = '#FFF';
-                ctx.fillText(`${c.name} x${c.count || 1}`, summaryX + 25, yOffset + 15);
-                yOffset += 20;
-            });
-        }
-        yOffset += 10;
-
-        // Gold
-        ctx.font = 'bold 14px Arial';
-        ctx.fillStyle = '#FFD700';
-        ctx.fillText('Gold:', summaryX + 15, yOffset);
-        ctx.font = '14px Arial';
-        ctx.fillStyle = '#FFD700';
-        ctx.fillText(`${loadout.gold}g`, summaryX + 100, yOffset);
-    },
-
-    /**
-     * Render control hints
-     * @private
-     */
-    _renderControls(ctx, panelX, panelY) {
-        const controlsY = panelY + this.PANEL_HEIGHT - 30;
+        Object.values(this.runEquipment).forEach(item => {
+            if (item && !item.isFreeItem) totalValue += item.sellValue || 20;
+        });
 
         ctx.font = '12px Arial';
         ctx.textAlign = 'center';
-        ctx.fillStyle = '#888';
+        ctx.fillStyle = totalValue > 0 ? '#e74c3c' : '#8b949e';
+        ctx.fillText(`Value at Risk: ${totalValue}g`, x + width / 2, buttonY + 50);
+    },
 
+    _renderControls(ctx, panelX, panelY) {
+        ctx.font = '11px Arial';
+        ctx.textAlign = 'center';
+        ctx.fillStyle = '#8b949e';
         ctx.fillText(
-            '[Arrows] Navigate | [E/Enter] Select/Confirm | [Tab] Next Section | [ESC] Cancel',
+            '[Arrows] Navigate | [E/Enter] Transfer/Equip | [Tab] Switch Panel | [Q] Basic Kit | [R] Start Run | [ESC] Close',
             panelX + this.PANEL_WIDTH / 2,
-            controlsY
+            panelY + this.PANEL_HEIGHT - 10
         );
     }
 };
@@ -724,6 +857,7 @@ const LoadoutUI = {
 window.addEventListener('keydown', (e) => {
     if (game.state === 'loadout' || game.state === GAME_STATES?.LOADOUT) {
         LoadoutUI.handleInput(e.key);
+        e.preventDefault();
     }
 });
 
@@ -733,4 +867,4 @@ window.addEventListener('keydown', (e) => {
 
 window.LoadoutUI = LoadoutUI;
 
-console.log('[LoadoutUI] Loadout UI loaded');
+console.log('[LoadoutUI] Arc Raiders-style loadout UI loaded');
