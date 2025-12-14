@@ -55,6 +55,15 @@ window.addEventListener('keydown', e => {
         return;
     }
 
+    // JOURNAL UI - Handle all input when journal is open
+    if (game.state === 'journal') {
+        if (typeof JournalUI !== 'undefined') {
+            JournalUI.handleInput(e.key);
+            e.preventDefault();
+        }
+        return;
+    }
+
     // Chest UI input handling
     if (game.state === 'chest') {
         if (typeof handleChestKey === 'function' && handleChestKey(e.key)) {
