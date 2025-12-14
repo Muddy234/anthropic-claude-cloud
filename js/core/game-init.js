@@ -253,19 +253,39 @@ function startNewGameDungeon() {
     // === Phase 1: Cleanup ===
     cleanupPreviousGame();
 
-    // === Phase 2: Reset Game State ===
+    // === Phase 2: Start session (CRITICAL for extraction to work) ===
+    if (typeof SessionManager !== 'undefined') {
+        SessionManager.startRun(1, [], 0);
+    } else if (typeof sessionState !== 'undefined') {
+        sessionState.active = true;
+        sessionState.runId = Date.now().toString(36);
+        sessionState.startTime = Date.now();
+        sessionState.startFloor = 1;
+        sessionState.currentFloor = 1;
+        sessionState.floorStartTime = Date.now();
+        sessionState.inventory = [];
+        sessionState.gold = 0;
+    }
+
+    // === Phase 3: Reset Game State ===
     resetGameState();
 
-    // === Phase 3: Generate Dungeon ===
+    // === Phase 4: Generate Dungeon ===
     generateDungeon();
 
-    // === Phase 4: Create Player ===
+    // === Phase 5: Create Player ===
     initializePlayer();
 
-    // === Phase 5: Initialize All Systems ===
+    // === Phase 6: Initialize All Systems ===
     initializeAllSystems();
 
-    // === Phase 6: Post-Init ===
+    // === Phase 7: Initialize Extraction Points ===
+    if (typeof ExtractionSystem !== 'undefined' && game.rooms) {
+        const spawnRoom = game.rooms.find(r => r.type === 'entrance');
+        ExtractionSystem.init(1, game.rooms, spawnRoom);
+    }
+
+    // === Phase 8: Post-Init ===
     postInitialization();
 
     console.log('═'.repeat(50));

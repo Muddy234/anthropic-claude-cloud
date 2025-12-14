@@ -59,9 +59,23 @@ const SessionManager = {
      * @returns {Object} Extraction result
      */
     extractionSuccess() {
+        // Check for active session - be forgiving if game is clearly in dungeon
         if (!sessionState.active) {
-            console.warn('[SessionManager] No active session to extract from');
-            return { success: false, reason: 'No active session' };
+            // Fallback: if we're in playing state with a player, assume session is active
+            if (game.state === 'playing' || game.state === 'extraction' ||
+                game.state === GAME_STATES?.PLAYING || game.state === GAME_STATES?.EXTRACTION) {
+                console.log('[SessionManager] Session flag not set, but game is active - proceeding with extraction');
+                sessionState.active = true;  // Fix the state
+            } else {
+                console.warn('[SessionManager] No active session to extract from');
+                console.warn('[SessionManager] sessionState:', JSON.stringify({
+                    active: sessionState.active,
+                    currentFloor: sessionState.currentFloor,
+                    inventory: sessionState.inventory?.length
+                }));
+                console.warn('[SessionManager] game.state:', game.state);
+                return { success: false, reason: 'No active session' };
+            }
         }
 
         const floor = sessionState.currentFloor;
