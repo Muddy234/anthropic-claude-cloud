@@ -127,6 +127,7 @@ const mouseAttackState = {
     swingArcAngle: 90,      // Current weapon arc angle
     swingRange: 1.0,        // Current weapon range
     swingStartTime: 0,
+    slashStyle: 'sweep',    // Current attack style for hitbox shape
 
     // Enemies hit this swing (prevent multi-hit same enemy)
     hitEnemies: new Set(),
@@ -136,9 +137,54 @@ const mouseAttackState = {
 
     // Combo system: 1 (left) -> 2 (right) -> 3 (special/combo)
     comboCount: 1,  // Current attack in combo (1, 2, or 3)
+    comboResetTimer: 0,     // Timer for combo decay (1.5s)
+    comboDecayDuration: 1.5, // Seconds before combo resets
+
+    // Input buffering (200ms buffer for clicks during cooldown)
+    inputBufferTime: 0,
+    inputBufferDuration: 0.2, // 200ms buffer window
+    bufferedAttack: false,
+
+    // Micro-lunge state
+    isLunging: false,
+    lungeProgress: 0,
+    lungeDuration: 0.1,     // 100ms lunge
+    lungeStartX: 0,
+    lungeStartY: 0,
+    lungeTargetX: 0,
+    lungeTargetY: 0,
+    lungeInputLock: false,  // Lock WASD during lunge
+
+    // Hitstop (impact frames)
+    hitstopActive: false,
+    hitstopTimer: 0,
+    hitstopDuration: 0.05,  // 50ms default
+    hitstopCritDuration: 0.08, // 80ms for crits
+
+    // Continuous hit detection window
+    activeWindowStart: 0.15,  // Start checking at 15%
+    activeWindowEnd: 0.85,    // Stop checking at 85%
 
     // Pending damage (delayed until after windup)
     pendingDamage: null  // { player, direction, arcConfig, isSpecial, triggered: false }
+};
+
+// Weapon lunge distances (micro-lunge impulse)
+const WEAPON_LUNGE_CONFIG = {
+    // Light weapons - minimal lunge
+    knife: 0,
+    unarmed: 0.05,
+    wand: 0,
+
+    // Medium weapons - moderate lunge
+    sword: 0.15,
+    polearm: 0.2,
+    staff: 0.1,
+
+    // Heavy weapons - significant lunge (step into the strike)
+    axe: 0.25,
+    mace: 0.3,
+    shield: 0.15
 };
 
 // Track mouse position
@@ -247,16 +293,31 @@ function getAttackCooldown(player) {
  * Perform a base attack toward mouse cursor
  * Uses combo system: Attack 1 (left) -> Attack 2 (right) -> Attack 3 (special)
  * @param {Object} player - The player object
+ * @param {boolean} fromBuffer - Whether this attack is from input buffer
  */
-function performMouseAttack(player) {
+function performMouseAttack(player, fromBuffer = false) {
     if (!player) return false;
     if (game.state !== 'playing') return false;
 
-    // Check cooldown
-    if (mouseAttackState.cooldown > 0) return false;
+    // Check cooldown - if on cooldown and not from buffer, buffer the input
+    if (mouseAttackState.cooldown > 0 && !fromBuffer) {
+        // INPUT BUFFERING: Remember attack intent during cooldown
+        mouseAttackState.bufferedAttack = true;
+        mouseAttackState.inputBufferTime = mouseAttackState.inputBufferDuration;
+        return false;
+    }
 
     // Check if already swinging
-    if (mouseAttackState.isSwinging) return false;
+    if (mouseAttackState.isSwinging) {
+        // Buffer the attack if in swing animation
+        mouseAttackState.bufferedAttack = true;
+        mouseAttackState.inputBufferTime = mouseAttackState.inputBufferDuration;
+        return false;
+    }
+
+    // Clear buffer since we're executing
+    mouseAttackState.bufferedAttack = false;
+    mouseAttackState.inputBufferTime = 0;
 
     // Get weapon config
     const arcConfig = getWeaponArcConfig(player);
@@ -282,6 +343,9 @@ function performMouseAttack(player) {
     // Advance combo counter (1 -> 2 -> 3 -> 1)
     mouseAttackState.comboCount = (comboCount % 3) + 1;
 
+    // COMBO DECAY: Reset the combo timer on each attack
+    mouseAttackState.comboResetTimer = mouseAttackState.comboDecayDuration;
+
     // Set cooldown
     mouseAttackState.cooldown = getAttackCooldown(player);
 
@@ -304,12 +368,16 @@ function performMeleeSwing(player, direction, arcConfig, isSpecial, attackFromLe
     mouseAttackState.swingArcAngle = arcConfig.arcAngle * (Math.PI / 180);
     mouseAttackState.swingRange = arcConfig.arcRange;
     mouseAttackState.swingStartTime = performance.now();
+    mouseAttackState.slashStyle = arcConfig.slashStyle || 'sweep';
     mouseAttackState.hitEnemies.clear();
+
+    // MICRO-LUNGE: Apply forward impulse based on weapon weight
+    applyMicroLunge(player, direction, arcConfig);
 
     // Create visual slash effect with combo info
     createSlashEffect(player, direction, arcConfig, isSpecial, attackFromLeft, comboCount);
 
-    // Store pending damage - will be triggered after windup (15% of animation)
+    // Store pending damage - will be triggered during active window (15%-85% of animation)
     mouseAttackState.pendingDamage = {
         player: player,
         direction: direction,
@@ -317,6 +385,63 @@ function performMeleeSwing(player, direction, arcConfig, isSpecial, attackFromLe
         isSpecial: isSpecial,
         triggered: false
     };
+}
+
+/**
+ * Apply micro-lunge impulse on attack
+ * Heavy weapons get more forward momentum to feel weighty
+ */
+function applyMicroLunge(player, direction, arcConfig) {
+    const weapon = player?.equipped?.MAIN;
+    const weaponType = weapon?.weaponType || 'unarmed';
+
+    // Get lunge distance based on weapon type
+    const lungeDist = WEAPON_LUNGE_CONFIG[weaponType] || 0;
+
+    if (lungeDist <= 0) return; // No lunge for this weapon
+
+    // Calculate lunge target
+    const dirX = Math.cos(direction);
+    const dirY = Math.sin(direction);
+
+    const startX = player.gridX;
+    const startY = player.gridY;
+    let targetX = startX + dirX * lungeDist;
+    let targetY = startY + dirY * lungeDist;
+
+    // Check for wall collision along lunge path
+    if (typeof isTileWalkable === 'function') {
+        const steps = Math.ceil(lungeDist / 0.1);
+        let validX = startX;
+        let validY = startY;
+
+        for (let i = 1; i <= steps; i++) {
+            const checkX = startX + dirX * lungeDist * (i / steps);
+            const checkY = startY + dirY * lungeDist * (i / steps);
+
+            if (isTileWalkable(Math.floor(checkX), Math.floor(checkY))) {
+                validX = checkX;
+                validY = checkY;
+            } else {
+                break;
+            }
+        }
+
+        targetX = validX;
+        targetY = validY;
+    }
+
+    // Only lunge if there's meaningful movement
+    if (Math.abs(targetX - startX) < 0.01 && Math.abs(targetY - startY) < 0.01) return;
+
+    // Start lunge
+    mouseAttackState.isLunging = true;
+    mouseAttackState.lungeProgress = 0;
+    mouseAttackState.lungeStartX = startX;
+    mouseAttackState.lungeStartY = startY;
+    mouseAttackState.lungeTargetX = targetX;
+    mouseAttackState.lungeTargetY = targetY;
+    mouseAttackState.lungeInputLock = true; // Lock WASD during lunge
 }
 
 /**
@@ -445,11 +570,14 @@ function updatePlayerFacingFromAngle(player, angle) {
 
 /**
  * Check for melee hits in the swing arc
+ * DYNAMIC HITBOX SHAPING: Different shapes based on slashStyle
+ * - Sweep/Chop/Slam/Alternate: Arc sector check
+ * - Thrust/Jab: OBB (oriented bounding box) / capsule check
  */
 function checkMeleeHits(player, direction, arcConfig, isSpecial) {
     if (!game.enemies) return;
 
-    const halfArc = (arcConfig.arcAngle * (Math.PI / 180)) / 2;
+    const slashStyle = arcConfig.slashStyle || 'sweep';
     const range = arcConfig.arcRange;
 
     // Use a copy of the array to avoid issues with splicing during iteration
@@ -465,24 +593,75 @@ function checkMeleeHits(player, direction, arcConfig, isSpecial) {
         const dy = enemy.gridY - player.gridY;
         const distance = Math.sqrt(dx * dx + dy * dy);
 
-        // Check range
+        // Check range first (applies to all styles)
         if (distance > range) continue;
 
-        // Check angle
-        const enemyAngle = Math.atan2(dy, dx);
-        let angleDiff = enemyAngle - direction;
+        let isHit = false;
 
-        // Normalize to -PI to PI
-        while (angleDiff > Math.PI) angleDiff -= 2 * Math.PI;
-        while (angleDiff < -Math.PI) angleDiff += 2 * Math.PI;
+        // DYNAMIC HITBOX: Choose detection shape based on slashStyle
+        if (slashStyle === 'thrust' || slashStyle === 'jab') {
+            // THRUST/JAB: Use narrow OBB (oriented bounding box) - thin rectangle
+            // Width is narrow (0.3 tiles), length is the full range
+            isHit = checkThrustHit(player, enemy, direction, range, slashStyle);
+        } else {
+            // SWEEP/CHOP/SLAM/ALTERNATE: Use arc sector check
+            const halfArc = (arcConfig.arcAngle * (Math.PI / 180)) / 2;
+            const enemyAngle = Math.atan2(dy, dx);
+            let angleDiff = enemyAngle - direction;
 
-        // Check if within arc
-        if (Math.abs(angleDiff) <= halfArc) {
+            // Normalize to -PI to PI
+            while (angleDiff > Math.PI) angleDiff -= 2 * Math.PI;
+            while (angleDiff < -Math.PI) angleDiff += 2 * Math.PI;
+
+            isHit = Math.abs(angleDiff) <= halfArc;
+        }
+
+        if (isHit) {
             // HIT!
             mouseAttackState.hitEnemies.add(enemy);
             applyMeleeDamage(player, enemy, isSpecial);
         }
     }
+}
+
+/**
+ * Check if enemy is hit by a thrust/jab attack (OBB/capsule)
+ * Uses a thin rectangle projecting from player in attack direction
+ * @param {Object} player - Player entity
+ * @param {Object} enemy - Enemy to check
+ * @param {number} direction - Attack direction in radians
+ * @param {number} range - Attack range (length of thrust)
+ * @param {string} slashStyle - 'thrust' or 'jab'
+ * @returns {boolean} True if enemy is hit
+ */
+function checkThrustHit(player, enemy, direction, range, slashStyle) {
+    // Thrust width (perpendicular to attack direction)
+    // Jab is narrower (0.25 tiles), thrust is slightly wider (0.4 tiles)
+    const width = slashStyle === 'jab' ? 0.25 : 0.4;
+
+    // Calculate perpendicular direction
+    const perpX = -Math.sin(direction);
+    const perpY = Math.cos(direction);
+
+    // Direction along the thrust
+    const dirX = Math.cos(direction);
+    const dirY = Math.sin(direction);
+
+    // Vector from player to enemy
+    const dx = enemy.gridX - player.gridX;
+    const dy = enemy.gridY - player.gridY;
+
+    // Project onto thrust direction (how far along the thrust)
+    const alongDist = dx * dirX + dy * dirY;
+
+    // Must be in front of player (not behind) and within range
+    if (alongDist < 0 || alongDist > range) return false;
+
+    // Project onto perpendicular direction (how far off-center)
+    const perpDist = Math.abs(dx * perpX + dy * perpY);
+
+    // Must be within the thrust width (half-width on each side)
+    return perpDist <= width / 2;
 }
 
 /**
@@ -525,6 +704,12 @@ function applyMeleeDamage(player, enemy, isSpecial) {
         damageResult.finalDamage = Math.max(1, baseDamage);
     }
 
+    // IMPACT FRAMES: Trigger hitstop for heavy hits
+    triggerHitstop(damageResult.isCrit, isSpecial);
+
+    // DIRECTIONAL SCREEN SHAKE: Shake along attack direction for impact feel
+    triggerDirectionalShake(mouseAttackState.swingDirection, damageResult.isCrit, isSpecial);
+
     // Apply damage
     enemy.hp -= damageResult.finalDamage;
 
@@ -540,8 +725,10 @@ function applyMeleeDamage(player, enemy, isSpecial) {
         showDamageNumber(enemy, damageResult.finalDamage, color);
     }
 
-    // Combat enhancements hook (knockback, screen shake, stagger)
+    // Combat enhancements hook (knockback, stagger - screen shake handled above)
     if (typeof onCombatHit === 'function') {
+        // Pass flag to skip duplicate screen shake
+        damageResult.skipScreenShake = true;
         onCombatHit(player, enemy, damageResult);
     }
 
@@ -585,6 +772,48 @@ function applyMeleeDamage(player, enemy, isSpecial) {
     if (typeof addMessage === 'function') {
         const critText = damageResult.isCrit ? ' CRITICAL!' : '';
         addMessage(`You hit ${enemy.name} for ${damageResult.finalDamage} damage!${critText}`);
+    }
+}
+
+/**
+ * Trigger hitstop (freeze frame) for impact feel
+ * @param {boolean} isCrit - Whether this was a critical hit
+ * @param {boolean} isSpecial - Whether this was a special attack
+ */
+function triggerHitstop(isCrit, isSpecial) {
+    // Crits and specials get longer hitstop
+    const duration = isCrit ? mouseAttackState.hitstopCritDuration :
+                     isSpecial ? mouseAttackState.hitstopDuration * 1.5 :
+                     mouseAttackState.hitstopDuration;
+
+    mouseAttackState.hitstopActive = true;
+    mouseAttackState.hitstopTimer = duration;
+}
+
+/**
+ * Trigger directional screen shake along attack direction
+ * @param {number} direction - Attack direction in radians
+ * @param {boolean} isCrit - Whether this was a critical hit
+ * @param {boolean} isSpecial - Whether this was a special attack
+ */
+function triggerDirectionalShake(direction, isCrit, isSpecial) {
+    // Get base intensity
+    let intensity = isCrit ? 6 : isSpecial ? 4 : 2;
+
+    // Calculate shake direction (along swing direction)
+    const shakeX = Math.cos(direction) * intensity;
+    const shakeY = Math.sin(direction) * intensity;
+
+    // Use existing screen shake system if available, with directional bias
+    if (typeof screenShakeState !== 'undefined') {
+        screenShakeState.active = true;
+        screenShakeState.intensity = intensity;
+        screenShakeState.timer = isCrit ? 0.12 : 0.08;
+        // Add directional component
+        screenShakeState.directionalX = shakeX;
+        screenShakeState.directionalY = shakeY;
+    } else if (typeof triggerScreenShake === 'function') {
+        triggerScreenShake(isCrit);
     }
 }
 
@@ -1506,22 +1735,107 @@ function drawSweepEffect(ctx, screenX, screenY, slash, tileSize, alpha) {
  */
 function updateMouseAttackSystem(deltaTime) {
     const dt = deltaTime / 1000;
+    const player = game?.player;
+
+    // ========================================================================
+    // HITSTOP: Pause everything during hitstop (impact frames)
+    // ========================================================================
+    if (mouseAttackState.hitstopActive) {
+        mouseAttackState.hitstopTimer -= dt;
+        if (mouseAttackState.hitstopTimer <= 0) {
+            mouseAttackState.hitstopActive = false;
+        } else {
+            // During hitstop, skip updating swing progress (freeze frame effect)
+            // But still update visuals and other systems
+            updateSlashEffects(deltaTime);
+            if (typeof MeleeSlashEffect !== 'undefined') {
+                MeleeSlashEffect.update(deltaTime);
+            }
+            return; // Skip everything else during hitstop
+        }
+    }
+
+    // ========================================================================
+    // COMBO DECAY: Reset combo after inactivity
+    // ========================================================================
+    if (mouseAttackState.comboResetTimer > 0) {
+        mouseAttackState.comboResetTimer -= dt;
+        if (mouseAttackState.comboResetTimer <= 0) {
+            // Reset combo to 1
+            if (mouseAttackState.comboCount !== 1) {
+                mouseAttackState.comboCount = 1;
+                // Visual feedback: could fade weapon glow here
+            }
+        }
+    }
+
+    // ========================================================================
+    // INPUT BUFFERING: Execute buffered attacks when cooldown ends
+    // ========================================================================
+    if (mouseAttackState.inputBufferTime > 0) {
+        mouseAttackState.inputBufferTime -= dt;
+    }
 
     // Update cooldown
     if (mouseAttackState.cooldown > 0) {
         mouseAttackState.cooldown = Math.max(0, mouseAttackState.cooldown - dt);
+
+        // When cooldown hits 0, check for buffered attack
+        if (mouseAttackState.cooldown === 0 && mouseAttackState.bufferedAttack &&
+            mouseAttackState.inputBufferTime > 0 && player) {
+            // Execute the buffered attack
+            performMouseAttack(player, true);
+        }
     }
 
-    // Update swing state
+    // ========================================================================
+    // MICRO-LUNGE: Update player position during lunge
+    // ========================================================================
+    if (mouseAttackState.isLunging && player) {
+        mouseAttackState.lungeProgress += dt / mouseAttackState.lungeDuration;
+
+        if (mouseAttackState.lungeProgress >= 1) {
+            // Lunge complete
+            mouseAttackState.isLunging = false;
+            mouseAttackState.lungeInputLock = false;
+
+            // Set final position
+            player.gridX = mouseAttackState.lungeTargetX;
+            player.gridY = mouseAttackState.lungeTargetY;
+            if (player.displayX !== undefined) player.displayX = mouseAttackState.lungeTargetX;
+            if (player.displayY !== undefined) player.displayY = mouseAttackState.lungeTargetY;
+        } else {
+            // Interpolate position with ease-out for snap feel
+            const t = easeOutQuadLunge(mouseAttackState.lungeProgress);
+            const newX = mouseAttackState.lungeStartX +
+                        (mouseAttackState.lungeTargetX - mouseAttackState.lungeStartX) * t;
+            const newY = mouseAttackState.lungeStartY +
+                        (mouseAttackState.lungeTargetY - mouseAttackState.lungeStartY) * t;
+
+            player.gridX = newX;
+            player.gridY = newY;
+            if (player.displayX !== undefined) player.displayX = newX;
+            if (player.displayY !== undefined) player.displayY = newY;
+        }
+    }
+
+    // ========================================================================
+    // SWING STATE: Update swing and continuous hit detection
+    // ========================================================================
     if (mouseAttackState.isSwinging) {
         mouseAttackState.swingProgress += dt / mouseAttackState.swingDuration;
 
-        // Check for pending damage after windup phase (15% of animation)
-        if (mouseAttackState.pendingDamage && !mouseAttackState.pendingDamage.triggered) {
-            if (mouseAttackState.swingProgress >= 0.15) {
+        // CONTINUOUS HIT DETECTION: Check for hits during entire active window
+        // Not just once at 15%, but every frame from 15% to 85%
+        if (mouseAttackState.pendingDamage) {
+            const progress = mouseAttackState.swingProgress;
+            const inActiveWindow = progress >= mouseAttackState.activeWindowStart &&
+                                   progress <= mouseAttackState.activeWindowEnd;
+
+            if (inActiveWindow) {
+                // Check for new hits every frame (hitEnemies Set prevents multi-hit)
                 const pd = mouseAttackState.pendingDamage;
                 checkMeleeHits(pd.player, pd.direction, pd.arcConfig, pd.isSpecial);
-                mouseAttackState.pendingDamage.triggered = true;
             }
         }
 
@@ -1549,6 +1863,20 @@ function updateMouseAttackSystem(deltaTime) {
     }
 }
 
+/**
+ * Ease-out quadratic for lunge movement (starts fast, slows down)
+ */
+function easeOutQuadLunge(t) {
+    return t * (2 - t);
+}
+
+/**
+ * Check if player movement should be locked (during lunge)
+ */
+function isPlayerMovementLocked() {
+    return mouseAttackState.lungeInputLock;
+}
+
 // ============================================================================
 // SYSTEM MANAGER INTEGRATION
 // ============================================================================
@@ -1558,6 +1886,7 @@ const MouseAttackSystem = {
 
     init(game) {
         console.log('[MouseAttack] Mouse-driven attack system initialized');
+        console.log('[MouseAttack] Features: Continuous Hit Detection, Input Buffering, Micro-Lunges, Combo Decay, Dynamic Hitboxes, Impact Frames');
     },
 
     update(dt) {
@@ -1570,6 +1899,14 @@ const MouseAttackSystem = {
         mouseAttackState.hitEnemies.clear();
         mouseAttackState.slashEffects = [];
         mouseAttackState.pendingDamage = null;
+        mouseAttackState.comboCount = 1;
+        mouseAttackState.comboResetTimer = 0;
+        mouseAttackState.bufferedAttack = false;
+        mouseAttackState.inputBufferTime = 0;
+        mouseAttackState.isLunging = false;
+        mouseAttackState.lungeInputLock = false;
+        mouseAttackState.hitstopActive = false;
+        mouseAttackState.hitstopTimer = 0;
     }
 };
 
@@ -1585,6 +1922,7 @@ if (typeof SystemManager !== 'undefined') {
 if (typeof window !== 'undefined') {
     // Config
     window.WEAPON_ARC_CONFIG = WEAPON_ARC_CONFIG;
+    window.WEAPON_LUNGE_CONFIG = WEAPON_LUNGE_CONFIG;
 
     // State
     window.mouseAttackState = mouseAttackState;
@@ -1599,6 +1937,9 @@ if (typeof window !== 'undefined') {
     window.updateMouseAttackSystem = updateMouseAttackSystem;
     window.drawSlashEffects = drawSlashEffects;
     window.checkMeleeHits = checkMeleeHits;
+    window.isPlayerMovementLocked = isPlayerMovementLocked;
+    window.triggerHitstop = triggerHitstop;
+    window.triggerDirectionalShake = triggerDirectionalShake;
 }
 
-console.log('✅ Mouse-driven attack system loaded');
+console.log('✅ Mouse-driven attack system loaded (with game juice enhancements)');
