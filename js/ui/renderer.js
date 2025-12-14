@@ -855,11 +855,6 @@ const camY = game.camera.y + (shakeOffset.y / (TILE_SIZE * ZOOM_LEVEL));
             renderExtractionPoints(ctx, camX, camY, effectiveTileSize, TRACKER_WIDTH);
         }
 
-        // LAYER 3: Draw decorations
-        if (typeof renderRoomDecorations === 'function') {
-            renderRoomDecorations(camX, camY, effectiveTileSize, TRACKER_WIDTH);
-        }
-        
         // Merchant rendering (only if visible)
         if (game.merchant) {
             const merchantTile = game.map[game.merchant.y]?.[game.merchant.x];

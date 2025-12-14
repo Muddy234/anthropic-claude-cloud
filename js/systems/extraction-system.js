@@ -260,6 +260,11 @@ const ExtractionSystem = {
         game.state = GAME_STATES ? GAME_STATES.EXTRACTION : 'extraction';
         game.activeExtractionPoint = point;
 
+        // Open the extraction UI
+        if (typeof ExtractionUI !== 'undefined') {
+            ExtractionUI.open();
+        }
+
         console.log('[ExtractionSystem] Opening extraction UI');
         return true;
     },

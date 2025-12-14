@@ -5,6 +5,106 @@
 // ============================================================================
 
 /**
+ * Create an enemy at the specified position
+ * Global function for dungeon spawning
+ * @param {number} x - Grid X position
+ * @param {number} y - Grid Y position
+ * @param {string} element - Element type for selecting appropriate monsters
+ * @param {number} difficulty - Difficulty scaling factor
+ * @returns {object} The created enemy
+ */
+function createEnemy(x, y, element, difficulty) {
+    // Get element-appropriate monsters from MONSTER_DATA
+    const elementMonsters = [];
+    const fallbackMonsters = [];
+
+    if (typeof MONSTER_DATA !== 'undefined') {
+        for (const [name, data] of Object.entries(MONSTER_DATA)) {
+            if (data.elite) continue; // Skip elites for regular spawning
+
+            if (data.element === element) {
+                elementMonsters.push({ name, data });
+            } else {
+                fallbackMonsters.push({ name, data });
+            }
+        }
+    }
+
+    // Pick a monster - prefer element-matching, fallback to any
+    const pool = elementMonsters.length > 0 ? elementMonsters : fallbackMonsters;
+
+    if (pool.length === 0) {
+        console.warn('[createEnemy] No monsters available in MONSTER_DATA');
+        return null;
+    }
+
+    // Weight-based selection
+    const totalWeight = pool.reduce((sum, m) => sum + (m.data.spawnWeight || 10), 0);
+    let roll = Math.random() * totalWeight;
+    let selected = pool[0];
+
+    for (const monster of pool) {
+        roll -= monster.data.spawnWeight || 10;
+        if (roll <= 0) {
+            selected = monster;
+            break;
+        }
+    }
+
+    const template = selected.data;
+    const difficultyScale = 1 + (difficulty - 1) * 0.15;
+
+    const enemy = {
+        id: `enemy_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+        name: selected.name,
+        typeId: selected.name,
+        gridX: x,
+        gridY: y,
+        x: x,
+        y: y,
+        displayX: x,
+        displayY: y,
+        hp: Math.floor((template.hp || 50) * difficultyScale),
+        maxHp: Math.floor((template.hp || 50) * difficultyScale),
+        str: Math.floor((template.str || 10) * difficultyScale),
+        agi: template.agi || 5,
+        int: template.int || 5,
+        pDef: Math.floor((template.pDef || 5) * difficultyScale),
+        mDef: Math.floor((template.mDef || 5) * difficultyScale),
+        damage: Math.floor((template.str || 10) * difficultyScale),
+        defense: Math.floor((template.pDef || 5) * difficultyScale),
+        element: template.element || 'physical',
+        xp: Math.floor((template.xp || 20) * difficultyScale),
+        attackRange: template.attackRange || 1,
+        attackSpeed: template.attackSpeed || 2.0,
+        moveInterval: template.moveInterval || 2,
+        aggression: template.aggression || 3,
+        loot: template.loot || [],
+        combat: {
+            isInCombat: false,
+            currentTarget: null,
+            attackCooldown: 0,
+            attackSpeed: template.attackSpeed || 2.0,
+            autoRetaliate: true,
+            attackRange: template.attackRange || 1,
+            comboCount: 1
+        }
+    };
+
+    // Register with AI system
+    if (typeof AIManager !== 'undefined') {
+        AIManager.registerEnemy(enemy);
+    }
+
+    // Initialize abilities
+    if (typeof EnemyAbilitySystem !== 'undefined') {
+        EnemyAbilitySystem.initializeEnemy(enemy);
+    }
+
+    return enemy;
+}
+
+/**
  * Convert blob-based dungeon to game.map format
  */
 function applyDungeonToGame() {
@@ -232,23 +332,6 @@ function spawnEnemiesInDungeon() {
 }
 
 /**
- * Decorate blobs with environmental details
- */
-function decorateDungeon() {
-    for (const blob of DUNGEON_STATE.blobs) {
-        const room = game.rooms.find(r => r.blob === blob);
-        if (!room) continue;
-
-        // Use existing decorator if available
-        if (typeof decorateRoom === 'function') {
-            decorateRoom(room);
-        }
-    }
-
-    console.log(`🎨 Decorated ${game.rooms.length} blobs`);
-}
-
-/**
  * Main integration function - replaces generateMap()
  */
 function generateBlobDungeon() {
@@ -265,9 +348,6 @@ function generateBlobDungeon() {
 
     // Convert to game format
     applyDungeonToGame();
-
-    // Decorate
-    decorateDungeon();
 
     // Spawn enemies
     spawnEnemiesInDungeon();
@@ -381,6 +461,7 @@ if (typeof window !== 'undefined') {
     window.spawnPlayerInDungeon = spawnPlayerInDungeon;
     window.spawnEnemiesInDungeon = spawnEnemiesInDungeon;
     window.placeExitInFarthestRoom = placeExitInFarthestRoom;
+    window.createEnemy = createEnemy;
 }
 
 console.log('✅ Dungeon integration adapter loaded');
