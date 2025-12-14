@@ -861,18 +861,26 @@ const EnemyAISystem = {
         
         for (const e of g.enemies) {
             if (!e.isMoving) continue;
-            
+
             if (typeof e.moveProgress !== 'number') e.moveProgress = 0;
-            
+
+            // Calculate actual distance for this move (1.0 for cardinal, ~1.414 for diagonal)
+            const dx = e.targetGridX - e.gridX;
+            const dy = e.targetGridY - e.gridY;
+            const moveDistance = Math.sqrt(dx * dx + dy * dy) || 1;
+
+            // Normalize speed so diagonal moves don't go faster
+            // Speed is in tiles/second, divide by actual distance so progress reaches 1.0
+            // at the same real-world speed regardless of direction
             const speed = 4 * (e.moveSpeedMult || 1.0);
-            e.moveProgress += speed * (dt / 1000);
-            
+            e.moveProgress += (speed / moveDistance) * (dt / 1000);
+
             const t = Math.min(e.moveProgress, 1);
-            e.displayX = e.gridX + (e.targetGridX - e.gridX) * t;
-            e.displayY = e.gridY + (e.targetGridY - e.gridY) * t;
+            e.displayX = e.gridX + dx * t;
+            e.displayY = e.gridY + dy * t;
             e.x = e.displayX;
             e.y = e.displayY;
-            
+
             if (e.moveProgress >= 1.0) {
                 e.gridX = e.targetGridX;
                 e.gridY = e.targetGridY;
