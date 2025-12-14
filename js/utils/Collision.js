@@ -281,4 +281,4 @@ if (typeof window !== 'undefined') {
     window.raycastDetailed = raycastDetailed;
 }
 
-console.log('✅ Collision system loaded (with decoration LOS blocking)');
+// Collision system loaded

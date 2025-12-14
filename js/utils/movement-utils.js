@@ -12,105 +12,60 @@ function lerp(start, end, t) {
 /**
  * Update entity's display position toward its logical position
  * This creates smooth movement between grid tiles
- * FIXED: Validates logical position and prevents infinite collision spam
  */
 function updateEntityMovement(entity, dt) {
     if (!entity) return;
 
-    // CRITICAL FIX: If the entity's logical position is invalid, snap it to display position
-    // This prevents the interpolation system from trying to reach an unreachable target
+    // Skip entities that already had position fix attempted
+    if (entity._positionFixAttempted) return;
+
+    // Validate logical position if canMoveTo is available
     if (typeof canMoveTo === 'function') {
-        // Skip if we already tried to fix this entity
-        if (entity._positionFixAttempted) {
-            return; // Don't keep trying every frame
-        }
-        
-        const logicalPositionValid = canMoveTo(entity.x, entity.y, false, 0.15);
-        
-        if (!logicalPositionValid) {
-            console.warn(`⚠️ Entity at invalid logical position (${entity.x}, ${entity.y}). Snapping to last valid display position.`);
-            entity._positionFixAttempted = true; // Mark so we don't try again
-            
-            // Try to find nearest valid position using canMoveTo validation
-            let fixed = false;
-            const searchRadius = 5;
-            
-            // Silence logs during search
-            const originalLog = console.log;
-            console.log = function() {};
-            
-            for (let dy = -searchRadius; dy <= searchRadius && !fixed; dy++) {
-                for (let dx = -searchRadius; dx <= searchRadius && !fixed; dx++) {
-                    const testX = Math.floor(entity.displayX) + dx;
-                    const testY = Math.floor(entity.displayY) + dy;
-                    
-                    if (testX >= 0 && testX < GRID_WIDTH && testY >= 0 && testY < GRID_HEIGHT) {
-                        // Use canMoveTo to validate - same check as movement system
-                        if (canMoveTo(testX, testY, false, 0.15)) {
-                            // Found valid position - use INTEGER positions for enemies
-                            entity.x = testX;
-                            entity.y = testY;
-                            entity.gridX = testX;
-                            entity.gridY = testY;
-                            entity.displayX = testX;
-                            entity.displayY = testY;
-                            console.log = originalLog; // Restore logging
-                            console.log(`✅ Fixed entity position to (${testX}, ${testY})`);
-                            fixed = true;
+        if (!canMoveTo(entity.x, entity.y, false, 0.15)) {
+            entity._positionFixAttempted = true;
+
+            // Try to find nearest valid position
+            for (let r = 1; r <= 5; r++) {
+                for (let dy = -r; dy <= r; dy++) {
+                    for (let dx = -r; dx <= r; dx++) {
+                        if (Math.abs(dx) !== r && Math.abs(dy) !== r) continue; // Only check perimeter
+                        const testX = Math.floor(entity.displayX) + dx;
+                        const testY = Math.floor(entity.displayY) + dy;
+
+                        if (testX >= 0 && testX < GRID_WIDTH &&
+                            testY >= 0 && testY < GRID_HEIGHT &&
+                            canMoveTo(testX, testY, false, 0.15)) {
+                            // Found valid position
+                            entity.x = entity.gridX = entity.displayX = testX;
+                            entity.y = entity.gridY = entity.displayY = testY;
+                            return;
                         }
                     }
                 }
             }
-            
-            console.log = originalLog; // Restore logging even if not fixed
-            
-            if (!fixed) {
-                // Couldn't find valid position - remove entity if it's an enemy
-                if (entity !== game.player && game.enemies) {
-                    const idx = game.enemies.indexOf(entity);
-                    if (idx > -1) {
-                        game.enemies.splice(idx, 1);
-                        console.log('🗑️ Removed stuck entity from game');
-                    }
-                }
+
+            // Couldn't fix - remove if enemy
+            if (entity !== game.player && game.enemies) {
+                const idx = game.enemies.indexOf(entity);
+                if (idx > -1) game.enemies.splice(idx, 1);
             }
-            return; // Don't interpolate this frame
+            return;
         }
     }
 
     const moveSpeed = entity.moveSpeed || 0.08;
-
-    // Calculate new interpolated positions
     const newDisplayX = lerp(entity.displayX, entity.x, moveSpeed);
     const newDisplayY = lerp(entity.displayY, entity.y, moveSpeed);
 
-    // SAFETY CHECK: Only update display position if it's valid
-    // Use a smaller radius for interpolation checks to avoid false positives
-    const interpolationRadius = 0.15;
-
-    // Check if new position is valid (but don't spam logs)
-    let canMoveToNew = true;
-    if (typeof canMoveTo === 'function') {
-        // Temporarily disable logging for interpolation checks
-        const originalLog = console.log;
-        console.log = function() {}; // Silence logs
-        canMoveToNew = canMoveTo(newDisplayX, newDisplayY, false, interpolationRadius);
-        console.log = originalLog; // Restore logging
-    }
-
-    if (canMoveToNew) {
+    // Only update if valid position
+    if (typeof canMoveTo !== 'function' || canMoveTo(newDisplayX, newDisplayY, false, 0.15)) {
         entity.displayX = newDisplayX;
         entity.displayY = newDisplayY;
     }
-    // If we can't move, just stay at current display position (don't spam checks)
 
     // Snap when very close (prevents jitter)
-    if (Math.abs(entity.displayX - entity.x) < 0.01) {
-        entity.displayX = entity.x;
-    }
-    if (Math.abs(entity.displayY - entity.y) < 0.01) {
-        entity.displayY = entity.y;
-    }
+    if (Math.abs(entity.displayX - entity.x) < 0.01) entity.displayX = entity.x;
+    if (Math.abs(entity.displayY - entity.y) < 0.01) entity.displayY = entity.y;
 }
 
 /**
@@ -243,4 +198,4 @@ if (typeof window !== 'undefined') {
     window.easeInOutQuad = easeInOutQuad;
 }
 
-console.log('[MovementUtils] Loaded with easing and optimized distance functions');
+// Movement utilities loaded

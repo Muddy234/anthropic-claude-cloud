@@ -78,4 +78,4 @@ if (typeof window !== 'undefined') {
     window.updateAllEnemyMovement = updateAllEnemyMovement;
 }
 
-console.log('✅ Enemy movement updater loaded');
+// Enemy movement updater loaded

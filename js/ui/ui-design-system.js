@@ -945,12 +945,7 @@ function getPulseValue(speed = UI_ANIMATION.pulseSpeed) {
     return (Math.sin(Date.now() * speed) + 1) / 2;
 }
 
-/**
- * Lerp between two values
- */
-function lerp(start, end, t) {
-    return start + (end - start) * t;
-}
+// lerp is provided by movement-utils.js
 
 /**
  * Draw a corruption/shift meter (occult-style)
@@ -1199,7 +1194,7 @@ window.drawPortraitFrame = drawPortraitFrame;
 window.drawTextWithShadow = drawTextWithShadow;
 window.drawCorruptionMeter = drawCorruptionMeter;
 window.getPulseValue = getPulseValue;
-window.lerp = lerp;
+// lerp is exported by movement-utils.js
 
 window.createGrungeTexture = createGrungeTexture;
 window.getGrungeTexture = getGrungeTexture;
