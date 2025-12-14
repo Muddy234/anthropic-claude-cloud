@@ -599,10 +599,9 @@ function applyMeleeDamage(player, enemy, isSpecial) {
 function createSlashEffect(player, direction, arcConfig, isSpecial = false, attackFromLeft = true, comboCount = 1) {
     const slashStyle = arcConfig.slashStyle || 'sweep';
 
-    // Use display position for visual accuracy (convert to pixels)
-    const tileSize = typeof TILE_SIZE !== 'undefined' ? TILE_SIZE : 32;
-    const originX = (player.displayX !== undefined ? player.displayX : player.gridX) * tileSize + tileSize / 2;
-    const originY = (player.displayY !== undefined ? player.displayY : player.gridY) * tileSize + tileSize / 2;
+    // Use display position for visual accuracy - in TILE coordinates (center of tile = +0.5)
+    const originX = (player.displayX !== undefined ? player.displayX : player.gridX) + 0.5;
+    const originY = (player.displayY !== undefined ? player.displayY : player.gridY) + 0.5;
 
     // Use MeleeSlashEffect system if available (code-based arc + particles)
     if (typeof MeleeSlashEffect !== 'undefined') {

@@ -893,9 +893,7 @@ const camY = game.camera.y + (shakeOffset.y / (TILE_SIZE * ZOOM_LEVEL));
 
         // New code-based melee slash effects (arc + particles)
         if (typeof MeleeSlashEffect !== 'undefined') {
-            const cameraPixelX = camX * effectiveTileSize - TRACKER_WIDTH;
-            const cameraPixelY = camY * effectiveTileSize;
-            MeleeSlashEffect.render(ctx, cameraPixelX, cameraPixelY);
+            MeleeSlashEffect.render(ctx, camX, camY, effectiveTileSize, TRACKER_WIDTH);
         }
 
         // Combat effects (sprite-based slash, magic, explosions)

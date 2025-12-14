@@ -27,17 +27,15 @@ const MeleeSlashEffect = {
 
     /**
      * Create a new slash effect
-     * @param {number} originX - Player center X in pixels
-     * @param {number} originY - Player center Y in pixels
+     * @param {number} originX - Player center X in TILE coordinates
+     * @param {number} originY - Player center Y in TILE coordinates
      * @param {number} facingAngle - Direction in radians (0 = right, PI/2 = down)
      * @param {Object} options - Weapon-specific options
      * @returns {Object} The created effect
      */
     create(originX, originY, facingAngle, options = {}) {
-        const tileSize = typeof TILE_SIZE !== 'undefined' ? TILE_SIZE : 32;
-
         const effect = {
-            // Position
+            // Position in TILE coordinates (will be converted to screen in render)
             originX,
             originY,
             facingAngle,
@@ -47,8 +45,8 @@ const MeleeSlashEffect = {
             slashDuration: options.slashDuration || this.defaults.slashDuration,
             isFinished: false,
 
-            // Geometry
-            radius: (options.range || 1.25) * tileSize,
+            // Geometry (in tile units, will be scaled by tileSize in render)
+            radius: options.range || 1.25,
             arcAngle: Math.PI * (options.arcDegrees || 90) / 180,
             maxThickness: this.defaults.baseThickness + ((options.range || 1.25) * 6),
 
@@ -57,7 +55,7 @@ const MeleeSlashEffect = {
             particleColor: options.particleColor || options.color || '#FFFFFF',
             glowColor: options.glowColor || null,
 
-            // Particles
+            // Particles (positions relative to origin in tile units)
             particles: [],
             particlesPerFrame: options.particlesPerFrame || this.defaults.particlesPerFrame,
 
@@ -65,6 +63,8 @@ const MeleeSlashEffect = {
             startAngle: facingAngle - (Math.PI * (options.arcDegrees || 90) / 180) / 2,
             endAngle: facingAngle + (Math.PI * (options.arcDegrees || 90) / 180) / 2
         };
+
+        console.log(`[MeleeSlashEffect] Created effect at (${originX.toFixed(2)}, ${originY.toFixed(2)}) angle=${(facingAngle * 180 / Math.PI).toFixed(0)}°`);
 
         this.activeEffects.push(effect);
         return effect;
@@ -77,15 +77,13 @@ const MeleeSlashEffect = {
      * @param {Object} weapon - Weapon data (optional)
      */
     createFromAttack(attacker, target, weapon = null) {
-        const tileSize = typeof TILE_SIZE !== 'undefined' ? TILE_SIZE : 32;
+        // Get attacker position in tile coordinates (center of tile)
+        const ax = (attacker.gridX ?? attacker.x) + 0.5;
+        const ay = (attacker.gridY ?? attacker.y) + 0.5;
 
-        // Get attacker position in pixels
-        const ax = (attacker.gridX ?? attacker.x) * tileSize + tileSize / 2;
-        const ay = (attacker.gridY ?? attacker.y) * tileSize + tileSize / 2;
-
-        // Get target position
-        const tx = (target.gridX ?? target.x) * tileSize + tileSize / 2;
-        const ty = (target.gridY ?? target.y) * tileSize + tileSize / 2;
+        // Get target position in tile coordinates
+        const tx = (target.gridX ?? target.x) + 0.5;
+        const ty = (target.gridY ?? target.y) + 0.5;
 
         // Calculate facing angle
         const facingAngle = Math.atan2(ty - ay, tx - ax);
@@ -244,15 +242,15 @@ const MeleeSlashEffect = {
             const progress = Math.random();
             const angle = effect.startAngle + progress * (effect.endAngle - effect.startAngle);
 
-            // Spawn near the tip (80% to 110% of radius)
+            // Spawn near the tip (80% to 110% of radius) - radius is in tile units
             const dist = effect.radius * (0.8 + Math.random() * 0.3);
 
-            // Position relative to origin
+            // Position relative to origin (in tile units)
             const px = Math.cos(angle) * dist;
             const py = Math.sin(angle) * dist;
 
-            // Velocity: fly outward
-            const speed = 1.5 + Math.random() * 2.5;
+            // Velocity: fly outward (in tile units per frame)
+            const speed = 0.05 + Math.random() * 0.08;
             const vx = Math.cos(angle) * speed;
             const vy = Math.sin(angle) * speed;
 
@@ -275,12 +273,14 @@ const MeleeSlashEffect = {
     /**
      * Render all active effects
      * @param {CanvasRenderingContext2D} ctx
-     * @param {number} cameraX - Camera offset X
-     * @param {number} cameraY - Camera offset Y
+     * @param {number} camX - Camera X in tile coordinates
+     * @param {number} camY - Camera Y in tile coordinates
+     * @param {number} tileSize - Effective tile size (with zoom)
+     * @param {number} offsetX - X offset (TRACKER_WIDTH)
      */
-    render(ctx, cameraX = 0, cameraY = 0) {
+    render(ctx, camX = 0, camY = 0, tileSize = 32, offsetX = 0) {
         for (const effect of this.activeEffects) {
-            this.renderEffect(ctx, effect, cameraX, cameraY);
+            this.renderEffect(ctx, effect, camX, camY, tileSize, offsetX);
         }
     },
 
@@ -288,19 +288,25 @@ const MeleeSlashEffect = {
      * Render a single effect
      * @param {CanvasRenderingContext2D} ctx
      * @param {Object} effect
-     * @param {number} cameraX
-     * @param {number} cameraY
+     * @param {number} camX - Camera X in tile coordinates
+     * @param {number} camY - Camera Y in tile coordinates
+     * @param {number} tileSize - Effective tile size (with zoom)
+     * @param {number} offsetX - X offset (TRACKER_WIDTH)
      */
-    renderEffect(ctx, effect, cameraX, cameraY) {
-        const screenX = effect.originX - cameraX;
-        const screenY = effect.originY - cameraY;
+    renderEffect(ctx, effect, camX, camY, tileSize, offsetX) {
+        // Convert tile coordinates to screen coordinates
+        const screenX = (effect.originX - camX) * tileSize + offsetX;
+        const screenY = (effect.originY - camY) * tileSize;
+
+        // Scale radius to screen pixels
+        const screenRadius = effect.radius * tileSize;
 
         // Draw glow layer (if element)
         if (effect.glowColor && effect.currentFrame <= effect.slashDuration) {
             ctx.save();
             ctx.globalAlpha = 0.3 * (1 - effect.currentFrame / effect.slashDuration);
             ctx.fillStyle = effect.glowColor;
-            this.drawSlashArc(ctx, screenX, screenY, effect, effect.maxThickness * 1.5);
+            this.drawSlashArc(ctx, screenX, screenY, effect, effect.maxThickness * 1.5, screenRadius);
             ctx.restore();
         }
 
@@ -310,12 +316,12 @@ const MeleeSlashEffect = {
             ctx.save();
             ctx.globalAlpha = 1 - (fadeProgress * 0.5); // Slight fade
             ctx.fillStyle = effect.slashColor;
-            this.drawSlashArc(ctx, screenX, screenY, effect, effect.maxThickness);
+            this.drawSlashArc(ctx, screenX, screenY, effect, effect.maxThickness, screenRadius);
             ctx.restore();
         }
 
         // Draw particles
-        this.renderParticles(ctx, effect, screenX, screenY);
+        this.renderParticles(ctx, effect, screenX, screenY, tileSize);
     },
 
     /**
@@ -325,8 +331,9 @@ const MeleeSlashEffect = {
      * @param {number} py - Player screen Y
      * @param {Object} effect
      * @param {number} thickness
+     * @param {number} screenRadius - Radius in screen pixels
      */
-    drawSlashArc(ctx, px, py, effect, thickness) {
+    drawSlashArc(ctx, px, py, effect, thickness, screenRadius) {
         const segments = this.defaults.segments;
 
         ctx.beginPath();
@@ -340,7 +347,7 @@ const MeleeSlashEffect = {
             const thicknessMod = Math.sin(progress * Math.PI);
             const currentThickness = thicknessMod * thickness;
 
-            const r = effect.radius + currentThickness / 2;
+            const r = screenRadius + currentThickness / 2;
             const x = px + Math.cos(angle) * r;
             const y = py + Math.sin(angle) * r;
 
@@ -359,7 +366,7 @@ const MeleeSlashEffect = {
             const thicknessMod = Math.sin(progress * Math.PI);
             const currentThickness = thicknessMod * thickness;
 
-            const r = effect.radius - currentThickness / 2;
+            const r = screenRadius - currentThickness / 2;
             const x = px + Math.cos(angle) * r;
             const y = py + Math.sin(angle) * r;
 
@@ -376,17 +383,22 @@ const MeleeSlashEffect = {
      * @param {Object} effect
      * @param {number} screenX
      * @param {number} screenY
+     * @param {number} tileSize
      */
-    renderParticles(ctx, effect, screenX, screenY) {
+    renderParticles(ctx, effect, screenX, screenY, tileSize) {
         for (const p of effect.particles) {
             if (p.alpha <= 0) continue;
+
+            // Convert particle position from tile units to screen pixels
+            const particleScreenX = screenX + p.x * tileSize;
+            const particleScreenY = screenY + p.y * tileSize;
 
             ctx.save();
             ctx.globalAlpha = p.alpha;
             ctx.fillStyle = effect.particleColor;
             ctx.fillRect(
-                screenX + p.x - p.size / 2,
-                screenY + p.y - p.size / 2,
+                particleScreenX - p.size / 2,
+                particleScreenY - p.size / 2,
                 p.size,
                 p.size
             );
