@@ -1,24 +1,32 @@
 // ============================================================================
 // MELEE SLASH EFFECT - Code-based sword/weapon slash visualization
 // ============================================================================
-// Replaces sprite-based attack animations with procedural effects
 // Features:
-// - Arc-shaped slash geometry (tapered, curved)
-// - Particle system for sparks/impact
-// - Configurable per weapon type
+// - State machine: WINDUP → SLASH → FADE
+// - Windup telegraph (expanding circle)
+// - "Cleave" shape: Fixed outer edge, dynamic inner edge (thin→thick→thin)
+// - Particle system for sparks along the blade
 // ============================================================================
 
 const MeleeSlashEffect = {
     // Active effects being rendered
     activeEffects: [],
 
+    // State constants
+    State: {
+        WINDUP: 'windup',
+        SLASH: 'slash',
+        FADE: 'fade'
+    },
+
     // Default configuration
     defaults: {
-        slashDuration: 8,        // Frames for the white arc (fast)
-        particlesPerFrame: 4,    // Sparks spawned per frame
+        windupDuration: 5,       // Frames for telegraph
+        slashDuration: 8,        // Frames for the slash arc
+        particlesPerFrame: 6,    // Sparks spawned per frame during slash
         particleFadeRate: 0.08,  // How fast particles fade
-        baseThickness: 12,       // Base arc thickness
-        segments: 16             // Arc smoothness
+        hiltOffset: 0.3,         // Minimum distance from player (in tiles)
+        segments: 20             // Arc smoothness
     },
 
     // ========================================================================
@@ -34,21 +42,32 @@ const MeleeSlashEffect = {
      * @returns {Object} The created effect
      */
     create(originX, originY, facingAngle, options = {}) {
+        const arcDegrees = options.arcDegrees || 90;
+        const totalSwingArc = Math.PI * arcDegrees / 180;
+
         const effect = {
-            // Position in TILE coordinates (will be converted to screen in render)
+            // Position in TILE coordinates
             originX,
             originY,
             facingAngle,
 
-            // Timing
-            currentFrame: 0,
-            slashDuration: options.slashDuration || this.defaults.slashDuration,
+            // State machine
+            state: this.State.WINDUP,
+            stateTimer: 0,
             isFinished: false,
 
-            // Geometry (in tile units, will be scaled by tileSize in render)
-            radius: options.range || 1.25,
-            arcAngle: Math.PI * (options.arcDegrees || 90) / 180,
-            maxThickness: this.defaults.baseThickness + ((options.range || 1.25) * 6),
+            // Timing
+            windupDuration: options.windupDuration || this.defaults.windupDuration,
+            slashDuration: options.slashDuration || this.defaults.slashDuration,
+
+            // Geometry (in tile units)
+            maxRange: options.range || 1.25,           // Outer edge (fixed at max range)
+            hiltOffset: options.hiltOffset || this.defaults.hiltOffset, // Inner edge minimum
+            totalSwingArc: totalSwingArc,
+
+            // Pre-calculated angles (swing goes from startAngle to endAngle)
+            startAngle: facingAngle + (totalSwingArc / 2),
+            endAngle: facingAngle - (totalSwingArc / 2),
 
             // Colors
             slashColor: options.color || '#FFFFFF',
@@ -57,11 +76,7 @@ const MeleeSlashEffect = {
 
             // Particles (positions relative to origin in tile units)
             particles: [],
-            particlesPerFrame: options.particlesPerFrame || this.defaults.particlesPerFrame,
-
-            // Pre-calculated angles
-            startAngle: facingAngle - (Math.PI * (options.arcDegrees || 90) / 180) / 2,
-            endAngle: facingAngle + (Math.PI * (options.arcDegrees || 90) / 180) / 2
+            particlesPerFrame: options.particlesPerFrame || this.defaults.particlesPerFrame
         };
 
         console.log(`[MeleeSlashEffect] Created effect at (${originX.toFixed(2)}, ${originY.toFixed(2)}) angle=${(facingAngle * 180 / Math.PI).toFixed(0)}°`);
@@ -72,36 +87,22 @@ const MeleeSlashEffect = {
 
     /**
      * Create slash effect from attack direction
-     * @param {Object} attacker - Entity attacking (has x, y or gridX, gridY)
-     * @param {Object} target - Target position or entity
-     * @param {Object} weapon - Weapon data (optional)
      */
     createFromAttack(attacker, target, weapon = null) {
-        // Get attacker position in tile coordinates (center of tile)
         const ax = (attacker.gridX ?? attacker.x) + 0.5;
         const ay = (attacker.gridY ?? attacker.y) + 0.5;
-
-        // Get target position in tile coordinates
         const tx = (target.gridX ?? target.x) + 0.5;
         const ty = (target.gridY ?? target.y) + 0.5;
-
-        // Calculate facing angle
         const facingAngle = Math.atan2(ty - ay, tx - ax);
-
-        // Get weapon-specific options
         const options = this.getWeaponOptions(weapon);
-
         return this.create(ax, ay, facingAngle, options);
     },
 
     /**
      * Get visual options based on weapon type
-     * @param {Object} weapon - Weapon data
-     * @returns {Object} Visual options
      */
     getWeaponOptions(weapon) {
         if (!weapon) {
-            // Unarmed/default
             return {
                 range: 1.0,
                 arcDegrees: 60,
@@ -110,12 +111,10 @@ const MeleeSlashEffect = {
             };
         }
 
-        const damageType = weapon.damageType || 'blade';
         const weaponType = weapon.weaponType || 'sword';
         const range = weapon.stats?.range || 1.25;
         const element = weapon.element;
 
-        // Base options by damage type
         let options = {
             range: range,
             arcDegrees: 90,
@@ -123,43 +122,39 @@ const MeleeSlashEffect = {
             color: '#FFFFFF'
         };
 
-        // Customize by weapon type
         switch (weaponType) {
             case 'sword':
             case 'knife':
                 options.arcDegrees = 100;
                 options.color = '#FFFFFF';
                 break;
-
             case 'mace':
             case 'hammer':
                 options.arcDegrees = 70;
                 options.color = '#CCCCCC';
                 options.slashDuration = 10;
-                options.particlesPerFrame = 6;
+                options.particlesPerFrame = 8;
                 break;
-
             case 'spear':
             case 'polearm':
                 options.arcDegrees = 45;
                 options.color = '#DDDDDD';
                 options.range = range * 1.2;
                 break;
-
             case 'axe':
                 options.arcDegrees = 80;
                 options.color = '#EEEEEE';
                 options.slashDuration = 9;
                 break;
-
             case 'dagger':
                 options.arcDegrees = 50;
                 options.slashDuration = 5;
-                options.particlesPerFrame = 2;
+                options.windupDuration = 3;
+                options.particlesPerFrame = 3;
                 break;
         }
 
-        // Add element colors
+        // Element colors
         if (element) {
             const elementColors = {
                 fire: { color: '#FF6B35', particleColor: '#FFAA00', glowColor: '#FF4400' },
@@ -172,7 +167,6 @@ const MeleeSlashEffect = {
                 dark: { color: '#636E72', particleColor: '#2D3436', glowColor: '#1E272E' },
                 arcane: { color: '#A29BFE', particleColor: '#DDA0DD', glowColor: '#9B59B6' }
             };
-
             if (elementColors[element]) {
                 Object.assign(options, elementColors[element]);
             }
@@ -187,7 +181,6 @@ const MeleeSlashEffect = {
 
     /**
      * Update all active effects
-     * @param {number} dt - Delta time in ms (unused, frame-based)
      */
     update(dt) {
         for (let i = this.activeEffects.length - 1; i >= 0; i--) {
@@ -201,18 +194,42 @@ const MeleeSlashEffect = {
     },
 
     /**
-     * Update a single effect
-     * @param {Object} effect
+     * Update a single effect using state machine
      */
     updateEffect(effect) {
-        effect.currentFrame++;
+        effect.stateTimer++;
 
-        // Spawn particles while slash is active
-        if (effect.currentFrame <= effect.slashDuration) {
-            this.spawnParticles(effect);
+        switch (effect.state) {
+            case this.State.WINDUP:
+                if (effect.stateTimer >= effect.windupDuration) {
+                    effect.state = this.State.SLASH;
+                    effect.stateTimer = 0;
+                }
+                break;
+
+            case this.State.SLASH:
+                this.spawnSparks(effect);
+                if (effect.stateTimer >= effect.slashDuration) {
+                    effect.state = this.State.FADE;
+                    effect.stateTimer = 0;
+                }
+                break;
+
+            case this.State.FADE:
+                if (effect.particles.length === 0) {
+                    effect.isFinished = true;
+                }
+                break;
         }
 
-        // Update particles
+        // Always update particles
+        this.updateParticles(effect);
+    },
+
+    /**
+     * Update particles for an effect
+     */
+    updateParticles(effect) {
         for (let i = effect.particles.length - 1; i >= 0; i--) {
             const p = effect.particles[i];
             p.x += p.vx;
@@ -223,34 +240,28 @@ const MeleeSlashEffect = {
                 effect.particles.splice(i, 1);
             }
         }
-
-        // Check if finished
-        if (effect.currentFrame > effect.slashDuration && effect.particles.length === 0) {
-            effect.isFinished = true;
-        }
     },
 
     /**
-     * Spawn particles along the slash arc
-     * @param {Object} effect
+     * Spawn sparks along the entire blade (hilt to tip)
      */
-    spawnParticles(effect) {
-        const count = effect.particlesPerFrame;
+    spawnSparks(effect) {
+        const count = effect.particlesPerFrame + Math.floor(Math.random() * 4);
 
         for (let i = 0; i < count; i++) {
-            // Random position along the arc
-            const progress = Math.random();
-            const angle = effect.startAngle + progress * (effect.endAngle - effect.startAngle);
+            // Random position along the swing arc
+            const arcProgress = Math.random();
+            const angle = effect.startAngle + arcProgress * (effect.endAngle - effect.startAngle);
 
-            // Spawn near the tip (80% to 110% of radius) - radius is in tile units
-            const dist = effect.radius * (0.8 + Math.random() * 0.3);
+            // Random distance between hilt and tip (favor the tip slightly)
+            const dist = effect.hiltOffset + (Math.random() * (effect.maxRange - effect.hiltOffset));
 
             // Position relative to origin (in tile units)
             const px = Math.cos(angle) * dist;
             const py = Math.sin(angle) * dist;
 
-            // Velocity: fly outward (in tile units per frame)
-            const speed = 0.05 + Math.random() * 0.08;
+            // Velocity: fly outward along the angle
+            const speed = 0.03 + Math.random() * 0.06;
             const vx = Math.cos(angle) * speed;
             const vy = Math.sin(angle) * speed;
 
@@ -272,11 +283,6 @@ const MeleeSlashEffect = {
 
     /**
      * Render all active effects
-     * @param {CanvasRenderingContext2D} ctx
-     * @param {number} camX - Camera X in tile coordinates
-     * @param {number} camY - Camera Y in tile coordinates
-     * @param {number} tileSize - Effective tile size (with zoom)
-     * @param {number} offsetX - X offset (TRACKER_WIDTH)
      */
     render(ctx, camX = 0, camY = 0, tileSize = 32, offsetX = 0) {
         for (const effect of this.activeEffects) {
@@ -285,71 +291,76 @@ const MeleeSlashEffect = {
     },
 
     /**
-     * Render a single effect
-     * @param {CanvasRenderingContext2D} ctx
-     * @param {Object} effect
-     * @param {number} camX - Camera X in tile coordinates
-     * @param {number} camY - Camera Y in tile coordinates
-     * @param {number} tileSize - Effective tile size (with zoom)
-     * @param {number} offsetX - X offset (TRACKER_WIDTH)
+     * Render a single effect based on its state
      */
     renderEffect(ctx, effect, camX, camY, tileSize, offsetX) {
         // Convert tile coordinates to screen coordinates
         const screenX = (effect.originX - camX) * tileSize + offsetX;
         const screenY = (effect.originY - camY) * tileSize;
 
-        // Scale radius to screen pixels
-        const screenRadius = effect.radius * tileSize;
+        ctx.fillStyle = effect.slashColor;
 
-        // Draw glow layer (if element)
-        if (effect.glowColor && effect.currentFrame <= effect.slashDuration) {
-            ctx.save();
-            ctx.globalAlpha = 0.3 * (1 - effect.currentFrame / effect.slashDuration);
-            ctx.fillStyle = effect.glowColor;
-            this.drawSlashArc(ctx, screenX, screenY, effect, effect.maxThickness * 1.5, screenRadius);
-            ctx.restore();
+        switch (effect.state) {
+            case this.State.WINDUP:
+                this.drawWindupTelegraph(ctx, screenX, screenY, effect, tileSize);
+                break;
+
+            case this.State.SLASH:
+                this.drawCleaveShape(ctx, screenX, screenY, effect, tileSize);
+                break;
+
+            // FADE state: just show particles, no shape
         }
 
-        // Draw main slash arc (only while active)
-        if (effect.currentFrame <= effect.slashDuration) {
-            const fadeProgress = effect.currentFrame / effect.slashDuration;
-            ctx.save();
-            ctx.globalAlpha = 1 - (fadeProgress * 0.5); // Slight fade
-            ctx.fillStyle = effect.slashColor;
-            this.drawSlashArc(ctx, screenX, screenY, effect, effect.maxThickness, screenRadius);
-            ctx.restore();
-        }
-
-        // Draw particles
+        // Always draw particles
         this.renderParticles(ctx, effect, screenX, screenY, tileSize);
     },
 
     /**
-     * Draw the arc-shaped slash
-     * @param {CanvasRenderingContext2D} ctx
-     * @param {number} px - Player screen X
-     * @param {number} py - Player screen Y
-     * @param {Object} effect
-     * @param {number} thickness
-     * @param {number} screenRadius - Radius in screen pixels
+     * Draw the windup telegraph - small expanding circle
      */
-    drawSlashArc(ctx, px, py, effect, thickness, screenRadius) {
+    drawWindupTelegraph(ctx, px, py, effect, tileSize) {
+        const progress = effect.stateTimer / effect.windupDuration;
+
+        // Position: slightly in front of player in facing direction
+        const offsetDist = 0.4 * tileSize; // ~0.4 tiles in front
+        const centerX = px + Math.cos(effect.facingAngle) * offsetDist;
+        const centerY = py + Math.sin(effect.facingAngle) * offsetDist;
+
+        // Size: starts small, grows
+        const minSize = 5;
+        const maxSize = 20;
+        const size = minSize + (progress * (maxSize - minSize));
+
+        ctx.save();
+        ctx.globalAlpha = 0.7 + (progress * 0.3); // Gets more opaque
+        ctx.fillStyle = effect.slashColor;
+        ctx.beginPath();
+        ctx.arc(centerX, centerY, size / 2, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+    },
+
+    /**
+     * Draw the "cleave" slash shape
+     * - Outer edge: Fixed at max range (smooth circular arc)
+     * - Inner edge: Dynamic "thin → thick → thin" using sine wave
+     */
+    drawCleaveShape(ctx, px, py, effect, tileSize) {
         const segments = this.defaults.segments;
+        const maxRangePixels = effect.maxRange * tileSize;
+        const hiltOffsetPixels = effect.hiltOffset * tileSize;
 
         ctx.beginPath();
 
-        // Outer edge
+        // 1. OUTER EDGE - Always at max range (go from start to end)
         for (let i = 0; i <= segments; i++) {
             const progress = i / segments;
-            const angle = effect.startAngle + progress * (effect.endAngle - effect.startAngle);
+            const currentAngle = effect.startAngle + progress * (effect.endAngle - effect.startAngle);
 
-            // Thickness varies - thickest in middle, thin at edges
-            const thicknessMod = Math.sin(progress * Math.PI);
-            const currentThickness = thicknessMod * thickness;
-
-            const r = screenRadius + currentThickness / 2;
-            const x = px + Math.cos(angle) * r;
-            const y = py + Math.sin(angle) * r;
+            // Outer point is fixed at max range
+            const x = px + Math.cos(currentAngle) * maxRangePixels;
+            const y = py + Math.sin(currentAngle) * maxRangePixels;
 
             if (i === 0) {
                 ctx.moveTo(x, y);
@@ -358,38 +369,53 @@ const MeleeSlashEffect = {
             }
         }
 
-        // Inner edge (reverse)
+        // 2. INNER EDGE - Dynamic "cleave" (go backwards from end to start)
+        // Creates "thin → thick → thin" effect using sine wave
         for (let i = segments; i >= 0; i--) {
             const progress = i / segments;
-            const angle = effect.startAngle + progress * (effect.endAngle - effect.startAngle);
+            const currentAngle = effect.startAngle + progress * (effect.endAngle - effect.startAngle);
 
-            const thicknessMod = Math.sin(progress * Math.PI);
-            const currentThickness = thicknessMod * thickness;
+            // Calculate sine wave expansion (0 → 1 → 0)
+            const expansion = Math.sin(progress * Math.PI);
 
-            const r = screenRadius - currentThickness / 2;
-            const x = px + Math.cos(angle) * r;
-            const y = py + Math.sin(angle) * r;
+            // When expansion = 0 (at ends): innerRadius = maxRange (thin line at tip)
+            // When expansion = 1 (at center): innerRadius = hiltOffset (full cleave)
+            const currentInnerRadius = maxRangePixels - (expansion * (maxRangePixels - hiltOffsetPixels));
+
+            const x = px + Math.cos(currentAngle) * currentInnerRadius;
+            const y = py + Math.sin(currentAngle) * currentInnerRadius;
 
             ctx.lineTo(x, y);
         }
 
         ctx.closePath();
+
+        // Draw glow layer first (if element)
+        if (effect.glowColor) {
+            ctx.save();
+            ctx.globalAlpha = 0.4;
+            ctx.fillStyle = effect.glowColor;
+            ctx.shadowColor = effect.glowColor;
+            ctx.shadowBlur = 15;
+            ctx.fill();
+            ctx.restore();
+        }
+
+        // Draw main fill
+        ctx.save();
+        ctx.globalAlpha = 0.9;
+        ctx.fillStyle = effect.slashColor;
         ctx.fill();
+        ctx.restore();
     },
 
     /**
      * Render particles for an effect
-     * @param {CanvasRenderingContext2D} ctx
-     * @param {Object} effect
-     * @param {number} screenX
-     * @param {number} screenY
-     * @param {number} tileSize
      */
     renderParticles(ctx, effect, screenX, screenY, tileSize) {
         for (const p of effect.particles) {
             if (p.alpha <= 0) continue;
 
-            // Convert particle position from tile units to screen pixels
             const particleScreenX = screenX + p.x * tileSize;
             const particleScreenY = screenY + p.y * tileSize;
 
@@ -410,19 +436,19 @@ const MeleeSlashEffect = {
     // UTILITY
     // ========================================================================
 
-    /**
-     * Clear all active effects
-     */
     clear() {
         this.activeEffects = [];
     },
 
-    /**
-     * Check if any effects are active
-     * @returns {boolean}
-     */
     hasActiveEffects() {
         return this.activeEffects.length > 0;
+    },
+
+    /**
+     * Check if any effect is currently dealing damage (in SLASH state)
+     */
+    isDealingDamage() {
+        return this.activeEffects.some(e => e.state === this.State.SLASH);
     }
 };
 
@@ -430,37 +456,26 @@ const MeleeSlashEffect = {
 // CONVENIENCE FUNCTIONS
 // ============================================================================
 
-/**
- * Create a slash effect when player attacks
- * @param {Object} target - Target entity or position
- * @param {Object} weapon - Player's weapon (optional)
- */
 function createPlayerSlash(target, weapon = null) {
     if (!game || !game.player) return null;
     return MeleeSlashEffect.createFromAttack(game.player, target, weapon);
 }
 
-/**
- * Create a slash effect when enemy attacks
- * @param {Object} enemy - Attacking enemy
- * @param {Object} target - Target (usually player)
- */
 function createEnemySlash(enemy, target) {
-    // Enemies get simpler, less flashy effects
     const options = {
         range: enemy.attackRange || 1,
         arcDegrees: 60,
         color: '#CC4444',
         particleColor: '#FF6666',
         slashDuration: 6,
-        particlesPerFrame: 2
+        windupDuration: 3,
+        particlesPerFrame: 3
     };
 
-    const tileSize = typeof TILE_SIZE !== 'undefined' ? TILE_SIZE : 32;
-    const ex = (enemy.gridX ?? enemy.x) * tileSize + tileSize / 2;
-    const ey = (enemy.gridY ?? enemy.y) * tileSize + tileSize / 2;
-    const tx = (target.gridX ?? target.x) * tileSize + tileSize / 2;
-    const ty = (target.gridY ?? target.y) * tileSize + tileSize / 2;
+    const ex = (enemy.gridX ?? enemy.x) + 0.5;
+    const ey = (enemy.gridY ?? enemy.y) + 0.5;
+    const tx = (target.gridX ?? target.x) + 0.5;
+    const ty = (target.gridY ?? target.y) + 0.5;
     const angle = Math.atan2(ty - ey, tx - ex);
 
     return MeleeSlashEffect.create(ex, ey, angle, options);
@@ -474,4 +489,4 @@ window.MeleeSlashEffect = MeleeSlashEffect;
 window.createPlayerSlash = createPlayerSlash;
 window.createEnemySlash = createEnemySlash;
 
-console.log('[MeleeSlashEffect] Code-based melee attack effects loaded');
+console.log('[MeleeSlashEffect] Code-based melee attack effects loaded (v2 - cleave style)');
