@@ -93,9 +93,16 @@ const VillageSystem = {
      * @private
      */
     _handleKeyDown(e) {
-        if (game.state !== 'village' && game.state !== 'dialogue') return;
+        if (game.state !== 'village' && game.state !== 'dialogue' && game.state !== 'journal') return;
 
-        // Handle dialogue input first
+        // Handle journal input first
+        if (game.state === 'journal' && typeof JournalUI !== 'undefined') {
+            JournalUI.handleInput(e.key);
+            e.preventDefault();
+            return;
+        }
+
+        // Handle dialogue input
         if (game.state === 'dialogue' && typeof DialogueUI !== 'undefined') {
             DialogueUI.handleInput(e.key);
             return;
