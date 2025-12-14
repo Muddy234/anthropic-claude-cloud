@@ -113,6 +113,27 @@ let persistentState = {
         npcStates: {}
     },
 
+    // THE BLEEDING EARTH: World state progression
+    worldState: 1,  // 1=NORMAL, 2=ASH, 3=BURNING, 4=ENDGAME
+    worldStateHistory: [],
+
+    // Lore collection tracking
+    loreCollected: [],
+
+    // Quest items for main storyline
+    questItems: {
+        dagger: false,          // Betrayal dagger (unlocks Elder confrontation)
+        wardsCollected: 0,      // Aether-Wards found in dungeon
+        wardsDelivered: 0       // Wards turned in at Town Hall
+    },
+
+    // NPC states (fled, dead, etc.)
+    npcStates: {},
+
+    // Victory tracking
+    victoryAchieved: false,
+    victoryTimestamp: null,
+
     // Death drop (for rescue runs)
     deathDrop: null
 };
@@ -250,6 +271,27 @@ function createNewPersistentState() {
             improvements: [],
             npcStates: {}
         },
+
+        // THE BLEEDING EARTH: World state progression
+        worldState: 1,
+        worldStateHistory: [{
+            state: 1,
+            timestamp: Date.now(),
+            trigger: 'game_start'
+        }],
+
+        loreCollected: [],
+
+        questItems: {
+            dagger: false,
+            wardsCollected: 0,
+            wardsDelivered: 0
+        },
+
+        npcStates: {},
+
+        victoryAchieved: false,
+        victoryTimestamp: null,
 
         deathDrop: null
     };

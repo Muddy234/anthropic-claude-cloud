@@ -1,5 +1,6 @@
 // === js/data/npcs.js ===
 // SURVIVAL EXTRACTION UPDATE: NPC definitions and dialogue
+// THE BLEEDING EARTH: Expanded NPC system with Elder Council
 
 // ============================================================================
 // NPC DATA
@@ -8,9 +9,64 @@
 const NPC_DATA = {
 
     // ========================================================================
-    // CORE NPCs (Always available)
+    // THE ELDER COUNCIL (Central to the narrative)
     // ========================================================================
 
+    elder_mira: {
+        id: 'elder_mira',
+        name: 'Elder Mira',
+        title: 'The Face of the Council',
+        color: '#9370DB',
+        description: 'The public leader of the village. Her eyes hold guilt.',
+        building: 'town_square',
+        role: 'quest_giver',
+        dialogueTree: 'elder_mira_main',
+        services: ['quests', 'lore', 'wards'],
+        initialDialogue: 'elder_mira_intro',
+        narrative: {
+            personality: 'guilty',
+            secret: 'She knows the truth about the Wards.',
+            confrontation: 'Confesses everything when shown the dagger.'
+        }
+    },
+
+    elder_thorne: {
+        id: 'elder_thorne',
+        name: 'Elder Thorne',
+        title: 'The Greed',
+        color: '#8B0000',
+        description: 'A harsh, calculating man. He speaks of pragmatism, but his eyes count gold.',
+        building: 'town_square',
+        role: 'elder',
+        dialogueTree: 'elder_thorne_main',
+        services: ['lore'],
+        initialDialogue: 'elder_thorne_intro',
+        narrative: {
+            personality: 'greedy',
+            secret: 'He pushed for cracking the seal.',
+            confrontation: 'Defiant. Claims it was necessary for the village.'
+        }
+    },
+
+    elder_vallus: {
+        id: 'elder_vallus',
+        name: 'Elder Vallus',
+        title: 'The Coward',
+        color: '#4B0082',
+        description: 'A nervous man who flinches at loud noises. He was once brave.',
+        building: 'town_square',
+        role: 'elder',
+        dialogueTree: 'elder_vallus_main',
+        services: ['lore'],
+        initialDialogue: 'elder_vallus_intro',
+        narrative: {
+            personality: 'cowardly',
+            secret: 'He killed the hero 100 years ago.',
+            confrontation: 'Breaks down. Begs for forgiveness.'
+        }
+    },
+
+    // Legacy alias for backward compatibility
     elder: {
         id: 'elder',
         name: 'Elder Mira',
@@ -19,10 +75,15 @@ const NPC_DATA = {
         description: 'A wise woman who has led the village for decades.',
         building: 'town_square',
         role: 'quest_giver',
-        dialogueTree: 'elder_main',
+        dialogueTree: 'elder_mira_main',
         services: ['quests', 'lore'],
-        initialDialogue: 'elder_intro'
+        initialDialogue: 'elder_mira_intro',
+        aliasOf: 'elder_mira'
     },
+
+    // ========================================================================
+    // CORE NPCs
+    // ========================================================================
 
     banker: {
         id: 'banker',
@@ -107,20 +168,102 @@ const NPC_DATA = {
         initialDialogue: 'patron_intro'
     },
 
-    // Future NPCs (placeholders for expansion)
+    // ========================================================================
+    // WORLD STATE CONDITIONAL NPCs
+    // ========================================================================
+
     alchemist: {
         id: 'alchemist',
         name: 'Zephyr',
         title: 'Wandering Alchemist',
         color: '#00CED1',
         description: 'A mysterious figure who deals in potions and rare materials.',
-        building: null,  // Wanders
+        building: 'smithy',  // Near the smithy
         role: 'merchant',
         dialogueTree: 'alchemist_main',
         services: ['shop', 'craft'],
         inventory: 'alchemist_stock',
         unlockCondition: { runs: 5 },
-        initialDialogue: 'alchemist_intro'
+        initialDialogue: 'alchemist_intro',
+        // THE BLEEDING EARTH: Flees when burning state reached
+        worldStatePresence: {
+            presentUntil: 3,  // BURNING
+            fleeState: 3,
+            fleeDialogue: 'alchemist_farewell',
+            replacement: {
+                type: 'object',
+                name: 'Leftover Potion Crate',
+                services: ['shop'],
+                inventory: 'alchemist_emergency_stock'
+            }
+        }
+    },
+
+    merchant_wife: {
+        id: 'merchant_wife',
+        name: 'Helena',
+        title: 'Merchant\'s Wife',
+        color: '#DDA0DD',
+        description: 'A worried mother of three. She helps her husband run the general store.',
+        building: 'tavern',  // Often at tavern
+        role: 'ambient',
+        dialogueTree: 'merchant_wife_main',
+        services: [],
+        initialDialogue: 'merchant_wife_intro',
+        worldStatePresence: {
+            presentUntil: 2,  // ASH
+            fleeState: 2,
+            fleeDialogue: 'merchant_wife_farewell'
+        }
+    },
+
+    // Ambient villagers (flee early)
+    villager_1: {
+        id: 'villager_1',
+        name: 'Farmer Jeb',
+        title: 'Local Farmer',
+        color: '#8B4513',
+        description: 'A weathered farmer who tends the fields outside town.',
+        building: null,  // Wanders
+        role: 'ambient',
+        dialogueTree: 'villager_generic',
+        services: [],
+        worldStatePresence: {
+            presentUntil: 2,
+            fleeState: 2
+        }
+    },
+
+    villager_2: {
+        id: 'villager_2',
+        name: 'Martha',
+        title: 'Baker',
+        color: '#DEB887',
+        description: 'The village baker. Her bread is legendary.',
+        building: null,
+        role: 'ambient',
+        dialogueTree: 'villager_generic',
+        services: [],
+        worldStatePresence: {
+            presentUntil: 2,
+            fleeState: 2
+        }
+    },
+
+    villager_3: {
+        id: 'villager_3',
+        name: 'Young Thomas',
+        title: 'Apprentice',
+        color: '#6495ED',
+        description: 'A young man learning the smith trade.',
+        building: 'smithy',
+        role: 'ambient',
+        dialogueTree: 'villager_generic',
+        services: [],
+        worldStatePresence: {
+            presentUntil: 2,
+            fleeState: 2
+        }
     },
 
     scout: {
@@ -137,6 +280,55 @@ const NPC_DATA = {
         initialDialogue: 'scout_intro'
     }
 };
+
+// ============================================================================
+// NPC WORLD STATE HELPERS
+// ============================================================================
+
+/**
+ * Check if an NPC should be present based on world state
+ * @param {string} npcId - NPC ID
+ * @returns {boolean}
+ */
+function isNPCPresentInWorldState(npcId) {
+    const npc = NPC_DATA[npcId];
+    if (!npc) return false;
+
+    // Check WorldStateSystem first
+    if (typeof WorldStateSystem !== 'undefined') {
+        const npcState = WorldStateSystem.getNPCState(npcId);
+        if (npcState === 'fled' || npcState === 'dead') {
+            return false;
+        }
+    }
+
+    // Check world state presence rules
+    if (npc.worldStatePresence) {
+        const currentState = typeof WorldStateSystem !== 'undefined' ?
+            WorldStateSystem.getState() : 1;
+
+        if (currentState >= npc.worldStatePresence.presentUntil) {
+            return false;
+        }
+    }
+
+    return true;
+}
+
+/**
+ * Get NPC's replacement (if any) for current world state
+ * @param {string} npcId
+ * @returns {Object|null}
+ */
+function getNPCReplacement(npcId) {
+    const npc = NPC_DATA[npcId];
+    if (!npc?.worldStatePresence?.replacement) return null;
+
+    if (!isNPCPresentInWorldState(npcId)) {
+        return npc.worldStatePresence.replacement;
+    }
+    return null;
+}
 
 // ============================================================================
 // DIALOGUE TREES
@@ -614,4 +806,8 @@ window.createNPC = createNPC;
 window.getDialogueNode = getDialogueNode;
 window.getDynamicContent = getDynamicContent;
 
-console.log('[NPCs] NPC data loaded');
+// THE BLEEDING EARTH: World state helpers
+window.isNPCPresentInWorldState = isNPCPresentInWorldState;
+window.getNPCReplacement = getNPCReplacement;
+
+console.log('[NPCs] NPC data loaded (with Elder Council and world state support)');

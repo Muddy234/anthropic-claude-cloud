@@ -310,6 +310,11 @@ const SurvivalIntegration = {
             QuestSystem.onExtraction(floor);
         }
 
+        // THE BLEEDING EARTH: Check world state progression
+        if (typeof WorldStateSystem !== 'undefined') {
+            WorldStateSystem.checkExtractionProgression(floor);
+        }
+
         // End run
         this._endRun(true);
 

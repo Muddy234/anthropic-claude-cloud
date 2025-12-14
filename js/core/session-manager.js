@@ -170,10 +170,10 @@ const SessionManager = {
         const currentFloor = sessionState.currentFloor;
         const nextFloor = currentFloor + 1;
 
-        // Check if Core (end of game)
-        if (nextFloor > 6) {
-            console.log('[SessionManager] Descending to The Core!');
-            sessionState.currentFloor = 'core';
+        // Check if Core/Malphas (Floor 10 - end of game)
+        if (nextFloor > 9) {
+            console.log('[SessionManager] Descending to The Heart of the World!');
+            sessionState.currentFloor = 10;  // Floor 10 = Malphas
         } else {
             sessionState.currentFloor = nextFloor;
         }
@@ -182,6 +182,11 @@ const SessionManager = {
         if (typeof nextFloor === 'number' && nextFloor > persistentState.stats.deepestFloor) {
             persistentState.stats.deepestFloor = nextFloor;
             this._checkVillageDegradation(nextFloor);
+        }
+
+        // THE BLEEDING EARTH: Check floor entry progression (triggers ENDGAME on Floor 10)
+        if (typeof WorldStateSystem !== 'undefined') {
+            WorldStateSystem.checkFloorEntryProgression(sessionState.currentFloor);
         }
 
         // Reset floor-specific session data
