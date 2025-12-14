@@ -144,10 +144,17 @@ const LoadoutUI = {
             case 'w':
             case 'W':
                 if (this.currentPanel === 0) {
-                    // Bank grid - move up
+                    // Bank grid - move up with scrolling
+                    const bankItems = this._getBankItems();
                     if (this.selectedIndex >= this.GRID_COLS) {
                         this.selectedIndex -= this.GRID_COLS;
+                        // Scroll up if selection goes above visible area
+                        const selectedRow = Math.floor(this.selectedIndex / this.GRID_COLS);
+                        if (selectedRow < this.bankScroll) {
+                            this.bankScroll = selectedRow;
+                        }
                     } else if (this.bankScroll > 0) {
+                        // Already at top of visible area, scroll up
                         this.bankScroll--;
                     }
                 } else if (this.currentPanel === 1) {
@@ -167,11 +174,16 @@ const LoadoutUI = {
             case 's':
             case 'S':
                 if (this.currentPanel === 0) {
-                    // Bank grid - move down
+                    // Bank grid - move down with scrolling
                     const bankItems = this._getBankItems();
-                    const maxRows = Math.ceil(bankItems.length / this.GRID_COLS);
+                    const maxVisibleRows = 6;
                     if (this.selectedIndex + this.GRID_COLS < bankItems.length) {
                         this.selectedIndex += this.GRID_COLS;
+                        // Scroll down if selection goes below visible area
+                        const selectedRow = Math.floor(this.selectedIndex / this.GRID_COLS);
+                        if (selectedRow >= this.bankScroll + maxVisibleRows) {
+                            this.bankScroll = selectedRow - maxVisibleRows + 1;
+                        }
                     }
                 } else if (this.currentPanel === 1) {
                     // Equipment slots - move down
@@ -537,18 +549,33 @@ const LoadoutUI = {
         ctx.fillStyle = '#8b949e';
         ctx.fillText('BANK / STASH', x + width / 2, y + 20);
 
-        // Bank gold
+        // Bank gold and item count
         const bankGold = persistentState?.bank?.gold || 0;
+        const bankItems = this._getBankItems();
         ctx.font = '12px Arial';
         ctx.fillStyle = '#FFD700';
-        ctx.fillText(`${bankGold}g available`, x + width / 2, y + 38);
+        ctx.fillText(`${bankGold}g | ${bankItems.length} items`, x + width / 2, y + 38);
 
-        // Item grid
-        const bankItems = this._getBankItems();
+        // Item grid with scroll support
         const gridX = x + 15;
         const gridY = y + 55;
+        const maxVisibleRows = 6;
 
-        this._renderItemGrid(ctx, gridX, gridY, bankItems, this.currentPanel === 0);
+        this._renderScrollableGrid(ctx, gridX, gridY, bankItems, this.currentPanel === 0, this.bankScroll, maxVisibleRows);
+
+        // Scroll indicator if needed
+        const totalRows = Math.ceil(bankItems.length / this.GRID_COLS);
+        if (totalRows > maxVisibleRows) {
+            ctx.font = '10px Arial';
+            ctx.textAlign = 'center';
+            ctx.fillStyle = '#58a6ff';
+            ctx.fillText(`↑↓ ${this.bankScroll + 1}-${Math.min(this.bankScroll + maxVisibleRows, totalRows)}/${totalRows}`, x + width / 2, y + height - 120);
+        }
+
+        // Item description panel (below grid)
+        if (this.currentPanel === 0 && bankItems.length > 0 && this.selectedIndex < bankItems.length) {
+            this._renderItemDescription(ctx, x + 5, y + height - 110, width - 10, bankItems[this.selectedIndex].item);
+        }
     },
 
     _renderEquipmentPanel(ctx, x, y) {
@@ -707,22 +734,24 @@ const LoadoutUI = {
     },
 
     _renderItemGrid(ctx, x, y, items, isActive, cols = 4) {
+        this._renderScrollableGrid(ctx, x, y, items, isActive, 0, 6, cols);
+    },
+
+    _renderScrollableGrid(ctx, x, y, items, isActive, scrollOffset = 0, maxVisibleRows = 6, cols = 4) {
         const slotSize = this.SLOT_SIZE;
         const gap = this.SLOT_GAP;
-        const rows = Math.ceil(items.length / cols) || 1;
-        const maxVisibleRows = 6;
+        const totalRows = Math.ceil(items.length / cols) || 1;
 
-        // Draw grid slots
-        for (let row = 0; row < Math.max(rows, maxVisibleRows); row++) {
+        // Draw grid slots with scroll offset
+        for (let visibleRow = 0; visibleRow < maxVisibleRows; visibleRow++) {
+            const actualRow = visibleRow + scrollOffset;
             for (let col = 0; col < cols; col++) {
-                const idx = row * cols + col;
+                const idx = actualRow * cols + col;
                 const slotX = x + col * (slotSize + gap);
-                const slotY = y + row * (slotSize + gap);
+                const slotY = y + visibleRow * (slotSize + gap);
 
-                // Check if within visible area
-                if (row >= maxVisibleRows) continue;
-
-                const item = items[idx];
+                // Check if we have an item at this index
+                const item = idx < items.length ? items[idx] : null;
                 const isSelected = isActive && idx === this.selectedIndex;
 
                 // Slot background
@@ -744,6 +773,78 @@ const LoadoutUI = {
                     this._renderItemSlot(ctx, slotX, slotY, slotSize, item.item);
                 }
             }
+        }
+    },
+
+    _renderItemDescription(ctx, x, y, width, item) {
+        if (!item) return;
+
+        const height = 100;
+
+        // Description panel background
+        ctx.fillStyle = '#0d1117';
+        ctx.fillRect(x, y, width, height);
+        ctx.strokeStyle = this._getRarityColor(item.rarity);
+        ctx.lineWidth = 2;
+        ctx.strokeRect(x, y, width, height);
+
+        // Item name
+        ctx.font = 'bold 12px Arial';
+        ctx.textAlign = 'left';
+        ctx.fillStyle = this._getRarityColor(item.rarity);
+        const displayName = item.name || 'Unknown Item';
+        ctx.fillText(displayName, x + 8, y + 16);
+
+        // Item type and rarity
+        ctx.font = '10px Arial';
+        ctx.fillStyle = '#8b949e';
+        const typeText = `${item.rarity || 'common'} ${item.type || 'item'}`;
+        ctx.fillText(typeText.charAt(0).toUpperCase() + typeText.slice(1), x + 8, y + 30);
+
+        // Stats
+        ctx.font = '10px Arial';
+        let statY = y + 46;
+
+        if (item.damage) {
+            ctx.fillStyle = '#e74c3c';
+            ctx.fillText(`Damage: ${item.damage}`, x + 8, statY);
+            statY += 12;
+        }
+        if (item.attackSpeed) {
+            ctx.fillStyle = '#f39c12';
+            ctx.fillText(`Speed: ${item.attackSpeed}`, x + 8, statY);
+            statY += 12;
+        }
+        if (item.pDef) {
+            ctx.fillStyle = '#3498db';
+            ctx.fillText(`P.Def: ${item.pDef}`, x + 8, statY);
+            statY += 12;
+        }
+        if (item.mDef) {
+            ctx.fillStyle = '#9b59b6';
+            ctx.fillText(`M.Def: ${item.mDef}`, x + 8, statY);
+            statY += 12;
+        }
+        if (item.element && item.element !== 'physical') {
+            ctx.fillStyle = '#2ecc71';
+            ctx.fillText(`Element: ${item.element}`, x + 8, statY);
+            statY += 12;
+        }
+        if (item.effect) {
+            ctx.fillStyle = '#1abc9c';
+            ctx.fillText(`Effect: ${item.effect.type} ${item.effect.value || ''}`, x + 8, statY);
+            statY += 12;
+        }
+        if (item.count && item.count > 1) {
+            ctx.fillStyle = '#95a5a6';
+            ctx.fillText(`Quantity: ${item.count}`, x + 8, statY);
+        }
+
+        // Sell value (right side)
+        if (item.sellValue) {
+            ctx.textAlign = 'right';
+            ctx.fillStyle = '#FFD700';
+            ctx.fillText(`${item.sellValue}g`, x + width - 8, y + 16);
         }
     },
 

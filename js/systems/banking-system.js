@@ -19,8 +19,6 @@ const BankingSystem = {
     deposit(item) {
         if (!item) return false;
 
-        const maxSlots = BANKING_CONFIG ? BANKING_CONFIG.maxSlots : 100;
-
         // Check for stackable items (materials, consumables)
         if (item.stackable || item.type === 'material' || item.type === 'consumable') {
             const existing = persistentState.bank.items.find(i => i.id === item.id);
@@ -31,13 +29,7 @@ const BankingSystem = {
             }
         }
 
-        // Check capacity
-        if (persistentState.bank.usedSlots >= maxSlots) {
-            console.warn('[BankingSystem] Bank is full!');
-            return false;
-        }
-
-        // Add new item
+        // Add new item (unlimited storage)
         persistentState.bank.items.push({ ...item, count: item.count || 1 });
         persistentState.bank.usedSlots++;
 
@@ -152,7 +144,7 @@ const BankingSystem = {
             gold: persistentState.bank.gold,
             items: [...persistentState.bank.items],
             usedSlots: persistentState.bank.usedSlots,
-            maxSlots: BANKING_CONFIG ? BANKING_CONFIG.maxSlots : 100
+            maxSlots: Infinity  // Unlimited storage
         };
     },
 
@@ -199,8 +191,7 @@ const BankingSystem = {
      * @returns {number}
      */
     getAvailableSlots() {
-        const maxSlots = BANKING_CONFIG ? BANKING_CONFIG.maxSlots : 100;
-        return maxSlots - persistentState.bank.usedSlots;
+        return Infinity;  // Unlimited storage
     },
 
     /**
@@ -208,7 +199,7 @@ const BankingSystem = {
      * @returns {boolean}
      */
     isFull() {
-        return this.getAvailableSlots() <= 0;
+        return false;  // Unlimited storage - never full
     },
 
     // ========================================================================
@@ -393,7 +384,7 @@ const BankingSystem = {
             gold: persistentState.bank.gold,
             totalItems: items.length,
             usedSlots: persistentState.bank.usedSlots,
-            maxSlots: BANKING_CONFIG ? BANKING_CONFIG.maxSlots : 100,
+            maxSlots: Infinity,  // Unlimited storage
             byType: {
                 weapons: items.filter(i => i.type === 'weapon').length,
                 armor: items.filter(i => i.type === 'armor').length,
