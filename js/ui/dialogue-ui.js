@@ -212,6 +212,9 @@ const DialogueUI = {
     _handleAction(action) {
         console.log(`[DialogueUI] Action: ${action}`);
 
+        // Store NPC reference before closing
+        const npc = this.currentNPC;
+
         switch (action) {
             case 'close':
                 this.close();
@@ -219,7 +222,9 @@ const DialogueUI = {
 
             case 'open_bank':
                 this.close();
-                if (typeof game !== 'undefined') {
+                if (typeof BankUI !== 'undefined') {
+                    BankUI.open();
+                } else if (typeof game !== 'undefined') {
                     game.state = GAME_STATES ? GAME_STATES.BANK : 'bank';
                 }
                 break;
@@ -227,23 +232,27 @@ const DialogueUI = {
             case 'open_shop':
                 this.close();
                 if (typeof ShopUI !== 'undefined') {
-                    ShopUI.open(this.currentNPC);
+                    ShopUI.open(npc);
                 } else if (typeof game !== 'undefined') {
                     game.state = GAME_STATES ? GAME_STATES.SHOP : 'shop';
-                    game.activeShopNPC = this.currentNPC;
+                    game.activeShopNPC = npc;
                 }
                 break;
 
             case 'open_loadout':
                 this.close();
-                if (typeof game !== 'undefined') {
+                if (typeof LoadoutUI !== 'undefined') {
+                    LoadoutUI.open();
+                } else if (typeof game !== 'undefined') {
                     game.state = GAME_STATES ? GAME_STATES.LOADOUT : 'loadout';
                 }
                 break;
 
             case 'open_crafting':
                 this.close();
-                if (typeof game !== 'undefined') {
+                if (typeof CraftingUI !== 'undefined') {
+                    CraftingUI.open();
+                } else if (typeof game !== 'undefined') {
                     game.state = GAME_STATES ? GAME_STATES.CRAFTING : 'crafting';
                 }
                 break;
@@ -328,9 +337,14 @@ const DialogueUI = {
         ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
         ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-        // Calculate box position
+        // Calculate total height needed (box + responses)
+        const responses = this.currentNode.responses || [];
+        const responsesHeight = responses.length * (this.OPTION_HEIGHT + 5);
+        const totalHeight = this.BOX_HEIGHT + responsesHeight + 20;
+
+        // Calculate box position - center vertically with room for responses
         const boxX = (canvas.width - this.BOX_WIDTH) / 2;
-        const boxY = canvas.height - this.BOX_HEIGHT - 50;
+        const boxY = (canvas.height - totalHeight) / 2;
 
         // Draw dialogue box
         this._renderDialogueBox(ctx, boxX, boxY);
