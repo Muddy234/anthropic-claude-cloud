@@ -36,10 +36,16 @@ const JournalUI = {
         this.scrollOffset = 0;
         this.viewingEntry = null;
 
-        if (game.state === 'village') {
-            game.previousState = 'village';
+        // Store the state we're coming from
+        if (game.state !== 'journal') {
+            game.previousState = game.state;
         }
         game.state = 'journal';
+
+        // Clear sidebar overlay state when journal opens
+        if (typeof sidebarState !== 'undefined') {
+            sidebarState.activeOverlay = 'journal';
+        }
 
         console.log('[JournalUI] Opened');
     },
@@ -48,10 +54,16 @@ const JournalUI = {
         this.active = false;
         this.viewingEntry = null;
 
+        // Return to previous state (village or playing)
         if (game.previousState === 'village') {
             game.state = 'village';
         } else {
             game.state = 'playing';
+        }
+
+        // Clear sidebar overlay state
+        if (typeof sidebarState !== 'undefined') {
+            sidebarState.activeOverlay = null;
         }
 
         console.log('[JournalUI] Closed');
@@ -456,8 +468,10 @@ const JournalUI = {
 // Open journal with 'J' key
 window.addEventListener('keydown', (e) => {
     if (e.key === 'j' || e.key === 'J') {
-        if (game.state === 'village' || game.state === 'journal') {
+        // Allow journal in village, dungeon (playing), or when already in journal
+        if (game.state === 'village' || game.state === 'playing' || game.state === 'journal') {
             JournalUI.toggle();
+            e.preventDefault();
         }
     }
 });

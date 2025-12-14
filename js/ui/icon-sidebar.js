@@ -16,7 +16,8 @@ const SIDEBAR_ICONS = [
     { id: 'inventory', label: 'Bag', icon: 'I', y: 180, hotkey: 'E' },
     { id: 'skills', label: 'Skills', icon: 'S', y: 240, hotkey: 'K' },
     { id: 'map', label: 'Map', icon: 'M', y: 300, hotkey: 'M' },
-    { id: 'shift', label: 'Shift', icon: '!', y: 360, hotkey: 'O' }
+    { id: 'journal', label: 'Journal', icon: 'J', y: 360, hotkey: 'J' },
+    { id: 'shift', label: 'Shift', icon: '!', y: 420, hotkey: 'O' }
 ];
 
 // Sidebar configuration using design system
@@ -348,8 +349,17 @@ function toggleSidebarOverlay(overlayId) {
         'inventory': 'inventory',
         'skills': 'skills',
         'map': 'map',
+        'journal': 'journal',
         'shift': 'shift'
     };
+
+    // Special handling for journal - use JournalUI
+    if (overlayId === 'journal') {
+        if (typeof JournalUI !== 'undefined') {
+            JournalUI.open();
+        }
+        return;
+    }
 
     game.state = stateMap[overlayId] || 'playing';
 }
