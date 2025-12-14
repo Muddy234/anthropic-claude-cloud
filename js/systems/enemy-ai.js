@@ -6,9 +6,12 @@
 
 const AI_STATES = {
     IDLE: 'idle', WANDERING: 'wandering', ALERT: 'alert', CHASING: 'chasing',
-    COMBAT: 'combat', FLEEING: 'fleeing', SEARCHING: 'searching', 
-    RETURNING: 'returning', SHOUTING: 'shouting', FOLLOWING: 'following', 
-    COMMANDED: 'commanded'
+    COMBAT: 'combat', SEARCHING: 'searching', RETURNING: 'returning',
+    SHOUTING: 'shouting', FOLLOWING: 'following', COMMANDED: 'commanded',
+    // New states for smart positioning
+    CIRCLING: 'circling',      // Waiting for attack token, surrounding player
+    DEFENSIVE: 'defensive',    // Low HP, holding position or seeking cover
+    SKIRMISHING: 'skirmishing' // Maintaining optimal range (for ranged enemies)
 };
 
 const BEHAVIOR_TYPES = {
@@ -79,6 +82,19 @@ class EnemyAI {
         this.commandedTarget = null;
         this.avoidTargets = [];
         this.debugLog = false;
+
+        // Slot-based combat (Kung Fu Circle)
+        this.hasAttackToken = false;
+        this.assignedCircleAngle = null;  // Angle around player for CIRCLING state
+
+        // Range-aware positioning (Skirmishing)
+        this.optimalRange = enemy.stats?.optimalRange || enemy.stats?.range || 1;
+        this.rangeTolerance = enemy.stats?.rangeTolerance || 0.5;
+        this.strafeDirection = Math.random() < 0.5 ? 1 : -1;  // Clockwise or counter-clockwise
+        this.strafeTimer = 0;
+
+        // Ally-anchored retreat
+        this.retreatAlly = null;
     }
     
     _getTerritorySize() {
@@ -126,59 +142,138 @@ class EnemyAI {
         }
         
         const hpPct = this.enemy.hp / this.enemy.maxHp;
-        const shouldFlee = this.enemy.behavior?.fleesBehavior && 
-                          this.enemy.behavior?.fleeThreshold > 0 && 
-                          hpPct <= this.enemy.behavior.fleeThreshold;
-        
+        const fleeThreshold = this.enemy.behavior?.fleeThreshold || 0.25;
+        const isLowHP = hpPct <= fleeThreshold;
+
         const aggroRange = this.enemy.perception?.sightRange || 6;
         const deaggroRange = aggroRange * 1.5;
         const atkRange = this.enemy.combat?.attackRange || 1;
-        
-        this._stateTransitions(canSee, dist, shouldFlee, hpPct, aggroRange, deaggroRange, atkRange);
+
+        // Check if enemy is ranged (optimal range > 1.5)
+        const isRanged = this.optimalRange > 1.5;
+
+        this._stateTransitions(canSee, dist, isLowHP, hpPct, aggroRange, deaggroRange, atkRange, isRanged);
     }
-    
-    _stateTransitions(canSee, dist, shouldFlee, hpPct, aggroRange, deaggroRange, atkRange) {
+
+    _stateTransitions(canSee, dist, isLowHP, hpPct, aggroRange, deaggroRange, atkRange, isRanged) {
         const S = AI_STATES;
         switch (this.currentState) {
             case S.IDLE:
             case S.WANDERING:
-                if (shouldFlee && canSee) this._changeState(S.FLEEING);
-                else if (canSee && dist <= aggroRange) {
+                if (canSee && dist <= aggroRange) {
                     this._changeState(this._shouldShout() ? S.SHOUTING : S.CHASING);
                 } else if (this.followTarget) this._changeState(S.FOLLOWING);
                 break;
+
             case S.ALERT:
-                if (shouldFlee) this._changeState(S.FLEEING);
-                else if (canSee) this._changeState(S.CHASING);
+                if (canSee) this._changeState(S.CHASING);
                 else if (this.stateTimer > 3000) this._changeState(S.WANDERING);
                 break;
+
             case S.CHASING:
-                if (shouldFlee) this._changeState(S.FLEEING);
-                else if (canSee && dist <= atkRange) this._changeState(S.COMBAT);
-                else if (!canSee) {
+                // Low HP: Enter DEFENSIVE state (ally-anchored retreat)
+                if (isLowHP && this.enemy.behavior?.fleesBehavior) {
+                    this._changeState(S.DEFENSIVE);
+                    break;
+                }
+                // Ranged enemy: Switch to SKIRMISHING when in range
+                if (isRanged && canSee && dist <= this.optimalRange + this.rangeTolerance + 1) {
+                    this._changeState(S.SKIRMISHING);
+                    break;
+                }
+                // Close enough to attack: Try to get attack token
+                if (canSee && dist <= atkRange) {
+                    if (AIManager.requestAttackToken(this.enemy)) {
+                        this._changeState(S.COMBAT);
+                    } else {
+                        this._changeState(S.CIRCLING);
+                    }
+                    break;
+                }
+                // Lost sight
+                if (!canSee) {
                     if (this.memory.duration > 0 && this.lastKnownTargetPos) this._changeState(S.SEARCHING);
                     else if (dist > deaggroRange) this._changeState(S.RETURNING);
                 }
-                if (this.enemy.behavior?.type === 'territorial' && !this._inTerritory()) 
+                // Territorial check
+                if (this.enemy.behavior?.type === 'territorial' && !this._inTerritory())
                     this._changeState(S.RETURNING);
                 break;
+
             case S.COMBAT:
-                if (shouldFlee) this._changeState(S.FLEEING);
-                else if (!canSee || dist > atkRange + 1) this._changeState(S.CHASING);
+                // Low HP: Enter DEFENSIVE (release token handled in _changeState)
+                if (isLowHP && this.enemy.behavior?.fleesBehavior) {
+                    this._changeState(S.DEFENSIVE);
+                    break;
+                }
+                // Out of range or lost sight
+                if (!canSee || dist > atkRange + 1) {
+                    this._changeState(S.CHASING);
+                }
                 break;
-            case S.FLEEING:
-                if (dist > deaggroRange) this._changeState(S.RETURNING);
-                if (hpPct > (this.enemy.behavior?.fleeThreshold || 0) + 0.2) this._changeState(S.CHASING);
+
+            case S.CIRCLING:
+                // Got attack token: Enter COMBAT
+                if (this.hasAttackToken && dist <= atkRange) {
+                    this._changeState(S.COMBAT);
+                    break;
+                }
+                // Try to get token periodically
+                if (dist <= atkRange && AIManager.requestAttackToken(this.enemy)) {
+                    this._changeState(S.COMBAT);
+                    break;
+                }
+                // Lost sight or target too far
+                if (!canSee || dist > atkRange + 3) {
+                    this._changeState(S.CHASING);
+                }
+                // Low HP
+                if (isLowHP && this.enemy.behavior?.fleesBehavior) {
+                    this._changeState(S.DEFENSIVE);
+                }
                 break;
+
+            case S.SKIRMISHING:
+                // Low HP: Enter DEFENSIVE
+                if (isLowHP && this.enemy.behavior?.fleesBehavior) {
+                    this._changeState(S.DEFENSIVE);
+                    break;
+                }
+                // Lost sight or out of aggro range
+                if (!canSee) {
+                    if (this.memory.duration > 0 && this.lastKnownTargetPos) this._changeState(S.SEARCHING);
+                    else this._changeState(S.RETURNING);
+                    break;
+                }
+                // If no longer ranged situation, go back to chasing
+                if (dist > this.optimalRange + this.rangeTolerance + 2) {
+                    this._changeState(S.CHASING);
+                }
+                break;
+
+            case S.DEFENSIVE:
+                // HP recovered: Return to combat
+                if (hpPct > (this.enemy.behavior?.fleeThreshold || 0.25) + 0.15) {
+                    this._changeState(S.CHASING);
+                    break;
+                }
+                // Lost sight of player
+                if (!canSee && dist > deaggroRange) {
+                    this._changeState(S.RETURNING);
+                }
+                break;
+
             case S.SEARCHING:
                 if (canSee) this._changeState(S.CHASING);
                 else if (this.stateTimer > this.memory.duration) this._changeState(S.RETURNING);
                 break;
+
             case S.RETURNING:
                 if (canSee && dist <= aggroRange) this._changeState(S.CHASING);
-                else if (this._dist(this.spawnPosition.x, this.spawnPosition.y) < 1) 
+                else if (this._dist(this.spawnPosition.x, this.spawnPosition.y) < 1)
                     this._changeState(S.WANDERING);
                 break;
+
             case S.FOLLOWING:
                 if (canSee && dist <= aggroRange) this._changeState(S.CHASING);
                 else if (!this.followTarget || this.followTarget.hp <= 0) {
@@ -186,6 +281,7 @@ class EnemyAI {
                     this._changeState(S.WANDERING);
                 }
                 break;
+
             case S.COMMANDED:
                 if (this.commandedTarget) {
                     this.target = this.commandedTarget;
@@ -256,7 +352,9 @@ class EnemyAI {
             [S.ALERT]: () => this._alert(dt, game),
             [S.CHASING]: () => this._chase(dt, game),
             [S.COMBAT]: () => this._combat(dt, game),
-            [S.FLEEING]: () => this._flee(dt, game),
+            [S.CIRCLING]: () => this._circle(dt, game),
+            [S.SKIRMISHING]: () => this._skirmish(dt, game),
+            [S.DEFENSIVE]: () => this._defensive(dt, game),
             [S.SEARCHING]: () => this._search(dt, game),
             [S.RETURNING]: () => this._moveToward(this.spawnPosition.x, this.spawnPosition.y, game, 0.7),
             [S.SHOUTING]: () => this._shout(dt, game),
@@ -323,11 +421,197 @@ class EnemyAI {
         this._face(this.target.gridX, this.target.gridY);
         if (this.attackCooldown <= 0) this._attack(game);
     }
-    
-    _flee(dt, game) {
-        if (game.player) this._moveAwayFrom(game.player.gridX, game.player.gridY, game, 1.2);
+
+    // ============================================================
+    // CIRCLING STATE - Surround player while waiting for attack token
+    // ============================================================
+    _circle(dt, game) {
+        if (!this.target) return;
+
+        // Assign a circle angle if not set
+        if (this.assignedCircleAngle === null) {
+            this.assignedCircleAngle = AIManager.assignCircleAngle(this.enemy);
+        }
+
+        const player = this.target;
+        const hoverDistance = (this.enemy.combat?.attackRange || 1) + 0.5;
+
+        // Calculate target position around the player
+        const targetX = player.gridX + Math.cos(this.assignedCircleAngle) * hoverDistance;
+        const targetY = player.gridY + Math.sin(this.assignedCircleAngle) * hoverDistance;
+
+        // Face the player
+        this._face(player.gridX, player.gridY);
+
+        // Move toward our circling position
+        const distToCirclePos = Math.sqrt(
+            (targetX - this.enemy.gridX) ** 2 +
+            (targetY - this.enemy.gridY) ** 2
+        );
+
+        if (distToCirclePos > 0.5 && !this.enemy.isMoving) {
+            this._moveToward(targetX, targetY, game, 0.8);
+        }
+
+        // Slowly rotate our assigned angle to create circling motion
+        this.assignedCircleAngle += 0.001 * dt * this.strafeDirection;
     }
-    
+
+    // ============================================================
+    // SKIRMISHING STATE - Maintain optimal range (for ranged enemies)
+    // ============================================================
+    _skirmish(dt, game) {
+        if (!this.target) return;
+
+        const player = this.target;
+        const dist = this._dist(player.gridX, player.gridY);
+
+        // Always face the player
+        this._face(player.gridX, player.gridY);
+
+        // Attack if in optimal range and cooldown ready
+        if (dist <= this.optimalRange + this.rangeTolerance && this.attackCooldown <= 0) {
+            this._attack(game);
+        }
+
+        // Zone-based movement
+        const tooClose = dist < this.optimalRange - this.rangeTolerance;
+        const tooFar = dist > this.optimalRange + this.rangeTolerance;
+
+        if (this.enemy.isMoving) return;
+
+        if (tooClose) {
+            // Zone 2: Retreat - move away from player
+            this._moveAwayFrom(player.gridX, player.gridY, game, 0.9);
+        } else if (tooFar) {
+            // Zone 1: Approach - move toward player
+            this._moveToward(player.gridX, player.gridY, game, 0.9);
+        } else {
+            // Zone 3: Sweet Spot - strafe perpendicular to player
+            this.strafeTimer += dt;
+            if (this.strafeTimer > 500) {
+                this.strafeTimer = 0;
+                // Occasionally change strafe direction
+                if (Math.random() < 0.2) {
+                    this.strafeDirection *= -1;
+                }
+            }
+            this._strafe(player.gridX, player.gridY, game);
+        }
+    }
+
+    /**
+     * Move perpendicular to the target (strafing)
+     */
+    _strafe(tx, ty, game) {
+        if (this.enemy.isMoving) return;
+
+        const dx = tx - this.enemy.gridX;
+        const dy = ty - this.enemy.gridY;
+
+        // Perpendicular direction (rotate 90 degrees)
+        // If direction is (dx, dy), perpendicular is (-dy, dx) or (dy, -dx)
+        let strafeX, strafeY;
+        if (this.strafeDirection > 0) {
+            strafeX = -dy;
+            strafeY = dx;
+        } else {
+            strafeX = dy;
+            strafeY = -dx;
+        }
+
+        // Normalize and get target position
+        const len = Math.sqrt(strafeX * strafeX + strafeY * strafeY);
+        if (len > 0) {
+            strafeX /= len;
+            strafeY /= len;
+        }
+
+        const targetX = this.enemy.gridX + strafeX;
+        const targetY = this.enemy.gridY + strafeY;
+
+        this._moveToward(targetX, targetY, game, 0.7);
+    }
+
+    // ============================================================
+    // DEFENSIVE STATE - Ally-anchored retreat or hold position
+    // ============================================================
+    _defensive(dt, game) {
+        const player = game.player;
+        if (!player) return;
+
+        // Always face the player
+        this._face(player.gridX, player.gridY);
+
+        // Try to find a healthy ally to hide behind
+        if (!this.retreatAlly || this.retreatAlly.hp <= 0 || this.stateTimer % 2000 < 50) {
+            this.retreatAlly = this._findRetreatAlly(game);
+        }
+
+        if (this.retreatAlly) {
+            // Move to position behind ally (relative to player)
+            const allyX = this.retreatAlly.gridX;
+            const allyY = this.retreatAlly.gridY;
+
+            // Vector from player to ally
+            const dx = allyX - player.gridX;
+            const dy = allyY - player.gridY;
+            const len = Math.sqrt(dx * dx + dy * dy) || 1;
+
+            // Target is 1.5 tiles behind the ally
+            const targetX = allyX + (dx / len) * 1.5;
+            const targetY = allyY + (dy / len) * 1.5;
+
+            const distToTarget = Math.sqrt(
+                (targetX - this.enemy.gridX) ** 2 +
+                (targetY - this.enemy.gridY) ** 2
+            );
+
+            if (distToTarget > 0.5 && !this.enemy.isMoving) {
+                this._moveToward(targetX, targetY, game, 0.9);
+            }
+        } else {
+            // No ally found: Hold position, face player
+            // Can still attack if player gets close
+            const dist = this._dist(player.gridX, player.gridY);
+            const atkRange = this.enemy.combat?.attackRange || 1;
+
+            if (dist <= atkRange && this.attackCooldown <= 0) {
+                this._attack(game);
+            }
+        }
+    }
+
+    /**
+     * Find a healthy ally to retreat behind
+     */
+    _findRetreatAlly(game) {
+        const scanRange = 6;
+        let bestAlly = null;
+        let bestScore = -Infinity;
+
+        for (const other of game.enemies) {
+            if (other === this.enemy || other.hp <= 0) continue;
+
+            const dist = this._dist(other.gridX, other.gridY);
+            if (dist > scanRange) continue;
+
+            // Must be healthier than us (at least 50% HP)
+            const allyHpPct = other.hp / other.maxHp;
+            if (allyHpPct < 0.5) continue;
+
+            // Score: prefer closer allies with higher HP
+            const score = allyHpPct * 10 - dist;
+
+            if (score > bestScore) {
+                bestScore = score;
+                bestAlly = other;
+            }
+        }
+
+        return bestAlly;
+    }
+
     _search(dt, game) {
         if (!this.lastKnownTargetPos) return;
         if (this._dist(this.lastKnownTargetPos.x, this.lastKnownTargetPos.y) < 1) {
@@ -694,12 +978,26 @@ class EnemyAI {
     
     _changeState(newState) {
         if (newState === this.currentState) return;
+
+        // Release attack token when leaving COMBAT or CIRCLING
+        if ((this.previousState === AI_STATES.COMBAT || this.currentState === AI_STATES.COMBAT ||
+             this.previousState === AI_STATES.CIRCLING || this.currentState === AI_STATES.CIRCLING) &&
+            newState !== AI_STATES.COMBAT && newState !== AI_STATES.CIRCLING) {
+            AIManager.releaseAttackToken(this.enemy);
+            this.hasAttackToken = false;
+            this.assignedCircleAngle = null;
+        }
+
         this.previousState = this.currentState;
         this.currentState = newState;
         this.stateTimer = 0;
         this.stateData = {};
+
         if (newState === AI_STATES.SHOUTING) { this.shoutTimer = 0; this.isShoutInterrupted = false; }
         if (newState === AI_STATES.SEARCHING) this.memory.searchedSpots = [];
+        if (newState === AI_STATES.DEFENSIVE) this.retreatAlly = null;
+        if (newState === AI_STATES.SKIRMISHING) this.strafeTimer = 0;
+
         if (this.debugLog) console.log(`[AI] ${this.enemy.name}: ${this.previousState} → ${newState}`);
     }
     
@@ -716,25 +1014,120 @@ class EnemyAI {
 const AIManager = {
     ais: new Map(),
     game: null,
-    
+
+    // Slot-based combat system (Kung Fu Circle)
+    maxAttackers: 3,           // Maximum enemies that can attack simultaneously
+    currentAttackers: new Set(), // Set of enemy IDs currently attacking
+    circleAngles: new Map(),   // Map of enemy ID to assigned circle angle
+
     init(gameRef) {
         this.game = gameRef;
         this.ais.clear();
-        console.log('[AIManager] Initialized');
+        this.currentAttackers.clear();
+        this.circleAngles.clear();
+        console.log('[AIManager] Initialized (with slot-based combat)');
     },
-    
+
     registerEnemy(enemy) {
         const ai = new EnemyAI(enemy);
         this.ais.set(enemy.id, ai);
         enemy.ai = ai;
         return ai;
     },
-    
+
     unregisterEnemy(enemy) {
         this.ais.delete(enemy.id);
+        this.releaseAttackToken(enemy);
+        this.circleAngles.delete(enemy.id);
         enemy.ai = null;
     },
-    
+
+    // ============================================================
+    // SLOT-BASED COMBAT (Attack Token System)
+    // ============================================================
+
+    /**
+     * Request an attack token. Returns true if granted.
+     * @param {Object} enemy - The enemy requesting to attack
+     * @returns {boolean} Whether the token was granted
+     */
+    requestAttackToken(enemy) {
+        if (!enemy?.id) return false;
+
+        // Already has a token
+        if (this.currentAttackers.has(enemy.id)) {
+            if (enemy.ai) enemy.ai.hasAttackToken = true;
+            return true;
+        }
+
+        // Check if slots available
+        if (this.currentAttackers.size < this.maxAttackers) {
+            this.currentAttackers.add(enemy.id);
+            if (enemy.ai) enemy.ai.hasAttackToken = true;
+            return true;
+        }
+
+        return false;
+    },
+
+    /**
+     * Release an attack token when enemy leaves combat
+     * @param {Object} enemy - The enemy releasing its token
+     */
+    releaseAttackToken(enemy) {
+        if (!enemy?.id) return;
+        this.currentAttackers.delete(enemy.id);
+        if (enemy.ai) enemy.ai.hasAttackToken = false;
+    },
+
+    /**
+     * Assign a unique angle for circling around the player
+     * @param {Object} enemy - The enemy to assign an angle to
+     * @returns {number} Angle in radians
+     */
+    assignCircleAngle(enemy) {
+        if (!enemy?.id) return Math.random() * Math.PI * 2;
+
+        // If already assigned, return existing
+        if (this.circleAngles.has(enemy.id)) {
+            return this.circleAngles.get(enemy.id);
+        }
+
+        // Find used angles
+        const usedAngles = Array.from(this.circleAngles.values());
+
+        // Try to find an angle that's well-separated from existing ones
+        let bestAngle = Math.random() * Math.PI * 2;
+        let bestMinDist = 0;
+
+        for (let i = 0; i < 8; i++) {
+            const testAngle = (i / 8) * Math.PI * 2;
+            let minDist = Math.PI * 2;
+
+            for (const used of usedAngles) {
+                let diff = Math.abs(testAngle - used);
+                if (diff > Math.PI) diff = Math.PI * 2 - diff;
+                minDist = Math.min(minDist, diff);
+            }
+
+            if (minDist > bestMinDist) {
+                bestMinDist = minDist;
+                bestAngle = testAngle;
+            }
+        }
+
+        this.circleAngles.set(enemy.id, bestAngle);
+        return bestAngle;
+    },
+
+    /**
+     * Get count of enemies currently in attack slots
+     * @returns {number}
+     */
+    getAttackerCount() {
+        return this.currentAttackers.size;
+    },
+
     // Configuration for distance-based AI culling
     AI_CULL_DISTANCE: 25,      // Full AI updates within this range
     AI_SLEEP_DISTANCE: 40,     // Minimal updates beyond this range
