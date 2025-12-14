@@ -391,7 +391,11 @@ function initIconSidebar() {
     // Hotkey handler
     document.addEventListener('keydown', (e) => {
         if (game.state === 'playing' || window.sidebarState.activeOverlay) {
-            handleSidebarHotkey(e.key);
+            const handled = handleSidebarHotkey(e.key);
+            if (handled) {
+                e.preventDefault();
+                e.stopPropagation();
+            }
         }
     });
 

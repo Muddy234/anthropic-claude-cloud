@@ -9,7 +9,7 @@ const JournalUI = {
 
     // State
     active: false,
-    currentTab: 'lore',  // 'lore', 'quests', 'bestiary'
+    currentTab: 'lore',  // 'lore', 'bestiary', 'quests', 'world'
     selectedIndex: 0,
     scrollOffset: 0,
     viewingEntry: null,
@@ -19,9 +19,10 @@ const JournalUI = {
     height: 500,
     padding: 20,
 
-    // Tabs
+    // Tabs - now includes Bestiary
     tabs: [
         { id: 'lore', name: 'Lore', icon: 'scroll' },
+        { id: 'bestiary', name: 'Bestiary', icon: 'skull' },
         { id: 'quests', name: 'Quests', icon: 'quest' },
         { id: 'world', name: 'World State', icon: 'globe' }
     ],
@@ -102,17 +103,17 @@ const JournalUI = {
             return;
         }
 
-        // Tab switching (left/right or Q/E)
-        if (key === 'ArrowLeft' || key === 'q' || key === 'Q') {
+        // Tab switching (left/right arrows only - avoids Q/E conflicts)
+        if (key === 'ArrowLeft') {
             this._previousTab();
-        } else if (key === 'ArrowRight' || key === 'e' || key === 'E') {
+        } else if (key === 'ArrowRight') {
             this._nextTab();
         }
 
-        // List navigation (up/down or W/S)
-        else if (key === 'ArrowUp' || key === 'w' || key === 'W') {
+        // List navigation (up/down arrows)
+        else if (key === 'ArrowUp') {
             this._selectPrevious();
-        } else if (key === 'ArrowDown' || key === 's' || key === 'S') {
+        } else if (key === 'ArrowDown') {
             this._selectNext();
         }
 
@@ -174,6 +175,8 @@ const JournalUI = {
         switch (this.currentTab) {
             case 'lore':
                 return this._getLoreItems();
+            case 'bestiary':
+                return this._getBestiaryItems();
             case 'quests':
                 return this._getQuestItems();
             case 'world':
@@ -196,6 +199,49 @@ const JournalUI = {
             }));
 
         return [...collected, ...uncollected];
+    },
+
+    _getBestiaryItems() {
+        if (typeof MONSTER_DATA === 'undefined') return [];
+
+        const discovered = persistentState?.monstersDiscovered || [];
+        const killCounts = persistentState?.monsterKillCounts || {};
+
+        const items = [];
+
+        // Add discovered monsters first
+        discovered.forEach(monsterName => {
+            const monster = MONSTER_DATA[monsterName];
+            if (monster) {
+                items.push({
+                    id: monsterName,
+                    name: monsterName,
+                    title: monsterName,
+                    type: 'monster',
+                    discovered: true,
+                    kills: killCounts[monsterName] || 0,
+                    ...monster
+                });
+            }
+        });
+
+        // Add undiscovered monsters as locked entries
+        Object.keys(MONSTER_DATA).forEach(monsterName => {
+            if (!discovered.includes(monsterName)) {
+                const monster = MONSTER_DATA[monsterName];
+                items.push({
+                    id: monsterName,
+                    name: '???',
+                    title: '???',
+                    type: 'monster',
+                    discovered: false,
+                    locked: true,
+                    element: monster.element
+                });
+            }
+        });
+
+        return items;
     },
 
     _getQuestItems() {
@@ -292,7 +338,7 @@ const JournalUI = {
         ctx.textAlign = 'center';
         const hint = this.viewingEntry ?
             '[Enter/Space] Back  [J/Esc] Close' :
-            '[Q/E] Tab  [W/S] Navigate  [Enter] Read  [J/Esc] Close';
+            '[←/→] Tab  [↑/↓] Navigate  [Enter] Read  [J/Esc] Close';
         ctx.fillText(hint, centerX + this.width / 2, centerY + this.height - 15);
     },
 
@@ -339,6 +385,16 @@ const JournalUI = {
             ctx.fillText(`${progress.collected}/${progress.total} collected`, x + this.width - 25, y);
         }
 
+        // Progress indicator for bestiary
+        if (this.currentTab === 'bestiary') {
+            const discovered = persistentState?.monstersDiscovered?.length || 0;
+            const total = typeof MONSTER_DATA !== 'undefined' ? Object.keys(MONSTER_DATA).length : 0;
+            ctx.fillStyle = '#888';
+            ctx.font = '12px monospace';
+            ctx.textAlign = 'right';
+            ctx.fillText(`${discovered}/${total} discovered`, x + this.width - 25, y);
+        }
+
         // Render visible items
         for (let i = 0; i < visibleItems && i + this.scrollOffset < items.length; i++) {
             const item = items[i + this.scrollOffset];
@@ -357,10 +413,23 @@ const JournalUI = {
             ctx.textAlign = 'left';
             ctx.fillText(item.title || item.name || 'Unknown', listX + 20, itemY + 18);
 
-            // Category/subtitle
-            const subtitle = item.locked ? 'Not yet discovered' :
-                (item.category ? LORE_CATEGORIES?.[item.category]?.name || item.category : '');
-            ctx.fillStyle = '#666';
+            // Category/subtitle - different for monsters
+            let subtitle = 'Not yet discovered';
+            if (!item.locked) {
+                if (item.type === 'monster') {
+                    const elementColors = {
+                        fire: '#ff6b35', physical: '#aaa', shadow: '#8b5cf6',
+                        nature: '#22c55e', earth: '#a3a380', water: '#3b82f6'
+                    };
+                    ctx.fillStyle = elementColors[item.element] || '#666';
+                    subtitle = `${item.element?.toUpperCase() || 'UNKNOWN'} - ${item.kills || 0} kills`;
+                } else {
+                    subtitle = item.category ? (LORE_CATEGORIES?.[item.category]?.name || item.category) : '';
+                    ctx.fillStyle = '#666';
+                }
+            } else {
+                ctx.fillStyle = '#555';
+            }
             ctx.font = '11px monospace';
             ctx.fillText(subtitle, listX + 20, itemY + 34);
 
@@ -398,6 +467,12 @@ const JournalUI = {
         ctx.textAlign = 'left';
         ctx.fillText(entry.title || entry.name, contentX, contentY + 20);
 
+        // Monster entries get special stat display
+        if (entry.type === 'monster' && entry.discovered) {
+            this._renderMonsterStats(ctx, entry, contentX, contentY + 40, contentWidth);
+            return;
+        }
+
         // Category
         if (entry.category) {
             const cat = LORE_CATEGORIES?.[entry.category];
@@ -424,6 +499,113 @@ const JournalUI = {
             ctx.fillStyle = '#888';
             ctx.font = 'italic 12px monospace';
             ctx.fillText(`"${entry.hint}"`, contentX, contentY + 320);
+        }
+    },
+
+    _renderMonsterStats(ctx, monster, x, y, width) {
+        const elementColors = {
+            fire: '#ff6b35', physical: '#aaa', shadow: '#8b5cf6',
+            nature: '#22c55e', earth: '#a3a380', water: '#3b82f6'
+        };
+
+        // Element badge
+        ctx.fillStyle = elementColors[monster.element] || '#888';
+        ctx.font = 'bold 12px monospace';
+        ctx.fillText(`[${monster.element?.toUpperCase() || 'UNKNOWN'}]`, x, y);
+
+        // Kill count
+        ctx.fillStyle = '#888';
+        ctx.font = '12px monospace';
+        ctx.textAlign = 'right';
+        ctx.fillText(`Slain: ${monster.kills || 0}`, x + width, y);
+        ctx.textAlign = 'left';
+
+        // Separator
+        ctx.strokeStyle = '#4a4a6a';
+        ctx.beginPath();
+        ctx.moveTo(x, y + 15);
+        ctx.lineTo(x + width, y + 15);
+        ctx.stroke();
+
+        // Description
+        ctx.fillStyle = '#bbb';
+        ctx.font = 'italic 12px monospace';
+        this._renderWrappedText(ctx, monster.description || 'No description.', x, y + 35, width, 16);
+
+        // Stats section header
+        const statsY = y + 80;
+        ctx.fillStyle = '#FFD700';
+        ctx.font = 'bold 14px monospace';
+        ctx.fillText('STATS', x, statsY);
+
+        // Stats grid
+        const stats = [
+            { label: 'HP', value: monster.hp, color: '#c0392b' },
+            { label: 'STR', value: monster.str, color: '#e67e22' },
+            { label: 'AGI', value: monster.agi, color: '#2ecc71' },
+            { label: 'INT', value: monster.int, color: '#3498db' },
+            { label: 'P.DEF', value: monster.pDef, color: '#95a5a6' },
+            { label: 'M.DEF', value: monster.mDef, color: '#9b59b6' }
+        ];
+
+        const colWidth = width / 3;
+        stats.forEach((stat, i) => {
+            const col = i % 3;
+            const row = Math.floor(i / 3);
+            const sx = x + col * colWidth;
+            const sy = statsY + 20 + row * 25;
+
+            ctx.fillStyle = stat.color;
+            ctx.font = 'bold 12px monospace';
+            ctx.fillText(stat.label + ':', sx, sy);
+
+            ctx.fillStyle = '#fff';
+            ctx.font = '12px monospace';
+            ctx.fillText(String(stat.value), sx + 50, sy);
+        });
+
+        // Combat info section
+        const combatY = statsY + 80;
+        ctx.fillStyle = '#FFD700';
+        ctx.font = 'bold 14px monospace';
+        ctx.fillText('COMBAT', x, combatY);
+
+        ctx.fillStyle = '#ccc';
+        ctx.font = '12px monospace';
+        ctx.fillText(`Attack: ${monster.attack || 'Unknown'}`, x, combatY + 20);
+        ctx.fillText(`Type: ${monster.attackType || '?'} / ${monster.damageType || '?'}`, x, combatY + 38);
+        ctx.fillText(`Range: ${monster.attackRange || 1}  Speed: ${monster.attackSpeed || 2.0}s`, x, combatY + 56);
+
+        // XP reward
+        ctx.fillStyle = '#FFD700';
+        ctx.font = 'bold 12px monospace';
+        ctx.textAlign = 'right';
+        ctx.fillText(`XP: ${monster.xp || 0}`, x + width, combatY + 20);
+        ctx.textAlign = 'left';
+
+        // Loot section
+        const lootY = combatY + 85;
+        ctx.fillStyle = '#FFD700';
+        ctx.font = 'bold 14px monospace';
+        ctx.fillText('DROPS', x, lootY);
+
+        if (monster.loot && monster.loot.length > 0) {
+            const rarityColors = {
+                common: '#aaa', uncommon: '#2ecc71', rare: '#3498db',
+                epic: '#9b59b6', legendary: '#f39c12'
+            };
+
+            monster.loot.forEach((drop, i) => {
+                const ly = lootY + 20 + i * 18;
+                ctx.fillStyle = rarityColors[drop.rarity] || '#aaa';
+                ctx.font = '11px monospace';
+                const chance = Math.round(drop.dropChance * 100);
+                ctx.fillText(`• ${drop.name} (${chance}%)`, x + 10, ly);
+            });
+        } else {
+            ctx.fillStyle = '#666';
+            ctx.font = '11px monospace';
+            ctx.fillText('No known drops', x + 10, lootY + 20);
         }
     },
 
@@ -465,14 +647,24 @@ const JournalUI = {
 // KEYBOARD LISTENER
 // ============================================================================
 
-// Open journal with 'J' key
+// Open journal with 'J' key (only in village - sidebar handles dungeon)
 window.addEventListener('keydown', (e) => {
     if (e.key === 'j' || e.key === 'J') {
-        // Allow journal in village, dungeon (playing), or when already in journal
-        if (game.state === 'village' || game.state === 'playing' || game.state === 'journal') {
+        // In village state, handle J key here (sidebar doesn't run in village)
+        if (game.state === 'village') {
             JournalUI.toggle();
             e.preventDefault();
+            return;
         }
+        // When journal is already open, handle closing
+        if (game.state === 'journal') {
+            // Only close if not viewing an entry (let handleInput manage that)
+            if (!JournalUI.viewingEntry) {
+                JournalUI.close();
+                e.preventDefault();
+            }
+        }
+        // Note: In 'playing' state, sidebar's handleSidebarHotkey handles J
     }
 });
 
