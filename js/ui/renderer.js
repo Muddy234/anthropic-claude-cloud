@@ -9,8 +9,22 @@ canvas.height = window.innerHeight;
 window.addEventListener('resize', () => {
     canvas.width = window.innerWidth;
     canvas.height = window.innerHeight;
-    console.log('Canvas resized to:', canvas.width, 'x', canvas.height);
 });
+
+// Shared color constants
+const RARITY_COLORS = {
+    'common': '#ffffff',
+    'uncommon': '#2ecc71',
+    'rare': '#3498db',
+    'epic': '#e67e22'
+};
+
+const ELEMENT_COLORS = {
+    'FIRE': '#ff6b35', 'ICE': '#3498db', 'WATER': '#5dade2',
+    'EARTH': '#8b4513', 'NATURE': '#27ae60', 'DARK': '#9b59b6',
+    'HOLY': '#f1c40f', 'DEATH': '#666', 'ARCANE': '#e67e22',
+    'PHYSICAL': '#ccc'
+};
 
 function drawInventoryOverlay() {
     // Initialize scroll offsets if not exists
@@ -231,15 +245,7 @@ function drawInventoryOverlay() {
                 const itemData = EQUIPMENT_DATA[item.name] || ITEMS_DATA[item.name] || item;
                 const rarity = itemData.rarity || 'common';
 
-                // Color by rarity
-                const rarityColors = {
-                    'common': '#ffffff',
-                    'uncommon': '#2ecc71',
-                    'rare': '#3498db',
-                    'epic': '#e67e22'
-                };
-
-                ctx.fillStyle = rarityColors[rarity] || '#ffffff';
+                ctx.fillStyle = RARITY_COLORS[rarity] || '#ffffff';
                 ctx.font = isSelected ? 'bold 18px monospace' : '18px monospace';
                 ctx.fillText(`${item.name}`, listX, itemY);
 
@@ -282,14 +288,8 @@ function drawItemInspectPanel(item, x, y, w, h, itemType) {
     let dy = y;
 
     // Item name with rarity color
-    const rarityColors = {
-        'common': '#ffffff',
-        'uncommon': '#2ecc71',
-        'rare': '#3498db',
-        'epic': '#e67e22'
-    };
     const rarity = itemData.rarity || 'common';
-    ctx.fillStyle = rarityColors[rarity];
+    ctx.fillStyle = RARITY_COLORS[rarity] || '#ffffff';
     ctx.font = 'bold 24px monospace';
     ctx.textAlign = 'center';
     ctx.fillText(item.name.toUpperCase(), x + w / 2, dy);
@@ -381,13 +381,7 @@ function drawItemInspectPanel(item, x, y, w, h, itemType) {
         ctx.fillText('Element:', x + 20, dy);
         ctx.textAlign = 'right';
         const thisElement = (itemData.element || 'physical').toUpperCase();
-        const elementColors = {
-            'FIRE': '#ff6b35', 'ICE': '#3498db', 'WATER': '#5dade2',
-            'EARTH': '#8b4513', 'NATURE': '#27ae60', 'DARK': '#9b59b6',
-            'HOLY': '#f1c40f', 'DEATH': '#666', 'ARCANE': '#e67e22',
-            'PHYSICAL': '#ccc'
-        };
-        ctx.fillStyle = elementColors[thisElement] || '#fff';
+        ctx.fillStyle = ELEMENT_COLORS[thisElement] || '#fff';
         ctx.fillText(thisElement, x + w - 20, dy);
         dy += 20;
 
@@ -841,12 +835,7 @@ const camY = game.camera.y + (shakeOffset.y / (TILE_SIZE * ZOOM_LEVEL));
         // NOTE: Layer 1.45 removed - single overlay above handles all dimming
         // No need for double-overlay which was making things too dark
 
-        // LAYER 1.5: Draw room perimeter walls with proper corners/edges (NEW!)
-        // DISABLED for blob-based dungeons - walls are rendered in Layer 1 based on game.map[y][x].type
-        // The renderAllWalls() function draws rectangular perimeters which don't work for organic blob shapes
-        // if (typeof renderAllWalls === 'function') {
-        //     renderAllWalls(ctx, camX, camY, effectiveTileSize, TRACKER_WIDTH);
-        // }
+        // NOTE: Walls rendered in Layer 1 based on game.map[y][x].type (blob-based dungeons)
         
         // LAYER 2: Draw loot piles
         if (typeof renderLootPiles === 'function') {
@@ -925,10 +914,6 @@ const camY = game.camera.y + (shakeOffset.y / (TILE_SIZE * ZOOM_LEVEL));
             renderMiniMap(ctx, canvas.width);
         }
 
-        // DISABLED: Old skills action bar (replaced by combat action bar)
-        // if (typeof drawActionBar === 'function') {
-        //     drawActionBar();
-        // }
         if (!game.merchant && game.state !== 'inventory' && game.state !== 'map' && game.state !== 'skills' && game.state !== 'moveset' && game.state !== 'levelup') {
             ctx.fillStyle = '#fff'; ctx.font = '20px monospace'; ctx.textAlign = 'left'; const msgX = TRACKER_WIDTH + 20; const msgY = canvas.height - 40;
             if (game.messageLog.length > 0 && Date.now() - game.lastMessageTime < 3000) { ctx.fillText(game.messageLog[game.messageLog.length - 1].text, msgX, msgY); }
