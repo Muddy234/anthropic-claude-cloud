@@ -55,9 +55,13 @@ class EnemyAI {
         this.hasAttackToken = false;
         this.assignedCircleAngle = null;
 
-        // Range-aware positioning
-        this.optimalRange = enemy.stats?.optimalRange || enemy.stats?.range || 1;
-        this.rangeTolerance = enemy.stats?.rangeTolerance || 0.5;
+        // Range-aware positioning - LINK TO TIER DATA
+        // Priority: Behavior Config (Tier) -> Stats (Weapon) -> Default 1
+        this.optimalRange = enemy.behavior?.preferredRange || enemy.stats?.optimalRange || enemy.stats?.range || 1;
+        // Defines if the enemy is allowed to enter SKIRMISHING state (kiting behavior)
+        this.canKite = enemy.behavior?.kitesBehavior || false;
+        // Anti-jitter: ensure tolerance is wide enough (>= 1.0) to prevent vibration
+        this.rangeTolerance = enemy.stats?.rangeTolerance || 1.0;
         this.strafeDirection = Math.random() < 0.5 ? 1 : -1;
         this.strafeTimer = 0;
 
@@ -148,7 +152,8 @@ class EnemyAI {
                 break;
 
             case S.CHASING:
-                if (isRanged && canSee && dist <= this.optimalRange + this.rangeTolerance + 1) {
+                // Only enter SKIRMISHING if canKite is true (prevents tanky ranged units from retreating)
+                if (this.canKite && isRanged && canSee && dist <= this.optimalRange + this.rangeTolerance + 1) {
                     this._changeState(S.SKIRMISHING);
                 } else if (canSee && dist <= atkRange) {
                     this._changeState(AIManager.requestAttackToken(this.enemy) ? S.COMBAT : S.CIRCLING);
@@ -410,20 +415,24 @@ class EnemyAI {
 
         this._face(player.gridX, player.gridY);
 
-        if (dist <= this.optimalRange + this.rangeTolerance && this.attackCooldown <= 0) {
+        // Anti-jitter: ensure the "Dead Zone" (where they stand still and shoot) is at least 1 tile wide
+        const effectiveTolerance = Math.max(this.rangeTolerance, 1.0);
+
+        if (dist <= this.optimalRange + effectiveTolerance && this.attackCooldown <= 0) {
             this._attack(game);
         }
 
         if (this.enemy.isMoving) return;
 
-        const tooClose = dist < this.optimalRange - this.rangeTolerance;
-        const tooFar = dist > this.optimalRange + this.rangeTolerance;
+        const tooClose = dist < this.optimalRange - effectiveTolerance;
+        const tooFar = dist > this.optimalRange + effectiveTolerance;
 
         if (tooClose) {
             this._moveAwayFrom(player.gridX, player.gridY, game, 0.9);
         } else if (tooFar) {
             this._moveToward(player.gridX, player.gridY, game, 0.9);
         } else {
+            // In sweet spot - strafe and shoot
             this.strafeTimer += dt;
             if (this.strafeTimer > 500) {
                 this.strafeTimer = 0;
