@@ -159,7 +159,9 @@ const ExtractionSystem = {
 
             // Auto-discover nearby points
             if (!point.discovered && game.player) {
-                const dist = point.getDistanceToPlayer(game.player.x, game.player.y);
+                const playerX = game.player.gridX ?? game.player.x;
+                const playerY = game.player.gridY ?? game.player.y;
+                const dist = point.getDistanceToPlayer(playerX, playerY);
                 if (dist < 10) {  // Discovery range
                     point.discover();
                 }
@@ -247,9 +249,13 @@ const ExtractionSystem = {
 
         if (!game.player) return false;
 
+        // Use gridX/gridY for consistent coordinate system
+        const playerX = game.player.gridX ?? game.player.x;
+        const playerY = game.player.gridY ?? game.player.y;
+
         // Check range
-        if (!point.isPlayerInRange(game.player.x, game.player.y)) {
-            console.log('[ExtractionSystem] Too far from extraction shaft');
+        if (!point.isPlayerInRange(playerX, playerY)) {
+            console.log(`[ExtractionSystem] Too far from extraction shaft. Player at (${playerX}, ${playerY}), shaft at (${point.x}, ${point.y})`);
             if (typeof addMessage === 'function') {
                 addMessage('Move closer to the extraction shaft.', 'info');
             }
@@ -332,9 +338,13 @@ const ExtractionSystem = {
     getPointAtPlayer() {
         if (!game.player) return null;
 
+        // Use gridX/gridY for consistent coordinate system
+        const playerX = game.player.gridX ?? game.player.x;
+        const playerY = game.player.gridY ?? game.player.y;
+
         return this.points.find(point =>
             point.isActive() &&
-            point.isPlayerInRange(game.player.x, game.player.y)
+            point.isPlayerInRange(playerX, playerY)
         );
     },
 

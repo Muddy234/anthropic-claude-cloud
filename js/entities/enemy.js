@@ -468,19 +468,10 @@ function isEnemyInFavorableRoom(enemy) {
 }
 
 /**
- * Get room attunement bonus for enemy
+ * Get room bonus for enemy (attunement system removed)
+ * Kept for API compatibility, always returns 1.0
  */
 function getEnemyRoomBonus(enemy) {
-    const room = getEntityRoom(enemy);
-    if (!room?.element) return 1.0;
-    
-    if (typeof getRoomAttunementModifier === 'function') {
-        return getRoomAttunementModifier(enemy.element, room.element);
-    }
-    
-    if (enemy.element === room.element) return 1.25;
-    if (typeof isOpposed === 'function' && isOpposed(enemy.element, room.element)) return 0.8;
-    
     return 1.0;
 }
 

@@ -504,7 +504,7 @@ function applyMeleeDamage(player, enemy, isSpecial) {
     let damageResult = { finalDamage: baseDamage, isCrit: false };
 
     if (typeof DamageCalculator !== 'undefined') {
-        // Get room for attunement
+        // Get room for context
         const room = game.rooms?.find(r =>
             enemy.gridX >= r.x && enemy.gridX < r.x + r.width &&
             enemy.gridY >= r.y && enemy.gridY < r.y + r.height

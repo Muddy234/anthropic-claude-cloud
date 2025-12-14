@@ -210,13 +210,70 @@ window.addEventListener('keydown', e => {
             return;
         }
 
-        // Extraction interaction (E key)
+        // Extraction interaction (E key) - BULLETPROOF VERSION
         if (e.key === 'e' || e.key === 'E') {
-            if (typeof ExtractionSystem !== 'undefined' && ExtractionSystem.initialized) {
-                const point = ExtractionSystem.getPointAtPlayer();
-                if (point && point.isActive()) {
+            // Check if ExtractionSystem exists
+            if (typeof ExtractionSystem === 'undefined') {
+                console.warn('[Input] ExtractionSystem not defined');
+                return;
+            }
+
+            // Check if initialized
+            if (!ExtractionSystem.initialized) {
+                console.warn('[Input] ExtractionSystem not initialized');
+                // Try to initialize if we have the data
+                if (game.rooms && game.floor) {
+                    const entranceRoom = game.rooms.find(r => r.type === 'entrance');
+                    ExtractionSystem.init(game.floor, game.rooms, entranceRoom);
+                    console.log('[Input] ExtractionSystem auto-initialized');
+                }
+            }
+
+            const playerX = game.player.gridX ?? game.player.x;
+            const playerY = game.player.gridY ?? game.player.y;
+
+            console.log(`[Input] E pressed at player position (${playerX}, ${playerY})`);
+
+            // Check if there are ANY extraction points - if not, force spawn them
+            const allPoints = ExtractionSystem.points || [];
+            if (allPoints.length === 0 && game.rooms && game.rooms.length > 0) {
+                console.log('[Input] No extraction points - force spawning...');
+                const entranceRoom = game.rooms.find(r => r.type === 'entrance' || r.blobType === 'entrance');
+                ExtractionSystem.init(game.floor || 1, game.rooms, entranceRoom);
+                console.log(`[Input] Force spawned ${ExtractionSystem.points.length} extraction points`);
+            }
+
+            // Try to get point at player
+            const point = ExtractionSystem.getPointAtPlayer();
+            if (point) {
+                if (point.isActive()) {
+                    console.log('[Input] Extraction point found, attempting extract...');
                     ExtractionSystem.tryExtract(point);
                     return;
+                } else {
+                    console.log('[Input] Extraction point found but not active');
+                    if (typeof addMessage === 'function') {
+                        addMessage('This extraction shaft has collapsed!', 'warning');
+                    }
+                }
+            } else {
+                // Find nearest point for debugging
+                const nearest = ExtractionSystem.getNearestActivePoint(playerX, playerY);
+                if (nearest && nearest.point) {
+                    const dist = nearest.distance.toFixed(1);
+                    console.log(`[Input] Nearest extraction point is ${dist} tiles away at (${nearest.point.x}, ${nearest.point.y})`);
+                    if (typeof addMessage === 'function') {
+                        if (nearest.distance < 3) {
+                            addMessage(`Move to extraction shaft (${dist} tiles away)`, 'info');
+                        } else if (nearest.distance < 10) {
+                            addMessage(`Extraction shaft nearby (${dist} tiles away)`, 'info');
+                        }
+                    }
+                } else {
+                    console.warn('[Input] No active extraction points found on this floor!');
+                    if (typeof addMessage === 'function') {
+                        addMessage('No extraction shafts available!', 'warning');
+                    }
                 }
             }
         }

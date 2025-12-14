@@ -1,9 +1,8 @@
 // ============================================================================
-// DAMAGE CALCULATOR - 3-Layer Damage System
+// DAMAGE CALCULATOR - 2-Layer Damage System
 // ============================================================================
 // Layer 1: Weapon Type vs Armor Type (±30%)
 // Layer 2: Element vs Element (±30%)
-// Layer 3: Entity Element vs Room Element (-20% to +25%)
 // ============================================================================
 
 const DamageCalculator = {
@@ -24,10 +23,10 @@ const DamageCalculator = {
     // ========================================================================
 
     /**
-     * Calculate damage with all 3 layers
+     * Calculate damage with 2 layers
      * @param {Object} attacker - Attacking entity (player or enemy)
      * @param {Object} defender - Defending entity
-     * @param {Object} room - Current room (for attunement)
+     * @param {Object} room - Current room (unused, kept for API compatibility)
      * @returns {Object} Damage result with breakdown
      */
     calculateDamage(attacker, defender, room = null) {
@@ -39,8 +38,6 @@ const DamageCalculator = {
             breakdown: {
                 weaponArmorMod: 1.0,
                 elementMod: 1.0,
-                attackerAttunement: 1.0,
-                defenderAttunement: 1.0,
                 defenseMod: 1.0,
                 critMod: 1.0,
                 variance: 1.0
@@ -68,45 +65,35 @@ const DamageCalculator = {
         const defendElement = this.getDefendElement(defender);
         result.breakdown.elementMod = this.getElementModifier(attackElement, defendElement);
 
-        // Step 5: Layer 3 - Room Attunement
-        if (room && room.element) {
-            result.breakdown.attackerAttunement = this.getRoomAttunement(attackElement, room.element);
-            result.breakdown.defenderAttunement = this.getRoomAttunement(defendElement, room.element);
-        }
-
-        // Step 6: Defense reduction
+        // Step 5: Defense reduction
         const defense = this.getDefense(defender, weaponType);
         result.breakdown.defenseMod = this.calculateDefenseReduction(defense);
 
-        // Step 7: Critical hit
+        // Step 6: Critical hit
         if (this.rollCrit(attacker)) {
             result.isCrit = true;
             result.breakdown.critMod = this.config.critMultiplier;
             result.messages.push('CRITICAL');
         }
 
-        // Step 8: Variance
+        // Step 7: Variance
         result.breakdown.variance = 1 - this.config.baseVariance + (Math.random() * this.config.baseVariance * 2);
 
-        // Step 9: Calculate final damage
+        // Step 8: Calculate final damage
         let damage = result.baseDamage;
-        
+
         // Apply weapon vs armor
         damage *= result.breakdown.weaponArmorMod;
-        
+
         // Apply element vs element
         damage *= result.breakdown.elementMod;
-        
-        // Apply attunement (attacker bonus, defender bonus inverted)
-        damage *= result.breakdown.attackerAttunement;
-        damage /= result.breakdown.defenderAttunement;
-        
+
         // Apply defense
         damage *= result.breakdown.defenseMod;
-        
+
         // Apply crit
         damage *= result.breakdown.critMod;
-        
+
         // Apply variance
         damage *= result.breakdown.variance;
 
@@ -118,8 +105,6 @@ const DamageCalculator = {
         if (result.breakdown.weaponArmorMod < 1.0) result.messages.push('Armor resists...');
         if (result.breakdown.elementMod > 1.0) result.messages.push('Super effective!');
         if (result.breakdown.elementMod < 1.0) result.messages.push('Not very effective...');
-        if (result.breakdown.attackerAttunement > 1.0) result.messages.push('Room empowers attack!');
-        if (result.breakdown.defenderAttunement > 1.0) result.messages.push('Room protects defender!');
 
         // Debug logging
         if (this.config.debugLogging) {
@@ -279,27 +264,6 @@ const DamageCalculator = {
     },
 
     // ========================================================================
-    // LAYER 3: ROOM ATTUNEMENT
-    // ========================================================================
-
-    getRoomAttunement(entityElement, roomElement) {
-        // Use global matrix if available
-        if (typeof ROOM_ATTUNEMENT_MATRIX !== 'undefined') {
-            const row = ROOM_ATTUNEMENT_MATRIX[entityElement];
-            if (row && row[roomElement] !== undefined) {
-                return 1.0 + row[roomElement];
-            }
-        }
-        
-        // Use global function if available
-        if (typeof getRoomAttunementModifier === 'function') {
-            return getRoomAttunementModifier(entityElement, roomElement);
-        }
-        
-        return 1.0;
-    },
-
-    // ========================================================================
     // DEFENSE
     // ========================================================================
 
@@ -384,13 +348,11 @@ const DamageCalculator = {
     logDamageCalculation(attacker, defender, room, result) {
         const attackerName = attacker.name || 'Player';
         const defenderName = defender.name || 'Target';
-        
+
         console.log(`[DamageCalc] ${attackerName} → ${defenderName}`);
         console.log(`  Base: ${result.baseDamage}`);
         console.log(`  Weapon/Armor: x${result.breakdown.weaponArmorMod.toFixed(2)}`);
         console.log(`  Element: x${result.breakdown.elementMod.toFixed(2)}`);
-        console.log(`  Attacker Attune: x${result.breakdown.attackerAttunement.toFixed(2)}`);
-        console.log(`  Defender Attune: /${result.breakdown.defenderAttunement.toFixed(2)}`);
         console.log(`  Defense: x${result.breakdown.defenseMod.toFixed(2)}`);
         console.log(`  Crit: x${result.breakdown.critMod.toFixed(2)}`);
         console.log(`  Variance: x${result.breakdown.variance.toFixed(2)}`);
@@ -435,8 +397,6 @@ function getDamagePreview(attacker, defender, room = null) {
     let preview = result.baseDamage;
     preview *= result.breakdown.weaponArmorMod;
     preview *= result.breakdown.elementMod;
-    preview *= result.breakdown.attackerAttunement;
-    preview /= result.breakdown.defenderAttunement;
     preview *= result.breakdown.defenseMod;
     
     return {
@@ -456,4 +416,4 @@ window.calculateDamageSimple = calculateDamageSimple;
 window.calculateDamageWithRoom = calculateDamageWithRoom;
 window.getDamagePreview = getDamagePreview;
 
-console.log('[DamageCalculator] 3-layer damage system loaded');
+console.log('[DamageCalculator] 2-layer damage system loaded');

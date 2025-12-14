@@ -58,10 +58,6 @@ const Debug = {
 ║   debug.listStatus(t)       - List active statuses           ║
 ║   debug.clearStatus(t)      - Clear all statuses             ║
 ║                                                              ║
-║ ATTUNEMENT                                                   ║
-║   debug.showAttunement()    - Show player attunement         ║
-║   debug.setAttunement(e, v) - Set attunement value           ║
-║                                                              ║
 ║ HAZARDS                                                      ║
 ║   debug.spawnHazard(id,x,y) - Spawn hazard at position       ║
 ║   debug.listHazards()       - List all hazard types          ║
@@ -401,23 +397,6 @@ const Debug = {
             clearStatusEffects(entity);
             console.log(`Cleared all status effects from ${entity.name || 'player'}`);
         }
-    },
-
-    // ========================================================================
-    // ATTUNEMENT
-    // ========================================================================
-    showAttunement() {
-        if (typeof AttunementSystem === 'undefined') { console.log('AttunementSystem not loaded'); return; }
-        const summary = AttunementSystem.getAttunementSummary(game.player);
-        console.log('Player Attunement:', summary);
-        const all = AttunementSystem.getAllAttunements(game.player);
-        console.table(all);
-    },
-
-    setAttunement(element, value) {
-        if (typeof AttunementSystem === 'undefined') { console.log('AttunementSystem not loaded'); return; }
-        AttunementSystem.playerAttunement.values[element] = value;
-        console.log(`Set ${element} attunement to ${value}`);
     },
 
     // ========================================================================

@@ -1,7 +1,7 @@
 // ============================================================================
 // COMBAT SYSTEM - The Shifting Chasm
 // ============================================================================
-// Updated: Integrates 3-layer damage system (Weapon/Armor, Element, Attunement)
+// Updated: Integrates 2-layer damage system (Weapon/Armor, Element)
 // Uses DamageCalculator for all damage calculations
 // ============================================================================
 
@@ -362,7 +362,7 @@ function disengageCombat(entity) {
 // ============================================================================
 
 function performAttack(attacker, defender) {
-    // Get current room for attunement
+    // Get current room for context
     const room = getCurrentRoom(attacker);
 
     // Enemy combo system: track which attack in the combo (1, 2, or 3)

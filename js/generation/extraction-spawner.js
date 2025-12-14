@@ -212,8 +212,13 @@ const ExtractionSpawner = {
 
         const tile = game.map[y][x];
 
-        // Must be walkable floor
-        if (tile.type !== 'floor' || !tile.walkable) {
+        // Must be floor (walkable check removed - tiles don't always have this property)
+        if (tile.type !== 'floor') {
+            return false;
+        }
+
+        // Not blocked
+        if (tile.blocked) {
             return false;
         }
 
@@ -222,8 +227,8 @@ const ExtractionSpawner = {
             return false;
         }
 
-        // Not on existing decorations/objects
-        if (tile.decoration || tile.object) {
+        // Not on existing objects
+        if (tile.object) {
             return false;
         }
 

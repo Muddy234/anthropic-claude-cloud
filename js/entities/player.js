@@ -1,7 +1,7 @@
 // ============================================================================
 // PLAYER - The Shifting Chasm
 // ============================================================================
-// Updated: Removed starting gear, added attunement tracking, normalized stats
+// Updated: Removed starting gear, normalized stats
 // ============================================================================
 
 function createPlayer() {
@@ -76,17 +76,10 @@ function createPlayer() {
         maxMana: 50,                  // Legacy (deprecated)
 
         // ====================================================================
-        // ELEMENT & ATTUNEMENT
+        // ELEMENT
         // ====================================================================
-        
+
         element: 'physical',          // Current attack element (from weapon)
-        attunement: {
-            primary: null,            // Dominant element affinity
-            values: {                 // 0-100 for each element
-                fire: 0, ice: 0, water: 0, earth: 0, nature: 0,
-                death: 0, arcane: 0, dark: 0, holy: 0, physical: 0
-            }
-        },
 
         // ====================================================================
         // DERIVED COMBAT STATS
@@ -412,37 +405,6 @@ function unequipItem(player, slot) {
 }
 
 // ============================================================================
-// ATTUNEMENT
-// ============================================================================
-
-/**
- * Get player's current attunement to an element
- */
-function getPlayerAttunement(element) {
-    if (!game.player?.attunement?.values) return 0;
-    return game.player.attunement.values[element] || 0;
-}
-
-/**
- * Update player's attunement (called by AttunementSystem)
- */
-function setPlayerAttunement(element, value) {
-    if (!game.player?.attunement?.values) return;
-    game.player.attunement.values[element] = Math.max(0, Math.min(100, value));
-    
-    // Update primary if this is now highest
-    let highest = 0;
-    let primary = null;
-    for (const el in game.player.attunement.values) {
-        if (game.player.attunement.values[el] > highest) {
-            highest = game.player.attunement.values[el];
-            primary = el;
-        }
-    }
-    game.player.attunement.primary = highest >= 25 ? primary : null;
-}
-
-// ============================================================================
 // LEVEL UP
 // ============================================================================
 
@@ -515,8 +477,6 @@ if (typeof window !== 'undefined') {
     window.recalculatePlayerStats = recalculatePlayerStats;
     window.equipItem = equipItem;
     window.unequipItem = unequipItem;
-    window.getPlayerAttunement = getPlayerAttunement;
-    window.setPlayerAttunement = setPlayerAttunement;
     window.checkLevelUp = checkLevelUp;
     window.resetPlayer = resetPlayer;
     window.handlePlayerDeath = handlePlayerDeath;

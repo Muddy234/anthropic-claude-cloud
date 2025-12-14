@@ -422,11 +422,6 @@ function postInitialization() {
         MonsterSocialSystem.scanAndFormGroups();
     }
 
-    // Initialize attunement
-    if (typeof AttunementSystem !== 'undefined') {
-        AttunementSystem.init();
-    }
-
     // Place starter chest near player
     placeStarterChest();
 
@@ -677,20 +672,7 @@ function registerNewSystems() {
             cleanup: () => HazardSystem.cleanup()
         }, 35);
     }
-    
-    // Attunement System
-    if (typeof AttunementSystem !== 'undefined' && !SystemManager.has('attunement')) {
-        SystemManager.register('attunement', {
-            name: 'attunement',
-            init: () => AttunementSystem.init(),
-            update: (dt) => {
-                const room = typeof getCurrentRoom === 'function' ? getCurrentRoom(game.player) : null;
-                AttunementSystem.update(dt, game.player, room);
-            },
-            cleanup: () => AttunementSystem.cleanup()
-        }, 45);
-    }
-    
+
     // Monster Social System
     if (typeof MonsterSocialSystem !== 'undefined' && !SystemManager.has('monster-social')) {
         SystemManager.register('monster-social', {
@@ -747,13 +729,7 @@ function initializeSystemsManually() {
         HazardSystem.init();
         console.log('  ✅ HazardSystem initialized');
     }
-    
-    // Attunement
-    if (typeof AttunementSystem !== 'undefined') {
-        AttunementSystem.init();
-        console.log('  ✅ AttunementSystem initialized');
-    }
-    
+
     // Social System
     if (typeof MonsterSocialSystem !== 'undefined') {
         MonsterSocialSystem.init();
@@ -898,6 +874,14 @@ function advanceToNextFloor() {
     
     initializeCamera();
     initializeAllSystems();
+
+    // Re-initialize extraction points for new floor
+    if (typeof ExtractionSystem !== 'undefined' && game.rooms) {
+        const entranceRoom = game.rooms.find(r => r.type === 'entrance');
+        ExtractionSystem.init(game.floor, game.rooms, entranceRoom);
+        console.log(`[Init] ExtractionSystem reinitialized for floor ${game.floor}`);
+    }
+
     postInitialization();
     
     console.log(`✅ Floor ${game.floor} ready!`);

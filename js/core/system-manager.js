@@ -22,8 +22,7 @@ const EXPECTED_SYSTEMS = [
     'enemy-ai',                // 40 - AI decisions based on noise and player
     'monster-social',          // 42 - Pack/swarm coordination
     'monster-animation-system',// 43 - Monster sprite animations
-    'attunement',              // 45 - Player element attunement
-    
+
     // Combat (50-59)
     'combat-system',           // 50 - Combat after all movement resolved
     'skills-combat',           // 55 - Skills-combat integration

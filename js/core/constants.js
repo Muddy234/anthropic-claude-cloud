@@ -272,7 +272,7 @@ const EXTRACTION_CONFIG = {
     },
 
     // Interaction
-    interactionRadius: 1.5  // Tiles from shaft to interact
+    interactionRadius: 2.0  // Tiles from shaft to interact (increased for easier use)
 };
 
 // ============================================================================
