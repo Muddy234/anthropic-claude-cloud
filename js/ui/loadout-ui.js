@@ -569,12 +569,12 @@ const LoadoutUI = {
             ctx.font = '10px Arial';
             ctx.textAlign = 'center';
             ctx.fillStyle = '#58a6ff';
-            ctx.fillText(`↑↓ ${this.bankScroll + 1}-${Math.min(this.bankScroll + maxVisibleRows, totalRows)}/${totalRows}`, x + width / 2, y + height - 120);
+            ctx.fillText(`↑↓ ${this.bankScroll + 1}-${Math.min(this.bankScroll + maxVisibleRows, totalRows)}/${totalRows}`, x + width / 2, y + height - 160);
         }
 
-        // Item description panel (below grid)
+        // Item description panel (below grid) - 140px tall panel
         if (this.currentPanel === 0 && bankItems.length > 0 && this.selectedIndex < bankItems.length) {
-            this._renderItemDescription(ctx, x + 5, y + height - 110, width - 10, bankItems[this.selectedIndex].item);
+            this._renderItemDescription(ctx, x + 5, y + height - 150, width - 10, bankItems[this.selectedIndex].item);
         }
     },
 
@@ -779,7 +779,10 @@ const LoadoutUI = {
     _renderItemDescription(ctx, x, y, width, item) {
         if (!item) return;
 
-        const height = 100;
+        const height = 140;
+        const colWidth = (width - 16) / 2;
+        const leftCol = x + 8;
+        const rightCol = x + 8 + colWidth;
 
         // Description panel background
         ctx.fillStyle = '#0d1117';
@@ -788,64 +791,205 @@ const LoadoutUI = {
         ctx.lineWidth = 2;
         ctx.strokeRect(x, y, width, height);
 
-        // Item name
+        // Item name with rarity color
         ctx.font = 'bold 12px Arial';
         ctx.textAlign = 'left';
         ctx.fillStyle = this._getRarityColor(item.rarity);
         const displayName = item.name || 'Unknown Item';
-        ctx.fillText(displayName, x + 8, y + 16);
+        ctx.fillText(displayName, leftCol, y + 14);
 
-        // Item type and rarity
-        ctx.font = '10px Arial';
+        // Gold value (prominent, top right)
+        const goldVal = item.goldValue || item.sellValue || 0;
+        if (goldVal > 0) {
+            ctx.textAlign = 'right';
+            ctx.font = 'bold 11px Arial';
+            ctx.fillStyle = '#FFD700';
+            ctx.fillText(`💰 ${goldVal}g`, x + width - 8, y + 14);
+        }
+
+        // Item type line (rarity + type + subtype)
+        ctx.textAlign = 'left';
+        ctx.font = '9px Arial';
         ctx.fillStyle = '#8b949e';
-        const typeText = `${item.rarity || 'common'} ${item.type || 'item'}`;
-        ctx.fillText(typeText.charAt(0).toUpperCase() + typeText.slice(1), x + 8, y + 30);
+        let typeStr = (item.rarity || 'common').charAt(0).toUpperCase() + (item.rarity || 'common').slice(1);
+        if (item.weaponType) {
+            typeStr += ` ${item.weaponType.charAt(0).toUpperCase() + item.weaponType.slice(1)}`;
+        } else if (item.armorType) {
+            typeStr += ` ${item.armorType.charAt(0).toUpperCase() + item.armorType.slice(1)} Armor`;
+        } else if (item.type) {
+            typeStr += ` ${item.type.charAt(0).toUpperCase() + item.type.slice(1)}`;
+        }
+        if (item.slot && item.slot !== 'MAIN') {
+            typeStr += ` (${item.slot})`;
+        }
+        ctx.fillText(typeStr, leftCol, y + 26);
 
-        // Stats
+        // Damage type for weapons
+        if (item.damageType) {
+            ctx.fillStyle = '#7f8c8d';
+            const dmgTypeStr = `${item.damageType.charAt(0).toUpperCase() + item.damageType.slice(1)} damage`;
+            ctx.fillText(dmgTypeStr, leftCol + ctx.measureText(typeStr).width + 10, y + 26);
+        }
+
+        // Stats section - use item.stats object
+        const stats = item.stats || {};
         ctx.font = '10px Arial';
-        let statY = y + 46;
+        let leftY = y + 42;
+        let rightY = y + 42;
 
-        if (item.damage) {
+        // LEFT COLUMN - Combat stats
+        // Damage
+        const damage = stats.damage || item.damage;
+        if (damage) {
             ctx.fillStyle = '#e74c3c';
-            ctx.fillText(`Damage: ${item.damage}`, x + 8, statY);
-            statY += 12;
+            ctx.fillText(`⚔ Damage: ${damage}`, leftCol, leftY);
+            leftY += 13;
         }
-        if (item.attackSpeed) {
+
+        // Attack speed
+        const speed = stats.speed || item.attackSpeed;
+        if (speed) {
             ctx.fillStyle = '#f39c12';
-            ctx.fillText(`Speed: ${item.attackSpeed}`, x + 8, statY);
-            statY += 12;
+            const speedLabel = speed >= 1.1 ? 'Fast' : speed <= 0.9 ? 'Slow' : 'Normal';
+            ctx.fillText(`⚡ Speed: ${speed.toFixed(2)} (${speedLabel})`, leftCol, leftY);
+            leftY += 13;
         }
-        if (item.pDef) {
-            ctx.fillStyle = '#3498db';
-            ctx.fillText(`P.Def: ${item.pDef}`, x + 8, statY);
-            statY += 12;
-        }
-        if (item.mDef) {
+
+        // Range
+        const range = stats.range;
+        if (range) {
             ctx.fillStyle = '#9b59b6';
-            ctx.fillText(`M.Def: ${item.mDef}`, x + 8, statY);
-            statY += 12;
+            ctx.fillText(`📏 Range: ${range}`, leftCol, leftY);
+            leftY += 13;
         }
-        if (item.element && item.element !== 'physical') {
+
+        // Defense
+        const defense = stats.defense || item.defense;
+        if (defense) {
+            ctx.fillStyle = '#3498db';
+            ctx.fillText(`🛡 Defense: ${defense}`, leftCol, leftY);
+            leftY += 13;
+        }
+
+        // Block chance (shields)
+        const block = stats.block;
+        if (block) {
+            ctx.fillStyle = '#1abc9c';
+            ctx.fillText(`🛡 Block: ${Math.round(block * 100)}%`, leftCol, leftY);
+            leftY += 13;
+        }
+
+        // Physical/Magical Defense
+        const pDef = stats.pDef || item.pDef;
+        const mDef = stats.mDef || item.mDef;
+        if (pDef) {
+            ctx.fillStyle = '#3498db';
+            ctx.fillText(`P.Def: +${pDef}`, leftCol, leftY);
+            leftY += 13;
+        }
+        if (mDef) {
+            ctx.fillStyle = '#9b59b6';
+            ctx.fillText(`M.Def: +${mDef}`, leftCol, leftY);
+            leftY += 13;
+        }
+
+        // RIGHT COLUMN - Stat bonuses and specials
+        // Stat bonuses
+        const str = stats.str || item.str;
+        const agi = stats.agi || item.agi;
+        const int = stats.int || item.int;
+
+        if (str && str > 0) {
+            ctx.fillStyle = '#e74c3c';
+            ctx.fillText(`STR: +${str}`, rightCol, rightY);
+            rightY += 13;
+        }
+        if (agi && agi > 0) {
             ctx.fillStyle = '#2ecc71';
-            ctx.fillText(`Element: ${item.element}`, x + 8, statY);
-            statY += 12;
+            ctx.fillText(`AGI: +${agi}`, rightCol, rightY);
+            rightY += 13;
         }
+        if (int && int > 0) {
+            ctx.fillStyle = '#3498db';
+            ctx.fillText(`INT: +${int}`, rightCol, rightY);
+            rightY += 13;
+        }
+
+        // Element
+        if (item.element && item.element !== 'physical' && item.element !== null) {
+            ctx.fillStyle = this._getElementColor(item.element);
+            let elemStr = `✨ ${item.element.charAt(0).toUpperCase() + item.element.slice(1)}`;
+            if (item.elementPower) {
+                elemStr += ` (${item.elementPower})`;
+            }
+            ctx.fillText(elemStr, rightCol, rightY);
+            rightY += 13;
+        }
+
+        // Special properties
+        if (item.special) {
+            ctx.fillStyle = '#f1c40f';
+            for (const [key, value] of Object.entries(item.special)) {
+                let specialText = '';
+                if (key === 'critBonus') specialText = `+${Math.round(value * 100)}% Crit`;
+                else if (key === 'critDmg') specialText = `+${Math.round(value * 100)}% Crit Dmg`;
+                else if (key === 'executeBonus') specialText = `+${Math.round(value * 100)}% Execute`;
+                else if (key === 'poisonChance') specialText = `${Math.round(value * 100)}% Poison`;
+                else if (key === 'slowAmount') specialText = `${Math.round(value * 100)}% Slow`;
+                else if (key === 'noiseReduction') specialText = `-${Math.round(value * 100)}% Noise`;
+                else if (key === 'doubleStrike') specialText = `${Math.round(value * 100)}% Double Strike`;
+                else if (key === 'dispel') specialText = 'Dispels magic';
+                else if (key === 'lifeSteal') specialText = `${Math.round(value * 100)}% Life Steal`;
+                else if (key === 'armorPen') specialText = `${Math.round(value * 100)}% Armor Pen`;
+                else if (key === 'knockback') specialText = `Knockback: ${value}`;
+                else specialText = `${key}: ${typeof value === 'number' ? Math.round(value * 100) + '%' : value}`;
+
+                if (specialText) {
+                    ctx.fillText(`★ ${specialText}`, rightCol, rightY);
+                    rightY += 13;
+                }
+            }
+        }
+
+        // Effect (consumables)
         if (item.effect) {
             ctx.fillStyle = '#1abc9c';
-            ctx.fillText(`Effect: ${item.effect.type} ${item.effect.value || ''}`, x + 8, statY);
-            statY += 12;
-        }
-        if (item.count && item.count > 1) {
-            ctx.fillStyle = '#95a5a6';
-            ctx.fillText(`Quantity: ${item.count}`, x + 8, statY);
+            const effectText = `${item.effect.type}: ${item.effect.value || ''}`;
+            ctx.fillText(effectText, rightCol, rightY);
+            rightY += 13;
         }
 
-        // Sell value (right side)
-        if (item.sellValue) {
-            ctx.textAlign = 'right';
-            ctx.fillStyle = '#FFD700';
-            ctx.fillText(`${item.sellValue}g`, x + width - 8, y + 16);
+        // Quantity (bottom left)
+        if (item.count && item.count > 1) {
+            ctx.fillStyle = '#95a5a6';
+            ctx.fillText(`Qty: ${item.count}`, leftCol, y + height - 8);
         }
+
+        // Noise level (bottom right) - stealth indicator
+        const noise = item.noise;
+        if (noise) {
+            ctx.textAlign = 'right';
+            ctx.fillStyle = '#7f8c8d';
+            const noiseVal = noise.onAttack || noise.onMove || 0;
+            const noiseLabel = noiseVal <= 30 ? 'Silent' : noiseVal <= 45 ? 'Quiet' : noiseVal <= 55 ? 'Normal' : 'Loud';
+            ctx.fillText(`🔊 ${noiseLabel}`, x + width - 8, y + height - 8);
+        }
+    },
+
+    _getElementColor(element) {
+        const colors = {
+            fire: '#ff6b35',
+            ice: '#74b9ff',
+            water: '#0984e3',
+            earth: '#8b4513',
+            nature: '#2ecc71',
+            death: '#6c5ce7',
+            holy: '#ffeaa7',
+            dark: '#2d3436',
+            arcane: '#a29bfe',
+            physical: '#95a5a6'
+        };
+        return colors[element] || '#ffffff';
     },
 
     _renderItemSlot(ctx, x, y, size, item) {
