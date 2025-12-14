@@ -96,8 +96,7 @@ function drawActionBarBackground(ctx, x, y, width, height, cfg, colors) {
     bgGrad.addColorStop(1, colors.bgDarkest || '#0a0a0f');
 
     ctx.fillStyle = bgGrad;
-    ctx.beginPath();
-    roundRect(ctx, x, y, width, height, cfg.cornerRadius);
+    drawRoundedRect(ctx, x, y, width, height, cfg.cornerRadius);
     ctx.fill();
 
     // Border
@@ -268,8 +267,7 @@ function drawSlotBackground(ctx, x, y, size, cfg, slotInfo, isHovered, colors, i
     bgGrad.addColorStop(1, colors.bgDarkest || '#0a0a0f');
 
     ctx.fillStyle = bgGrad;
-    ctx.beginPath();
-    roundRect(ctx, x, y, size, size, radius);
+    drawRoundedRect(ctx, x, y, size, size, radius);
     ctx.fill();
 
     // Reset shadow
@@ -283,8 +281,7 @@ function drawSlotBackground(ctx, x, y, size, cfg, slotInfo, isHovered, colors, i
     // Inner shadow
     ctx.strokeStyle = 'rgba(0, 0, 0, 0.3)';
     ctx.lineWidth = 1;
-    ctx.beginPath();
-    roundRect(ctx, x + 2, y + 2, size - 4, size - 4, radius - 2);
+    drawRoundedRect(ctx, x + 2, y + 2, size - 4, size - 4, radius - 2);
     ctx.stroke();
 }
 
@@ -382,8 +379,7 @@ function drawHotkeyBadge(ctx, x, y, size, cfg, keyText, colors) {
 
     // Badge background
     ctx.fillStyle = colors.bgDarkest || '#0a0a0f';
-    ctx.beginPath();
-    roundRect(ctx, badgeX, badgeY, badgeSize + (keyText.length > 1 ? 10 : 0), badgeSize, 3);
+    drawRoundedRect(ctx, badgeX, badgeY, badgeSize + (keyText.length > 1 ? 10 : 0), badgeSize, 3);
     ctx.fill();
 
     // Badge border
@@ -424,27 +420,12 @@ function drawReadyPulse(ctx, x, y, size, cfg, colors, customColor = null) {
     ctx.strokeStyle = pulseColor;
     ctx.lineWidth = 2;
     ctx.globalAlpha = pulseAlpha;
-    ctx.beginPath();
-    roundRect(ctx, x - 2, y - 2, size + 4, size + 4, cfg.cornerRadius + 2);
+    drawRoundedRect(ctx, x - 2, y - 2, size + 4, size + 4, cfg.cornerRadius + 2);
     ctx.stroke();
     ctx.globalAlpha = 1;
 }
 
-/**
- * Helper: Draw rounded rectangle path
- */
-function roundRect(ctx, x, y, width, height, radius) {
-    ctx.moveTo(x + radius, y);
-    ctx.lineTo(x + width - radius, y);
-    ctx.quadraticCurveTo(x + width, y, x + width, y + radius);
-    ctx.lineTo(x + width, y + height - radius);
-    ctx.quadraticCurveTo(x + width, y + height, x + width - radius, y + height);
-    ctx.lineTo(x + radius, y + height);
-    ctx.quadraticCurveTo(x, y + height, x, y + height - radius);
-    ctx.lineTo(x, y + radius);
-    ctx.quadraticCurveTo(x, y, x + radius, y);
-    ctx.closePath();
-}
+// NOTE: Uses drawRoundedRect from ui-design-system.js
 
 // ============================================================================
 // SLOT INFO HELPERS (unchanged logic, cleaned up)
@@ -534,157 +515,10 @@ function getConsumableInfo(player, slot) {
     return info;
 }
 
-// Unused but kept for reference if slots 1-2 are re-enabled
-function getBaseAttackInfo(player) {
-    const info = {
-        hotkey: 1,
-        name: 'Base Attack',
-        icon: 'sword',
-        state: 'disabled',
-        cooldown: 0,
-        maxCooldown: 1,
-        canUse: false
-    };
-
-    if (player.actionCooldowns?.baseAttack > 0) {
-        info.state = 'cooldown';
-        info.cooldown = player.actionCooldowns.baseAttack;
-        info.maxCooldown = player.combat?.attackSpeed || 1.0;
-        return info;
-    }
-
-    const target = player.combat?.currentTarget;
-    if (!target || target.hp <= 0) {
-        info.state = 'disabled';
-        return info;
-    }
-
-    const weapon = player.equipped?.MAIN;
-    const range = weapon?.stats?.range || 1;
-    const distance = getDistanceToTarget(player, target);
-
-    if (distance > range) {
-        info.state = 'outOfRange';
-        return info;
-    }
-
-    const weaponType = getWeaponTypeFromPlayer(player);
-
-    if (weaponType === 'ranged') {
-        const ammoType = weapon?.weaponType === 'crossbow' ? 'bolts' : 'arrows';
-        if (!player.ammo || player.ammo[ammoType] <= 0) {
-            info.state = 'outOfAmmo';
-            return info;
-        }
-    }
-
-    if (weaponType === 'magic') {
-        const element = weapon?.element || 'arcane';
-        const manaCost = getMagicManaCost(element);
-        if (player.mp < manaCost) {
-            info.state = 'outOfMana';
-            return info;
-        }
-    }
-
-    info.state = 'ready';
-    info.canUse = true;
-    return info;
-}
-
-function getSkillAttackInfo(player) {
-    const info = {
-        hotkey: 2,
-        name: 'Skill Attack',
-        icon: 'star',
-        state: 'disabled',
-        cooldown: 0,
-        maxCooldown: 10,
-        canUse: false
-    };
-
-    if (player.actionCooldowns?.skillAttack > 0) {
-        info.state = 'cooldown';
-        info.cooldown = player.actionCooldowns.skillAttack;
-        info.maxCooldown = 10;
-        return info;
-    }
-
-    const target = player.combat?.currentTarget;
-    if (!target || target.hp <= 0) {
-        info.state = 'disabled';
-        return info;
-    }
-
-    const weapon = player.equipped?.MAIN;
-    const range = weapon?.stats?.range || 1;
-    const distance = getDistanceToTarget(player, target);
-
-    if (distance > range) {
-        info.state = 'outOfRange';
-        return info;
-    }
-
-    const weaponType = getWeaponTypeFromPlayer(player);
-
-    if (weaponType === 'ranged') {
-        const ammoType = weapon?.weaponType === 'crossbow' ? 'bolts' : 'arrows';
-        if (!player.ammo || player.ammo[ammoType] <= 0) {
-            info.state = 'outOfAmmo';
-            return info;
-        }
-    }
-
-    if (weaponType === 'magic') {
-        const element = weapon?.element || 'arcane';
-        const manaCost = getMagicManaCost(element);
-        if (player.mp < manaCost) {
-            info.state = 'outOfMana';
-            return info;
-        }
-    }
-
-    info.state = 'ready';
-    info.canUse = true;
-    return info;
-}
 
 // ============================================================================
 // HELPER FUNCTIONS
 // ============================================================================
-
-function getDistanceToTarget(player, target) {
-    if (typeof getDistance === 'function') {
-        return getDistance(player, target);
-    }
-    const dx = player.gridX - target.gridX;
-    const dy = player.gridY - target.gridY;
-    return Math.sqrt(dx * dx + dy * dy);
-}
-
-function getWeaponTypeFromPlayer(player) {
-    const weapon = player.equipped?.MAIN;
-    if (!weapon) return 'melee';
-
-    const weaponType = weapon.weaponType || weapon.damageType;
-
-    if (['staff', 'wand', 'tome'].includes(weaponType)) {
-        return 'magic';
-    }
-
-    if (['bow', 'crossbow', 'throwing'].includes(weaponType)) {
-        return 'ranged';
-    }
-
-    return 'melee';
-}
-
-function getMagicManaCost(element) {
-    if (typeof MAGIC_CONFIG !== 'undefined' && MAGIC_CONFIG[element]) {
-        return MAGIC_CONFIG[element].manaCost;
-    }
-    return 12;
-}
 
 function findItemInPlayerInventory(player, itemId) {
     if (!player.inventory) return null;
@@ -806,4 +640,4 @@ if (typeof window !== 'undefined') {
     window.ACTION_BAR_CONFIG = ACTION_BAR_CONFIG;
 }
 
-console.log('Action bar UI loaded (CotDG style)');
+// Action bar UI loaded
