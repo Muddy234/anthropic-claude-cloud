@@ -1483,6 +1483,11 @@ function renderUIOverlays(ctx) {
     } else {
         renderInspectPopup(ctx);
     }
+
+    // Render journal if active (can be opened in dungeon too)
+    if (typeof JournalUI !== 'undefined' && JournalUI.active) {
+        JournalUI.render(ctx);
+    }
 }
 
 // Export for use in renderer
