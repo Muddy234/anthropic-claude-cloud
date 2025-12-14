@@ -307,12 +307,7 @@ function updateDash(deltaTime) {
     }
 }
 
-/**
- * Ease-out quadratic for smooth dash
- */
-function easeOutQuad(t) {
-    return t * (2 - t);
-}
+// NOTE: easeOutQuad is now provided by movement-utils.js
 
 /**
  * Check if player currently has i-frames
@@ -658,8 +653,7 @@ window.addEventListener('mousemove', (e) => {
     lastMouseY = e.clientY;
 });
 
-// Spacebar handler for dash (add to existing keydown)
-const originalKeydownHandler = window.addEventListener;
+// Spacebar handler for dash
 window.addEventListener('keydown', (e) => {
     // Spacebar for dash (only in playing state, not in menus)
     if (e.key === ' ' && game.state === 'playing') {

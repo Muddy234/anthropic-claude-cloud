@@ -1806,7 +1806,7 @@ function updateMouseAttackSystem(deltaTime) {
             if (player.displayY !== undefined) player.displayY = mouseAttackState.lungeTargetY;
         } else {
             // Interpolate position with ease-out for snap feel
-            const t = easeOutQuadLunge(mouseAttackState.lungeProgress);
+            const t = easeOutQuad(mouseAttackState.lungeProgress);
             const newX = mouseAttackState.lungeStartX +
                         (mouseAttackState.lungeTargetX - mouseAttackState.lungeStartX) * t;
             const newY = mouseAttackState.lungeStartY +
@@ -1863,12 +1863,7 @@ function updateMouseAttackSystem(deltaTime) {
     }
 }
 
-/**
- * Ease-out quadratic for lunge movement (starts fast, slows down)
- */
-function easeOutQuadLunge(t) {
-    return t * (2 - t);
-}
+// NOTE: easeOutQuad is now provided by movement-utils.js (used for lunge movement)
 
 /**
  * Check if player movement should be locked (during lunge)

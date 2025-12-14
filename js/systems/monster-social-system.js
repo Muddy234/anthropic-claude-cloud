@@ -144,8 +144,8 @@ const MonsterSocialSystem = {
             if (other === enemy || other.hp <= 0) continue;
             if (!other.isOrphan || other.packId) continue;
 
-            const dist = this.getDistance(enemy, other);
-            if (dist <= this.config.packRadius && this.arePackCompatible(enemy, other)) {
+            // Optimized: uses squared distance to avoid sqrt
+            if (this.isWithinRange(enemy, other, this.config.packRadius) && this.arePackCompatible(enemy, other)) {
                 candidates.push(other);
                 if (candidates.length >= 2) break; // Only need 2 for pack
             }
@@ -285,8 +285,8 @@ const MonsterSocialSystem = {
                 if (assigned.has(other)) continue;
                 if (packMembers.length >= this.config.maxPackSize) break;
 
-                const dist = this.getDistance(enemy, other);
-                if (dist <= this.config.packRadius && this.arePackCompatible(enemy, other)) {
+                // Optimized: uses squared distance to avoid sqrt
+                if (this.isWithinRange(enemy, other, this.config.packRadius) && this.arePackCompatible(enemy, other)) {
                     packMembers.push(other);
                     assigned.add(other);
                 }
@@ -333,8 +333,8 @@ const MonsterSocialSystem = {
                 if (assigned.has(other)) continue;
                 if (swarmMembers.length >= this.config.maxSwarmSize) break;
 
-                const dist = this.getDistance(enemy, other);
-                if (dist <= this.config.swarmRadius && this.areSwarmCompatible(enemy, other)) {
+                // Optimized: uses squared distance to avoid sqrt
+                if (this.isWithinRange(enemy, other, this.config.swarmRadius) && this.areSwarmCompatible(enemy, other)) {
                     swarmMembers.push(other);
                     assigned.add(other);
                 }
@@ -502,8 +502,8 @@ const MonsterSocialSystem = {
         for (const enemy of game.enemies) {
             if (enemy === alerter || enemy.hp <= 0) continue;
 
-            const dist = this.getDistance(alerter, enemy);
-            if (dist > alertRange) continue;
+            // Optimized: uses squared distance to avoid sqrt
+            if (!this.isWithinRange(alerter, enemy, alertRange)) continue;
 
             // Check if can receive alert
             if (this.canReceiveAlert(enemy, alerter, alertType)) {
@@ -711,6 +711,18 @@ const MonsterSocialSystem = {
         return Math.sqrt(dx * dx + dy * dy);
     },
 
+    // Optimized: avoids sqrt() for range comparisons
+    getDistanceSquared(e1, e2) {
+        const dx = (e1.gridX || e1.x) - (e2.gridX || e2.x);
+        const dy = (e1.gridY || e1.y) - (e2.gridY || e2.y);
+        return dx * dx + dy * dy;
+    },
+
+    // Check if two entities are within range (optimized, no sqrt)
+    isWithinRange(e1, e2, range) {
+        return this.getDistanceSquared(e1, e2) <= range * range;
+    },
+
     calculateCenter(members) {
         let sumX = 0, sumY = 0;
         for (const m of members) {
@@ -743,10 +755,12 @@ const MonsterSocialSystem = {
 
     isPackScattered(pack) {
         if (!pack.leader) return true;
-        
+
+        const scatterRadius = this.config.packRadius * 2;
         for (const member of pack.members) {
             if (member === pack.leader) continue;
-            if (this.getDistance(pack.leader, member) > this.config.packRadius * 2) {
+            // Optimized: uses squared distance to avoid sqrt
+            if (!this.isWithinRange(pack.leader, member, scatterRadius)) {
                 return true;
             }
         }
@@ -874,7 +888,6 @@ const MonsterSocialSystem = {
 // EXPORTS
 // ============================================================================
 
-window.MonsterSocialSystem = MonsterSocialSystem;
 window.MonsterSocialSystem = MonsterSocialSystem;
 
 console.log('[MonsterSocialSystem] Loaded');

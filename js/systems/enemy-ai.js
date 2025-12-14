@@ -20,9 +20,6 @@ const BEHAVIOR_TYPES = {
     patrol: { hasTerritoryRange: true, territorySize: 'room' }
 };
 
-// Static handler map (created once, not per frame)
-const STATE_HANDLERS = {};
-
 class EnemyAI {
     constructor(enemy) {
         this.enemy = enemy;

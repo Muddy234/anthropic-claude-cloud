@@ -67,19 +67,7 @@ function updateAllEnemyMovement(enemies, deltaTime) {
     }
 }
 
-/**
- * Ease-out quadratic - starts fast, ends slow (feels natural)
- */
-function easeOutQuad(t) {
-    return t * (2 - t);
-}
-
-/**
- * Linear interpolation
- */
-function lerp(start, end, t) {
-    return start + (end - start) * t;
-}
+// NOTE: easeOutQuad and lerp are now provided by movement-utils.js
 
 // ============================================================
 // GLOBAL EXPORTS

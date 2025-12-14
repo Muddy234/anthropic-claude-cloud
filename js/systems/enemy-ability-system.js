@@ -993,8 +993,8 @@ const EnemyAbilitySystem = {
                 if (game.enemies) {
                     for (const other of game.enemies) {
                         if (other === enemy || other.hp <= 0) continue;
-                        const dist = this.getDistance(enemy, other);
-                        if (dist <= mechanic.alertRadius) {
+                        // Optimized: uses squared distance to avoid sqrt
+                        if (this.isWithinRange(enemy, other, mechanic.alertRadius)) {
                             other.state = 'chasing';
                             if (other.ai) {
                                 other.ai.currentState = 'chasing';
@@ -1040,6 +1040,17 @@ const EnemyAbilitySystem = {
         const dx = (a.gridX || a.x) - (b.gridX || b.x);
         const dy = (a.gridY || a.y) - (b.gridY || b.y);
         return Math.sqrt(dx * dx + dy * dy);
+    },
+
+    // Optimized: avoids sqrt() for range comparisons
+    getDistanceSquared(a, b) {
+        const dx = (a.gridX || a.x) - (b.gridX || b.x);
+        const dy = (a.gridY || a.y) - (b.gridY || b.y);
+        return dx * dx + dy * dy;
+    },
+
+    isWithinRange(a, b, range) {
+        return this.getDistanceSquared(a, b) <= range * range;
     },
 
     /**

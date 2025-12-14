@@ -248,12 +248,7 @@ function cancelPlayerMove() {
     }
 }
 
-/**
- * Ease-out quadratic - starts fast, ends slow (feels natural)
- */
-function easeOutQuad(t) {
-    return t * (2 - t);
-}
+// NOTE: easeOutQuad is now provided by movement-utils.js
 
 /**
  * Update camera to smoothly follow player (Pokemon-style)

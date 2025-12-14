@@ -159,3 +159,88 @@ function normalizeDirection(dx, dy) {
     }
     return { dx, dy };
 }
+
+// ============================================================================
+// EASING FUNCTIONS
+// ============================================================================
+
+/**
+ * Ease-out quadratic - starts fast, slows down
+ * Use for: dash movement, lunge, deceleration effects
+ */
+function easeOutQuad(t) {
+    return t * (2 - t);
+}
+
+/**
+ * Ease-in quadratic - starts slow, speeds up
+ * Use for: acceleration effects
+ */
+function easeInQuad(t) {
+    return t * t;
+}
+
+/**
+ * Ease-in-out quadratic - smooth start and end
+ * Use for: smooth camera movements, UI animations
+ */
+function easeInOutQuad(t) {
+    return t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
+}
+
+// ============================================================================
+// OPTIMIZED DISTANCE CALCULATIONS
+// ============================================================================
+
+/**
+ * Calculate squared distance (faster than getDistance - avoids sqrt)
+ * Use when comparing distances: distSq <= range*range
+ */
+function getDistanceSquared(x1, y1, x2, y2) {
+    const dx = x1 - x2;
+    const dy = y1 - y2;
+    return dx * dx + dy * dy;
+}
+
+/**
+ * Check if two points are within range (optimized, no sqrt)
+ */
+function isWithinRange(x1, y1, x2, y2, range) {
+    return getDistanceSquared(x1, y1, x2, y2) <= range * range;
+}
+
+/**
+ * Calculate distance between two coordinate pairs
+ */
+function getDistanceXY(x1, y1, x2, y2) {
+    const dx = x1 - x2;
+    const dy = y1 - y2;
+    return Math.sqrt(dx * dx + dy * dy);
+}
+
+// ============================================================================
+// EXPORTS
+// ============================================================================
+
+if (typeof window !== 'undefined') {
+    // Movement
+    window.lerp = lerp;
+    window.updateEntityMovement = updateEntityMovement;
+    window.isEntityMoving = isEntityMoving;
+    window.snapEntityPosition = snapEntityPosition;
+    window.normalizeDirection = normalizeDirection;
+
+    // Distance
+    window.getDistance = getDistance;
+    window.getManhattanDistance = getManhattanDistance;
+    window.getDistanceSquared = getDistanceSquared;
+    window.getDistanceXY = getDistanceXY;
+    window.isWithinRange = isWithinRange;
+
+    // Easing
+    window.easeOutQuad = easeOutQuad;
+    window.easeInQuad = easeInQuad;
+    window.easeInOutQuad = easeInOutQuad;
+}
+
+console.log('[MovementUtils] Loaded with easing and optimized distance functions');
