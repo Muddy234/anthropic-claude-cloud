@@ -219,8 +219,8 @@ window.addEventListener('keydown', e => {
             return;
         }
 
-        // Extraction interaction (E key) - BULLETPROOF VERSION
-        if (e.key === 'e' || e.key === 'E') {
+        // Extraction interaction (T key) - BULLETPROOF VERSION
+        if (e.key === 't' || e.key === 'T') {
             // Check if ExtractionSystem exists
             if (typeof ExtractionSystem === 'undefined') {
                 console.warn('[Input] ExtractionSystem not defined');
@@ -241,7 +241,7 @@ window.addEventListener('keydown', e => {
             const playerX = game.player.gridX ?? game.player.x;
             const playerY = game.player.gridY ?? game.player.y;
 
-            console.log(`[Input] E pressed at player position (${playerX}, ${playerY})`);
+            console.log(`[Input] T pressed at player position (${playerX}, ${playerY})`);
 
             // Check if there are ANY extraction points - if not, force spawn them
             const allPoints = ExtractionSystem.points || [];

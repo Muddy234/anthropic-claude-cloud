@@ -271,6 +271,68 @@ function drawMinimapEntities(ctx, cx, cy, cfg, playerGridX, playerGridY, colors)
         ctx.restore();
     }
 
+    // Draw path down / descent location (purple, separate from extraction)
+    let descentX = null, descentY = null;
+    let descentRevealed = false;
+
+    if (typeof sessionState !== 'undefined' && sessionState.pathDown) {
+        const pd = sessionState.pathDown;
+        if (pd.x !== null && pd.y !== null) {
+            descentX = pd.x;
+            descentY = pd.y;
+            descentRevealed = pd.revealed || pd.discovered;
+        }
+    }
+    if (descentX === null && typeof game !== 'undefined' && game.exitPosition) {
+        descentX = game.exitPosition.x;
+        descentY = game.exitPosition.y;
+        descentRevealed = true;
+    }
+
+    if (descentX !== null && descentY !== null) {
+        const dx = descentX - playerGridX;
+        const dy = descentY - playerGridY;
+        const dist = Math.sqrt(dx * dx + dy * dy) * cfg.tileSize;
+
+        if (dist <= radius - 5) {
+            const minimapX = cx + (dx * cfg.tileSize);
+            const minimapY = cy + (dy * cfg.tileSize);
+
+            ctx.save();
+
+            if (descentRevealed) {
+                // Bright magenta for descent
+                ctx.shadowColor = '#ff00ff';
+                ctx.shadowBlur = 10;
+                ctx.fillStyle = '#ff00ff';
+                ctx.globalAlpha = pulse;
+                ctx.beginPath();
+                ctx.arc(minimapX, minimapY, cfg.tileSize * 1.5, 0, Math.PI * 2);
+                ctx.fill();
+
+                // Down arrow indicator
+                ctx.shadowBlur = 0;
+                ctx.fillStyle = '#ffffff';
+                ctx.globalAlpha = 1;
+                ctx.beginPath();
+                ctx.moveTo(minimapX, minimapY + cfg.tileSize * 2.5);
+                ctx.lineTo(minimapX - cfg.tileSize * 0.6, minimapY + cfg.tileSize * 1.5);
+                ctx.lineTo(minimapX + cfg.tileSize * 0.6, minimapY + cfg.tileSize * 1.5);
+                ctx.closePath();
+                ctx.fill();
+            } else {
+                // Dim purple when not revealed
+                ctx.fillStyle = 'rgba(128, 0, 128, 0.4)';
+                ctx.globalAlpha = 0.5;
+                ctx.beginPath();
+                ctx.arc(minimapX, minimapY, cfg.tileSize * 1.2, 0, Math.PI * 2);
+                ctx.fill();
+            }
+
+            ctx.restore();
+        }
+    }
+
     // Draw enemies
     if (game.enemies) {
         for (const enemy of game.enemies) {

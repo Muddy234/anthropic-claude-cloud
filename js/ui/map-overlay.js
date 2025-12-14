@@ -165,8 +165,11 @@ function drawDungeonMap(areaX, areaY, areaWidth, areaHeight) {
         }
     }
 
-    // Draw exit portal (ALWAYS visible, even unexplored)
+    // Draw exit portal / extraction points (ALWAYS visible, even unexplored)
     drawExitPortal(offsetX, offsetY, tileSize);
+
+    // Draw path down / descent location
+    drawPathDown(offsetX, offsetY, tileSize);
 
     // Draw enemies and loot (only at zoom > 2x)
     if (mapOverlayState.zoom > 2) {
@@ -276,12 +279,70 @@ function drawExitPortal(offsetX, offsetY, tileSize) {
         ctx.lineWidth = 2;
         ctx.strokeRect(screenX - 1, screenY - 1, tileSize + 2, tileSize + 2);
 
-        // Draw "E" label for extraction
+        // Draw "T" label for extraction (T key to extract)
         ctx.fillStyle = '#000';
         ctx.font = `bold ${Math.max(8, tileSize - 2)}px Arial`;
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
-        ctx.fillText('E', screenX + tileSize / 2, screenY + tileSize / 2);
+        ctx.fillText('T', screenX + tileSize / 2, screenY + tileSize / 2);
+    }
+}
+
+/**
+ * Draw the descent/path down location on the map
+ */
+function drawPathDown(offsetX, offsetY, tileSize) {
+    let exitX = null, exitY = null;
+    let isRevealed = false;
+
+    // Check sessionState.pathDown first
+    if (typeof sessionState !== 'undefined' && sessionState.pathDown) {
+        const pd = sessionState.pathDown;
+        if (pd.x !== null && pd.y !== null) {
+            exitX = pd.x;
+            exitY = pd.y;
+            isRevealed = pd.revealed || pd.discovered;
+        }
+    }
+
+    // Fallback to game.exitPosition
+    if (exitX === null && typeof game !== 'undefined' && game.exitPosition) {
+        exitX = game.exitPosition.x;
+        exitY = game.exitPosition.y;
+        isRevealed = true; // Legacy always visible
+    }
+
+    if (exitX === null || exitY === null) return;
+
+    // Only show if revealed (mini-boss defeated or discovered)
+    // For debugging, always show but dim if not revealed
+    const screenX = offsetX + exitX * tileSize;
+    const screenY = offsetY + exitY * tileSize;
+
+    // Draw descent marker
+    const cfg = MAP_OVERLAY_CONFIG;
+    const pulse = Math.sin(Date.now() / 400) * 0.3 + 0.7;
+
+    if (isRevealed) {
+        // Bright purple/magenta for revealed descent
+        ctx.fillStyle = '#ff00ff';
+        ctx.fillRect(screenX, screenY, tileSize, tileSize);
+
+        // Pulsing border
+        ctx.strokeStyle = `rgba(255, 0, 255, ${pulse})`;
+        ctx.lineWidth = 2;
+        ctx.strokeRect(screenX - 1, screenY - 1, tileSize + 2, tileSize + 2);
+
+        // Draw down arrow or "D" for descent
+        ctx.fillStyle = '#000';
+        ctx.font = `bold ${Math.max(8, tileSize - 2)}px Arial`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText('▼', screenX + tileSize / 2, screenY + tileSize / 2);
+    } else {
+        // Dim indicator when not yet revealed
+        ctx.fillStyle = 'rgba(128, 0, 128, 0.3)';
+        ctx.fillRect(screenX, screenY, tileSize, tileSize);
     }
 }
 
