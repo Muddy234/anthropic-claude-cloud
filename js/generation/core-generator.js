@@ -46,7 +46,6 @@ const CoreGenerator = {
         // Hazard spawn points (for dynamic hazards during fight)
         const hazardSpawns = this._defineHazardSpawns(width, height, pillars);
 
-        console.log('[CoreGenerator] Generated Core arena');
 
         return {
             tiles,
@@ -385,4 +384,4 @@ const CoreGenerator = {
 
 window.CoreGenerator = CoreGenerator;
 
-console.log('[CoreGenerator] Core generator loaded');
+// Core generator loaded

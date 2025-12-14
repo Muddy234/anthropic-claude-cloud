@@ -101,8 +101,6 @@ const VillageGenerator = {
         const worldState = typeof WorldStateSystem !== 'undefined' ?
             WorldStateSystem.getState() : Math.min(degradationLevel + 1, 4);
 
-        console.log(`[VillageGenerator] Generating village (World State: ${worldState})`);
-
         // Initialize empty map
         const map = this._createBaseMap();
 
@@ -120,8 +118,6 @@ const VillageGenerator = {
 
         // Find spawn point (in front of player house or town square)
         const spawnPoint = this._findSpawnPoint(buildings);
-
-        console.log(`[VillageGenerator] Village generated with ${buildings.length} buildings`);
 
         return {
             map,
@@ -524,7 +520,6 @@ const VillageGenerator = {
                     this._crushBuilding(map, building);
                 }
 
-                console.log(`[VillageGenerator] ${building.id}: ${buildingState.status}`);
             }
         });
     },
@@ -699,4 +694,4 @@ const VillageGenerator = {
 
 window.VillageGenerator = VillageGenerator;
 
-console.log('[VillageGenerator] Village generator loaded');
+// Village generator loaded

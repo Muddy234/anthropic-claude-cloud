@@ -59,11 +59,9 @@ const ExtractionSpawner = {
                     `shaft_f${floor}_${index}`
                 );
                 points.push(point);
-                console.log(`[ExtractionSpawner] Placed shaft at (${pos.x}, ${pos.y}) in room ${room.id}`);
             }
         });
 
-        console.log(`[ExtractionSpawner] Spawned ${points.length} extraction points on floor ${floor}`);
         return points;
     },
 
@@ -295,8 +293,6 @@ const ExtractionSpawner = {
         const pos = this._findValidPosition(selectedRoom);
         if (!pos) return null;
 
-        console.log(`[ExtractionSpawner] Path down placed at (${pos.x}, ${pos.y}) in room ${selectedRoom.id}`);
-
         return {
             x: pos.x,
             y: pos.y,
@@ -311,4 +307,4 @@ const ExtractionSpawner = {
 
 window.ExtractionSpawner = ExtractionSpawner;
 
-console.log('[ExtractionSpawner] Extraction spawner loaded');
+// Extraction spawner loaded

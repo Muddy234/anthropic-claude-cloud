@@ -34,8 +34,8 @@ const CHAMBER_CONFIG = {
     deadEndRatio: 0.25,            // 25% of sections as dead ends
 
     // System
-    debugLogging: true,
-    trackStats: true
+    debugLogging: false,
+    trackStats: false
 };
 
 // Statistics tracking
@@ -964,4 +964,4 @@ if (typeof window !== 'undefined') {
     window.isInSafeChamber = isInSafeChamber;
 }
 
-console.log('✅ Chamber generator loaded (BSP + Cellular Automata)');
+// Chamber generator loaded (BSP + Cellular Automata)
