@@ -219,6 +219,31 @@ window.addEventListener('keydown', e => {
             return;
         }
 
+        // Descent interaction (D key) - Go to next floor
+        if (e.key === 'd' || e.key === 'D') {
+            const playerX = Math.floor(game.player.gridX);
+            const playerY = Math.floor(game.player.gridY);
+            const tile = game.map[playerY]?.[playerX];
+
+            if (tile && tile.type === 'exit') {
+                console.log('[Input] D pressed on exit tile - descending!');
+                if (typeof addMessage === 'function') {
+                    addMessage("Descending deeper into the dungeon...", 'info');
+                }
+                if (typeof advanceToNextFloor === 'function') {
+                    advanceToNextFloor();
+                } else {
+                    // Fallback: manually increment floor and regenerate
+                    game.floor = (game.floor || 1) + 1;
+                    if (typeof generateBlobDungeon === 'function') {
+                        game.enemies = [];
+                        generateBlobDungeon();
+                    }
+                }
+                return;
+            }
+        }
+
         // Extraction interaction (T key) - BULLETPROOF VERSION
         if (e.key === 't' || e.key === 'T') {
             // Check if ExtractionSystem exists
@@ -517,11 +542,14 @@ function checkTileInteractions(player) {
 
     if (!tile) return;
 
-    // Exit tile - advance floor (legacy - disabled for extraction system)
+    // Exit/descent tile - show prompt (D key to descend)
     if (tile.type === 'exit') {
-        addMessage("Found the exit! Descending deeper...");
-        advanceToNextFloor();
-        return;
+        if (!game.descentPromptShown) {
+            addMessage("Press [D] to descend deeper!", 'info');
+            game.descentPromptShown = true;
+        }
+    } else {
+        game.descentPromptShown = false;
     }
 
     // Extraction point interaction
@@ -530,7 +558,7 @@ function checkTileInteractions(player) {
         if (point && point.isActive()) {
             // Show extraction prompt
             if (!game.extractionPromptShown) {
-                addMessage("Press [E] to extract to the surface!", 'info');
+                addMessage("Press [T] to extract to the surface!", 'info');
                 game.extractionPromptShown = true;
             }
         } else {

@@ -450,15 +450,17 @@ function placeExitInFarthestRoom() {
         }
     }
 
-    // OLD EXIT TILE CREATION - DISABLED for extraction system
-    // if (game.map[exitY] && game.map[exitY][exitX]) {
-    //     game.map[exitY][exitX] = {
-    //         type: 'exit',
-    //         explored: false,
-    //         visible: false,
-    //         room: game.rooms.find(r => r.blob === farthestBlob) || null
-    //     };
-    // }
+    // Create descent/exit tile on the map
+    if (game.map[exitY] && game.map[exitY][exitX]) {
+        game.map[exitY][exitX] = {
+            type: 'exit',
+            explored: false,
+            visible: false,
+            lit: false,
+            room: game.rooms.find(r => r.blob === farthestBlob) || null
+        };
+        console.log(`✅ Exit tile created at (${exitX}, ${exitY})`);
+    }
 
     // Calculate distance from entrance for logging
     const distFromEntrance = Math.abs(exitX - entranceBlob.connectionPoint.x) +
