@@ -288,4 +288,4 @@ if (document.readyState === 'loading') {
     initRightClickSystem();
 }
 
-console.log('✅ Right-click system loaded');
+// Right-click system loaded

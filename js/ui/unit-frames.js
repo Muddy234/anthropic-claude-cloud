@@ -627,7 +627,6 @@ function initUnitFrameHandlers() {
         }
     });
 
-    console.log('Unit frame handlers initialized');
 }
 
 // Initialize on load
@@ -639,4 +638,4 @@ if (typeof window !== 'undefined') {
 window.renderUnitFrames = renderUnitFrames;
 window.UNIT_FRAME_CONFIG = UNIT_FRAME_CONFIG;
 
-console.log('Unit frames loaded (CotDG style)');
+// Unit frames loaded

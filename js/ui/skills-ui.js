@@ -1207,4 +1207,4 @@ window.actionTooltip = actionTooltip;
 window.SKILLS_UI_CONFIG = SKILLS_UI_CONFIG;
 window.skillsUIState = window.skillsUIState;
 
-console.log('Skills UI loaded (Pentagon Radar - CotDG style)');
+// Skills UI loaded
