@@ -191,12 +191,14 @@ const SurvivalIntegration = {
             return false;
         }
 
-        // Set up session state
-        sessionState.runActive = true;
+        // Set up session state - ensure both flags are set for compatibility
+        sessionState.active = true;  // Used by SessionManager/ExtractionSystem
+        sessionState.runActive = true;  // Legacy flag
         sessionState.currentFloor = startingFloor;
-        sessionState.startingFloor = startingFloor;
+        sessionState.startFloor = startingFloor;
+        sessionState.floorStartTime = Date.now();
         sessionState.inventory = [];
-        sessionState.goldCollected = 0;
+        sessionState.gold = 0;
         sessionState.floorsVisited = [startingFloor];
         sessionState.enemiesKilled = 0;
         sessionState.bossesKilled = 0;
@@ -417,7 +419,8 @@ const SurvivalIntegration = {
      * @param {number} amount
      */
     onGoldCollected(amount) {
-        sessionState.goldCollected += amount;
+        sessionState.gold = (sessionState.gold || 0) + amount;  // Used by SessionManager
+        sessionState.goldCollected = (sessionState.goldCollected || 0) + amount;  // Legacy
     },
 
     /**
@@ -450,12 +453,13 @@ const SurvivalIntegration = {
         const runDuration = Date.now() - sessionState.runStartTime;
         persistentState.stats.playTime += runDuration;
 
-        sessionState.runActive = false;
+        sessionState.active = false;  // Used by SessionManager/ExtractionSystem
+        sessionState.runActive = false;  // Legacy flag
 
         // Clear session inventory (already deposited if success)
         if (!success) {
             sessionState.inventory = [];
-            sessionState.goldCollected = 0;
+            sessionState.gold = 0;
         }
 
         // Auto-save

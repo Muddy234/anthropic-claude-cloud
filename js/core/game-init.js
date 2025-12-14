@@ -123,21 +123,25 @@ function startDungeonRun(options = {}) {
         window.removeEventListener('keydown', VillageSystem._keyHandler);
     }
 
-    // Set up session state
-    if (typeof sessionState !== 'undefined') {
-        sessionState.runActive = true;
+    // Start session through SessionManager
+    if (typeof SessionManager !== 'undefined') {
+        SessionManager.startRun(startingFloor, loadout || [], 0);
+        // Note: SessionManager.startRun() handles stats.totalRuns increment
+    } else if (typeof sessionState !== 'undefined') {
+        // Fallback if SessionManager not loaded yet
+        sessionState.active = true;
+        sessionState.runId = Date.now().toString(36);
+        sessionState.startTime = Date.now();
+        sessionState.startFloor = startingFloor;
         sessionState.currentFloor = startingFloor;
-        sessionState.startingFloor = startingFloor;
+        sessionState.floorStartTime = Date.now();
         sessionState.inventory = [];
-        sessionState.goldCollected = 0;
-        sessionState.floorsVisited = [startingFloor];
-        sessionState.enemiesKilled = 0;
-        sessionState.runStartTime = Date.now();
-    }
+        sessionState.gold = 0;
 
-    // Update stats
-    if (typeof persistentState !== 'undefined' && persistentState.stats) {
-        persistentState.stats.totalRuns = (persistentState.stats.totalRuns || 0) + 1;
+        // Update stats only in fallback case
+        if (typeof persistentState !== 'undefined' && persistentState.stats) {
+            persistentState.stats.totalRuns = (persistentState.stats.totalRuns || 0) + 1;
+        }
     }
 
     // Reset game state for dungeon
@@ -224,7 +228,7 @@ function returnToVillage() {
 
     // Clear session
     if (typeof sessionState !== 'undefined') {
-        sessionState.runActive = false;
+        sessionState.active = false;
     }
 
     console.log('✅ Back in the village.');
