@@ -197,10 +197,10 @@ const LightSourceSystem = {
     config: {
         debugLogging: false,
         defaultPlayerLightRadius: 3,
-        flickerIntensity: 0.25,      // Increased from 0.1 - more dramatic flicker
-        flickerSpeed: 12,            // Slightly faster for more lively feel
-        flickerOctaves: 3,           // More octaves for complex organic movement
-        flickerPersistence: 0.6,     // How much each octave contributes
+        flickerIntensity: 0.08,      // Subtle flicker - just enough to feel alive
+        flickerSpeed: 6,             // Slow, gentle movement
+        flickerOctaves: 2,           // Simpler pattern for smoother feel
+        flickerPersistence: 0.4,     // Gentle layering
         useCookieTextures: false,    // DISABLED - was erasing glows with destination-out
         cookieIrregularity: 0.3      // Slightly more irregular shapes
     },
@@ -1061,26 +1061,13 @@ const LightSourceSystem = {
             });
         }
 
-        // Debug: count sources
-        let sourceCount = 0;
-        let renderedCount = 0;
-
         // Render all other active light sources - use SAME approach as player torch
         this.sources.forEach(source => {
-            sourceCount++;
-
             // Skip inactive sources and player-attached sources (handled above)
-            if (!source.active) {
-                console.log(`[LightGlow] Skipping inactive source: ${source.id}`);
-                return;
-            }
-            if (source.type === 'player' || source.attachedTo === game.player) {
-                console.log(`[LightGlow] Skipping player-attached source: ${source.id}`);
-                return;
-            }
+            if (!source.active) return;
+            if (source.type === 'player' || source.attachedTo === game.player) return;
 
             // Get source position - center on tile (add 0.5) for proper glow positioning
-            // This matches the +0.5 we now add to player position above
             let sourceGridX = source.gridX + 0.5;
             let sourceGridY = source.gridY + 0.5;
             if (source.attachedTo) {
@@ -1088,7 +1075,7 @@ const LightSourceSystem = {
                 sourceGridY = (source.attachedTo.displayY ?? source.attachedTo.gridY ?? source.gridY) + 0.5;
             }
 
-            // Convert to screen coordinates - EXACTLY like player
+            // Convert to screen coordinates
             const sourceScreenX = (sourceGridX - camX) * tileSize + offsetX;
             const sourceScreenY = (sourceGridY - camY) * tileSize;
 
@@ -1097,21 +1084,10 @@ const LightSourceSystem = {
                 ? VisionSystem.getPlayerVisionRange()
                 : 4;
 
-            console.log(`[LightGlow] Rendering ${source.type} at screen (${sourceScreenX.toFixed(0)}, ${sourceScreenY.toFixed(0)}), radius=${torchRadius}, tileSize=${tileSize}`);
-            renderedCount++;
-
             this.renderLightGlow(ctx, sourceScreenX, sourceScreenY, torchRadius, tileSize, {
                 intensity: this.renderConfig.playerGlowIntensity
             });
         });
-
-        // Log summary once per second
-        if (!this._lastLogTime || Date.now() - this._lastLogTime > 1000) {
-            if (sourceCount > 0) {
-                console.log(`[LightGlow] Total sources: ${sourceCount}, rendered: ${renderedCount}`);
-            }
-            this._lastLogTime = Date.now();
-        }
     },
 
     /**
