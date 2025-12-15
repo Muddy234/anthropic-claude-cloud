@@ -520,7 +520,7 @@ const FADE_DISTANCE = 2; // 2 tile gradient from torch edge
 
 /**
  * Calculate tile brightness based on distance from player AND light sources
- * Returns 1.0 (full brightness) inside any light, smooth gradient in fade zone, MIN_BRIGHTNESS outside
+ * Returns brightness value based on the strongest light affecting the tile
  * @param {number} tileX - Tile X position
  * @param {number} tileY - Tile Y position
  * @returns {number} - Brightness from MIN_BRIGHTNESS to 1.0
@@ -528,7 +528,10 @@ const FADE_DISTANCE = 2; // 2 tile gradient from torch edge
 function getTileBrightness(tileX, tileY) {
     let maxBrightness = MIN_BRIGHTNESS;
 
-    // Check player's torch light
+    // Player's personal torch light (dimmer than placed light sources)
+    // This is separate from LightSourceSystem - it's the basic visibility the player always has
+    const PLAYER_TORCH_INTENSITY = 0.75; // Dimmer than campfire (0.9) so placed fires are brighter
+
     if (game.player) {
         const playerX = game.player.gridX;
         const playerY = game.player.gridY;
@@ -543,9 +546,9 @@ function getTileBrightness(tileX, tileY) {
         const dy = tileY - playerY;
         const distance = Math.sqrt(dx * dx + dy * dy);
 
-        // Inside torch radius = full brightness
+        // Inside torch radius
         if (distance <= torchRadius) {
-            maxBrightness = Math.max(maxBrightness, 1.0);
+            maxBrightness = Math.max(maxBrightness, PLAYER_TORCH_INTENSITY);
         } else {
             // In fade zone = smooth gradient
             const fadeStart = torchRadius;
@@ -554,7 +557,7 @@ function getTileBrightness(tileX, tileY) {
             if (distance < fadeEnd) {
                 const fadeProgress = (distance - fadeStart) / FADE_DISTANCE;
                 const smoothProgress = fadeProgress * fadeProgress * (3 - 2 * fadeProgress);
-                const brightness = 1.0 - (smoothProgress * (1.0 - MIN_BRIGHTNESS));
+                const brightness = PLAYER_TORCH_INTENSITY - (smoothProgress * (PLAYER_TORCH_INTENSITY - MIN_BRIGHTNESS));
                 maxBrightness = Math.max(maxBrightness, brightness);
             }
         }
@@ -580,18 +583,25 @@ function getTileBrightness(tileX, tileY) {
             const dy = tileY - sourceY;
             const distance = Math.sqrt(dx * dx + dy * dy);
 
-            const lightRadius = source.radius || 5;
+            // Apply flicker multiplier from LightSourceSystem for organic variation
+            const flickerMultiplier = LightSourceSystem.getSourceFlicker(source);
+            const effectiveRadius = (source.radius || 5) * flickerMultiplier;
+            const effectiveIntensity = (source.intensity || 1.0) * flickerMultiplier;
 
-            // Inside light radius = full brightness
-            if (distance <= lightRadius) {
-                maxBrightness = Math.max(maxBrightness, source.intensity || 1.0);
+            // Inside light radius
+            if (distance <= effectiveRadius) {
+                // Smooth falloff from center
+                const t = distance / effectiveRadius;
+                const smoothFalloff = 1 - (t * t * (3 - 2 * t)); // Smoothstep
+                const brightness = MIN_BRIGHTNESS + (effectiveIntensity - MIN_BRIGHTNESS) * smoothFalloff;
+                maxBrightness = Math.max(maxBrightness, brightness);
             } else {
                 // Fade zone for light sources
-                const fadeEnd = lightRadius + FADE_DISTANCE;
+                const fadeEnd = effectiveRadius + FADE_DISTANCE;
                 if (distance < fadeEnd) {
-                    const fadeProgress = (distance - lightRadius) / FADE_DISTANCE;
+                    const fadeProgress = (distance - effectiveRadius) / FADE_DISTANCE;
                     const smoothProgress = fadeProgress * fadeProgress * (3 - 2 * fadeProgress);
-                    const brightness = (source.intensity || 1.0) - (smoothProgress * ((source.intensity || 1.0) - MIN_BRIGHTNESS));
+                    const brightness = effectiveIntensity - (smoothProgress * (effectiveIntensity - MIN_BRIGHTNESS));
                     maxBrightness = Math.max(maxBrightness, brightness);
                 }
             }
