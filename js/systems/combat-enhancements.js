@@ -133,7 +133,7 @@ function performDash(player, mouseX, mouseY) {
     // Calculate direction toward mouse
     const trackerWidth = typeof TRACKER_WIDTH !== 'undefined' ? TRACKER_WIDTH : 250;
     const tileSize = (typeof TILE_SIZE !== 'undefined' ? TILE_SIZE : 32) *
-                     (typeof ZOOM_LEVEL !== 'undefined' ? ZOOM_LEVEL : 2);
+                     (window.currentZoom || ZOOM_LEVEL || 2);
     const camX = game.camera ? game.camera.x : 0;
     const camY = game.camera ? game.camera.y : 0;
 

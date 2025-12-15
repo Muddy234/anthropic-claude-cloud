@@ -9,10 +9,23 @@ canvas.height = window.innerHeight;
 window.canvas = canvas;
 window.ctx = ctx;
 
+// Dynamic zoom - calculated to maintain fixed viewport tile count
+let currentZoom = typeof calculateDynamicZoom === 'function'
+    ? calculateDynamicZoom(canvas.width)
+    : ZOOM_LEVEL;
+window.currentZoom = currentZoom;
+
 // Handle window resizing
 window.addEventListener('resize', () => {
     canvas.width = window.innerWidth;
     canvas.height = window.innerHeight;
+
+    // Recalculate zoom for new screen size
+    currentZoom = typeof calculateDynamicZoom === 'function'
+        ? calculateDynamicZoom(canvas.width)
+        : ZOOM_LEVEL;
+    window.currentZoom = currentZoom;
+
     // Resize particle canvas overlay to match
     if (typeof ParticleCanvas !== 'undefined') {
         ParticleCanvas.resize();
@@ -678,7 +691,7 @@ if (game.state === 'menu') {
         }
     } else if (game.state === 'playing' || game.state === 'inventory' || game.state === 'map' || game.state === 'skills' || game.state === 'levelup' || game.state === 'character' || game.state === 'shift' || game.state === 'chest' || game.state === 'extraction') {
 
-const effectiveTileSize = TILE_SIZE * ZOOM_LEVEL;
+const effectiveTileSize = TILE_SIZE * currentZoom;
 const viewW = canvas.width - TRACKER_WIDTH;
 const viewH = canvas.height;
 
@@ -725,8 +738,8 @@ game.camera.y += (game.camera.targetY - game.camera.y) * CAMERA_SMOOTHING;
 
 // Apply screen shake offset
 const shakeOffset = typeof getScreenShakeOffset === 'function' ? getScreenShakeOffset() : { x: 0, y: 0 };
-const camX = game.camera.x + (shakeOffset.x / (TILE_SIZE * ZOOM_LEVEL));
-const camY = game.camera.y + (shakeOffset.y / (TILE_SIZE * ZOOM_LEVEL));
+const camX = game.camera.x + (shakeOffset.x / (TILE_SIZE * currentZoom));
+const camY = game.camera.y + (shakeOffset.y / (TILE_SIZE * currentZoom));
 
         ctx.save(); ctx.beginPath(); ctx.rect(TRACKER_WIDTH, 0, viewW, canvas.height); ctx.clip();
         

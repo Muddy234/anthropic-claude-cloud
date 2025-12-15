@@ -590,7 +590,7 @@ function initUnitFrameHandlers() {
 
         // Calculate grid position to check for interactables
         const tileSize = (typeof TILE_SIZE !== 'undefined') ? TILE_SIZE : 32;
-        const zoomLevel = (typeof ZOOM_LEVEL !== 'undefined') ? ZOOM_LEVEL : 2;
+        const zoomLevel = window.currentZoom || ZOOM_LEVEL || 2;
         const effectiveTileSize = tileSize * zoomLevel;
 
         const viewX = clickX - TRACKER_WIDTH;

@@ -215,7 +215,7 @@ window.addEventListener('mousemove', (e) => {
 
     const trackerWidth = typeof TRACKER_WIDTH !== 'undefined' ? TRACKER_WIDTH : 70;
     const tileSize = (typeof TILE_SIZE !== 'undefined' ? TILE_SIZE : 32) *
-                     (typeof ZOOM_LEVEL !== 'undefined' ? ZOOM_LEVEL : 2);
+                     (window.currentZoom || ZOOM_LEVEL || 2);
 
     mouseWorldX = (scaledX - trackerWidth) / tileSize + game.camera.x;
     mouseWorldY = scaledY / tileSize + game.camera.y;

@@ -48,8 +48,7 @@ function handleRightClick(e) {
                          (window.TRACKER_WIDTH || 400);
     const tileSize = (typeof TILE_SIZE !== 'undefined') ? TILE_SIZE :
                      (window.TILE_SIZE || 32);
-    const zoomLevel = (typeof ZOOM_LEVEL !== 'undefined') ? ZOOM_LEVEL :
-                      (window.ZOOM_LEVEL || 2);
+    const zoomLevel = window.currentZoom || ZOOM_LEVEL || 2;
 
     const effectiveTileSize = tileSize * zoomLevel;
 

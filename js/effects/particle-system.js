@@ -110,7 +110,7 @@ const FireParticleSystem = {
         if (typeof LightSourceSystem === 'undefined') return;
 
         const tileSize = (typeof TILE_SIZE !== 'undefined' ? TILE_SIZE : 16) *
-                         (typeof ZOOM_LEVEL !== 'undefined' ? ZOOM_LEVEL : 2);
+                         (window.currentZoom || ZOOM_LEVEL || 2);
 
         // 1. SPAWN NEW PARTICLES from active light sources
         LightSourceSystem.sources.forEach(source => {

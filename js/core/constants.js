@@ -9,13 +9,25 @@
 const GRID_WIDTH = 200;
 const GRID_HEIGHT = 200;
 const TILE_SIZE = 16;
-const ZOOM_LEVEL = 3.25;  // 30% zoom increase for closer view
+const ZOOM_LEVEL = 3.25;  // Fallback zoom if dynamic calculation fails
+const VIEWPORT_TILES_WIDTH = 30;  // Fixed number of tiles visible horizontally
 const TRACKER_WIDTH = 70;  // Icon sidebar width (reduced from 350 for new UI)
 const CAMERA_DEADZONE_WIDTH = 200;
 const CAMERA_DEADZONE_HEIGHT = 150;
 const CAMERA_SMOOTHING = 0.1;
 const DISPLAY_WIDTH = GRID_WIDTH * TILE_SIZE;
 const DISPLAY_HEIGHT = GRID_HEIGHT * TILE_SIZE;
+
+/**
+ * Calculate dynamic zoom level to maintain fixed viewport tile count
+ * @param {number} screenWidth - Current screen/canvas width
+ * @returns {number} - Calculated zoom level
+ */
+function calculateDynamicZoom(screenWidth) {
+    const availableWidth = screenWidth - TRACKER_WIDTH;
+    const desiredPixelsPerTile = availableWidth / VIEWPORT_TILES_WIDTH;
+    return desiredPixelsPerTile / TILE_SIZE;
+}
 
 // ============================================================================
 // PLAYER DEFAULTS
@@ -498,6 +510,8 @@ window.GRID_WIDTH = GRID_WIDTH;
 window.GRID_HEIGHT = GRID_HEIGHT;
 window.TILE_SIZE = TILE_SIZE;
 window.ZOOM_LEVEL = ZOOM_LEVEL;
+window.VIEWPORT_TILES_WIDTH = VIEWPORT_TILES_WIDTH;
+window.calculateDynamicZoom = calculateDynamicZoom;
 window.TRACKER_WIDTH = TRACKER_WIDTH;
 window.CAMERA_DEADZONE_WIDTH = CAMERA_DEADZONE_WIDTH;
 window.CAMERA_DEADZONE_HEIGHT = CAMERA_DEADZONE_HEIGHT;
