@@ -137,16 +137,19 @@ function drawActionBar() {
 
     if (actionsToShow.length === 0) return; // Don't show empty bar
 
-    // Calculate position - above the consumable action bar
-    const slotSize = 52;
-    const slotSpacing = 8;
+    // Calculate position - SAME ROW as consumable action bar, to its left
+    // Use same slot dimensions as consumable bar for visual consistency
+    const slotSize = 56;      // Match ACTION_BAR_CONFIG.slotSize
+    const slotSpacing = 10;   // Match ACTION_BAR_CONFIG.slotSpacing
     const padding = 20;
     const barWidth = (slotSize * actionsToShow.length) + (slotSpacing * (actionsToShow.length - 1)) + 20;
     const barHeight = slotSize + 20;
 
-    // Position above consumable bar (consumable bar height ~76px + padding)
-    const barX = canvas.width - barWidth - padding;
-    const barY = canvas.height - barHeight - padding - 90; // Above consumable bar
+    // Match the consumable bar's Y position (same as action-bar-ui.js)
+    // Consumable bar: numSlots=3, slotSize=56, slotSpacing=10
+    const consumableBarWidth = (slotSize * 3) + (slotSpacing * 2) + 20;
+    const barX = canvas.width - barWidth - padding - consumableBarWidth - 10; // 10px gap between bars
+    const barY = canvas.height - barHeight - padding; // Same Y as consumable bar
 
     ctx.save();
 
