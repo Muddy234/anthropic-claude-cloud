@@ -377,29 +377,48 @@ const LoadoutUI = {
             MAIN: null, OFF: null
         };
 
-        // Add basic loadout items (not from bank - free items)
-        const basicWeapon = {
-            name: 'Rusty Shortsword',
-            type: 'weapon',
-            damage: 8,
-            rarity: 'common',
-            attackSpeed: 1.5,
-            attackRange: 1,
-            element: 'physical',
-            isFreeItem: true  // Mark as free (not from bank)
-        };
+        // Use LoadoutSystem.BASIC_LOADOUT as source of truth
+        const basicLoadout = typeof LoadoutSystem !== 'undefined'
+            ? LoadoutSystem.BASIC_LOADOUT
+            : null;
 
-        this.runEquipment.MAIN = basicWeapon;
+        if (basicLoadout) {
+            // Add weapon from BASIC_LOADOUT
+            if (basicLoadout.weapon) {
+                this.runEquipment.MAIN = {
+                    ...basicLoadout.weapon,
+                    isFreeItem: true  // Mark as free (not from bank)
+                };
+            }
 
-        // Add health potions
-        this.runInventory.push({
-            name: 'Weak Health Potion',
-            type: 'consumable',
-            count: 2,
-            rarity: 'common',
-            effect: { type: 'heal', value: 25 },
-            isFreeItem: true
-        });
+            // Add consumables from BASIC_LOADOUT (includes fire starter kits)
+            if (basicLoadout.consumables) {
+                basicLoadout.consumables.forEach(cons => {
+                    this.runInventory.push({
+                        ...cons,
+                        isFreeItem: true
+                    });
+                });
+            }
+        } else {
+            // Fallback if LoadoutSystem not available
+            this.runEquipment.MAIN = {
+                name: 'Rusty Shortsword',
+                type: 'weapon',
+                damage: 5,
+                rarity: 'common',
+                isFreeItem: true
+            };
+            this.runInventory.push({
+                id: 'weak_health_potion',
+                name: 'Weak Health Potion',
+                type: 'consumable',
+                count: 2,
+                rarity: 'common',
+                effect: { type: 'heal', value: 25 },
+                isFreeItem: true
+            });
+        }
 
         console.log('[LoadoutUI] Basic loadout selected');
     },

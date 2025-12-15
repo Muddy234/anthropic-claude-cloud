@@ -443,8 +443,28 @@ function getItemsByRarity(rarity) {
     return Object.values(ITEMS_DATA).filter(item => item.rarity === rarity);
 }
 
-function useItem(player, itemId) {
-    const item = ITEMS_DATA[itemId];
+function useItem(player, itemId, inventoryItem = null) {
+    // Try to find item definition: first by ID, then by name lookup
+    let item = ITEMS_DATA[itemId];
+
+    // If not found by ID, search ITEMS_DATA by name
+    if (!item) {
+        item = Object.values(ITEMS_DATA).find(i => i.name === itemId);
+    }
+
+    // If still not found but we have an inventory item with an effect, use that
+    if (!item && inventoryItem && inventoryItem.effect) {
+        item = inventoryItem;
+    }
+
+    // Final fallback: search player inventory for the item
+    if (!item && player.inventory) {
+        const invItem = player.inventory.find(i => i.id === itemId || i.name === itemId);
+        if (invItem && invItem.effect) {
+            item = invItem;
+        }
+    }
+
     if (!item || item.type !== 'consumable') {
         return { success: false, message: 'Cannot use this item' };
     }

@@ -226,9 +226,9 @@ function handleConsumable(player, slot) {
         return;
     }
 
-    // Use item
+    // Use item (pass the found item so useItem can use its effect directly)
     if (typeof useItem === 'function') {
-        const result = useItem(player, itemId);
+        const result = useItem(player, itemId, item);
         if (result.success) {
             // Consume 1 from stack
             item.count--;
