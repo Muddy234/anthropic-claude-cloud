@@ -10,7 +10,8 @@ const VisionSystem = {
 
     // Configuration
     config: {
-        basePlayerVision: 4,      // Player base vision range (full visibility)
+        basePlayerVision: 4,      // Player base vision range with torch ON
+        torchOffVision: 2,        // Player vision range with torch OFF (stealth mode)
         fadeDistance: 2,          // Additional tiles where vision fades to darkness
         updateEveryFrame: true,   // Recalculate visibility every frame
         debugLogging: false
@@ -74,12 +75,15 @@ const VisionSystem = {
 
     /**
      * Get player's current vision range including equipment bonuses
+     * Respects torch state: ON = full vision (4), OFF = reduced (2)
      */
     getPlayerVisionRange() {
-        let range = this.config.basePlayerVision;
+        // Check torch state - use reduced vision when torch is OFF
+        const torchOn = game.player?.isTorchOn !== false; // Default to true if undefined
+        let range = torchOn ? this.config.basePlayerVision : this.config.torchOffVision;
 
-        // Check equipped items for vision bonuses
-        if (game.player.equipped) {
+        // Check equipped items for vision bonuses (only apply when torch is ON)
+        if (torchOn && game.player.equipped) {
             for (const slot in game.player.equipped) {
                 const item = game.player.equipped[slot];
                 if (item && item.visionBonus) {

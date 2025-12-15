@@ -22,39 +22,52 @@ const ENEMY_CONFIG = {
 /**
  * Check if enemy can see the player
  * Uses perception stats from new monster schema
+ * Torch OFF: enemy vision reduced by 50% unless player is in a light source
  */
 function canSeePlayer(enemy) {
     if (!game.player || game.player.isDead) return false;
-    
+
     // Check if player is invisible
     if (game.player.isInvisible) return false;
-    
-    // Get vision range from perception or fallback
-    const visionRange = enemy.perception?.sightRange || enemy.aggression || ENEMY_CONFIG.defaultVisionRange;
-    
+
+    // Get base vision range from perception or fallback
+    let visionRange = enemy.perception?.sightRange || enemy.aggression || ENEMY_CONFIG.defaultVisionRange;
+
+    // TORCH STEALTH MECHANIC:
+    // If player's torch is OFF, enemy vision is halved (0.5x)
+    // UNLESS player is standing in another light source (campfire, brazier, etc.)
+    const playerTorchOn = game.player.isTorchOn !== false;
+    const playerInLightSource = typeof LightSourceSystem !== 'undefined' &&
+        LightSourceSystem.isNearLightSource(game.player.gridX, game.player.gridY);
+
+    if (!playerTorchOn && !playerInLightSource) {
+        // Player is in stealth - enemy sees at half range
+        visionRange *= 0.5;
+    }
+
     // Calculate distance
     const dx = game.player.gridX - (enemy.gridX ?? enemy.x);
     const dy = game.player.gridY - (enemy.gridY ?? enemy.y);
     const dist = Math.sqrt(dx * dx + dy * dy);
-    
+
     if (dist > visionRange) return false;
-    
+
     // Check if in same room (optional - some enemies can see across rooms)
     if (enemy.perception?.requiresSameRoom !== false) {
         if (!isInSameRoom(enemy, game.player)) return false;
     }
-    
+
     // Check facing direction (cone of vision)
     if (enemy.facing && !isInVisionCone(enemy, game.player)) {
         // Not in cone, but close enemies can still detect
         if (dist > 2) return false;
     }
-    
+
     // Line of sight check (optional)
     if (enemy.perception?.requiresLineOfSight) {
         if (!hasLineOfSight(enemy, game.player)) return false;
     }
-    
+
     return true;
 }
 

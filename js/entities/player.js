@@ -194,9 +194,15 @@ function createPlayer() {
         // ====================================================================
         // FLAGS
         // ====================================================================
-        
+
         isDead: false,
-        isUndead: false               // For holy damage bonus
+        isUndead: false,              // For holy damage bonus
+
+        // ====================================================================
+        // TORCH SYSTEM
+        // ====================================================================
+
+        isTorchOn: true               // Torch toggle - affects vision and stealth
     };
 
     // ========================================================================
@@ -469,6 +475,37 @@ function handlePlayerDeath() {
 }
 
 // ============================================================================
+// TORCH SYSTEM
+// ============================================================================
+
+/**
+ * Toggle the player's torch on/off
+ * When ON: Full vision (4 tiles), warm lighting, enemies see you at full range
+ * When OFF: Reduced vision (2 tiles), cool tint, enemies detect at 0.5x range
+ */
+function toggleTorch() {
+    if (!game.player) return;
+
+    game.player.isTorchOn = !game.player.isTorchOn;
+
+    // Play feedback
+    if (typeof addMessage === 'function') {
+        if (game.player.isTorchOn) {
+            addMessage('Torch lit - you can see further but enemies can spot you.', 'info');
+        } else {
+            addMessage('Torch extinguished - moving in shadows...', 'info');
+        }
+    }
+
+    // Invalidate vision cache to force recalculation
+    if (typeof VisionSystem !== 'undefined' && VisionSystem.clearVisibility) {
+        VisionSystem.clearVisibility();
+    }
+
+    console.log(`[Torch] Toggled to ${game.player.isTorchOn ? 'ON' : 'OFF'}`);
+}
+
+// ============================================================================
 // EXPORTS
 // ============================================================================
 
@@ -480,6 +517,7 @@ if (typeof window !== 'undefined') {
     window.checkLevelUp = checkLevelUp;
     window.resetPlayer = resetPlayer;
     window.handlePlayerDeath = handlePlayerDeath;
+    window.toggleTorch = toggleTorch;
 }
 
 console.log('✅ Player system loaded (normalized stats, no starting gear)');

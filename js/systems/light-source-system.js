@@ -1045,20 +1045,26 @@ const LightSourceSystem = {
      * @param {number} offsetX - X offset (e.g., sidebar width)
      */
     renderAllLightGlows(ctx, camX, camY, tileSize, offsetX) {
-        // Render player's torch glow first
+        // Render player's torch glow (only if torch is ON)
         if (game.player) {
+            const torchOn = game.player.isTorchOn !== false; // Default to true
+
             // Player position - displayX/displayY represent top-left of tile
             // Add 0.5 tiles to center the glow on the player sprite
             const playerScreenX = (game.player.displayX + 0.5 - camX) * tileSize + offsetX;
             const playerScreenY = (game.player.displayY + 0.5 - camY) * tileSize;
 
-            const torchRadius = typeof VisionSystem !== 'undefined'
-                ? VisionSystem.getPlayerVisionRange()
-                : 4;
+            if (torchOn) {
+                // Torch ON: warm orange glow with flicker
+                const torchRadius = typeof VisionSystem !== 'undefined'
+                    ? VisionSystem.getPlayerVisionRange()
+                    : 4;
 
-            this.renderLightGlow(ctx, playerScreenX, playerScreenY, torchRadius, tileSize, {
-                intensity: this.renderConfig.playerGlowIntensity
-            });
+                this.renderLightGlow(ctx, playerScreenX, playerScreenY, torchRadius, tileSize, {
+                    intensity: this.renderConfig.playerGlowIntensity
+                });
+            }
+            // Torch OFF: no glow rendered - player relies on ambient light only
         }
 
         // Render all other active light sources - use SAME approach as player torch
@@ -1103,32 +1109,37 @@ const LightSourceSystem = {
         const flickerMultiplier = this.getFlicker();
         const fadeDistance = this.renderConfig.fadeDistance;
 
-        // Check player's torch
+        // Check player's torch (only contributes if torch is ON)
         if (game.player) {
-            const playerX = game.player.gridX;
-            const playerY = game.player.gridY;
-            const torchRadius = typeof VisionSystem !== 'undefined'
-                ? VisionSystem.getPlayerVisionRange()
-                : 4;
+            const torchOn = game.player.isTorchOn !== false; // Default to true
 
-            const dx = tileX - playerX;
-            const dy = tileY - playerY;
-            const distance = Math.sqrt(dx * dx + dy * dy);
+            if (torchOn) {
+                const playerX = game.player.gridX;
+                const playerY = game.player.gridY;
+                const torchRadius = typeof VisionSystem !== 'undefined'
+                    ? VisionSystem.getPlayerVisionRange()
+                    : 4;
 
-            const effectiveRadius = torchRadius * flickerMultiplier;
-            const playerIntensity = 0.75; // Player torch dimmer than placed sources
+                const dx = tileX - playerX;
+                const dy = tileY - playerY;
+                const distance = Math.sqrt(dx * dx + dy * dy);
 
-            if (distance <= effectiveRadius) {
-                maxBrightness = Math.max(maxBrightness, playerIntensity);
-            } else {
-                const fadeEnd = effectiveRadius + fadeDistance;
-                if (distance < fadeEnd) {
-                    const fadeProgress = (distance - effectiveRadius) / fadeDistance;
-                    const smoothProgress = fadeProgress * fadeProgress * (3 - 2 * fadeProgress);
-                    const brightness = playerIntensity - (smoothProgress * (playerIntensity - minBrightness));
-                    maxBrightness = Math.max(maxBrightness, brightness);
+                const effectiveRadius = torchRadius * flickerMultiplier;
+                const playerIntensity = 0.75; // Player torch dimmer than placed sources
+
+                if (distance <= effectiveRadius) {
+                    maxBrightness = Math.max(maxBrightness, playerIntensity);
+                } else {
+                    const fadeEnd = effectiveRadius + fadeDistance;
+                    if (distance < fadeEnd) {
+                        const fadeProgress = (distance - effectiveRadius) / fadeDistance;
+                        const smoothProgress = fadeProgress * fadeProgress * (3 - 2 * fadeProgress);
+                        const brightness = playerIntensity - (smoothProgress * (playerIntensity - minBrightness));
+                        maxBrightness = Math.max(maxBrightness, brightness);
+                    }
                 }
             }
+            // Torch OFF: no brightness contribution from player - relies on ambient light
         }
 
         // Check all light sources

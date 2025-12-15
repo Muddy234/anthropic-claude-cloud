@@ -102,28 +102,35 @@ function drawCombatActionBar(ctx, canvasWidth, canvasHeight) {
 
 /**
  * Draw torch slot - for toggling player torch
+ * Shows ON (warm orange) or OFF (cool blue/grey) state
  */
 function drawTorchSlot(ctx, x, y, cfg, player, colors) {
     const size = cfg.slotSize;
     const isHovered = window.actionBarState.hoverSlot === 'torch';
 
-    // TODO: Get actual torch state from player/game
-    const torchActive = true; // Placeholder - torch is always on for now
-    const isReady = true;
+    // Get actual torch state from player
+    const torchActive = player?.isTorchOn !== false; // Default to true if undefined
 
     ctx.save();
 
-    // Determine state colors
-    let borderColor = colors.border || '#3a3a4a';
-    let bgColor = colors.bgMedium || '#1a1a2e';
-    let glowColor = null;
+    // Determine state colors based on torch state
+    let borderColor, bgColor, glowColor, iconColor;
 
     if (torchActive) {
-        borderColor = colors.warning || '#f39c12'; // Orange for fire
-        glowColor = 'rgba(255, 147, 41, 0.4)'; // Warm orange glow
+        // Torch ON: warm orange glow
+        borderColor = colors.warning || '#f39c12';
+        bgColor = colors.bgMedium || '#1a1a2e';
+        glowColor = 'rgba(255, 147, 41, 0.4)';
+        iconColor = '#ff9329';
+    } else {
+        // Torch OFF: cool blue/grey (stealth mode)
+        borderColor = '#5588aa';
+        bgColor = '#151822';
+        glowColor = 'rgba(60, 100, 140, 0.3)';
+        iconColor = '#6699bb';
     }
 
-    // Glow for active torch
+    // Glow effect
     if (glowColor) {
         ctx.shadowColor = glowColor;
         ctx.shadowBlur = cfg.glowIntensity;
@@ -142,15 +149,15 @@ function drawTorchSlot(ctx, x, y, cfg, player, colors) {
 
     // Border
     ctx.strokeStyle = borderColor;
-    ctx.lineWidth = torchActive ? 2 : 1;
+    ctx.lineWidth = 2;
     ctx.stroke();
 
-    // Icon - flame symbol
+    // Icon - flame symbol for ON, moon for OFF
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.fillStyle = torchActive ? '#ff9329' : colors.textMuted || '#666666';
+    ctx.fillStyle = iconColor;
     ctx.font = `bold ${cfg.iconSize}px monospace`;
-    ctx.fillText('☀', x + size / 2, y + size / 2); // Sun/light symbol
+    ctx.fillText(torchActive ? '☀' : '☾', x + size / 2, y + size / 2);
 
     // Hotkey badge
     drawHotkeyBadge(ctx, x, y, size, cfg, 'T', colors);
@@ -158,7 +165,7 @@ function drawTorchSlot(ctx, x, y, cfg, player, colors) {
     // Status text
     ctx.font = '9px monospace';
     ctx.textBaseline = 'bottom';
-    ctx.fillStyle = torchActive ? colors.warning || '#f39c12' : colors.textMuted || '#666666';
+    ctx.fillStyle = iconColor;
     ctx.fillText(torchActive ? 'ON' : 'OFF', x + size / 2, y + size - 3);
 
     ctx.restore();
