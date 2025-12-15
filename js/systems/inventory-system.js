@@ -222,6 +222,53 @@ function useItem(index) {
     // Find the actual index in the main inventory array to modify it
     const realIndex = game.player.inventory.indexOf(item);
 
+    // Try to use item via its effect property (new system)
+    if (item.effect && itemEffects[item.effect.type]) {
+        const effect = item.effect;
+        let msg;
+
+        // Call the effect handler with appropriate parameters
+        switch (effect.type) {
+            case 'heal':
+                msg = itemEffects.heal(game.player, effect.value);
+                break;
+            case 'healPercent':
+                msg = itemEffects.healPercent(game.player, effect.value);
+                break;
+            case 'healOverTime':
+                msg = itemEffects.healOverTime(game.player, effect.value, effect.duration);
+                break;
+            case 'restoreMana':
+                msg = itemEffects.restoreMana(game.player, effect.value);
+                break;
+            case 'buff':
+                msg = itemEffects.buff(game.player, effect.stat, effect.value, effect.duration);
+                break;
+            case 'cure':
+                msg = itemEffects.cure(game.player, effect.status);
+                break;
+            case 'stealth':
+                msg = itemEffects.stealth(game.player, effect.duration);
+                break;
+            case 'deployable':
+                msg = itemEffects.deployable(game.player, effect.deployType);
+                // Check if deployment failed
+                if (msg.includes('Cannot')) {
+                    addMessage(msg);
+                    return false;
+                }
+                break;
+            default:
+                msg = 'Unknown effect';
+        }
+
+        addMessage(`Used ${item.name}: ${msg}`);
+        item.count--;
+        if (item.count <= 0) game.player.inventory.splice(realIndex, 1);
+        return true;
+    }
+
+    // Legacy fallback: lookup by item name directly
     if (itemEffects[item.name]) {
         const msg = itemEffects[item.name](game.player);
         addMessage(`Used ${item.name}: ${msg}`);
@@ -229,6 +276,7 @@ function useItem(index) {
         if (item.count <= 0) game.player.inventory.splice(realIndex, 1);
         return true;
     }
+
     return false;
 }
 // ============================================================================
