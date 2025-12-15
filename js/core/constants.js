@@ -9,7 +9,7 @@
 const GRID_WIDTH = 200;
 const GRID_HEIGHT = 200;
 const TILE_SIZE = 16;
-const ZOOM_LEVEL = 2.5;  // Increased from 2.0 for better sprite visibility (25% zoom in)
+const ZOOM_LEVEL = 3.25;  // 30% zoom increase for closer view
 const TRACKER_WIDTH = 70;  // Icon sidebar width (reduced from 350 for new UI)
 const CAMERA_DEADZONE_WIDTH = 200;
 const CAMERA_DEADZONE_HEIGHT = 150;
