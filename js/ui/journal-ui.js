@@ -48,7 +48,6 @@ const JournalUI = {
             sidebarState.activeOverlay = 'journal';
         }
 
-        console.log('[JournalUI] Opened');
     },
 
     close() {
@@ -66,8 +65,6 @@ const JournalUI = {
         if (typeof sidebarState !== 'undefined') {
             sidebarState.activeOverlay = null;
         }
-
-        console.log('[JournalUI] Closed');
     },
 
     toggle() {
@@ -674,4 +671,4 @@ window.addEventListener('keydown', (e) => {
 
 window.JournalUI = JournalUI;
 
-console.log('[JournalUI] Journal system loaded (Press J in village)');
+// Journal system loaded

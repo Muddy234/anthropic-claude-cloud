@@ -5,6 +5,10 @@ ctx.imageSmoothingEnabled = false; // Optimize for pixel art
 canvas.width = window.innerWidth;
 canvas.height = window.innerHeight;
 
+// Export canvas and ctx for other UI components
+window.canvas = canvas;
+window.ctx = ctx;
+
 // Handle window resizing
 window.addEventListener('resize', () => {
     canvas.width = window.innerWidth;
