@@ -1,50 +1,33 @@
 // ============================================================================
-// CAMPFIRE SYSTEM - Deployable rest points with healing and light
+// CAMPFIRE SYSTEM - Deployment helper for placeable light sources
+// ============================================================================
+// Thin wrapper that handles position validation and deployment of campfires.
+// Actual light and healing logic is handled by LightSourceSystem.
 // ============================================================================
 
 const CampfireSystem = {
-    // Configuration
-    config: {
-        healRadius: 2,           // Tiles - how close player must be to heal
-        lightRadius: 5,          // Tiles - light radius (torch-like)
-        healPercentPerSecond: 1, // 1% of max HP per second
-        healTickInterval: 1000,  // Heal every 1 second
-        lightColor: '#ff6622',   // Warm orange fire color
-        lightIntensity: 0.9      // Slightly dimmer than full brightness
-    },
-
-    // Active campfires
-    campfires: [],
-
-    // Track healing tick
-    healTickTimer: 0,
-
-    // Unique ID counter
+    // Track deployed campfires for map marking
+    deployedCampfires: [],
     nextId: 1,
 
-    // ========================================================================
-    // INITIALIZATION
-    // ========================================================================
-
+    /**
+     * Initialize the system
+     */
     init() {
-        this.campfires = [];
-        this.healTickTimer = 0;
+        this.deployedCampfires = [];
         this.nextId = 1;
         console.log('[CampfireSystem] Initialized');
     },
-
-    // ========================================================================
-    // DEPLOYMENT
-    // ========================================================================
 
     /**
      * Deploy a campfire at the given position
      * @param {number} gridX - Grid X position
      * @param {number} gridY - Grid Y position
+     * @param {string} type - Light source type (default: 'campfire')
      * @returns {boolean} Success
      */
-    deployCampfire(gridX, gridY) {
-        // Check if position is valid (on floor tile)
+    deployCampfire(gridX, gridY, type = 'campfire') {
+        // Validate position
         if (!this._isValidPosition(gridX, gridY)) {
             console.log('[CampfireSystem] Invalid position for campfire');
             return false;
@@ -56,42 +39,35 @@ const CampfireSystem = {
             return false;
         }
 
-        const campfireId = `campfire_${this.nextId++}`;
+        const campfireId = `deployed_campfire_${this.nextId++}`;
 
-        // Create campfire entity
+        // Add light source via LightSourceSystem (handles light + healing)
+        if (typeof LightSourceSystem !== 'undefined') {
+            LightSourceSystem.addSource({
+                id: campfireId,
+                type: type,
+                gridX: gridX,
+                gridY: gridY
+                // Uses defaults from SOURCE_CONFIGS for the type
+            });
+        }
+
+        // Track deployment
         const campfire = {
             id: campfireId,
             gridX: gridX,
             gridY: gridY,
-            lightSourceId: null,
+            type: type,
             createdAt: Date.now()
         };
+        this.deployedCampfires.push(campfire);
 
-        // Register light source with LightSourceSystem
-        if (typeof LightSourceSystem !== 'undefined') {
-            campfire.lightSourceId = LightSourceSystem.addSource({
-                id: campfireId,
-                type: 'campfire',
-                gridX: gridX,
-                gridY: gridY,
-                radius: this.config.lightRadius,
-                intensity: this.config.lightIntensity,
-                color: this.config.lightColor,
-                flicker: true,
-                fuel: Infinity,      // Never burns out
-                permanent: true      // Permanent fixture
-            });
-        }
-
-        // Add to campfires array
-        this.campfires.push(campfire);
-
-        // Add visual marker to the map tile (for rendering)
+        // Mark map tile for rendering
         if (game.map?.[gridY]?.[gridX]) {
             game.map[gridY][gridX].campfire = campfire;
         }
 
-        console.log(`[CampfireSystem] Deployed campfire at (${gridX}, ${gridY})`);
+        console.log(`[CampfireSystem] Deployed ${type} at (${gridX}, ${gridY})`);
 
         // Show status text
         if (typeof showStatusText === 'function' && game.player) {
@@ -102,18 +78,18 @@ const CampfireSystem = {
     },
 
     /**
-     * Remove a campfire
+     * Remove a deployed campfire
      * @param {string} campfireId - ID of campfire to remove
      */
     removeCampfire(campfireId) {
-        const index = this.campfires.findIndex(c => c.id === campfireId);
+        const index = this.deployedCampfires.findIndex(c => c.id === campfireId);
         if (index === -1) return;
 
-        const campfire = this.campfires[index];
+        const campfire = this.deployedCampfires[index];
 
-        // Remove light source
-        if (typeof LightSourceSystem !== 'undefined' && campfire.lightSourceId) {
-            LightSourceSystem.removeSource(campfire.lightSourceId);
+        // Remove from LightSourceSystem
+        if (typeof LightSourceSystem !== 'undefined') {
+            LightSourceSystem.removeSource(campfireId);
         }
 
         // Remove from map tile
@@ -121,88 +97,12 @@ const CampfireSystem = {
             delete game.map[campfire.gridY][campfire.gridX].campfire;
         }
 
-        // Remove from array
-        this.campfires.splice(index, 1);
-
+        this.deployedCampfires.splice(index, 1);
         console.log(`[CampfireSystem] Removed campfire ${campfireId}`);
     },
 
-    // ========================================================================
-    // UPDATE LOOP
-    // ========================================================================
-
     /**
-     * Update campfire system - heals nearby players when out of combat
-     * @param {number} dt - Delta time in milliseconds
-     */
-    update(dt) {
-        if (!game.player || game.player.hp <= 0) return;
-
-        // Update heal tick timer
-        this.healTickTimer += dt;
-
-        // Only heal on tick interval
-        if (this.healTickTimer < this.config.healTickInterval) return;
-        this.healTickTimer = 0;
-
-        // Check if player is in combat
-        if (this._isPlayerInCombat()) return;
-
-        // Check if player is near any campfire
-        const player = game.player;
-        const nearestCampfire = this._getNearestCampfire(player.gridX, player.gridY);
-
-        if (!nearestCampfire) return;
-
-        const distance = this._getDistance(player.gridX, player.gridY, nearestCampfire.gridX, nearestCampfire.gridY);
-
-        if (distance <= this.config.healRadius) {
-            this._healPlayer(player);
-        }
-    },
-
-    // ========================================================================
-    // HEALING
-    // ========================================================================
-
-    /**
-     * Heal player by percentage of max HP
-     * @param {Object} player - Player entity
-     */
-    _healPlayer(player) {
-        // Don't heal if at full HP
-        if (player.hp >= player.maxHp) return;
-
-        // Calculate heal amount (1% of max HP)
-        const healAmount = Math.max(1, Math.floor(player.maxHp * (this.config.healPercentPerSecond / 100)));
-        const actualHeal = Math.min(healAmount, player.maxHp - player.hp);
-
-        player.hp += actualHeal;
-
-        // Show heal number
-        if (typeof showDamageNumber === 'function' && actualHeal > 0) {
-            showDamageNumber(player, actualHeal, '#88FF88');
-        }
-    },
-
-    // ========================================================================
-    // HELPERS
-    // ========================================================================
-
-    /**
-     * Check if player is in combat
-     * @returns {boolean}
-     */
-    _isPlayerInCombat() {
-        const player = game.player;
-        if (!player) return false;
-
-        // Check both combat flags
-        return player.inCombat === true || player.combat?.isInCombat === true;
-    },
-
-    /**
-     * Check if position is valid for campfire
+     * Check if position is valid for campfire placement
      * @param {number} gridX
      * @param {number} gridY
      * @returns {boolean}
@@ -219,7 +119,7 @@ const CampfireSystem = {
         // Can't place on hazards
         if (tile.hazard) return false;
 
-        // Can't place on decorations that block
+        // Can't place on blocking decorations
         if (typeof hasBlockingDecorationAt === 'function' && hasBlockingDecorationAt(gridX, gridY)) {
             return false;
         }
@@ -234,73 +134,36 @@ const CampfireSystem = {
      * @returns {boolean}
      */
     _hasCampfireAt(gridX, gridY) {
-        return this.campfires.some(c => c.gridX === gridX && c.gridY === gridY);
+        return this.deployedCampfires.some(c => c.gridX === gridX && c.gridY === gridY);
     },
 
     /**
-     * Get nearest campfire to position
-     * @param {number} gridX
-     * @param {number} gridY
-     * @returns {Object|null}
-     */
-    _getNearestCampfire(gridX, gridY) {
-        if (this.campfires.length === 0) return null;
-
-        let nearest = null;
-        let nearestDist = Infinity;
-
-        for (const campfire of this.campfires) {
-            const dist = this._getDistance(gridX, gridY, campfire.gridX, campfire.gridY);
-            if (dist < nearestDist) {
-                nearestDist = dist;
-                nearest = campfire;
-            }
-        }
-
-        return nearest;
-    },
-
-    /**
-     * Calculate distance between two points
-     * @param {number} x1
-     * @param {number} y1
-     * @param {number} x2
-     * @param {number} y2
-     * @returns {number}
-     */
-    _getDistance(x1, y1, x2, y2) {
-        return Math.sqrt((x2 - x1) ** 2 + (y2 - y1) ** 2);
-    },
-
-    /**
-     * Get all active campfires
+     * Get all deployed campfires
      * @returns {Array}
      */
     getCampfires() {
-        return [...this.campfires];
+        return [...this.deployedCampfires];
     },
 
     /**
-     * Clear all campfires (for level reset)
+     * Clear all deployed campfires (for level reset)
      */
     clearAll() {
-        // Remove all light sources
-        for (const campfire of this.campfires) {
-            if (typeof LightSourceSystem !== 'undefined' && campfire.lightSourceId) {
-                LightSourceSystem.removeSource(campfire.lightSourceId);
+        for (const campfire of this.deployedCampfires) {
+            if (typeof LightSourceSystem !== 'undefined') {
+                LightSourceSystem.removeSource(campfire.id);
             }
-            // Remove from map tile
             if (game.map?.[campfire.gridY]?.[campfire.gridX]) {
                 delete game.map[campfire.gridY][campfire.gridX].campfire;
             }
         }
-        this.campfires = [];
+        this.deployedCampfires = [];
         console.log('[CampfireSystem] All campfires cleared');
     }
 };
 
 // ============================================================================
-// SYSTEM MANAGER REGISTRATION
+// SYSTEM MANAGER REGISTRATION (minimal - just for cleanup)
 // ============================================================================
 
 const CampfireSystemDef = {
@@ -311,7 +174,7 @@ const CampfireSystemDef = {
     },
 
     update(dt) {
-        CampfireSystem.update(dt);
+        // No update needed - LightSourceSystem handles healing
     },
 
     cleanup() {
@@ -319,7 +182,6 @@ const CampfireSystemDef = {
     }
 };
 
-// Register with SystemManager if available
 if (typeof SystemManager !== 'undefined') {
     SystemManager.register('campfire-system', CampfireSystemDef, 50);
 }
@@ -330,4 +192,4 @@ if (typeof SystemManager !== 'undefined') {
 
 window.CampfireSystem = CampfireSystem;
 
-console.log('[CampfireSystem] Campfire system loaded');
+console.log('[CampfireSystem] Deployment helper loaded');

@@ -264,14 +264,18 @@ const LightSourceSystem = {
             attachable: true  // Can attach to player
         },
         'campfire': {
-            radius: 6,
-            intensity: 1.0,
+            radius: 5,
+            intensity: 0.9,
             color: '#ff6622',
             flicker: true,
-            fuel: 180,
-            burnRate: 1,
-            permanent: false,
-            warmthBonus: 12
+            fuel: Infinity,
+            burnRate: 0,
+            permanent: true,
+            warmthBonus: 12,
+            // Healing properties (only when player is out of combat)
+            heals: true,
+            healRadius: 2,
+            healRate: 0.01  // 1% of max HP per second
         },
         'spell': {
             radius: 4,
@@ -356,6 +360,11 @@ const LightSourceSystem = {
             // Special properties
             warmthBonus: config.warmthBonus ?? defaults.warmthBonus ?? 0,
             damageToUndead: config.damageToUndead ?? defaults.damageToUndead ?? false,
+
+            // Healing properties (for campfires, bonfires, etc.)
+            heals: config.heals ?? defaults.heals ?? false,
+            healRadius: config.healRadius ?? defaults.healRadius ?? 0,
+            healRate: config.healRate ?? defaults.healRate ?? 0,
 
             // Rendering
             flickerPhase: Math.random() * Math.PI * 2,
@@ -752,6 +761,62 @@ const LightSourceSystem = {
                     }
                 });
             });
+        }
+
+        // Apply healing from light sources (campfires, bonfires, etc.)
+        this._updateHealing(dtSeconds);
+    },
+
+    /**
+     * Update healing for light sources that provide healing
+     * @param {number} dtSeconds - Delta time in seconds
+     */
+    _updateHealing(dtSeconds) {
+        const player = game?.player;
+        if (!player || player.hp <= 0) return;
+
+        // Check if player is in combat - no healing during combat
+        if (player.inCombat === true || player.combat?.isInCombat === true) return;
+
+        // Check if player is already at full HP
+        if (player.hp >= player.maxHp) return;
+
+        // Track if we need to show healing (accumulate from multiple sources)
+        let totalHeal = 0;
+
+        // Check each active source for healing
+        this.sources.forEach(source => {
+            if (!source.active || !source.heals) return;
+
+            const srcX = source.gridX;
+            const srcY = source.gridY;
+            const dist = Math.sqrt((player.gridX - srcX) ** 2 + (player.gridY - srcY) ** 2);
+
+            // Check if player is within healing radius
+            if (dist <= source.healRadius) {
+                // Calculate heal amount: healRate is % of max HP per second
+                const healAmount = player.maxHp * source.healRate * dtSeconds;
+                totalHeal += healAmount;
+            }
+        });
+
+        // Apply accumulated healing
+        if (totalHeal > 0) {
+            const actualHeal = Math.min(totalHeal, player.maxHp - player.hp);
+            player.hp += actualHeal;
+
+            // Track partial HP for smooth healing display
+            if (!this._healAccumulator) this._healAccumulator = 0;
+            this._healAccumulator += actualHeal;
+
+            // Show heal number when we've accumulated at least 1 HP
+            if (this._healAccumulator >= 1) {
+                const displayHeal = Math.floor(this._healAccumulator);
+                this._healAccumulator -= displayHeal;
+                if (typeof showDamageNumber === 'function' && displayHeal > 0) {
+                    showDamageNumber(player, displayHeal, '#88FF88');
+                }
+            }
         }
     },
 
