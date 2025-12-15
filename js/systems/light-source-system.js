@@ -1065,12 +1065,12 @@ const LightSourceSystem = {
             if (!source.active) return;
             if (source.type === 'player' || source.attachedTo === game.player) return;
 
-            // Get source position
-            let sourceGridX = source.gridX;
-            let sourceGridY = source.gridY;
+            // Get source position - center on tile (add 0.5) for proper glow positioning
+            let sourceGridX = source.gridX + 0.5;
+            let sourceGridY = source.gridY + 0.5;
             if (source.attachedTo) {
-                sourceGridX = source.attachedTo.displayX ?? source.attachedTo.gridX ?? sourceGridX;
-                sourceGridY = source.attachedTo.displayY ?? source.attachedTo.gridY ?? sourceGridY;
+                sourceGridX = (source.attachedTo.displayX ?? source.attachedTo.gridX ?? source.gridX) + 0.5;
+                sourceGridY = (source.attachedTo.displayY ?? source.attachedTo.gridY ?? source.gridY) + 0.5;
             }
 
             // Convert to screen coordinates
@@ -1142,11 +1142,12 @@ const LightSourceSystem = {
             if (!source.active) return;
             if (source.type === 'player' || source.attachedTo === game.player) return;
 
-            let sourceX = source.gridX;
-            let sourceY = source.gridY;
+            // Center on tile (add 0.5) to match glow rendering
+            let sourceX = source.gridX + 0.5;
+            let sourceY = source.gridY + 0.5;
             if (source.attachedTo) {
-                sourceX = source.attachedTo.displayX ?? source.attachedTo.gridX ?? sourceX;
-                sourceY = source.attachedTo.displayY ?? source.attachedTo.gridY ?? sourceY;
+                sourceX = (source.attachedTo.displayX ?? source.attachedTo.gridX ?? source.gridX) + 0.5;
+                sourceY = (source.attachedTo.displayY ?? source.attachedTo.gridY ?? source.gridY) + 0.5;
             }
 
             const dx = tileX - sourceX;
@@ -1156,12 +1157,9 @@ const LightSourceSystem = {
             const effectiveRadius = (source.radius || 5) * flickerMultiplier;
             const sourceIntensity = source.intensity || 1.0;
 
+            // Use same flat brightness as player torch (no smooth falloff inside radius)
             if (distance <= effectiveRadius) {
-                // Smooth falloff from center
-                const t = distance / effectiveRadius;
-                const smoothFalloff = 1 - (t * t * (3 - 2 * t));
-                const brightness = minBrightness + (sourceIntensity - minBrightness) * smoothFalloff;
-                maxBrightness = Math.max(maxBrightness, brightness);
+                maxBrightness = Math.max(maxBrightness, sourceIntensity);
             } else {
                 const fadeEnd = effectiveRadius + fadeDistance;
                 if (distance < fadeEnd) {
