@@ -205,10 +205,11 @@ const InventoryManager = {
 window.InventoryManager = InventoryManager;
 
 // ============================================================================
-// ITEM USE FUNCTION (Original)
+// ITEM USE FUNCTION (Inventory tab - uses filtered index)
+// Named useItemByIndex to avoid conflict with items.js useItem(player, itemId)
 // ============================================================================
 
-function useItem(index) {
+function useItemByIndex(index) {
     const types = ['weapon', 'armor', 'consumable', 'material'];
     // If we are in the "Equipped" tab (4), we might want to unequip logic later, but for now ignore
     if (game.inventoryTab === 4) return false;
@@ -299,5 +300,8 @@ if (typeof SystemManager !== 'undefined') {
 } else {
     console.warn('⚠️ SystemManager not found - inventory-system running standalone');
 }
+
+// Export useItemByIndex for input-handler consumable usage
+window.useItemByIndex = useItemByIndex;
 
 console.log('✅ Inventory system loaded');

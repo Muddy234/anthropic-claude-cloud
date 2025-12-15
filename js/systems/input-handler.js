@@ -376,20 +376,16 @@ function handleInventoryInput(e) {
 
                     addMessage(`Equipped ${selectedItem.name}`);
                 } else if (selectedItem.type === 'consumable') {
-                    // Use consumable
-                    if (selectedItem.name === 'Health Potion') {
-                        const healAmount = 50;
-                        game.player.hp = Math.min(game.player.maxHp, game.player.hp + healAmount);
-                        addMessage(`Used Health Potion. Restored ${healAmount} HP.`);
-
-                        // Decrease count or remove
-                        if (selectedItem.count > 1) {
-                            selectedItem.count--;
-                        } else {
-                            const invIndex = game.player.inventory.indexOf(selectedItem);
-                            if (invIndex !== -1) {
-                                game.player.inventory.splice(invIndex, 1);
-                                game.selectedItemIndex = Math.max(0, game.selectedItemIndex - 1);
+                    // Use consumable via useItemByIndex from inventory-system.js
+                    // This handles all effect types: heal, deployable, buff, etc.
+                    if (typeof useItemByIndex === 'function') {
+                        const success = useItemByIndex(game.selectedItemIndex);
+                        if (success) {
+                            // useItemByIndex handles count decrement and removal
+                            // Just update selection if needed
+                            const newFilteredItems = game.player.inventory.filter(i => i.type === 'consumable');
+                            if (game.selectedItemIndex >= newFilteredItems.length) {
+                                game.selectedItemIndex = Math.max(0, newFilteredItems.length - 1);
                             }
                         }
                     }
