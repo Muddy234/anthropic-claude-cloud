@@ -519,50 +519,86 @@ const MIN_BRIGHTNESS = 0.55; // 55% brightness outside torch (45% dimmed)
 const FADE_DISTANCE = 2; // 2 tile gradient from torch edge
 
 /**
- * Calculate tile brightness based on distance from player
- * Returns 1.0 (full brightness) inside torch, smooth gradient in fade zone, MIN_BRIGHTNESS outside
+ * Calculate tile brightness based on distance from player AND light sources
+ * Returns 1.0 (full brightness) inside any light, smooth gradient in fade zone, MIN_BRIGHTNESS outside
  * @param {number} tileX - Tile X position
  * @param {number} tileY - Tile Y position
  * @returns {number} - Brightness from MIN_BRIGHTNESS to 1.0
  */
 function getTileBrightness(tileX, tileY) {
-    if (!game.player) return MIN_BRIGHTNESS;
+    let maxBrightness = MIN_BRIGHTNESS;
 
-    const playerX = game.player.gridX;
-    const playerY = game.player.gridY;
+    // Check player's torch light
+    if (game.player) {
+        const playerX = game.player.gridX;
+        const playerY = game.player.gridY;
 
-    // Get torch/vision radius
-    const torchRadius = typeof VisionSystem !== 'undefined'
-        ? VisionSystem.getPlayerVisionRange()
-        : 4;
+        // Get torch/vision radius
+        const torchRadius = typeof VisionSystem !== 'undefined'
+            ? VisionSystem.getPlayerVisionRange()
+            : 4;
 
-    // Calculate distance from player
-    const dx = tileX - playerX;
-    const dy = tileY - playerY;
-    const distance = Math.sqrt(dx * dx + dy * dy);
+        // Calculate distance from player
+        const dx = tileX - playerX;
+        const dy = tileY - playerY;
+        const distance = Math.sqrt(dx * dx + dy * dy);
 
-    // Inside torch radius = full brightness
-    if (distance <= torchRadius) {
-        return 1.0;
+        // Inside torch radius = full brightness
+        if (distance <= torchRadius) {
+            maxBrightness = Math.max(maxBrightness, 1.0);
+        } else {
+            // In fade zone = smooth gradient
+            const fadeStart = torchRadius;
+            const fadeEnd = torchRadius + FADE_DISTANCE;
+
+            if (distance < fadeEnd) {
+                const fadeProgress = (distance - fadeStart) / FADE_DISTANCE;
+                const smoothProgress = fadeProgress * fadeProgress * (3 - 2 * fadeProgress);
+                const brightness = 1.0 - (smoothProgress * (1.0 - MIN_BRIGHTNESS));
+                maxBrightness = Math.max(maxBrightness, brightness);
+            }
+        }
     }
 
-    // In fade zone = smooth gradient
-    const fadeStart = torchRadius;
-    const fadeEnd = torchRadius + FADE_DISTANCE;
+    // Check all active light sources from LightSourceSystem
+    if (typeof LightSourceSystem !== 'undefined') {
+        const sources = LightSourceSystem.getActiveSources();
+        for (const source of sources) {
+            // Skip player light (already handled above)
+            if (source.type === 'player' || source.attachedTo === game.player) continue;
 
-    if (distance < fadeEnd) {
-        // Calculate progress through fade zone (0 at torch edge, 1 at fade end)
-        const fadeProgress = (distance - fadeStart) / FADE_DISTANCE;
+            // Get source position (handle attached sources)
+            let sourceX = source.gridX;
+            let sourceY = source.gridY;
+            if (source.attachedTo) {
+                sourceX = source.attachedTo.displayX ?? source.attachedTo.gridX ?? sourceX;
+                sourceY = source.attachedTo.displayY ?? source.attachedTo.gridY ?? sourceY;
+            }
 
-        // Smoothstep for natural transition
-        const smoothProgress = fadeProgress * fadeProgress * (3 - 2 * fadeProgress);
+            // Calculate distance from light source
+            const dx = tileX - sourceX;
+            const dy = tileY - sourceY;
+            const distance = Math.sqrt(dx * dx + dy * dy);
 
-        // Interpolate from 1.0 to MIN_BRIGHTNESS
-        return 1.0 - (smoothProgress * (1.0 - MIN_BRIGHTNESS));
+            const lightRadius = source.radius || 5;
+
+            // Inside light radius = full brightness
+            if (distance <= lightRadius) {
+                maxBrightness = Math.max(maxBrightness, source.intensity || 1.0);
+            } else {
+                // Fade zone for light sources
+                const fadeEnd = lightRadius + FADE_DISTANCE;
+                if (distance < fadeEnd) {
+                    const fadeProgress = (distance - lightRadius) / FADE_DISTANCE;
+                    const smoothProgress = fadeProgress * fadeProgress * (3 - 2 * fadeProgress);
+                    const brightness = (source.intensity || 1.0) - (smoothProgress * ((source.intensity || 1.0) - MIN_BRIGHTNESS));
+                    maxBrightness = Math.max(maxBrightness, brightness);
+                }
+            }
+        }
     }
 
-    // Beyond fade zone = minimum brightness
-    return MIN_BRIGHTNESS;
+    return Math.min(1.0, maxBrightness);
 }
 
 /**
