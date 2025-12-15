@@ -37,11 +37,28 @@ const LoadoutSystem = {
         },
         consumables: [
             {
+                id: 'weak_health_potion',
                 name: 'Weak Health Potion',
                 type: 'consumable',
+                subtype: 'healing',
                 count: 2,
                 description: 'Restores 25 HP.',
-                healAmount: 25
+                effect: { type: 'heal', value: 25 },
+                rarity: 'common',
+                stackable: true,
+                maxStack: 10
+            },
+            {
+                id: 'fire_starter_kit',
+                name: 'Fire Starter Kit',
+                type: 'consumable',
+                subtype: 'deployable',
+                count: 2,
+                description: 'Deploy a campfire that heals 1% HP/sec when resting nearby. Provides light.',
+                effect: { type: 'deployable', deployType: 'campfire' },
+                rarity: 'common',
+                stackable: true,
+                maxStack: 5
             }
         ]
     },

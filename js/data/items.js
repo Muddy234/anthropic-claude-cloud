@@ -8,6 +8,13 @@
 
 const CONSUMABLES = {
     // === HEALING ===
+    'weak_health_potion': {
+        id: 'weak_health_potion', name: 'Weak Health Potion', type: 'consumable', subtype: 'healing',
+        rarity: 'common', stackable: true, maxStack: 10,
+        effect: { type: 'heal', value: 25 },
+        description: 'Restores 25 HP. Basic starter potion.',
+        goldValue: 15
+    },
     'health_potion_small': {
         id: 'health_potion_small', name: 'Small Health Potion', type: 'consumable', subtype: 'healing',
         rarity: 'common', stackable: true, maxStack: 10,
@@ -169,6 +176,15 @@ const CONSUMABLES = {
         effect: { type: 'healOverTime', value: 5, duration: 10 },
         description: 'Restores 5 HP per second for 10 seconds.',
         goldValue: 35
+    },
+
+    // === DEPLOYABLES ===
+    'fire_starter_kit': {
+        id: 'fire_starter_kit', name: 'Fire Starter Kit', type: 'consumable', subtype: 'deployable',
+        rarity: 'common', stackable: true, maxStack: 5,
+        effect: { type: 'deployable', deployType: 'campfire' },
+        description: 'Deploy a campfire that heals 1% HP/sec when resting nearby. Provides light.',
+        goldValue: 50
     }
 };
 
@@ -392,6 +408,18 @@ const itemEffects = {
         player.isStealthed = true;
         player.stealthDuration = duration;
         return `Invisible for ${duration}s`;
+    },
+
+    // Deployables
+    'deployable': (player, deployType) => {
+        if (typeof CampfireSystem !== 'undefined' && deployType === 'campfire') {
+            const success = CampfireSystem.deployCampfire(player.gridX, player.gridY);
+            if (success) {
+                return 'Campfire placed!';
+            }
+            return 'Cannot place campfire here';
+        }
+        return 'Unknown deployable type';
     }
 };
 
@@ -445,6 +473,13 @@ function useItem(player, itemId) {
             break;
         case 'stealth':
             message = itemEffects.stealth(player, effect.duration);
+            break;
+        case 'deployable':
+            message = itemEffects.deployable(player, effect.deployType);
+            // Check if deployment failed
+            if (message.includes('Cannot')) {
+                return { success: false, message: message };
+            }
             break;
         default:
             message = 'Unknown effect';

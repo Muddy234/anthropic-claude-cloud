@@ -562,12 +562,14 @@ function triggerGCD(player) {
 
 function findItemInInventory(player, itemId) {
     if (!player.inventory) return null;
-    return player.inventory.find(item => item.id === itemId);
+    // Search by ID first, then fallback to name for looted items without IDs
+    return player.inventory.find(item => item.id === itemId || item.name === itemId);
 }
 
 function removeItemFromInventory(player, itemId) {
     if (!player.inventory) return;
-    const index = player.inventory.findIndex(item => item.id === itemId);
+    // Search by ID first, then fallback to name for looted items without IDs
+    const index = player.inventory.findIndex(item => item.id === itemId || item.name === itemId);
     if (index !== -1) {
         player.inventory.splice(index, 1);
     }
