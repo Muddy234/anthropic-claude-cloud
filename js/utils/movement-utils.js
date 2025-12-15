@@ -24,18 +24,17 @@ function updateEntityMovement(entity, dt) {
         if (!canMoveTo(entity.x, entity.y, false, 0.15)) {
             entity._positionFixAttempted = true;
 
-            // Try to find nearest valid position
+            // Try to find nearest valid position (perimeter search)
             for (let r = 1; r <= 5; r++) {
                 for (let dy = -r; dy <= r; dy++) {
                     for (let dx = -r; dx <= r; dx++) {
-                        if (Math.abs(dx) !== r && Math.abs(dy) !== r) continue; // Only check perimeter
+                        if (Math.abs(dx) !== r && Math.abs(dy) !== r) continue;
                         const testX = Math.floor(entity.displayX) + dx;
                         const testY = Math.floor(entity.displayY) + dy;
 
                         if (testX >= 0 && testX < GRID_WIDTH &&
                             testY >= 0 && testY < GRID_HEIGHT &&
                             canMoveTo(testX, testY, false, 0.15)) {
-                            // Found valid position
                             entity.x = entity.gridX = entity.displayX = testX;
                             entity.y = entity.gridY = entity.displayY = testY;
                             return;
