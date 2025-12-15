@@ -11,13 +11,13 @@ const VisionSystem = {
     // Configuration - Dynamic Line-of-Sight System
     config: {
         // Core vision ranges (in tiles)
-        baseSightRange: 2,        // Player's natural eyesight (torch OFF)
-        torchBonus: 4,            // Added to clear range when torch ON
+        baseSightRange: 4,        // Player's natural eyesight (torch OFF)
+        torchBonus: 6,            // Added to clear range when torch ON
         fadeBuffer: 2,            // Distance over which vision fades to darkness
 
         // Effective radii:
-        // Torch ON:  6 clear + 2 fade = 8 total (baseSightRange + torchBonus + fadeBuffer)
-        // Torch OFF: 2 clear + 2 fade = 4 total (baseSightRange + fadeBuffer)
+        // Torch ON:  10 clear + 2 fade = 12 total (baseSightRange + torchBonus + fadeBuffer)
+        // Torch OFF: 4 clear + 2 fade = 6 total (baseSightRange + fadeBuffer)
 
         // Darkness overlay
         darkOverlayColor: { r: 26, g: 26, b: 45 },  // Grayish blue
@@ -67,7 +67,7 @@ const VisionSystem = {
 
         // Calculate player vision range (base + equipment bonuses)
         const fullVisionRange = this.getPlayerVisionRange();
-        const totalRange = fullVisionRange + this.config.fadeDistance;
+        const totalRange = fullVisionRange + this.config.fadeBuffer;
 
         // Run shadowcasting from player position
         const playerX = Math.floor(game.player.gridX);
@@ -85,8 +85,8 @@ const VisionSystem = {
 
     /**
      * Get player's current CLEAR vision range (not including fade)
-     * Torch ON:  baseSightRange + torchBonus = 6 tiles
-     * Torch OFF: baseSightRange = 2 tiles
+     * Torch ON:  baseSightRange + torchBonus = 10 tiles (4 + 6)
+     * Torch OFF: baseSightRange = 4 tiles
      */
     getPlayerVisionRange() {
         const torchOn = game.player?.isTorchOn !== false;
@@ -381,7 +381,7 @@ const VisionSystem = {
     scanOctant(originX, originY, fullVisionRange, totalRange, row, startSlope, endSlope, octant) {
         if (startSlope < endSlope) return;
 
-        const fadeDistance = this.config.fadeDistance;
+        const fadeDistance = this.config.fadeBuffer;
 
         for (let currentRow = row; currentRow <= totalRange; currentRow++) {
             let blocked = false;
@@ -493,6 +493,72 @@ const VisionSystem = {
      */
     canPlayerSee(x, y) {
         return this.isTileVisible(Math.floor(x), Math.floor(y));
+    },
+
+    /**
+     * Get entity visibility (0-1) based on distance from ALL light sources
+     * Used for entity culling (enemies, loot, merchants, etc.)
+     * @param {number} entityX - Entity grid X position
+     * @param {number} entityY - Entity grid Y position
+     * @returns {number} 0 = invisible, 1 = fully visible, 0-1 = in fade zone
+     */
+    getEntityVisibility(entityX, entityY) {
+        let maxVisibility = 0;
+        const fadeBuffer = this.config.fadeBuffer;
+
+        // Check player's light (torch)
+        if (game.player) {
+            const playerX = game.player.gridX;
+            const playerY = game.player.gridY;
+            const dx = entityX - playerX;
+            const dy = entityY - playerY;
+            const distance = Math.sqrt(dx * dx + dy * dy);
+
+            const clearRange = this.getPlayerVisionRange();  // 4 or 10 depending on torch
+            const maxRange = clearRange + fadeBuffer;
+
+            const visibility = this._calculateVisibilityAtDistance(distance, clearRange, maxRange);
+            maxVisibility = Math.max(maxVisibility, visibility);
+        }
+
+        // Check all other light sources (campfires, braziers, etc.)
+        if (typeof LightSourceSystem !== 'undefined' && LightSourceSystem.sources) {
+            for (const source of LightSourceSystem.sources) {
+                // Skip player-attached light sources (already handled above)
+                if (source.attachedTo === game.player) continue;
+
+                const sourceX = source.x;
+                const sourceY = source.y;
+                const dx = entityX - sourceX;
+                const dy = entityY - sourceY;
+                const distance = Math.sqrt(dx * dx + dy * dy);
+
+                // Use the source's own radius for its clear range
+                const sourceClearRange = source.radius || 5;
+                const sourceMaxRange = sourceClearRange + fadeBuffer;
+
+                const visibility = this._calculateVisibilityAtDistance(distance, sourceClearRange, sourceMaxRange);
+                maxVisibility = Math.max(maxVisibility, visibility);
+
+                // Early exit if fully visible
+                if (maxVisibility >= 1.0) return 1.0;
+            }
+        }
+
+        return maxVisibility;
+    },
+
+    /**
+     * Calculate visibility based on distance from a light source
+     * @private
+     */
+    _calculateVisibilityAtDistance(distance, clearRange, maxRange) {
+        if (distance <= clearRange) return 1.0;      // Fully visible in clear zone
+        if (distance >= maxRange) return 0.0;        // Invisible beyond max range
+
+        // In fade zone - linear interpolation
+        const fadeProgress = (distance - clearRange) / (maxRange - clearRange);
+        return 1.0 - fadeProgress;
     }
 };
 

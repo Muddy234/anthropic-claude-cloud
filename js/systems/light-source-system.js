@@ -196,7 +196,7 @@ const LightSourceSystem = {
     // ========================================================================
     config: {
         debugLogging: false,
-        defaultPlayerLightRadius: 6,  // Matches VisionSystem torch ON clear range
+        defaultPlayerLightRadius: 10,  // Matches VisionSystem torch ON: 4 base + 6 torch = 10
         flickerIntensity: 0.08,       // Subtle flicker - just enough to feel alive
         flickerSpeed: 6,              // Slow, gentle movement
         flickerOctaves: 2,            // Simpler pattern for smoother feel
