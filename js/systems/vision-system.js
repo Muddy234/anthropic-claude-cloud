@@ -172,6 +172,8 @@ const VisionSystem = {
 
     /**
      * Mark a tile as visible
+     * Only marks tiles as EXPLORED if they're in the clear zone (visibility = 1.0)
+     * Fade zone tiles are visible but not permanently mapped
      */
     setVisible(x, y, visibility = 1) {
         if (x < 0 || y < 0 || y >= game.map.length || x >= game.map[0].length) return;
@@ -183,7 +185,14 @@ const VisionSystem = {
                 this._visibleTiles.push({ x, y });
             }
             tile.visible = true;
-            tile.explored = true;
+
+            // EXPLORATION: Only mark as explored if in CLEAR zone (full visibility)
+            // Tiles in the fade zone are visible but not permanently mapped
+            // This prevents players from mapping entire rooms from the doorway
+            if (visibility >= 1.0) {
+                tile.explored = true;
+            }
+
             tile.visibility = Math.max(tile.visibility, visibility);
         }
     },

@@ -343,6 +343,19 @@ function addItemToInventory(item) {
 function tryPickupLootAtPosition(gridX, gridY) {
     const pile = getLootPileAt(gridX, gridY);
     if (pile) {
+        // Block interaction with invisible loot
+        let visibility = 1;
+        if (typeof VisionSystem !== 'undefined' && VisionSystem.getEntityVisibility) {
+            visibility = VisionSystem.getEntityVisibility(gridX, gridY);
+        } else if (typeof getEntityVisibility === 'function') {
+            visibility = getEntityVisibility(gridX, gridY);
+        }
+
+        if (visibility <= 0) {
+            // Loot is not visible - cannot interact
+            return false;
+        }
+
         pickupLootPile(pile);
         return true;
     }

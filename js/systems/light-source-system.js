@@ -196,13 +196,13 @@ const LightSourceSystem = {
     // ========================================================================
     config: {
         debugLogging: false,
-        defaultPlayerLightRadius: 3,
-        flickerIntensity: 0.08,      // Subtle flicker - just enough to feel alive
-        flickerSpeed: 6,             // Slow, gentle movement
-        flickerOctaves: 2,           // Simpler pattern for smoother feel
-        flickerPersistence: 0.4,     // Gentle layering
-        useCookieTextures: false,    // DISABLED - was erasing glows with destination-out
-        cookieIrregularity: 0.3      // Slightly more irregular shapes
+        defaultPlayerLightRadius: 6,  // Matches VisionSystem torch ON clear range
+        flickerIntensity: 0.08,       // Subtle flicker - just enough to feel alive
+        flickerSpeed: 6,              // Slow, gentle movement
+        flickerOctaves: 2,            // Simpler pattern for smoother feel
+        flickerPersistence: 0.4,      // Gentle layering
+        useCookieTextures: false,     // DISABLED - was erasing glows with destination-out
+        cookieIrregularity: 0.3       // Slightly more irregular shapes
     },
 
     // ========================================================================
@@ -1085,13 +1085,11 @@ const LightSourceSystem = {
             const sourceScreenX = (sourceGridX - camX) * tileSize + offsetX;
             const sourceScreenY = (sourceGridY - camY) * tileSize;
 
-            // Use SAME rendering as player torch
-            const torchRadius = typeof VisionSystem !== 'undefined'
-                ? VisionSystem.getPlayerVisionRange()
-                : 4;
+            // Use the light source's own radius (not player vision range)
+            const sourceRadius = source.radius || 5;
 
-            this.renderLightGlow(ctx, sourceScreenX, sourceScreenY, torchRadius, tileSize, {
-                intensity: this.renderConfig.playerGlowIntensity
+            this.renderLightGlow(ctx, sourceScreenX, sourceScreenY, sourceRadius, tileSize, {
+                intensity: source.intensity || this.renderConfig.playerGlowIntensity
             });
         });
     },
