@@ -371,4 +371,4 @@ window.getWardStatus = getWardStatus;
 window.hasBetrayalDagger = hasBetrayalDagger;
 window.grantBetrayalDagger = grantBetrayalDagger;
 
-console.log('[QuestItems] Quest item system loaded');
+// Quest item system loaded

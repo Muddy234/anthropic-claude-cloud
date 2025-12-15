@@ -320,25 +320,14 @@ const MATERIALS = {
 };
 
 // ============================================================================
-// QUEST ITEMS - Special non-consumable items
-// ============================================================================
-
-const QUEST_ITEMS = {
-    'ancient_key': { id: 'ancient_key', name: 'Ancient Key', type: 'quest', rarity: 'rare', stackable: false, description: 'An ornate key of unknown origin.' },
-    'mysterious_orb': { id: 'mysterious_orb', name: 'Mysterious Orb', type: 'quest', rarity: 'epic', stackable: false, description: 'A glowing orb pulsing with energy.' },
-    'forgotten_tome': { id: 'forgotten_tome', name: 'Forgotten Tome', type: 'quest', rarity: 'rare', stackable: false, description: 'An ancient book written in a dead language.' },
-    'cultist_orders': { id: 'cultist_orders', name: 'Cultist Orders', type: 'quest', rarity: 'uncommon', stackable: false, description: 'Documents detailing cultist activities.' }
-};
-
-// ============================================================================
 // COMBINED ITEMS DATA
 // ============================================================================
+// Note: QUEST_ITEMS is defined in quest-items.js (story items)
 
 const ITEMS_DATA = {
     ...CONSUMABLES,
     ...AMMO,
-    ...MATERIALS,
-    ...QUEST_ITEMS
+    ...MATERIALS
 };
 
 // ============================================================================

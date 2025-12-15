@@ -148,18 +148,7 @@ const TIER_COLORS = {
     'BOSS': '#f1c40f'     // Gold - boss
 };
 
-/**
- * Element colors for display
- */
-const ELEMENT_COLORS = {
-    'fire': '#ff6b35',
-    'water': '#3498db',
-    'earth': '#8b4513',
-    'shadow': '#9b59b6',
-    'death': '#666666',
-    'nature': '#27ae60',
-    'physical': '#cccccc'
-};
+// Note: ELEMENT_COLORS is defined in renderer.js
 
 // ============================================================================
 // INFO POPUP CONTENT - Detailed information for hyperlinks

@@ -11,13 +11,13 @@
 const EXPECTED_SYSTEMS = [
     // Input & Movement (10-29)
     'input-handler',           // 10 - Capture input before anything moves
-    'pokemon-movement',        // 20 - Player movement based on input
+    // Note: pokemon-movement is called directly by input-handler, not via SystemManager
     'player-animation',        // 25 - Animation follows movement
-    
+
     // Environmental (30-39)
     'noise-system',            // 30 - Process noise events before AI reacts
     'hazards',                 // 35 - Environmental hazard updates
-    
+
     // AI & Behavior (40-49)
     'enemy-ai',                // 40 - AI decisions based on noise and player
     'monster-social',          // 42 - Pack/swarm coordination
@@ -27,15 +27,13 @@ const EXPECTED_SYSTEMS = [
     'combat-system',           // 50 - Combat after all movement resolved
     'skills-combat',           // 55 - Skills-combat integration
     'status-effects',          // 56 - Status effect ticks
-    
+
     // Post-Combat (60-79)
     'skill-system',            // 60 - Skill cooldowns/effects
     'inventory-system',        // 65 - Inventory updates
-    'loot-system',             // 70 - Loot despawn timers
-    
-    // Environment & UI (80-99)
-    'shift-system',            // 80 - Environmental hazards
-    'merchant-shop'            // 90 - UI state updates last
+    'loot-system'              // 70 - Loot despawn timers
+
+    // Note: shift-system and merchant-shop are optional/not implemented
 ];
 
 // Optional systems (may not always be present)
