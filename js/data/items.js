@@ -410,15 +410,30 @@ const itemEffects = {
         return `Invisible for ${duration}s`;
     },
 
-    // Deployables
+    // Deployables - directly use LightSourceSystem
     'deployable': (player, deployType) => {
-        if (typeof CampfireSystem !== 'undefined' && deployType === 'campfire') {
-            const success = CampfireSystem.deployCampfire(player.gridX, player.gridY);
-            if (success) {
-                return 'Campfire placed!';
-            }
-            return 'Cannot place campfire here';
+        if (typeof LightSourceSystem === 'undefined') {
+            return 'Light system not available';
         }
+
+        if (deployType === 'campfire') {
+            // Add campfire light source at player position
+            const campfireId = `campfire_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`;
+            LightSourceSystem.addSource({
+                id: campfireId,
+                type: 'campfire',
+                gridX: player.gridX,
+                gridY: player.gridY
+            });
+
+            // Mark tile for visual rendering
+            if (game.map?.[player.gridY]?.[player.gridX]) {
+                game.map[player.gridY][player.gridX].hasCampfire = true;
+            }
+
+            return 'Campfire placed!';
+        }
+
         return 'Unknown deployable type';
     }
 };
