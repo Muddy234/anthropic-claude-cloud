@@ -29,7 +29,7 @@ window.actionBarState = {
 
 /**
  * Draw the combat action bar (bottom-right of screen) - CotDG Style
- * Now includes ALL slots: weapon skill, consumables 3-4, and dash
+ * Layout: [Dash] [Torch] [Consumable1] [Consumable2]
  * @param {CanvasRenderingContext2D} ctx - Canvas context
  * @param {number} canvasWidth - Canvas width
  * @param {number} canvasHeight - Canvas height
@@ -39,7 +39,7 @@ function drawCombatActionBar(ctx, canvasWidth, canvasHeight) {
     if (!player) return;
 
     const cfg = ACTION_BAR_CONFIG;
-    const numSlots = 4; // 1 weapon skill + 2 consumables + 1 dash
+    const numSlots = 4; // Dash + Torch + 2 consumables
 
     // Get colors from design system
     const colors = typeof UI_COLORS !== 'undefined' ? UI_COLORS : {
@@ -78,24 +78,88 @@ function drawCombatActionBar(ctx, canvasWidth, canvasHeight) {
 
     let slotIndex = 0;
 
-    // === SLOT 1: WEAPON SKILL (hotkey 5) ===
-    const weaponAction = getWeaponActionForBar(player);
-    const skillSlotX = barX + 10 + (slotIndex * (cfg.slotSize + cfg.slotSpacing));
-    drawWeaponSkillSlot(ctx, skillSlotX, barY + 10, cfg, weaponAction, player, colors);
+    // === SLOT 1: DASH (spacebar) ===
+    const dashSlotX = barX + 10 + (slotIndex * (cfg.slotSize + cfg.slotSpacing));
+    drawStylizedDashSlot(ctx, dashSlotX, barY + 10, cfg, colors);
     slotIndex++;
 
-    // === SLOTS 2-3: CONSUMABLES (hotkeys 3 and 4) ===
+    // === SLOT 2: TORCH (hotkey T) ===
+    const torchSlotX = barX + 10 + (slotIndex * (cfg.slotSize + cfg.slotSpacing));
+    drawTorchSlot(ctx, torchSlotX, barY + 10, cfg, player, colors);
+    slotIndex++;
+
+    // === SLOTS 3-4: CONSUMABLES (hotkeys 1 and 2) ===
     for (let i = 0; i < 2; i++) {
         const slotX = barX + 10 + (slotIndex * (cfg.slotSize + cfg.slotSpacing));
         const slotY = barY + 10;
-        const hotkey = i + 3;
+        const hotkey = i + 1; // Hotkeys 1 and 2
         drawStylizedActionSlot(ctx, slotX, slotY, cfg, hotkey, player, colors);
         slotIndex++;
     }
 
-    // === SLOT 4: DASH ===
-    const dashSlotX = barX + 10 + (slotIndex * (cfg.slotSize + cfg.slotSpacing));
-    drawStylizedDashSlot(ctx, dashSlotX, barY + 10, cfg, colors);
+    ctx.restore();
+}
+
+/**
+ * Draw torch slot - for toggling player torch
+ */
+function drawTorchSlot(ctx, x, y, cfg, player, colors) {
+    const size = cfg.slotSize;
+    const isHovered = window.actionBarState.hoverSlot === 'torch';
+
+    // TODO: Get actual torch state from player/game
+    const torchActive = true; // Placeholder - torch is always on for now
+    const isReady = true;
+
+    ctx.save();
+
+    // Determine state colors
+    let borderColor = colors.border || '#3a3a4a';
+    let bgColor = colors.bgMedium || '#1a1a2e';
+    let glowColor = null;
+
+    if (torchActive) {
+        borderColor = colors.warning || '#f39c12'; // Orange for fire
+        glowColor = 'rgba(255, 147, 41, 0.4)'; // Warm orange glow
+    }
+
+    // Glow for active torch
+    if (glowColor) {
+        ctx.shadowColor = glowColor;
+        ctx.shadowBlur = cfg.glowIntensity;
+    }
+
+    // Background
+    const bgGrad = ctx.createLinearGradient(x, y, x, y + size);
+    bgGrad.addColorStop(0, bgColor);
+    bgGrad.addColorStop(1, colors.bgDarkest || '#0a0a0f');
+
+    ctx.fillStyle = bgGrad;
+    drawRoundedRect(ctx, x, y, size, size, cfg.cornerRadius);
+    ctx.fill();
+
+    ctx.shadowBlur = 0;
+
+    // Border
+    ctx.strokeStyle = borderColor;
+    ctx.lineWidth = torchActive ? 2 : 1;
+    ctx.stroke();
+
+    // Icon - flame symbol
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillStyle = torchActive ? '#ff9329' : colors.textMuted || '#666666';
+    ctx.font = `bold ${cfg.iconSize}px monospace`;
+    ctx.fillText('☀', x + size / 2, y + size / 2); // Sun/light symbol
+
+    // Hotkey badge
+    drawHotkeyBadge(ctx, x, y, size, cfg, 'T', colors);
+
+    // Status text
+    ctx.font = '9px monospace';
+    ctx.textBaseline = 'bottom';
+    ctx.fillStyle = torchActive ? colors.warning || '#f39c12' : colors.textMuted || '#666666';
+    ctx.fillText(torchActive ? 'ON' : 'OFF', x + size / 2, y + size - 3);
 
     ctx.restore();
 }
@@ -610,6 +674,10 @@ function getSlotInfo(hotkey, player) {
     }
 
     switch (hotkey) {
+        case 1:
+            return getConsumableInfo(player, 'slot1');
+        case 2:
+            return getConsumableInfo(player, 'slot2');
         case 3:
             return getConsumableInfo(player, 'slot3');
         case 4:
@@ -623,8 +691,9 @@ function getSlotInfo(hotkey, player) {
  * Get consumable slot info
  */
 function getConsumableInfo(player, slot) {
-    const slotNum = slot === 'slot3' ? 3 : 4;
-    const cooldownKey = slot === 'slot3' ? 'consumable3' : 'consumable4';
+    const slotNumMap = { 'slot1': 1, 'slot2': 2, 'slot3': 3, 'slot4': 4 };
+    const slotNum = slotNumMap[slot] || 1;
+    const cooldownKey = `consumable${slotNum}`;
 
     const info = {
         hotkey: slotNum,
@@ -687,7 +756,7 @@ function findItemInPlayerInventory(player, itemId) {
 
 /**
  * Handle mouse move for hover detection
- * Updated for 4-slot unified bar: [Skill5] [Consumable3] [Consumable4] [Dash]
+ * Layout: [Dash] [Torch] [Consumable1] [Consumable2]
  */
 function handleActionBarMouseMove(e) {
     if (!canvas || game.state !== 'playing') return;
@@ -711,7 +780,7 @@ function handleActionBarMouseMove(e) {
     }
 
     // Check which slot is hovered
-    // Layout: [Skill5] [Consumable3] [Consumable4] [Dash]
+    // Layout: [Dash] [Torch] [Consumable1] [Consumable2]
     let hoveredSlot = null;
     for (let i = 0; i < numSlots; i++) {
         const slotX = barX + 10 + (i * (cfg.slotSize + cfg.slotSpacing));
@@ -720,13 +789,13 @@ function handleActionBarMouseMove(e) {
         if (mouseX >= slotX && mouseX <= slotX + cfg.slotSize &&
             mouseY >= slotY && mouseY <= slotY + cfg.slotSize) {
             if (i === 0) {
-                hoveredSlot = 'skill5';
-            } else if (i === 1) {
-                hoveredSlot = 'slot3';
-            } else if (i === 2) {
-                hoveredSlot = 'slot4';
-            } else {
                 hoveredSlot = 'dash';
+            } else if (i === 1) {
+                hoveredSlot = 'torch';
+            } else if (i === 2) {
+                hoveredSlot = 'slot1';
+            } else {
+                hoveredSlot = 'slot2';
             }
             break;
         }
@@ -737,7 +806,7 @@ function handleActionBarMouseMove(e) {
 
 /**
  * Initialize action bar click detection
- * Updated for 4-slot unified bar
+ * Layout: [Dash] [Torch] [Consumable1] [Consumable2]
  */
 function initActionBarClickHandler() {
     if (typeof canvas === 'undefined') {
@@ -762,7 +831,7 @@ function initActionBarClickHandler() {
         const barX = canvas.width - barWidth - cfg.barPadding;
         const barY = canvas.height - barHeight - cfg.barPadding;
 
-        // Check each slot: [Skill5] [Consumable3] [Consumable4] [Dash]
+        // Check each slot: [Dash] [Torch] [Consumable1] [Consumable2]
         for (let i = 0; i < numSlots; i++) {
             const slotX = barX + 10 + (i * (cfg.slotSize + cfg.slotSpacing));
             const slotY = barY + 10;
@@ -771,24 +840,24 @@ function initActionBarClickHandler() {
                 clickY >= slotY && clickY <= slotY + cfg.slotSize) {
 
                 if (i === 0) {
-                    // Weapon skill (hotkey 5)
-                    if (typeof handleActiveCombatHotkey === 'function') {
-                        handleActiveCombatHotkey(5, game.player);
-                    }
-                } else if (i === 1) {
-                    // Consumable 3
-                    if (typeof handleActiveCombatHotkey === 'function') {
-                        handleActiveCombatHotkey(3, game.player);
-                    }
-                } else if (i === 2) {
-                    // Consumable 4
-                    if (typeof handleActiveCombatHotkey === 'function') {
-                        handleActiveCombatHotkey(4, game.player);
-                    }
-                } else {
-                    // Dash
+                    // Dash (spacebar)
                     if (typeof performDash === 'function') {
                         performDash();
+                    }
+                } else if (i === 1) {
+                    // Torch toggle (T)
+                    if (typeof toggleTorch === 'function') {
+                        toggleTorch();
+                    }
+                } else if (i === 2) {
+                    // Consumable 1
+                    if (typeof handleActiveCombatHotkey === 'function') {
+                        handleActiveCombatHotkey(1, game.player);
+                    }
+                } else {
+                    // Consumable 2
+                    if (typeof handleActiveCombatHotkey === 'function') {
+                        handleActiveCombatHotkey(2, game.player);
                     }
                 }
                 return;
