@@ -246,7 +246,7 @@ const LightSourceSystem = {
         'brazier': {
             radius: 5,
             intensity: 1.0,
-            color: '#ffaa44',
+            color: '#ff8844',
             flicker: true,
             fuel: 60,
             burnRate: 1,
@@ -256,7 +256,7 @@ const LightSourceSystem = {
         'lantern': {
             radius: 3,
             intensity: 0.7,
-            color: '#ffdd88',
+            color: '#ff8844',
             flicker: true,
             fuel: 300,
             burnRate: 1,
@@ -265,8 +265,8 @@ const LightSourceSystem = {
         },
         'campfire': {
             radius: 5,
-            intensity: 0.9,
-            color: '#ff6622',
+            intensity: 1,
+            color: '#ff8844',
             flicker: true,
             fuel: Infinity,
             burnRate: 0,
@@ -1010,3 +1010,4 @@ window.PerlinNoise = PerlinNoise;
 window.LightCookieSystem = LightCookieSystem;
 
 console.log('✅ Light Source System loaded (with Perlin noise flicker & cookie textures)');
+
