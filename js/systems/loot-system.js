@@ -410,27 +410,37 @@ function renderLootPiles(ctx, camX, camY, tileSize, offsetX) {
             continue;
         }
 
-        // FOG OF WAR: Show loot on ALL tiles with appropriate dimming
-        // - Explored tiles: distance-based brightness
-        // - Unexplored tiles: maximum dimming (same as far explored tiles)
-        const MIN_BRIGHTNESS = 0.55;
-        let brightness;
-        if (tile.explored) {
-            brightness = typeof getTileBrightness === 'function'
-                ? getTileBrightness(pile.x, pile.y)
-                : 1.0;
+        // =====================================================================
+        // ENTITY VISIBILITY CULLING
+        // =====================================================================
+        // Loot is only visible within light source ranges
+        let visibility = 0;
+
+        if (typeof VisionSystem !== 'undefined' && VisionSystem.getEntityVisibility) {
+            visibility = VisionSystem.getEntityVisibility(pile.x, pile.y);
+        } else if (typeof getEntityVisibility === 'function') {
+            visibility = getEntityVisibility(pile.x, pile.y);
         } else {
-            brightness = MIN_BRIGHTNESS;
+            // Fallback: use tile visibility
+            visibility = (tile && tile.visible) ? 1.0 : 0;
         }
 
-        // Calculate fade for last 10 seconds
+        // Store visibility on pile for interaction blocking
+        pile.isVisible = visibility > 0;
+
+        // Skip drawing if completely hidden
+        if (visibility <= 0) {
+            continue;
+        }
+
+        // Calculate fade for last 10 seconds (combine with visibility)
         const age = Date.now() - pile.spawnTime;
         const timeLeft = LOOT_CONFIG.despawnTime - age;
-        let alpha = brightness; // Start with brightness-based alpha
+        let alpha = visibility;
         if (timeLeft < 10000) {
             // Blink effect in last 10 seconds
             const blinkAlpha = (Math.sin(age / 150) + 1) / 2 * 0.7 + 0.3;
-            alpha = brightness * blinkAlpha;
+            alpha = visibility * blinkAlpha;
         }
 
         ctx.globalAlpha = alpha;

@@ -818,18 +818,28 @@ const camY = game.camera.y + (shakeOffset.y / (TILE_SIZE * currentZoom));
             renderExtractionPoints(ctx, camX, camY, effectiveTileSize, TRACKER_WIDTH);
         }
 
-        // Merchant rendering (only if visible)
+        // Merchant rendering (only if visible within light sources)
         if (game.merchant) {
-            const merchantTile = game.map[game.merchant.y]?.[game.merchant.x];
-            if (merchantTile && merchantTile.visible) {
+            let merchantVisibility = 0;
+            if (typeof VisionSystem !== 'undefined' && VisionSystem.getEntityVisibility) {
+                merchantVisibility = VisionSystem.getEntityVisibility(game.merchant.x, game.merchant.y);
+            } else {
+                const merchantTile = game.map[game.merchant.y]?.[game.merchant.x];
+                merchantVisibility = (merchantTile && merchantTile.visible) ? 1.0 : 0;
+            }
+
+            if (merchantVisibility > 0) {
                 const mx = (game.merchant.x - camX) * effectiveTileSize + TRACKER_WIDTH;
                 const my = (game.merchant.y - camY) * effectiveTileSize;
+                ctx.save();
+                ctx.globalAlpha = merchantVisibility;
                 ctx.fillStyle = '#f1c40f';
                 ctx.fillRect(mx + 10, my + 10, effectiveTileSize - 20, effectiveTileSize - 20);
                 ctx.fillStyle = '#000';
                 ctx.font = 'bold 24px monospace';
                 ctx.textAlign = 'center';
                 ctx.fillText('$', mx + effectiveTileSize / 2, my + effectiveTileSize / 2 + 8);
+                ctx.restore();
             }
         }
 

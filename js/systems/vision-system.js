@@ -8,12 +8,22 @@
 const VisionSystem = {
     name: 'vision',
 
-    // Configuration
+    // Configuration - Dynamic Line-of-Sight System
     config: {
-        basePlayerVision: 4,      // Player base vision range with torch ON
-        torchOffVision: 2,        // Player vision range with torch OFF (stealth mode)
-        fadeDistance: 2,          // Additional tiles where vision fades to darkness
-        updateEveryFrame: true,   // Recalculate visibility every frame
+        // Core vision ranges (in tiles)
+        baseSightRange: 2,        // Player's natural eyesight (torch OFF)
+        torchBonus: 4,            // Added to clear range when torch ON
+        fadeBuffer: 2,            // Distance over which vision fades to darkness
+
+        // Effective radii:
+        // Torch ON:  6 clear + 2 fade = 8 total (baseSightRange + torchBonus + fadeBuffer)
+        // Torch OFF: 2 clear + 2 fade = 4 total (baseSightRange + fadeBuffer)
+
+        // Darkness overlay
+        darkOverlayColor: { r: 26, g: 26, b: 45 },  // Grayish blue
+        maxOpacity: 0.90,         // 90% opacity - walls remain faintly visible
+
+        updateEveryFrame: true,
         debugLogging: false
     },
 
@@ -74,29 +84,40 @@ const VisionSystem = {
     // ========================================================================
 
     /**
-     * Get player's current vision range including equipment bonuses
-     * Respects torch state: ON = full vision (4), OFF = reduced (2)
+     * Get player's current CLEAR vision range (not including fade)
+     * Torch ON:  baseSightRange + torchBonus = 6 tiles
+     * Torch OFF: baseSightRange = 2 tiles
      */
     getPlayerVisionRange() {
-        // Check torch state - use reduced vision when torch is OFF
-        const torchOn = game.player?.isTorchOn !== false; // Default to true if undefined
-        let range = torchOn ? this.config.basePlayerVision : this.config.torchOffVision;
+        const torchOn = game.player?.isTorchOn !== false;
+        let range = torchOn
+            ? this.config.baseSightRange + this.config.torchBonus
+            : this.config.baseSightRange;
 
-        // Check equipped items for vision bonuses (only apply when torch is ON)
-        if (torchOn && game.player.equipped) {
+        // Equipment bonuses only apply when torch is ON
+        if (torchOn && game.player?.equipped) {
             for (const slot in game.player.equipped) {
                 const item = game.player.equipped[slot];
-                if (item && item.visionBonus) {
-                    range += item.visionBonus;
-                }
-                // Also check stats.visionBonus for alternative format
-                if (item && item.stats && item.stats.visionBonus) {
-                    range += item.stats.visionBonus;
-                }
+                if (item?.visionBonus) range += item.visionBonus;
+                if (item?.stats?.visionBonus) range += item.stats.visionBonus;
             }
         }
 
         return range;
+    },
+
+    /**
+     * Get the total vision range including fade buffer
+     */
+    getTotalVisionRange() {
+        return this.getPlayerVisionRange() + this.config.fadeBuffer;
+    },
+
+    /**
+     * Get the fade buffer distance
+     */
+    getFadeBuffer() {
+        return this.config.fadeBuffer;
     },
 
     /**
@@ -191,21 +212,116 @@ const VisionSystem = {
 
     /**
      * Update which enemies are visible to the player
+     * Now uses the new entity visibility system
      */
     updateEnemyVisibility() {
         if (!game.enemies) return;
 
         for (const enemy of game.enemies) {
-            const ex = Math.floor(enemy.gridX);
-            const ey = Math.floor(enemy.gridY);
+            const visibility = this.getEntityVisibility(enemy.gridX, enemy.gridY);
+            enemy.isVisible = visibility > 0;
+            enemy.visibilityAlpha = visibility; // Store for rendering
+        }
+    },
 
-            if (ex >= 0 && ey >= 0 && ey < game.map.length && ex < game.map[0].length) {
-                const tile = game.map[ey][ex];
-                enemy.isVisible = tile && tile.visible;
+    // ========================================================================
+    // ENTITY VISIBILITY SYSTEM
+    // ========================================================================
+    // Entities (enemies, loot, traps) are hidden outside light source ranges
+    // Uses distance from ALL light sources (player torch + campfires, etc.)
+
+    /**
+     * Calculate visibility alpha for an entity at a given position
+     * Checks distance to player (if torch on) and all other light sources
+     * @param {number} entityX - Entity grid X position
+     * @param {number} entityY - Entity grid Y position
+     * @returns {number} - Alpha value: 1.0 (fully visible), 0.0 (hidden), or fade value
+     */
+    getEntityVisibility(entityX, entityY) {
+        let maxVisibility = 0;
+        const fadeBuffer = this.config.fadeBuffer;
+
+        // Check player's torch light
+        if (game.player) {
+            const torchOn = game.player.isTorchOn !== false;
+
+            if (torchOn) {
+                const playerClearRange = this.getPlayerVisionRange();
+                const playerMaxRange = playerClearRange + fadeBuffer;
+
+                const dx = entityX - game.player.gridX;
+                const dy = entityY - game.player.gridY;
+                const distance = Math.sqrt(dx * dx + dy * dy);
+
+                const visibility = this._calculateVisibilityAtDistance(distance, playerClearRange, playerMaxRange);
+                maxVisibility = Math.max(maxVisibility, visibility);
             } else {
-                enemy.isVisible = false;
+                // Torch OFF: player still has base sight range
+                const baseClearRange = this.config.baseSightRange;
+                const baseMaxRange = baseClearRange + fadeBuffer;
+
+                const dx = entityX - game.player.gridX;
+                const dy = entityY - game.player.gridY;
+                const distance = Math.sqrt(dx * dx + dy * dy);
+
+                const visibility = this._calculateVisibilityAtDistance(distance, baseClearRange, baseMaxRange);
+                maxVisibility = Math.max(maxVisibility, visibility);
             }
         }
+
+        // Check all other light sources (campfires, braziers, etc.)
+        if (typeof LightSourceSystem !== 'undefined') {
+            LightSourceSystem.sources.forEach(source => {
+                if (!source.active) return;
+                // Skip player-attached sources (already handled above)
+                if (source.type === 'player' || source.attachedTo === game.player) return;
+
+                const sourceX = source.gridX;
+                const sourceY = source.gridY;
+                const sourceClearRange = source.radius || 5;
+                const sourceMaxRange = sourceClearRange + fadeBuffer;
+
+                const dx = entityX - sourceX;
+                const dy = entityY - sourceY;
+                const distance = Math.sqrt(dx * dx + dy * dy);
+
+                const visibility = this._calculateVisibilityAtDistance(distance, sourceClearRange, sourceMaxRange);
+                maxVisibility = Math.max(maxVisibility, visibility);
+            });
+        }
+
+        return maxVisibility;
+    },
+
+    /**
+     * Calculate visibility based on distance from a light source
+     * @param {number} distance - Distance from light source
+     * @param {number} clearRange - Full visibility range
+     * @param {number} maxRange - Maximum range (clear + fade)
+     * @returns {number} - Visibility alpha (0-1)
+     */
+    _calculateVisibilityAtDistance(distance, clearRange, maxRange) {
+        // Inside clear zone - fully visible
+        if (distance <= clearRange) {
+            return 1.0;
+        }
+        // Outside max range - hidden
+        if (distance >= maxRange) {
+            return 0.0;
+        }
+        // In fade zone - gradual transition
+        const fadeProgress = (distance - clearRange) / (maxRange - clearRange);
+        return 1.0 - fadeProgress;
+    },
+
+    /**
+     * Check if an entity at a position is visible at all
+     * @param {number} x - Grid X
+     * @param {number} y - Grid Y
+     * @returns {boolean}
+     */
+    isPositionVisible(x, y) {
+        return this.getEntityVisibility(x, y) > 0;
     },
 
     // ========================================================================
@@ -392,6 +508,8 @@ if (typeof window !== 'undefined') {
     window.isEnemyVisible = (enemy) => VisionSystem.isEnemyVisible(enemy);
     window.canPlayerSee = (x, y) => VisionSystem.canPlayerSee(x, y);
     window.getPlayerVisionRange = () => VisionSystem.getPlayerVisionRange();
+    window.getEntityVisibility = (x, y) => VisionSystem.getEntityVisibility(x, y);
+    window.isPositionVisible = (x, y) => VisionSystem.isPositionVisible(x, y);
 }
 
-console.log('✅ Vision system loaded (shadowcasting fog of war)');
+console.log('✅ Vision system loaded (dynamic line-of-sight)');

@@ -635,9 +635,6 @@ function drawEnemyHealthBar(ctx, x, y, width, hp, maxHp, isTargeted, barHeight) 
 function renderAllEnemies(ctx, camX, camY, tileSize, offsetX) {
     if (!game.enemies) return;
 
-    // MIN_BRIGHTNESS constant for unexplored tiles (matches renderer.js)
-    const MIN_BRIGHTNESS = 0.55;
-
     // Calculate view bounds for frustum culling (with 2 tile margin)
     const viewLeft = camX - 2;
     const viewRight = camX + (ctx.canvas.width - offsetX) / tileSize + 2;
@@ -651,28 +648,39 @@ function renderAllEnemies(ctx, camX, camY, tileSize, offsetX) {
             continue;
         }
 
-        const enemyTileX = Math.floor(enemy.gridX);
-        const enemyTileY = Math.floor(enemy.gridY);
-        const tile = game.map[enemyTileY]?.[enemyTileX];
+        // =====================================================================
+        // ENTITY VISIBILITY CULLING
+        // =====================================================================
+        // Entities are only visible within light source ranges
+        // Uses distance from ALL light sources (player torch + campfires, etc.)
 
-        // Skip if no tile data
-        if (!tile) continue;
+        let visibility = 0;
 
-        // Determine brightness based on tile exploration status
-        let brightness;
-        if (tile.explored) {
-            // Distance-based dimming for explored tiles
-            brightness = typeof getTileBrightness === 'function'
-                ? getTileBrightness(enemyTileX, enemyTileY)
-                : 1.0;
+        // Use new entity visibility system if available
+        if (typeof VisionSystem !== 'undefined' && VisionSystem.getEntityVisibility) {
+            visibility = VisionSystem.getEntityVisibility(enemy.gridX, enemy.gridY);
+        } else if (typeof getEntityVisibility === 'function') {
+            visibility = getEntityVisibility(enemy.gridX, enemy.gridY);
         } else {
-            // Maximum dimming for unexplored tiles
-            brightness = MIN_BRIGHTNESS;
+            // Fallback: use old tile-based visibility
+            const enemyTileX = Math.floor(enemy.gridX);
+            const enemyTileY = Math.floor(enemy.gridY);
+            const tile = game.map[enemyTileY]?.[enemyTileX];
+            visibility = (tile && tile.visible) ? 1.0 : 0;
         }
 
-        // Apply brightness as globalAlpha for dimming effect
+        // Store visibility on enemy for other systems (health bars, targeting)
+        enemy.visibilityAlpha = visibility;
+        enemy.isVisible = visibility > 0;
+
+        // CASE B: Outside Max Range - DO NOT DRAW
+        if (visibility <= 0) {
+            continue;
+        }
+
+        // CASE A & C: Inside clear zone or fade zone - draw with alpha
         ctx.save();
-        ctx.globalAlpha = brightness;
+        ctx.globalAlpha = visibility;
 
         drawEnemy(ctx, enemy, camX, camY, tileSize, offsetX);
 
