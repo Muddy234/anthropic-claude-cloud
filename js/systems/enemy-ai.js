@@ -9,7 +9,8 @@ const AI_STATES = {
     CIRCLING: 'circling', DEFENSIVE: 'defensive', SKIRMISHING: 'skirmishing',
     PANICKED: 'panicked', ENRAGED: 'enraged',
     REACTING: 'reacting',      // Delay before aggro (reaction time)
-    SACRIFICING: 'sacrificing' // Elite consuming a minion
+    SACRIFICING: 'sacrificing', // Elite consuming a minion
+    WINDUP: 'windup'           // Telegraph delay before attack (allows dodging)
 };
 
 const BEHAVIOR_TYPES = {
@@ -73,6 +74,10 @@ class EnemyAI {
         // Tier-based behavior (from MONSTER_TIERS)
         const tierConfig = enemy.tierConfig || MONSTER_TIERS?.[enemy.tier] || null;
         this.reactionDelay = tierConfig?.senses?.reactionDelay || enemy.perception?.reactionDelay || 0;
+
+        // Windup duration before attack (allows player to dodge)
+        // Higher tiers have shorter windups, making them more dangerous
+        this.windupDuration = enemy.combat?.windupDuration || tierConfig?.combat?.windupDuration || 300;
         this.searchBehavior = enemy.behavior?.searchBehavior || tierConfig?.behavior?.searchBehavior || 'none';
         this.retreatHierarchy = tierConfig?.social?.retreatHierarchy || [];
         this.packCourage = tierConfig?.social?.packCourage || false;
@@ -351,6 +356,7 @@ class EnemyAI {
             case S.WANDERING: this._wander(dt, game); break;
             case S.REACTING: this._react(dt, game); break;
             case S.SACRIFICING: this._sacrifice(dt, game); break;
+            case S.WINDUP: this._windup(dt, game); break;
             case S.ALERT: this._alert(dt, game); break;
             case S.CHASING: this._chase(dt, game); break;
             case S.COMBAT: this._combat(dt, game); break;
@@ -415,7 +421,7 @@ class EnemyAI {
             this._face(this.target.gridX, this.target.gridY);
             const atkRange = this.enemy.combat?.attackRange || 1;
             if (this._dist(this.target.gridX, this.target.gridY) <= atkRange && this.attackCooldown <= 0) {
-                this._attack(game);
+                this._startWindup(AI_STATES.CHASING);
             }
             return;
         }
@@ -439,7 +445,38 @@ class EnemyAI {
     _combat(dt, game) {
         if (!this.target) return;
         this._face(this.target.gridX, this.target.gridY);
-        if (this.attackCooldown <= 0) this._attack(game);
+        if (this.attackCooldown <= 0) {
+            this._startWindup(AI_STATES.COMBAT);
+        }
+    }
+
+    // Helper to start windup state from any attack-capable state
+    _startWindup(returnState) {
+        // Store target position for windup lock-in (enemy commits to this direction)
+        this.stateData.windupTargetPos = { x: this.target.gridX, y: this.target.gridY };
+        this.stateData.returnState = returnState;
+        this._changeState(AI_STATES.WINDUP);
+    }
+
+    _windup(dt, game) {
+        // WINDUP STATE: Enemy is telegraphing their attack
+        // CRITICAL: Do NOT call _face() - enemy is locked to their facing direction
+        // This allows players to dodge by stepping out of the attack cone
+
+        if (!this.target) {
+            this._changeState(AI_STATES.CHASING);
+            return;
+        }
+
+        // Check if windup duration has elapsed
+        if (this.stateTimer >= this.windupDuration) {
+            // Execute the attack with forceAttack=true (uses vision cone check)
+            this._attack(game, true);
+            // Return to previous state (could be COMBAT, SKIRMISHING, ENRAGED, etc.)
+            const returnState = this.stateData.returnState || AI_STATES.COMBAT;
+            this._changeState(returnState);
+        }
+        // Otherwise, just wait (enemy is "winding up" their attack)
     }
 
     _circle(dt, game) {
@@ -473,7 +510,7 @@ class EnemyAI {
         const effectiveTolerance = Math.max(this.rangeTolerance, 1.0);
 
         if (dist <= this.optimalRange + effectiveTolerance && this.attackCooldown <= 0) {
-            this._attack(game);
+            this._startWindup(AI_STATES.SKIRMISHING);
         }
 
         if (this.enemy.isMoving) return;
@@ -534,7 +571,7 @@ class EnemyAI {
             // Hold position, attack if close
             const atkRange = this.enemy.combat?.attackRange || 1;
             if (this._dist(player.gridX, player.gridY) <= atkRange && this.attackCooldown <= 0) {
-                this._attack(game);
+                this._startWindup(AI_STATES.DEFENSIVE);
             }
         }
     }
@@ -705,7 +742,7 @@ class EnemyAI {
 
         if (dist <= atkRange) {
             this._face(player.gridX, player.gridY);
-            if (this.attackCooldown <= 0) this._attack(game);
+            if (this.attackCooldown <= 0) this._startWindup(AI_STATES.ENRAGED);
         } else {
             this._moveToward(player.gridX, player.gridY, game, 1.3); // Faster pursuit
         }
@@ -956,10 +993,26 @@ class EnemyAI {
     }
 
     // COMBAT
-    _attack(game) {
+    _attack(game, forceAttack = false) {
         if (!this.target) return;
         const range = this.enemy.stats?.range || 1;
         if (this._dist(this.target.gridX, this.target.gridY) > range) return;
+
+        const cooldown = 700 / (this.enemy.stats?.speed || 1);
+
+        // WINDUP LOCK-IN CHECK: If this is a forced attack (from windup),
+        // check if target is still in our vision cone. If player dodged, miss!
+        if (forceAttack) {
+            const inCone = this._inVisionCone(this.target.gridX, this.target.gridY);
+            if (!inCone) {
+                // Player dodged! Attack whiffs
+                if (typeof showDamageNumber === 'function') {
+                    showDamageNumber(this.target, 'DODGED', '#00FF00');
+                }
+                this.attackCooldown = cooldown;
+                return;
+            }
+        }
 
         if (this.enemy.special && this.specialCooldown <= 0 && Math.random() < 0.2) {
             this._specialAttack(game);
@@ -968,7 +1021,6 @@ class EnemyAI {
 
         const room = this._getCurrentRoom(game);
         const result = DamageCalculator.calculateDamage(this.enemy, this.target, room);
-        const cooldown = 700 / (this.enemy.stats?.speed || 1);
 
         if (!result.isHit) {
             if (typeof showDamageNumber === 'function') showDamageNumber(this.target, 0, '#888888');
