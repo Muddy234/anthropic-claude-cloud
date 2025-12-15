@@ -13,6 +13,10 @@ window.ctx = ctx;
 window.addEventListener('resize', () => {
     canvas.width = window.innerWidth;
     canvas.height = window.innerHeight;
+    // Resize particle canvas overlay to match
+    if (typeof ParticleCanvas !== 'undefined') {
+        ParticleCanvas.resize();
+    }
 });
 
 // Shared color constants
@@ -899,6 +903,11 @@ const camY = game.camera.y + (shakeOffset.y / (TILE_SIZE * ZOOM_LEVEL));
 
         // Combat effects (sprite-based slash, magic, explosions)
         if (typeof renderCombatEffects === 'function') { renderCombatEffects(ctx, camX, camY, effectiveTileSize, TRACKER_WIDTH); }
+
+        // Particle effects (fire sparks, magic particles, etc.) - renders to separate canvas layer
+        if (typeof ParticleSystemManager !== 'undefined') {
+            ParticleSystemManager.render(camX, camY, effectiveTileSize, TRACKER_WIDTH);
+        }
 
         if (typeof renderDamageNumbers === 'function') { renderDamageNumbers(camX, camY, effectiveTileSize, TRACKER_WIDTH); }
         ctx.restore();
