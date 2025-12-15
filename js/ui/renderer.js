@@ -528,8 +528,8 @@ const FOG_COLOR = { r: 26, g: 26, b: 45 }; // #1a1a2d
 const TORCH_COLOR = { r: 255, g: 147, b: 41 }; // Warm orange #ff9329
 
 // Visibility settings
-const MIN_BRIGHTNESS = 0.55; // 55% brightness outside torch (45% dimmed)
-const FADE_DISTANCE = 2; // 2 tile gradient from torch edge
+const MIN_BRIGHTNESS = 0.30; // 30% brightness outside torch (70% dimmed)
+const FADE_DISTANCE = 2;     // 2 tile gradient from torch edge
 
 /**
  * Calculate tile brightness based on distance from player AND light sources

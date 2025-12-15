@@ -9,19 +9,16 @@ const VisionSystem = {
     name: 'vision',
 
     // Configuration - Dynamic Line-of-Sight System
+    // Note: Fog color and brightness are defined in renderer.js (FOG_COLOR, MIN_BRIGHTNESS)
     config: {
         // Core vision ranges (in tiles)
         baseSightRange: 4,        // Player's natural eyesight (torch OFF)
-        torchBonus: 6,            // Added to clear range when torch ON
+        torchBonus: 6,            // Additional clear range when torch ON
         fadeBuffer: 2,            // Distance over which vision fades to darkness
 
         // Effective radii:
-        // Torch ON:  10 clear + 2 fade = 12 total (baseSightRange + torchBonus + fadeBuffer)
-        // Torch OFF: 4 clear + 2 fade = 6 total (baseSightRange + fadeBuffer)
-
-        // Darkness overlay
-        darkOverlayColor: { r: 26, g: 26, b: 45 },  // Grayish blue
-        maxOpacity: 0.90,         // 90% opacity - walls remain faintly visible
+        // Torch ON:  10 clear + 2 fade = 12 total
+        // Torch OFF: 4 clear + 2 fade = 6 total
 
         updateEveryFrame: true,
         debugLogging: false
