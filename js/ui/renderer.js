@@ -931,11 +931,19 @@ function drawShiftCountdown() {
     // Calculate corruption percentage (inverted - more time passed = more corruption)
     const corruptionPct = 1 - (countdown / maxTime);
 
-    // Position at bottom-right, above action bar
-    const barWidth = 180;
+    // Position above the unified action bar, spanning its full width
+    // Use stored action bar dimensions if available
+    const actionBar = window.actionBarDimensions || {
+        x: canvas.width - 290,
+        y: canvas.height - 96,
+        width: 270,
+        height: 76
+    };
+
+    const barWidth = actionBar.width;
     const barHeight = 20;
-    const barX = canvas.width - barWidth - 25;
-    const barY = canvas.height - 110;
+    const barX = actionBar.x;
+    const barY = actionBar.y - barHeight - 8; // 8px gap above action bar
 
     const pulse = typeof getPulseValue === 'function' ? getPulseValue(0.003) : (Math.sin(Date.now() * 0.003) + 1) / 2;
 

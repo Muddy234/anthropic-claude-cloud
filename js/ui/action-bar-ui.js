@@ -29,6 +29,7 @@ window.actionBarState = {
 
 /**
  * Draw the combat action bar (bottom-right of screen) - CotDG Style
+ * Now includes ALL slots: weapon skill, consumables 3-4, and dash
  * @param {CanvasRenderingContext2D} ctx - Canvas context
  * @param {number} canvasWidth - Canvas width
  * @param {number} canvasHeight - Canvas height
@@ -38,7 +39,7 @@ function drawCombatActionBar(ctx, canvasWidth, canvasHeight) {
     if (!player) return;
 
     const cfg = ACTION_BAR_CONFIG;
-    const numSlots = 3; // 2 consumable slots (3-4) + 1 dash slot
+    const numSlots = 4; // 1 weapon skill + 2 consumables + 1 dash
 
     // Get colors from design system
     const colors = typeof UI_COLORS !== 'undefined' ? UI_COLORS : {
@@ -54,34 +55,189 @@ function drawCombatActionBar(ctx, canvasWidth, canvasHeight) {
         textMuted: '#888888',
         success: '#27ae60',
         warning: '#f39c12',
-        danger: '#e74c3c'
+        danger: '#e74c3c',
+        corruption: '#8e44ad'
     };
 
     // Update animation phase
     window.actionBarState.pulsePhase = (window.actionBarState.pulsePhase + 0.05) % (Math.PI * 2);
 
-    // Position at bottom-right corner
+    // Position at bottom-right corner - unified bar for all 4 slots
     const barWidth = (cfg.slotSize * numSlots) + (cfg.slotSpacing * (numSlots - 1)) + 20;
     const barHeight = cfg.slotSize + 20;
     const barX = canvasWidth - barWidth - cfg.barPadding;
     const barY = canvasHeight - barHeight - cfg.barPadding;
 
+    // Store bar dimensions for shift bar positioning
+    window.actionBarDimensions = { x: barX, y: barY, width: barWidth, height: barHeight };
+
     ctx.save();
 
-    // === BAR BACKGROUND ===
+    // === BAR BACKGROUND (single unified background for all 4 slots) ===
     drawActionBarBackground(ctx, barX, barY, barWidth, barHeight, cfg, colors);
 
-    // === CONSUMABLE SLOTS (hotkeys 3 and 4) ===
+    let slotIndex = 0;
+
+    // === SLOT 1: WEAPON SKILL (hotkey 5) ===
+    const weaponAction = getWeaponActionForBar(player);
+    const skillSlotX = barX + 10 + (slotIndex * (cfg.slotSize + cfg.slotSpacing));
+    drawWeaponSkillSlot(ctx, skillSlotX, barY + 10, cfg, weaponAction, player, colors);
+    slotIndex++;
+
+    // === SLOTS 2-3: CONSUMABLES (hotkeys 3 and 4) ===
     for (let i = 0; i < 2; i++) {
-        const slotX = barX + 10 + (i * (cfg.slotSize + cfg.slotSpacing));
+        const slotX = barX + 10 + (slotIndex * (cfg.slotSize + cfg.slotSpacing));
         const slotY = barY + 10;
         const hotkey = i + 3;
         drawStylizedActionSlot(ctx, slotX, slotY, cfg, hotkey, player, colors);
+        slotIndex++;
     }
 
-    // === DASH SLOT ===
-    const dashSlotX = barX + 10 + (2 * (cfg.slotSize + cfg.slotSpacing));
+    // === SLOT 4: DASH ===
+    const dashSlotX = barX + 10 + (slotIndex * (cfg.slotSize + cfg.slotSpacing));
     drawStylizedDashSlot(ctx, dashSlotX, barY + 10, cfg, colors);
+
+    ctx.restore();
+}
+
+/**
+ * Get weapon action data for the action bar
+ */
+function getWeaponActionForBar(player) {
+    if (!player.skills) return null;
+
+    const weapon = player.equipped?.MAIN;
+    const specialty = weapon?.specialty || 'unarmed';
+    const specData = player.skills.specialties[specialty];
+
+    // Get action info
+    const actionMap = {
+        sword: { id: 'blade_dancer', icon: 'BD', name: 'Blade Dancer' },
+        knife: { id: 'arterial_strike', icon: 'AS', name: 'Arterial Strike' },
+        axe: { id: 'cleaving_blow', icon: 'CB', name: 'Cleaving Blow' },
+        polearm: { id: 'impaling_thrust', icon: 'IT', name: 'Impaling Thrust' },
+        mace: { id: 'skull_crack', icon: 'SC', name: 'Skull Crack' },
+        staff: { id: 'sweeping_arc', icon: 'SA', name: 'Sweeping Arc' },
+        unarmed: { id: 'flurry_of_blows', icon: 'FB', name: 'Flurry of Blows' },
+        shield: { id: 'shield_charge', icon: 'SH', name: 'Shield Charge' },
+        fire: { id: 'immolate', icon: 'IM', name: 'Immolate' },
+        ice: { id: 'frozen_grasp', icon: 'FG', name: 'Frozen Grasp' },
+        lightning: { id: 'chain_lightning', icon: 'CL', name: 'Chain Lightning' },
+        necromancy: { id: 'life_siphon', icon: 'LS', name: 'Life Siphon' },
+        bow: { id: 'power_shot', icon: 'PS', name: 'Power Shot' },
+        crossbow: { id: 'piercing_bolt', icon: 'PB', name: 'Piercing Bolt' },
+        throwing: { id: 'fan_of_knives', icon: 'FK', name: 'Fan of Knives' }
+    };
+
+    const actionInfo = actionMap[specialty] || actionMap['unarmed'];
+    const cooldown = player.skills.actionCooldowns?.[actionInfo.id] || 0;
+    const isUnlocked = specData && specData.level >= 5;
+
+    return {
+        ...actionInfo,
+        specialty: specialty,
+        cooldown: cooldown,
+        maxCooldown: 10,
+        isUnlocked: isUnlocked,
+        isReady: cooldown <= 0 && isUnlocked
+    };
+}
+
+/**
+ * Draw weapon skill slot - CotDG style
+ */
+function drawWeaponSkillSlot(ctx, x, y, cfg, actionData, player, colors) {
+    const size = cfg.slotSize;
+    const isHovered = window.actionBarState.hoverSlot === 'skill5';
+
+    ctx.save();
+
+    // Determine state
+    let borderColor = colors.border || '#3a3a4a';
+    let bgColor = colors.bgMedium || '#1a1a2e';
+    let glowColor = null;
+
+    if (!actionData || !actionData.isUnlocked) {
+        borderColor = colors.textMuted || '#444444';
+        bgColor = 'rgba(30, 30, 30, 0.5)';
+    } else if (actionData.isReady) {
+        borderColor = colors.corruption || '#8e44ad';
+        glowColor = 'rgba(142, 68, 173, 0.4)';
+    } else {
+        borderColor = colors.warning || '#f39c12';
+    }
+
+    // Glow for ready state
+    if (glowColor) {
+        ctx.shadowColor = glowColor;
+        ctx.shadowBlur = cfg.glowIntensity;
+    }
+
+    // Background
+    const bgGrad = ctx.createLinearGradient(x, y, x, y + size);
+    bgGrad.addColorStop(0, bgColor);
+    bgGrad.addColorStop(1, colors.bgDarkest || '#0a0a0f');
+
+    ctx.fillStyle = bgGrad;
+    drawRoundedRect(ctx, x, y, size, size, cfg.cornerRadius);
+    ctx.fill();
+
+    ctx.shadowBlur = 0;
+
+    // Border
+    ctx.strokeStyle = borderColor;
+    ctx.lineWidth = (actionData && actionData.isReady) ? 2 : 1;
+    ctx.stroke();
+
+    // Cooldown sweep
+    if (actionData && actionData.cooldown > 0 && actionData.isUnlocked) {
+        drawCooldownSweep(ctx, x, y, size, cfg, actionData.cooldown, actionData.maxCooldown, colors);
+    }
+
+    // Icon
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+
+    if (!actionData || !actionData.isUnlocked) {
+        ctx.fillStyle = colors.textMuted || '#444444';
+    } else if (actionData.isReady) {
+        ctx.fillStyle = colors.textPrimary || '#ffffff';
+    } else {
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.5)';
+    }
+
+    ctx.font = `bold ${cfg.iconSize}px monospace`;
+    ctx.fillText(actionData ? actionData.icon : '??', x + size / 2, y + size / 2);
+
+    // Hotkey badge
+    drawHotkeyBadge(ctx, x, y, size, cfg, '5', colors);
+
+    // Status text
+    ctx.font = '9px monospace';
+    ctx.textBaseline = 'bottom';
+
+    if (!actionData || !actionData.isUnlocked) {
+        ctx.fillStyle = colors.textMuted || '#444444';
+        ctx.fillText('LOCK', x + size / 2, y + size - 3);
+    } else if (actionData.isReady) {
+        const pulse = Math.sin(window.actionBarState.pulsePhase) * 0.3 + 0.7;
+        ctx.fillStyle = `rgba(142, 68, 173, ${pulse})`;
+        ctx.fillText('READY', x + size / 2, y + size - 3);
+    } else {
+        ctx.fillStyle = colors.warning || '#f39c12';
+        ctx.fillText(actionData.cooldown.toFixed(1) + 's', x + size / 2, y + size - 3);
+    }
+
+    // Ready pulse
+    if (actionData && actionData.isReady && !isHovered) {
+        const pulseAlpha = 0.15 + Math.sin(window.actionBarState.pulsePhase) * 0.1;
+        ctx.strokeStyle = colors.corruption || '#8e44ad';
+        ctx.lineWidth = 2;
+        ctx.globalAlpha = pulseAlpha;
+        drawRoundedRect(ctx, x - 2, y - 2, size + 4, size + 4, cfg.cornerRadius + 2);
+        ctx.stroke();
+        ctx.globalAlpha = 1;
+    }
 
     ctx.restore();
 }
@@ -531,6 +687,7 @@ function findItemInPlayerInventory(player, itemId) {
 
 /**
  * Handle mouse move for hover detection
+ * Updated for 4-slot unified bar: [Skill5] [Consumable3] [Consumable4] [Dash]
  */
 function handleActionBarMouseMove(e) {
     if (!canvas || game.state !== 'playing') return;
@@ -540,7 +697,7 @@ function handleActionBarMouseMove(e) {
     const mouseY = e.clientY - rect.top;
 
     const cfg = ACTION_BAR_CONFIG;
-    const numSlots = 3;
+    const numSlots = 4;
     const barWidth = (cfg.slotSize * numSlots) + (cfg.slotSpacing * (numSlots - 1)) + 20;
     const barHeight = cfg.slotSize + 20;
     const barX = canvas.width - barWidth - cfg.barPadding;
@@ -554,15 +711,20 @@ function handleActionBarMouseMove(e) {
     }
 
     // Check which slot is hovered
+    // Layout: [Skill5] [Consumable3] [Consumable4] [Dash]
     let hoveredSlot = null;
-    for (let i = 0; i < 3; i++) {
+    for (let i = 0; i < numSlots; i++) {
         const slotX = barX + 10 + (i * (cfg.slotSize + cfg.slotSpacing));
         const slotY = barY + 10;
 
         if (mouseX >= slotX && mouseX <= slotX + cfg.slotSize &&
             mouseY >= slotY && mouseY <= slotY + cfg.slotSize) {
-            if (i < 2) {
-                hoveredSlot = `slot${i + 3}`;
+            if (i === 0) {
+                hoveredSlot = 'skill5';
+            } else if (i === 1) {
+                hoveredSlot = 'slot3';
+            } else if (i === 2) {
+                hoveredSlot = 'slot4';
             } else {
                 hoveredSlot = 'dash';
             }
@@ -575,6 +737,7 @@ function handleActionBarMouseMove(e) {
 
 /**
  * Initialize action bar click detection
+ * Updated for 4-slot unified bar
  */
 function initActionBarClickHandler() {
     if (typeof canvas === 'undefined') {
@@ -593,34 +756,42 @@ function initActionBarClickHandler() {
         const clickY = e.clientY - rect.top;
 
         const cfg = ACTION_BAR_CONFIG;
-        const numSlots = 3;
+        const numSlots = 4;
         const barWidth = (cfg.slotSize * numSlots) + (cfg.slotSpacing * (numSlots - 1)) + 20;
         const barHeight = cfg.slotSize + 20;
         const barX = canvas.width - barWidth - cfg.barPadding;
         const barY = canvas.height - barHeight - cfg.barPadding;
 
-        // Check consumable slots (3 and 4)
-        for (let i = 0; i < 2; i++) {
+        // Check each slot: [Skill5] [Consumable3] [Consumable4] [Dash]
+        for (let i = 0; i < numSlots; i++) {
             const slotX = barX + 10 + (i * (cfg.slotSize + cfg.slotSpacing));
             const slotY = barY + 10;
 
             if (clickX >= slotX && clickX <= slotX + cfg.slotSize &&
                 clickY >= slotY && clickY <= slotY + cfg.slotSize) {
-                const hotkey = i + 3;
-                if (typeof handleActiveCombatHotkey === 'function') {
-                    handleActiveCombatHotkey(hotkey, game.player);
+
+                if (i === 0) {
+                    // Weapon skill (hotkey 5)
+                    if (typeof handleActiveCombatHotkey === 'function') {
+                        handleActiveCombatHotkey(5, game.player);
+                    }
+                } else if (i === 1) {
+                    // Consumable 3
+                    if (typeof handleActiveCombatHotkey === 'function') {
+                        handleActiveCombatHotkey(3, game.player);
+                    }
+                } else if (i === 2) {
+                    // Consumable 4
+                    if (typeof handleActiveCombatHotkey === 'function') {
+                        handleActiveCombatHotkey(4, game.player);
+                    }
+                } else {
+                    // Dash
+                    if (typeof performDash === 'function') {
+                        performDash();
+                    }
                 }
                 return;
-            }
-        }
-
-        // Check dash slot
-        const dashSlotX = barX + 10 + (2 * (cfg.slotSize + cfg.slotSpacing));
-        const dashSlotY = barY + 10;
-        if (clickX >= dashSlotX && clickX <= dashSlotX + cfg.slotSize &&
-            clickY >= dashSlotY && clickY <= dashSlotY + cfg.slotSize) {
-            if (typeof performDash === 'function') {
-                performDash();
             }
         }
     });

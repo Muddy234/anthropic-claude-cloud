@@ -70,12 +70,16 @@ window.skillsBarState = {
 
 /**
  * Draw the skills action bar - CotDG style
- * Positioned above the consumable action bar
+ * NOTE: Weapon skill slot is now rendered by action-bar-ui.js in the unified bar
+ * This function now only renders ADDITIONAL expertise slots (6-9) if unlocked
  */
 function drawActionBar() {
     const player = game.player;
     if (!player || !player.skills) return;
     if (game.state !== 'playing') return;
+
+    // Weapon skill (slot 5) is now handled by action-bar-ui.js
+    // Only render additional expertise actions here if any are unlocked
 
     // Get colors from design system
     const colors = typeof UI_COLORS !== 'undefined' ? UI_COLORS : {
@@ -98,19 +102,8 @@ function drawActionBar() {
     // Update animation
     window.skillsBarState.pulsePhase = (window.skillsBarState.pulsePhase + 0.05) % (Math.PI * 2);
 
-    // Collect actions to display
+    // Collect actions to display - ONLY expertise slots 6-9 (weapon skill 5 is in unified bar)
     const actionsToShow = [];
-
-    // Slot 5: Weapon action
-    const weaponAction = getPlayerWeaponAction(player);
-    if (weaponAction) {
-        actionsToShow.push({
-            slot: 5,
-            action: weaponAction.action,
-            specialty: weaponAction.specialty,
-            available: weaponAction.available
-        });
-    }
 
     // Slots 6-9: Expertise actions (only if unlocked)
     const expertiseSlots = [
