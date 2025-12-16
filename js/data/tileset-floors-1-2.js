@@ -1,15 +1,16 @@
 // ============================================================================
 // TILESET REFERENCE - Floors 1-2: Stone Dungeon & Upper Depths
 // ============================================================================
-// File: dungeon_upper.png (to be provided by design team)
-// Tile Size: 16x16 pixels
+// File: dungeon_upper.png
+// Tile Size: 32x32 pixels
+// Image Size: 2816 x 1536 pixels (88 cols x 48 rows)
 // Based on reference image with stone dungeon, props, and decorations
 // ============================================================================
 
 const TILESET_FLOORS_1_2 = {
     // Spritesheet file path
     spritesheet: 'assets/spritesheet/dungeon_upper.png',
-    tileSize: 16,
+    tileSize: 32,
 
     // ========================================================================
     // STONE DUNGEON WALLS (Row 0)

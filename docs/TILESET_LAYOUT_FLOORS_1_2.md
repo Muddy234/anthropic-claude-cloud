@@ -5,7 +5,7 @@
 | Property | Value |
 |----------|-------|
 | **Filename** | `dungeon_upper.png` |
-| **Location** | `assets/spritesheets/dungeon_upper.png` |
+| **Location** | `assets/spritesheet/dungeon_upper.png` |
 | **Tile Size** | 16 x 16 pixels |
 | **Grid Size** | 12 columns x 13 rows |
 | **Total Dimensions** | 192 x 208 pixels |
@@ -248,7 +248,7 @@ For animated tiles, place animation frames **horizontally adjacent**:
 - [ ] Arrange tiles in 12 x 13 grid (16px each)
 - [ ] Include transparency for props/decorations
 - [ ] Match positions to grid layout above
-- [ ] Save as `assets/spritesheets/dungeon_upper.png`
+- [ ] Save as `assets/spritesheet/dungeon_upper.png`
 - [ ] Test in-game by loading floor 1
 
 ---
