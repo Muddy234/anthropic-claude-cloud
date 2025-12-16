@@ -234,8 +234,8 @@ function getFloor12FloorTile(themeName, x, y) {
     // Use hash to determine tile selection
     const hash = hashCoord(x, y);
 
-    // 75% primary (dirt1/dirt2), 25% secondary
-    if (hash % 100 < 75) {
+    // 85% primary (dirt1/dirt2), 15% secondary
+    if (hash % 100 < 85) {
         // Primary tiles - pick between dirt1 and dirt2
         const index = hash % primaryTiles.length;
         return primaryTiles[index];
@@ -278,7 +278,16 @@ function getFloor12WallTile(themeName, position, x, y) {
     // Use hash function for wall variety - ALL positions get random brick variant
     const hash = hashCoord(x || 0, y || 0);
     const index = hash % allWallVariants.length;
-    return allWallVariants[index];
+    const selectedTile = allWallVariants[index];
+
+    // DEBUG: Log first few wall tile selections to verify variation
+    if (!window._wallDebugCount) window._wallDebugCount = 0;
+    if (window._wallDebugCount < 20) {
+        console.log(`[WallTile] pos=(${x},${y}) hash=${hash} index=${index} tile=row${selectedTile.row},col${selectedTile.col}`);
+        window._wallDebugCount++;
+    }
+
+    return selectedTile;
 }
 
 /**
