@@ -180,12 +180,12 @@ function drawTileFromSet(ctx, tilesetName, tile, screenX, screenY, size) {
 function getFloorTileForTheme(theme, x, y) {
     const currentFloor = game.currentFloor || 1;
 
-    // Check if this is a Floor 1-2 theme
-    if (currentFloor <= 2 && typeof isFloor12Theme === 'function' && isFloor12Theme(theme)) {
+    // Floors 1-2: ALWAYS use Floor 1-2 tileset regardless of theme
+    if (currentFloor <= 2 && typeof getFloor12FloorTile === 'function') {
         return getFloor12FloorTile(theme, x, y);
     }
 
-    // Original floor tile logic for other floors
+    // Original floor tile logic for floors 3+
     const rand = (x * 7 + y * 11) % 10;  // 0-9
 
     if (rand < 5) {

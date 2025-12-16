@@ -194,6 +194,17 @@ const FLOOR_1_2_THEMES = {
 // ============================================================================
 
 /**
+ * Simple hash function for better tile distribution
+ */
+function hashCoord(x, y) {
+    // Multiple rounds of mixing for better randomness
+    let h = x * 374761393 + y * 668265263;
+    h = (h ^ (h >> 13)) * 1274126177;
+    h = h ^ (h >> 16);
+    return Math.abs(h);
+}
+
+/**
  * Get a random floor tile for a Floor 1-2 theme
  * Uses ALL floor variants for maximum variety
  */
@@ -214,10 +225,9 @@ function getFloor12FloorTile(themeName, x, y) {
         floors.floor_dirt6
     ];
 
-    // Use position-based pseudo-random for variety
-    // Using larger prime numbers for better distribution
-    const seed = ((x * 31 + y * 37) ^ (x * y * 13)) % allFloorTiles.length;
-    const index = Math.abs(seed) % allFloorTiles.length;
+    // Use hash function for better distribution without patterns
+    const hash = hashCoord(x, y);
+    const index = hash % allFloorTiles.length;
     return allFloorTiles[index];
 }
 
@@ -265,9 +275,9 @@ function getFloor12WallTile(themeName, position, x, y) {
         case 'right':
         case 'center':
         default:
-            // Use position-based pseudo-random for wall variety
-            const seed = ((x || 0) * 23 + (y || 0) * 29) ^ ((x || 0) * (y || 0) * 7);
-            const index = Math.abs(seed) % allWallVariants.length;
+            // Use hash function for better wall variety without patterns
+            const hash = hashCoord(x || 0, y || 0);
+            const index = hash % allWallVariants.length;
             return allWallVariants[index];
     }
 }
