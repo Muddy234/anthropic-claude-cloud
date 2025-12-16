@@ -97,11 +97,11 @@
 </head>
 <body>
     <div class="container">
-        <h1>🎨 Tileset Viewer - walls_floor.png</h1>
+        <h1>🎨 Tileset Viewer - dungeon_upper.png</h1>
         
         <div class="info">
             <h3>📊 Tileset Information:</h3>
-            <p><strong>Tile Size:</strong> 16x16 pixels</p>
+            <p><strong>Tile Size:</strong> 32x32 pixels</p>
             <p><strong>Image Size:</strong> <span id="imageSize">Loading...</span></p>
             <p><strong>Grid Size:</strong> <span id="gridSize">Loading...</span></p>
             <p><strong>Click any tile</strong> to see its coordinates!</p>
@@ -139,32 +139,33 @@
     </div>
     
     <script>
-        const tileSize = 16;
+        const tileSize = 32;
         let tilesetImage = null;
         let canvas = null;
         let ctx = null;
         
-        // Current mapping from your code
+        // Current mapping - to be updated after visual inspection
+        // Using the viewer to identify correct coordinates for dungeon_upper.png
         const currentMapping = {
-            'Floor Variant 1': { row: 8, col: 0 },
-            'Floor Variant 2': { row: 8, col: 1 },
-            'Floor Variant 3': { row: 9, col: 0 },
-            'Floor Variant 4': { row: 9, col: 1 },
+            'Stone Floor 1': { row: 0, col: 0 },
+            'Stone Floor 2': { row: 0, col: 1 },
+            'Stone Floor 3': { row: 0, col: 2 },
+            'Stone Floor 4': { row: 0, col: 3 },
             'Wall Top-Left': { row: 0, col: 0 },
             'Wall Top-Center': { row: 0, col: 1 },
             'Wall Top-Right': { row: 0, col: 2 },
-            'Wall Left': { row: 0, col: 3 },
-            'Wall Center': { row: 0, col: 4 },
-            'Wall Right': { row: 0, col: 5 },
-            'Wall Bottom-Left': { row: 1, col: 0 },
-            'Wall Bottom-Center': { row: 1, col: 1 },
-            'Wall Bottom-Right': { row: 1, col: 2 }
+            'Wall Left': { row: 1, col: 0 },
+            'Wall Center': { row: 1, col: 1 },
+            'Wall Right': { row: 1, col: 2 },
+            'Wall Bottom-Left': { row: 2, col: 0 },
+            'Wall Bottom-Center': { row: 2, col: 1 },
+            'Wall Bottom-Right': { row: 2, col: 2 }
         };
         
         // Load the tileset
         function loadTileset() {
             tilesetImage = new Image();
-            tilesetImage.src = 'assets/spritesheet/walls_floors/walls_floor.png';
+            tilesetImage.src = 'assets/spritesheet/dungeon_upper.png';
             
             tilesetImage.onload = () => {
                 console.log('✅ Tileset loaded!');
@@ -184,14 +185,14 @@
             };
             
             tilesetImage.onerror = () => {
-                alert('❌ Failed to load tileset! Make sure the path is correct:\nassets/spritesheet/walls_floor.png');
+                alert('❌ Failed to load tileset! Make sure the path is correct:\nassets/spritesheet/dungeon_upper.png');
             };
         }
         
         // Setup canvas
         function setupCanvas(cols, rows) {
             canvas = document.getElementById('tilesetCanvas');
-            const scale = 3; // Make it bigger for visibility
+            const scale = 1; // Original size (32x32 tiles are already visible)
             canvas.width = cols * tileSize * scale;
             canvas.height = rows * tileSize * scale;
             ctx = canvas.getContext('2d');
@@ -212,7 +213,7 @@
         
         // Draw the tileset with grid
         function drawTileset(cols, rows) {
-            const scale = 3;
+            const scale = 1;
             
             // Draw the image scaled up
             ctx.drawImage(tilesetImage, 0, 0, canvas.width, canvas.height);
@@ -237,31 +238,8 @@
                 ctx.stroke();
             }
             
-            // Draw coordinate labels
-            ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
-            ctx.font = 'bold 10px monospace';
-            ctx.textAlign = 'center';
-            ctx.textBaseline = 'middle';
-            
-            for (let row = 0; row < rows; row++) {
-                for (let col = 0; col < cols; col++) {
-                    const x = col * tileSize * scale + (tileSize * scale) / 2;
-                    const y = row * tileSize * scale + (tileSize * scale) / 2;
-                    
-                    // Draw semi-transparent background for text
-                    ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
-                    ctx.fillRect(
-                        col * tileSize * scale + 2,
-                        row * tileSize * scale + 2,
-                        tileSize * scale - 4,
-                        12
-                    );
-                    
-                    // Draw coordinate
-                    ctx.fillStyle = '#FFD700';
-                    ctx.fillText(`${row},${col}`, x, y - 10);
-                }
-            }
+            // Draw coordinate labels (only on hover/click due to density)
+            // Skip coordinate overlay for large tilesets - use click to see coords
         }
         
         // Show selected tile
@@ -313,7 +291,7 @@
                 
                 row.innerHTML = `
                     <td><strong>${name}</strong></td>
-                    <td><code>TILESET.DARK_STONE.${name.toLowerCase().replace(/[- ]/g, '_')}</code></td>
+                    <td><code>FLOORS_1_2.${name.toLowerCase().replace(/[- ]/g, '_')}</code></td>
                     <td class="coord">${coords.row}</td>
                     <td class="coord">${coords.col}</td>
                     <td></td>
