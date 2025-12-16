@@ -195,12 +195,14 @@ const FLOOR_1_2_THEMES = {
 
 /**
  * Simple hash function for better tile distribution
+ * Uses modular arithmetic to avoid 32-bit overflow issues
  */
 function hashCoord(x, y) {
-    // Multiple rounds of mixing for better randomness
-    let h = x * 374761393 + y * 668265263;
-    h = (h ^ (h >> 13)) * 1274126177;
-    h = h ^ (h >> 16);
+    // Use smaller primes and modular arithmetic to stay in safe range
+    const MOD = 2147483647; // 2^31 - 1 (largest 32-bit signed int)
+    let h = ((x * 2654435761) % MOD + (y * 2246822519) % MOD) % MOD;
+    h = ((h ^ (h >>> 13)) * 1597334677) % MOD;
+    h = (h ^ (h >>> 16)) % MOD;
     return Math.abs(h);
 }
 
