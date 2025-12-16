@@ -208,42 +208,56 @@ function hashCoord(x, y) {
 
 /**
  * Get a random floor tile for a Floor 1-2 theme
- * Uses ALL floor variants for maximum variety
+ * 75% floor_dirt1/floor_dirt2, 25% other variants
  */
 function getFloor12FloorTile(themeName, x, y) {
     const floors = TILESET_FLOORS_1_2.STONE_FLOORS;
 
-    // Use ALL floor tiles for variety
-    const allFloorTiles = [
+    // Primary tiles (75% of floors)
+    const primaryTiles = [
+        floors.floor_dirt1,
+        floors.floor_dirt2
+    ];
+
+    // Secondary tiles (25% of floors)
+    const secondaryTiles = [
         floors.floor_stone1,
         floors.floor_stone2,
         floors.floor_stone3,
         floors.floor_stone4,
-        floors.floor_dirt1,
-        floors.floor_dirt2,
         floors.floor_dirt3,
         floors.floor_dirt4,
         floors.floor_dirt5,
         floors.floor_dirt6
     ];
 
-    // Use hash function for better distribution without patterns
+    // Use hash to determine tile selection
     const hash = hashCoord(x, y);
-    const index = hash % allFloorTiles.length;
-    return allFloorTiles[index];
+
+    // 75% primary (dirt1/dirt2), 25% secondary
+    if (hash % 100 < 75) {
+        // Primary tiles - pick between dirt1 and dirt2
+        const index = hash % primaryTiles.length;
+        return primaryTiles[index];
+    } else {
+        // Secondary tiles - random from the rest
+        const index = hash % secondaryTiles.length;
+        return secondaryTiles[index];
+    }
 }
 
 /**
  * Get a wall tile for a Floor 1-2 theme with variation
+ * ALL wall positions use brick variants for consistent look
  * @param {string} themeName - The room theme
- * @param {string} position - Wall position (top_left, top, left, center, etc.)
+ * @param {string} position - Wall position (ignored - all positions use brick variants)
  * @param {number} x - X coordinate for pseudo-random variation
  * @param {number} y - Y coordinate for pseudo-random variation
  */
 function getFloor12WallTile(themeName, position, x, y) {
     const walls = TILESET_FLOORS_1_2.STONE_WALLS;
 
-    // All wall variants for random selection on non-corner positions
+    // All wall variants - used for ALL positions including corners
     const allWallVariants = [
         walls.wall_brick_clean1,
         walls.wall_brick_clean2,
@@ -261,27 +275,10 @@ function getFloor12WallTile(themeName, position, x, y) {
         walls.wall_brick_decorative
     ];
 
-    // Corners need specific tiles, but other positions get random variation
-    switch (position) {
-        case 'top_left':
-            return walls.wall_top_left;
-        case 'top_right':
-            return walls.wall_top_right;
-        case 'bottom_left':
-            return walls.wall_bottom_left;
-        case 'bottom_right':
-            return walls.wall_bottom_right;
-        case 'top':
-        case 'bottom':
-        case 'left':
-        case 'right':
-        case 'center':
-        default:
-            // Use hash function for better wall variety without patterns
-            const hash = hashCoord(x || 0, y || 0);
-            const index = hash % allWallVariants.length;
-            return allWallVariants[index];
-    }
+    // Use hash function for wall variety - ALL positions get random brick variant
+    const hash = hashCoord(x || 0, y || 0);
+    const index = hash % allWallVariants.length;
+    return allWallVariants[index];
 }
 
 /**
