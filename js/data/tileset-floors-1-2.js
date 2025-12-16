@@ -195,48 +195,81 @@ const FLOOR_1_2_THEMES = {
 
 /**
  * Get a random floor tile for a Floor 1-2 theme
+ * Uses ALL floor variants for maximum variety
  */
 function getFloor12FloorTile(themeName, x, y) {
     const floors = TILESET_FLOORS_1_2.STONE_FLOORS;
 
-    // Default floor tiles to cycle through
-    const defaultTiles = [
+    // Use ALL floor tiles for variety
+    const allFloorTiles = [
         floors.floor_stone1,
         floors.floor_stone2,
         floors.floor_stone3,
         floors.floor_stone4,
         floors.floor_dirt1,
-        floors.floor_dirt2
+        floors.floor_dirt2,
+        floors.floor_dirt3,
+        floors.floor_dirt4,
+        floors.floor_dirt5,
+        floors.floor_dirt6
     ];
 
     // Use position-based pseudo-random for variety
-    const seed = (x * 7 + y * 13) % defaultTiles.length;
-    return defaultTiles[seed];
+    // Using larger prime numbers for better distribution
+    const seed = ((x * 31 + y * 37) ^ (x * y * 13)) % allFloorTiles.length;
+    const index = Math.abs(seed) % allFloorTiles.length;
+    return allFloorTiles[index];
 }
 
 /**
- * Get a wall tile for a Floor 1-2 theme
+ * Get a wall tile for a Floor 1-2 theme with variation
+ * @param {string} themeName - The room theme
+ * @param {string} position - Wall position (top_left, top, left, center, etc.)
+ * @param {number} x - X coordinate for pseudo-random variation
+ * @param {number} y - Y coordinate for pseudo-random variation
  */
-function getFloor12WallTile(themeName, position) {
+function getFloor12WallTile(themeName, position, x, y) {
     const walls = TILESET_FLOORS_1_2.STONE_WALLS;
-    const wallsLower = TILESET_FLOORS_1_2.STONE_WALLS_LOWER;
 
-    const positionMap = {
-        'top_left': walls.wall_top_left,
-        'top': walls.wall_top_center,
-        'top_right': walls.wall_top_right,
-        'left': wallsLower.wall_left,
-        'center': wallsLower.wall_center,
-        'right': wallsLower.wall_right,
-        'bottom': wallsLower.wall_bottom,
-        'bottom_left': walls.wall_bottom_left,
-        'bottom_center': walls.wall_bottom_center,
-        'bottom_right': walls.wall_bottom_right,
-        'corner_bl': wallsLower.inner_corner_bl,
-        'corner_br': wallsLower.inner_corner_br
-    };
+    // All wall variants for random selection on non-corner positions
+    const allWallVariants = [
+        walls.wall_brick_clean1,
+        walls.wall_brick_clean2,
+        walls.wall_brick_clean3,
+        walls.wall_brick_clean4,
+        walls.wall_brick_clean5,
+        walls.wall_brick_clean6,
+        walls.wall_brick_clean7,
+        walls.wall_brick_clean8,
+        walls.wall_brick_rock,
+        walls.wall_brick_cracked1,
+        walls.wall_brick_cracked2,
+        walls.wall_brick_cracked3,
+        walls.wall_brick_cracked4,
+        walls.wall_brick_decorative
+    ];
 
-    return positionMap[position] || wallsLower.wall_center;
+    // Corners need specific tiles, but other positions get random variation
+    switch (position) {
+        case 'top_left':
+            return walls.wall_top_left;
+        case 'top_right':
+            return walls.wall_top_right;
+        case 'bottom_left':
+            return walls.wall_bottom_left;
+        case 'bottom_right':
+            return walls.wall_bottom_right;
+        case 'top':
+        case 'bottom':
+        case 'left':
+        case 'right':
+        case 'center':
+        default:
+            // Use position-based pseudo-random for wall variety
+            const seed = ((x || 0) * 23 + (y || 0) * 29) ^ ((x || 0) * (y || 0) * 7);
+            const index = Math.abs(seed) % allWallVariants.length;
+            return allWallVariants[index];
+    }
 }
 
 /**

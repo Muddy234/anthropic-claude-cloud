@@ -323,6 +323,8 @@ function renderRoomWalls(ctx, room, wallSet, camX, camY, effectiveTileSize, offs
 function renderTopWall(ctx, room, wallSet, camX, camY, effectiveTileSize, offset) {
     const wallY = room.y;
     const tileset = wallSet.tileset;
+    const currentFloor = game.currentFloor || 1;
+    const useVariation = currentFloor <= 2 && typeof getFloor12WallTile === 'function';
 
     for (let x = room.x; x < room.x + room.width; x++) {
         const tile = game.map[wallY] && game.map[wallY][x];
@@ -333,11 +335,11 @@ function renderTopWall(ctx, room, wallSet, camX, camY, effectiveTileSize, offset
 
         let wallTile;
         if (x === room.x) {
-            wallTile = wallSet.wall_top_left;
+            wallTile = useVariation ? getFloor12WallTile(null, 'top_left', x, wallY) : wallSet.wall_top_left;
         } else if (x === room.x + room.width - 1) {
-            wallTile = wallSet.wall_top_right;
+            wallTile = useVariation ? getFloor12WallTile(null, 'top_right', x, wallY) : wallSet.wall_top_right;
         } else {
-            wallTile = wallSet.wall_top_center;
+            wallTile = useVariation ? getFloor12WallTile(null, 'top', x, wallY) : wallSet.wall_top_center;
         }
 
         drawTile(ctx, wallTile, screenX, screenY, effectiveTileSize, tileset);
@@ -350,6 +352,8 @@ function renderTopWall(ctx, room, wallSet, camX, camY, effectiveTileSize, offset
 function renderBottomWall(ctx, room, wallSet, camX, camY, effectiveTileSize, offset) {
     const wallY = room.y + room.height - 1;
     const tileset = wallSet.tileset;
+    const currentFloor = game.currentFloor || 1;
+    const useVariation = currentFloor <= 2 && typeof getFloor12WallTile === 'function';
 
     for (let x = room.x; x < room.x + room.width; x++) {
         const tile = game.map[wallY] && game.map[wallY][x];
@@ -360,11 +364,11 @@ function renderBottomWall(ctx, room, wallSet, camX, camY, effectiveTileSize, off
 
         let wallTile;
         if (x === room.x) {
-            wallTile = wallSet.wall_bottom_left || wallSet.wall_left;
+            wallTile = useVariation ? getFloor12WallTile(null, 'bottom_left', x, wallY) : (wallSet.wall_bottom_left || wallSet.wall_left);
         } else if (x === room.x + room.width - 1) {
-            wallTile = wallSet.wall_bottom_right || wallSet.wall_right;
+            wallTile = useVariation ? getFloor12WallTile(null, 'bottom_right', x, wallY) : (wallSet.wall_bottom_right || wallSet.wall_right);
         } else {
-            wallTile = wallSet.wall_bottom_center || wallSet.wall_top_center;
+            wallTile = useVariation ? getFloor12WallTile(null, 'bottom', x, wallY) : (wallSet.wall_bottom_center || wallSet.wall_top_center);
         }
 
         drawTile(ctx, wallTile, screenX, screenY, effectiveTileSize, tileset);
@@ -377,6 +381,8 @@ function renderBottomWall(ctx, room, wallSet, camX, camY, effectiveTileSize, off
 function renderLeftWall(ctx, room, wallSet, camX, camY, effectiveTileSize, offset) {
     const wallX = room.x;
     const tileset = wallSet.tileset;
+    const currentFloor = game.currentFloor || 1;
+    const useVariation = currentFloor <= 2 && typeof getFloor12WallTile === 'function';
 
     for (let y = room.y + 1; y < room.y + room.height - 1; y++) {
         const tile = game.map[y] && game.map[y][wallX];
@@ -385,7 +391,8 @@ function renderLeftWall(ctx, room, wallSet, camX, camY, effectiveTileSize, offse
         const screenX = (wallX - camX) * effectiveTileSize + offset;
         const screenY = (y - camY) * effectiveTileSize;
 
-        drawTile(ctx, wallSet.wall_left, screenX, screenY, effectiveTileSize, tileset);
+        const wallTile = useVariation ? getFloor12WallTile(null, 'left', wallX, y) : wallSet.wall_left;
+        drawTile(ctx, wallTile, screenX, screenY, effectiveTileSize, tileset);
     }
 }
 
@@ -395,6 +402,8 @@ function renderLeftWall(ctx, room, wallSet, camX, camY, effectiveTileSize, offse
 function renderRightWall(ctx, room, wallSet, camX, camY, effectiveTileSize, offset) {
     const wallX = room.x + room.width - 1;
     const tileset = wallSet.tileset;
+    const currentFloor = game.currentFloor || 1;
+    const useVariation = currentFloor <= 2 && typeof getFloor12WallTile === 'function';
 
     for (let y = room.y + 1; y < room.y + room.height - 1; y++) {
         const tile = game.map[y] && game.map[y][wallX];
@@ -403,18 +412,29 @@ function renderRightWall(ctx, room, wallSet, camX, camY, effectiveTileSize, offs
         const screenX = (wallX - camX) * effectiveTileSize + offset;
         const screenY = (y - camY) * effectiveTileSize;
 
-        drawTile(ctx, wallSet.wall_right, screenX, screenY, effectiveTileSize, tileset);
+        const wallTile = useVariation ? getFloor12WallTile(null, 'right', wallX, y) : wallSet.wall_right;
+        drawTile(ctx, wallTile, screenX, screenY, effectiveTileSize, tileset);
     }
 }
 
 /**
  * Draw wall tile (for gap fill between rooms)
+ * @param {number} gridX - Optional grid X coordinate for variation
+ * @param {number} gridY - Optional grid Y coordinate for variation
  */
-function drawWallTile(ctx, screenX, screenY, size) {
+function drawWallTile(ctx, screenX, screenY, size, gridX, gridY) {
     const wallSet = getWallSet();
+    const currentFloor = game.currentFloor || 1;
+    const useVariation = currentFloor <= 2 && typeof getFloor12WallTile === 'function';
 
-    if (wallSet && wallSet.wall_center) {
-        drawTile(ctx, wallSet.wall_center, screenX, screenY, size, wallSet.tileset);
+    if (wallSet) {
+        let wallTile;
+        if (useVariation && gridX !== undefined && gridY !== undefined) {
+            wallTile = getFloor12WallTile(null, 'center', gridX, gridY);
+        } else {
+            wallTile = wallSet.wall_center;
+        }
+        drawTile(ctx, wallTile, screenX, screenY, size, wallSet.tileset);
     } else {
         ctx.fillStyle = '#2d3748';
         ctx.fillRect(screenX, screenY, size, size);
