@@ -18,46 +18,28 @@ const TILESET_FLOORS_1_2 = {
     // ========================================================================
     STONE_WALLS: {
         // Basic wall variations
-        wall_brick_clean: { row: 0, col: 0 },
-        wall_brick_cracked: { row: 0, col: 1 },
-        wall_brick_mossy: { row: 0, col: 2 },
-        wall_brick_damaged: { row: 0, col: 3 },
-
-        // Arched doorways
-        door_arch_stone: { row: 0, col: 4 },
-        door_arch_wood: { row: 0, col: 5 },
-
-        // Mine/cave entrances
-        entrance_mine: { row: 0, col: 6 },
-        entrance_cave: { row: 0, col: 7 },
+        wall_brick_clean1: { row: 0, col: 5 },
+        wall_brick_clean2: { row: 0, col: 13 },
+        wall_brick_clean3: { row: 0, col: 16 },
+        wall_brick_clean4: { row: 0, col: 20 },
+        wall_brick_clean5: { row: 0, col: 21 },
+        wall_brick_clean6: { row: 0, col: 22 },
+        wall_brick_clean7: { row: 8, col: 4 },
+        wall_brick_clean8: { row: 8, col: 13 },
+	wall_brick_rock: { row: 0, col: 4},
+        wall_brick_cracked1: { row: 8, col: 9 },
+        wall_brick_cracked2: { row: 8, col: 14 },
+        wall_brick_cracked3: { row: 4, col: 21 },
+        wall_brick_cracked4: { row: 8, col: 5 },
+        wall_brick_decorative: { row: 9, col: 14 },
 
         // Wall tops and edges
-        wall_top_left: { row: 0, col: 8 },
-        wall_top_center: { row: 0, col: 9 },
-        wall_top_right: { row: 0, col: 10 },
-        wall_corner_outer: { row: 0, col: 11 }
-    },
-
-    // ========================================================================
-    // STONE DUNGEON WALLS - LOWER SECTIONS (Row 1)
-    // Wall bottoms, sides, and inner corners
-    // ========================================================================
-    STONE_WALLS_LOWER: {
-        wall_left: { row: 1, col: 0 },
-        wall_center: { row: 1, col: 1 },
-        wall_right: { row: 1, col: 2 },
-        wall_bottom: { row: 1, col: 3 },
-
-        // Inner corners for room construction
-        inner_corner_tl: { row: 1, col: 4 },
-        inner_corner_tr: { row: 1, col: 5 },
-        inner_corner_bl: { row: 1, col: 6 },
-        inner_corner_br: { row: 1, col: 7 },
-
-        // Pillar/column walls
-        wall_pillar_top: { row: 1, col: 8 },
-        wall_pillar_mid: { row: 1, col: 9 },
-        wall_pillar_base: { row: 1, col: 10 }
+        wall_top_left: { row: 2, col: 2 },
+        wall_bottom_left: { row: 3, col: 2 },
+        wall_top_center: { row: 6, col: 21 },
+        wall_bottom_center: { row: 2, col: 8 },
+        wall_top_right: { row: 2, col: 3 },
+        wall_bottom_right: { row: 3, col: 3 },
     },
 
     // ========================================================================
@@ -65,53 +47,18 @@ const TILESET_FLOORS_1_2 = {
     // Various stone floor patterns
     // ========================================================================
     STONE_FLOORS: {
-        floor_stone_clean: { row: 2, col: 0 },
-        floor_stone_cracked: { row: 2, col: 1 },
-        floor_stone_worn: { row: 2, col: 2 },
-        floor_stone_mossy: { row: 2, col: 3 },
-
-        // Large tile patterns
-        floor_large_tile_1: { row: 2, col: 4 },
-        floor_large_tile_2: { row: 2, col: 5 },
-        floor_large_tile_3: { row: 2, col: 6 },
-        floor_large_tile_4: { row: 2, col: 7 },
-
-        // Detailed/decorated floors
-        floor_detailed_1: { row: 2, col: 8 },
-        floor_detailed_2: { row: 2, col: 9 }
+        floor_dirt1: { row: 5, col: 0 },
+        floor_dirt2: { row: 5, col: 1 },
+        floor_dirt3: { row: 10, col: 0 },
+        floor_dirt4: { row: 10, col: 1 },
+        floor_dirt5: { row: 9, col: 0 },
+        floor_dirt6: { row: 9, col: 1 },
+        floor_stone1: { row: 3, col: 0 },
+        floor_stone2: { row: 3, col: 1 },
+        floor_stone3: { row: 2, col: 1 },
+        floor_stone4: { row: 2, col: 0 },
     },
 
-    // ========================================================================
-    // FLOOR TILES - DIRT/EARTH (Row 3)
-    // Natural ground and transitions
-    // ========================================================================
-    EARTH_FLOORS: {
-        floor_dirt_1: { row: 3, col: 0 },
-        floor_dirt_2: { row: 3, col: 1 },
-        floor_earth_rocky: { row: 3, col: 2 },
-        floor_mud: { row: 3, col: 3 },
-
-        // Stone-to-dirt transitions
-        transition_stone_dirt_n: { row: 3, col: 4 },
-        transition_stone_dirt_s: { row: 3, col: 5 },
-        transition_stone_dirt_e: { row: 3, col: 6 },
-        transition_stone_dirt_w: { row: 3, col: 7 }
-    },
-
-    // ========================================================================
-    // PIT/VOID TILES (Row 4)
-    // Cave openings and bottomless pits
-    // ========================================================================
-    PITS: {
-        pit_center: { row: 4, col: 0 },
-        pit_edge_n: { row: 4, col: 1 },
-        pit_edge_s: { row: 4, col: 2 },
-        pit_edge_e: { row: 4, col: 3 },
-        pit_edge_w: { row: 4, col: 4 },
-        pit_corner_nw: { row: 4, col: 5 },
-        pit_corner_ne: { row: 4, col: 6 },
-        pit_corner_sw: { row: 4, col: 7 },
-        pit_corner_se: { row: 4, col: 8 }
     },
 
     // ========================================================================
@@ -119,19 +66,14 @@ const TILESET_FLOORS_1_2 = {
     // Blue and purple crystal formations
     // ========================================================================
     CRYSTALS: {
-        crystal_blue_small: { row: 5, col: 0 },
-        crystal_blue_medium: { row: 5, col: 1 },
-        crystal_blue_large: { row: 5, col: 2 },
-        crystal_blue_cluster: { row: 5, col: 3 },
+        crystal_blue_medium: { row: 4, col: 2 },
+        crystal_blue_small: { row: 4, col: 9 },
 
-        crystal_purple_small: { row: 5, col: 4 },
-        crystal_purple_medium: { row: 5, col: 5 },
-        crystal_purple_large: { row: 5, col: 6 },
-        crystal_purple_cluster: { row: 5, col: 7 },
+        crystal_purple_small: { row: 4, col: 17 },
+        crystal_purple_medium: { row: 4, col: 3 },
 
         // Mixed crystal formations
-        crystal_mixed_1: { row: 5, col: 8 },
-        crystal_mixed_2: { row: 5, col: 9 }
+        crystal_mixed_1: { row: 4, col: 11 },
     },
 
     // ========================================================================
@@ -139,37 +81,9 @@ const TILESET_FLOORS_1_2 = {
     // Progressive damage/corruption patterns
     // ========================================================================
     LAVA_CRACKS: {
-        crack_lava_light: { row: 6, col: 0 },
-        crack_lava_medium: { row: 6, col: 1 },
-        crack_lava_heavy: { row: 6, col: 2 },
-        crack_lava_severe: { row: 6, col: 3 },
+        crack_lava_light: { row: 6, col: 17 },
+        crack_lava_medium: { row: 5, col: 18 },
 
-        // Spreading patterns
-        crack_spread_n: { row: 6, col: 4 },
-        crack_spread_s: { row: 6, col: 5 },
-        crack_spread_e: { row: 6, col: 6 },
-        crack_spread_w: { row: 6, col: 7 },
-        crack_spread_center: { row: 6, col: 8 }
-    },
-
-    // ========================================================================
-    // PROPS - STORAGE (Row 7)
-    // Crates, barrels, and containers
-    // ========================================================================
-    PROPS_STORAGE: {
-        crate_wood_1: { row: 7, col: 0 },
-        crate_wood_2: { row: 7, col: 1 },
-        crate_metal: { row: 7, col: 2 },
-        crate_broken: { row: 7, col: 3 },
-
-        barrel_wood_1: { row: 7, col: 4 },
-        barrel_wood_2: { row: 7, col: 5 },
-        barrel_metal: { row: 7, col: 6 },
-        barrel_broken: { row: 7, col: 7 },
-
-        // Stacked variations
-        crates_stacked: { row: 7, col: 8 },
-        barrels_stacked: { row: 7, col: 9 }
     },
 
     // ========================================================================
@@ -177,19 +91,8 @@ const TILESET_FLOORS_1_2 = {
     // Lanterns and light sources
     // ========================================================================
     PROPS_LIGHTING: {
-        lantern_hanging_lit: { row: 8, col: 0 },
-        lantern_hanging_unlit: { row: 8, col: 1 },
-        lantern_standing_lit: { row: 8, col: 2 },
-        lantern_standing_unlit: { row: 8, col: 3 },
+        torch_wall_lit: { row: 8, col: 6 },
 
-        torch_wall_lit: { row: 8, col: 4 },
-        torch_wall_unlit: { row: 8, col: 5 },
-        torch_floor_lit: { row: 8, col: 6 },
-        torch_floor_unlit: { row: 8, col: 7 },
-
-        // Brazier
-        brazier_lit: { row: 8, col: 8 },
-        brazier_unlit: { row: 8, col: 9 }
     },
 
     // ========================================================================
@@ -197,68 +100,8 @@ const TILESET_FLOORS_1_2 = {
     // Pillars, supports, chains
     // ========================================================================
     PROPS_STRUCTURAL: {
-        pillar_stone_top: { row: 9, col: 0 },
-        pillar_stone_mid: { row: 9, col: 1 },
-        pillar_stone_base: { row: 9, col: 2 },
-        pillar_stone_broken: { row: 9, col: 3 },
-
-        pillar_wood_top: { row: 9, col: 4 },
-        pillar_wood_mid: { row: 9, col: 5 },
-        pillar_wood_base: { row: 9, col: 6 },
-        pillar_wood_broken: { row: 9, col: 7 },
-
-        chain_vertical: { row: 9, col: 8 },
-        rope_coiled: { row: 9, col: 9 }
+        rope_coiled: { row: 8, col: 8 }
     },
-
-    // ========================================================================
-    // PROPS - REMAINS (Row 10)
-    // Skeletons, bones, and debris
-    // ========================================================================
-    PROPS_REMAINS: {
-        skeleton_sitting: { row: 10, col: 0 },
-        skeleton_lying: { row: 10, col: 1 },
-        skeleton_chained: { row: 10, col: 2 },
-        bones_pile_small: { row: 10, col: 3 },
-        bones_pile_large: { row: 10, col: 4 },
-        skull_single: { row: 10, col: 5 },
-        skulls_pile: { row: 10, col: 6 },
-
-        // Debris
-        rubble_stone: { row: 10, col: 7 },
-        rubble_wood: { row: 10, col: 8 }
-    },
-
-    // ========================================================================
-    // PROPS - MINING (Row 11)
-    // Mining equipment and tools
-    // ========================================================================
-    PROPS_MINING: {
-        pickaxe_wall: { row: 11, col: 0 },
-        pickaxe_floor: { row: 11, col: 1 },
-        shovel: { row: 11, col: 2 },
-        mining_cart: { row: 11, col: 3 },
-        mining_cart_full: { row: 11, col: 4 },
-        lantern_mining: { row: 11, col: 5 },
-        rail_track_h: { row: 11, col: 6 },
-        rail_track_v: { row: 11, col: 7 }
-    },
-
-    // ========================================================================
-    // PROPS - PRISON (Row 12)
-    // Cages, bars, and restraints
-    // ========================================================================
-    PROPS_PRISON: {
-        bars_vertical: { row: 12, col: 0 },
-        bars_horizontal: { row: 12, col: 1 },
-        cage_small: { row: 12, col: 2 },
-        cage_large_tl: { row: 12, col: 3 },
-        cage_large_tr: { row: 12, col: 4 },
-        cage_large_bl: { row: 12, col: 5 },
-        cage_large_br: { row: 12, col: 6 },
-        shackles: { row: 12, col: 7 }
-    }
-};
 
 // ============================================================================
 // FLOOR 1-2 ROOM THEMES
