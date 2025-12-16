@@ -8,7 +8,7 @@
 
 const TILESET_FLOORS_1_2 = {
     // Spritesheet file path
-    spritesheet: 'assets/spritesheets/dungeon_upper.png',
+    spritesheet: 'assets/spritesheet/dungeon_upper.png',
     tileSize: 16,
 
     // ========================================================================
