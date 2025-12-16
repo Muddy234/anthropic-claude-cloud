@@ -164,12 +164,13 @@ function applyDungeonToGame() {
         }
     }
 
-    // Fill remaining tiles with walls
+    // Keep void tiles as void (inaccessible black areas)
+    // Don't convert to walls - void areas should remain black/inaccessible
     for (let y = 0; y < GRID_HEIGHT; y++) {
         for (let x = 0; x < GRID_WIDTH; x++) {
             if (game.map[y][x].type === 'void') {
                 game.map[y][x] = {
-                    type: 'wall',
+                    type: 'void',
                     blocked: true
                 };
             }

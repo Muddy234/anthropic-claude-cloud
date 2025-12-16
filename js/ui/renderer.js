@@ -777,6 +777,9 @@ const camY = game.camera.y + (shakeOffset.y / (TILE_SIZE * currentZoom));
                     ctx.fillRect(screenX, screenY, effectiveTileSize, effectiveTileSize);
                     ctx.strokeStyle = '#111';
                     ctx.strokeRect(screenX, screenY, effectiveTileSize, effectiveTileSize);
+                } else {
+                    // Unknown tile type or undefined - render as void (black)
+                    drawVoidTile(ctx, screenX, screenY, effectiveTileSize);
                 }
 
                 // FOG OF WAR: Apply dimming overlay to ALL tiles
