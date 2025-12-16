@@ -40,7 +40,7 @@ function initTileset() {
 
     // Load floors 1-2 tileset (stone dungeon)
     tilesets.floors_1_2 = new Image();
-    tilesets.floors_1_2.src = 'assets/spritesheets/dungeon_upper.png';
+    tilesets.floors_1_2.src = 'assets/spritesheet/dungeon_upper.png';
 
     tilesets.floors_1_2.onload = () => {
         tilesetState.floors12Loaded = true;
