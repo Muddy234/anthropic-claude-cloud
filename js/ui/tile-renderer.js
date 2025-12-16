@@ -228,8 +228,8 @@ function drawDoorwayTile(ctx, screenX, screenY, size) {
     const currentFloor = game.currentFloor || 1;
 
     if (currentFloor <= 2 && tilesetState.floors12Loaded && typeof TILESET_FLOORS_1_2 !== 'undefined') {
-        // Use Floor 1-2 door tile
-        drawTile(ctx, TILESET_FLOORS_1_2.STONE_WALLS.door_arch_stone, screenX, screenY, size, tilesets.floors_1_2);
+        // Use Floor 1-2 floor tile for doorways (passable like floors)
+        drawTile(ctx, TILESET_FLOORS_1_2.STONE_FLOORS.floor_stone1, screenX, screenY, size, tilesets.floors_1_2);
     } else if (isTilesetLoaded() && typeof TILESET !== 'undefined') {
         // Use default door tile
         drawTile(ctx, TILESET.DECORATIVE.door_wooden_closed, screenX, screenY, size, tilesets.default);
