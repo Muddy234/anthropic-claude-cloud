@@ -90,6 +90,22 @@ Object.defineProperty(window, 'tilesetLoaded', {
 // TILE DRAWING FUNCTIONS
 // ============================================================================
 
+// Tileset configuration for different spritesheets
+const TILESET_CONFIG = {
+    default: {
+        tileSize: 16,       // Size of each tile in the spritesheet
+        spacing: 0,         // Gap between tiles (if any)
+        offsetX: 0,         // Starting X offset in spritesheet
+        offsetY: 0          // Starting Y offset in spritesheet
+    },
+    floors_1_2: {
+        tileSize: 32,       // 32x32 pixel tiles
+        spacing: 0,         // Adjust if there's whitespace between tiles
+        offsetX: 0,         // Adjust if tiles don't start at (0,0)
+        offsetY: 0
+    }
+};
+
 /**
  * Draw a single tile from the spritesheet with CRISP pixel-perfect rendering
  * @param {CanvasRenderingContext2D} ctx - Canvas context
@@ -110,20 +126,35 @@ function drawTile(ctx, tile, screenX, screenY, size, tileset = null) {
         return;
     }
 
+    // Determine which config to use based on tileset
+    let config = TILESET_CONFIG.default;
+    if (tileset === tilesets.floors_1_2 || (!tileset && getTilesetForFloor() === tilesets.floors_1_2)) {
+        config = TILESET_CONFIG.floors_1_2;
+    }
+
+    const tileSize = config.tileSize;
+    const spacing = config.spacing;
+    const offsetX = config.offsetX;
+    const offsetY = config.offsetY;
+
+    // Calculate source position accounting for spacing
+    const sourceX = offsetX + tile.col * (tileSize + spacing);
+    const sourceY = offsetY + tile.row * (tileSize + spacing);
+
     // CRITICAL: Disable image smoothing for pixel-perfect rendering
     const originalSmoothing = ctx.imageSmoothingEnabled;
     ctx.imageSmoothingEnabled = false;
 
     ctx.drawImage(
         img,
-        tile.col * 16,  // Source X (16px tiles)
-        tile.row * 16,  // Source Y
-        16,             // Source Width
-        16,             // Source Height
+        sourceX,            // Source X
+        sourceY,            // Source Y
+        tileSize,           // Source Width
+        tileSize,           // Source Height
         Math.floor(screenX),  // Snap to pixel
         Math.floor(screenY),  // Snap to pixel
-        size,           // Destination Width (scaled)
-        size            // Destination Height (scaled)
+        size,               // Destination Width (scaled)
+        size                // Destination Height (scaled)
     );
 
     // Restore smoothing setting
@@ -446,6 +477,7 @@ if (typeof window !== 'undefined') {
     // Tileset state (for debugging)
     window.tilesets = tilesets;
     window.tilesetState = tilesetState;
+    window.TILESET_CONFIG = TILESET_CONFIG;  // Adjust spacing/offset at runtime if needed
 }
 
 console.log('[TileRenderer] Multi-tileset renderer loaded');
