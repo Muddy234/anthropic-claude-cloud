@@ -324,6 +324,15 @@ function renderTopWall(ctx, room, wallSet, camX, camY, effectiveTileSize, offset
     const wallY = room.y;
     const tileset = wallSet.tileset;
     const currentFloor = game.currentFloor || 1;
+
+    // DEBUG: Check why useVariation might be false
+    if (!window._wallDebugChecked) {
+        window._wallDebugChecked = true;
+        console.log('[WallDebug] currentFloor:', currentFloor);
+        console.log('[WallDebug] typeof getFloor12WallTile:', typeof getFloor12WallTile);
+        console.log('[WallDebug] window.getFloor12WallTile:', typeof window.getFloor12WallTile);
+    }
+
     const useVariation = currentFloor <= 2 && typeof getFloor12WallTile === 'function';
 
     for (let x = room.x; x < room.x + room.width; x++) {
