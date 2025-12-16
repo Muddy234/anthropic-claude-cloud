@@ -762,9 +762,9 @@ const camY = game.camera.y + (shakeOffset.y / (TILE_SIZE * currentZoom));
                 } else if (tile.type === 'doorway') {
                     drawDoorwayTile(ctx, screenX, screenY, effectiveTileSize);
                 } else if (tile.type === 'wall') {
-                    drawWallTile(ctx, screenX, screenY, effectiveTileSize);
+                    drawWallTile(ctx, screenX, screenY, effectiveTileSize, x, y);
                 } else if (tile.type === 'interior_wall') {
-                    drawWallTile(ctx, screenX, screenY, effectiveTileSize);
+                    drawWallTile(ctx, screenX, screenY, effectiveTileSize, x, y);
                 } else if (tile.type === 'void') {
                     drawVoidTile(ctx, screenX, screenY, effectiveTileSize);
                 } else if (tile.type === 'lava') {
