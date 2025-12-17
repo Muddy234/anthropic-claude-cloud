@@ -310,6 +310,15 @@ function applyProjectileDamage(config) {
         target.hp = 0;
     }
 
+    // Soul & Body: Award skill XP based on damage dealt
+    if (config.attacker === game.player) {
+        if (config.isMagic && typeof awardMagicXp === 'function') {
+            awardMagicXp(game.player, damage);
+        } else if (typeof awardRangedXp === 'function') {
+            awardRangedXp(game.player, damage);
+        }
+    }
+
     // Trigger aggro - enemy should chase when hit by ranged attacks
     if (config.attacker === game.player && target !== game.player) {
         // Make enemy aware and start chasing

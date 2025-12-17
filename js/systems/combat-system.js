@@ -611,6 +611,11 @@ function applyDamage(entity, damage, source, damageResult) {
         }
     }
 
+    // Soul & Body: Apply boon damage reduction (for player only)
+    if (entity === game.player && typeof applyBoonDamageReduction === 'function') {
+        damage = applyBoonDamageReduction(damage);
+    }
+
     // Ensure damage is still valid after modifications
     if (isNaN(damage)) damage = 1;
 
@@ -620,6 +625,11 @@ function applyDamage(entity, damage, source, damageResult) {
     if (isNaN(entity.hp)) {
         console.warn('[Combat] HP became NaN for', entity.name, '- resetting to 0');
         entity.hp = 0;
+    }
+
+    // Soul & Body: Award Defense XP when player takes damage
+    if (entity === game.player && typeof awardDefenseXp === 'function') {
+        awardDefenseXp(game.player, damage);
     }
 
     // === VISUAL FEEDBACK FOR PLAYER DAMAGE ===

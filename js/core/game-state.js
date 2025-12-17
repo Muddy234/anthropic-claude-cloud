@@ -139,7 +139,10 @@ let persistentState = {
     victoryTimestamp: null,
 
     // Death drop (for rescue runs)
-    deathDrop: null
+    deathDrop: null,
+
+    // Soul & Body: Permanent skill progression (NEVER lost on death)
+    skills: null  // Populated by skill-system.js when player is created
 };
 
 // ============================================================================
@@ -301,7 +304,10 @@ function createNewPersistentState() {
         victoryAchieved: false,
         victoryTimestamp: null,
 
-        deathDrop: null
+        deathDrop: null,
+
+        // Soul & Body: Permanent skill progression
+        skills: null  // Initialized by skill-system.js
     };
 }
 

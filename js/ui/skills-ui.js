@@ -30,13 +30,13 @@ const SKILLS_UI_CONFIG = {
         deploy_turret: 'DT'
     },
 
-    // Proficiency configuration for radar chart
+    // Proficiency configuration for radar chart (Soul & Body Model)
     proficiencies: {
-        blade:     { icon: 'B', name: 'BLADE',     angle: -90,  color: '#c0392b' },  // Top
-        blunt:     { icon: 'H', name: 'BLUNT',     angle: -18,  color: '#e67e22' },  // Top-right
-        magic:     { icon: 'M', name: 'MAGIC',     angle: 54,   color: '#9b59b6' },  // Bottom-right
-        ranged:    { icon: 'R', name: 'RANGED',    angle: 126,  color: '#27ae60' },  // Bottom-left
-        expertise: { icon: 'E', name: 'EXPERTISE', angle: 198,  color: '#3498db' }   // Top-left
+        melee:    { icon: 'M', name: 'MELEE',    angle: -90,  color: '#c0392b' },  // Top
+        ranged:   { icon: 'R', name: 'RANGED',   angle: -18,  color: '#27ae60' },  // Top-right
+        magic:    { icon: 'A', name: 'MAGIC',    angle: 54,   color: '#9b59b6' },  // Bottom-right
+        defense:  { icon: 'D', name: 'DEFENSE',  angle: 126,  color: '#3498db' },  // Bottom-left
+        vitality: { icon: 'V', name: 'VITALITY', angle: 198,  color: '#e74c3c' }   // Top-left
     },
 
     // Radar chart settings

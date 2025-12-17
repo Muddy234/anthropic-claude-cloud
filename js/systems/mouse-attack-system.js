@@ -733,6 +733,25 @@ function applyMeleeDamage(player, enemy, isSpecial) {
         enemy.hp = 0;
     }
 
+    // Soul & Body: Award skill XP based on damage dealt
+    // Determine proficiency type from weapon
+    const weaponType = weapon?.weaponType || weapon?.damageType || 'unarmed';
+    let proficiencyType = 'melee';
+    if (['bow', 'crossbow', 'throwing'].includes(weaponType)) {
+        proficiencyType = 'ranged';
+    } else if (['staff', 'wand', 'tome'].includes(weaponType)) {
+        proficiencyType = 'magic';
+    }
+
+    // Award XP for damage dealt
+    if (proficiencyType === 'melee' && typeof awardMeleeXp === 'function') {
+        awardMeleeXp(player, damageResult.finalDamage);
+    } else if (proficiencyType === 'ranged' && typeof awardRangedXp === 'function') {
+        awardRangedXp(player, damageResult.finalDamage);
+    } else if (proficiencyType === 'magic' && typeof awardMagicXp === 'function') {
+        awardMagicXp(player, damageResult.finalDamage);
+    }
+
     // Show damage number
     if (typeof showDamageNumber === 'function') {
         // Ambush gets gold color, crit gets yellow, normal gets white
