@@ -1911,6 +1911,112 @@ if (typeof SystemManager !== 'undefined') {
 }
 
 // ============================================================================
+// RANGE INDICATOR - Crosshair clamped to weapon range
+// ============================================================================
+
+/**
+ * Draw a crosshair at mouse position, clamped to player's attack range
+ * @param {CanvasRenderingContext2D} ctx - Canvas context
+ * @param {number} camX - Camera X position
+ * @param {number} camY - Camera Y position
+ * @param {number} tileSize - Effective tile size (with zoom)
+ * @param {number} offsetX - X offset (tracker width)
+ */
+function drawRangeIndicator(ctx, camX, camY, tileSize, offsetX) {
+    if (!game.player || game.state !== 'playing') return;
+
+    // Get player position (use display position for smooth visuals)
+    const playerX = game.player.displayX !== undefined ? game.player.displayX : game.player.gridX;
+    const playerY = game.player.displayY !== undefined ? game.player.displayY : game.player.gridY;
+
+    // Get mouse world position
+    const mousePos = getMouseWorldPosition();
+
+    // Calculate direction and distance from player to mouse
+    const dx = mousePos.x - playerX;
+    const dy = mousePos.y - playerY;
+    const distance = Math.sqrt(dx * dx + dy * dy);
+
+    // Get weapon range from arc config (this accounts for weapon type)
+    const arcConfig = getWeaponArcConfig();
+    const maxRange = arcConfig.arcRange || 1.5;
+
+    // Calculate clamped position
+    let indicatorX, indicatorY;
+
+    if (distance <= maxRange || distance === 0) {
+        // Within range - show at mouse position
+        indicatorX = mousePos.x;
+        indicatorY = mousePos.y;
+    } else {
+        // Beyond range - clamp to max range
+        const angle = Math.atan2(dy, dx);
+        indicatorX = playerX + Math.cos(angle) * maxRange;
+        indicatorY = playerY + Math.sin(angle) * maxRange;
+    }
+
+    // Convert to screen coordinates
+    const screenX = (indicatorX - camX) * tileSize + offsetX;
+    const screenY = (indicatorY - camY) * tileSize;
+
+    // Crosshair size
+    const crosshairSize = tileSize * 0.4;
+    const lineWidth = 2;
+    const gapSize = tileSize * 0.1;
+
+    ctx.save();
+
+    // Outer stroke (dark outline for visibility)
+    ctx.strokeStyle = 'rgba(0, 0, 0, 0.7)';
+    ctx.lineWidth = lineWidth + 2;
+    ctx.lineCap = 'round';
+
+    // Draw crosshair with gap in center
+    ctx.beginPath();
+    // Top
+    ctx.moveTo(screenX, screenY - crosshairSize);
+    ctx.lineTo(screenX, screenY - gapSize);
+    // Bottom
+    ctx.moveTo(screenX, screenY + gapSize);
+    ctx.lineTo(screenX, screenY + crosshairSize);
+    // Left
+    ctx.moveTo(screenX - crosshairSize, screenY);
+    ctx.lineTo(screenX - gapSize, screenY);
+    // Right
+    ctx.moveTo(screenX + gapSize, screenY);
+    ctx.lineTo(screenX + crosshairSize, screenY);
+    ctx.stroke();
+
+    // Inner stroke (white/colored)
+    const isInRange = distance <= maxRange;
+    ctx.strokeStyle = isInRange ? 'rgba(255, 255, 255, 0.9)' : 'rgba(255, 200, 100, 0.9)';
+    ctx.lineWidth = lineWidth;
+
+    ctx.beginPath();
+    // Top
+    ctx.moveTo(screenX, screenY - crosshairSize);
+    ctx.lineTo(screenX, screenY - gapSize);
+    // Bottom
+    ctx.moveTo(screenX, screenY + gapSize);
+    ctx.lineTo(screenX, screenY + crosshairSize);
+    // Left
+    ctx.moveTo(screenX - crosshairSize, screenY);
+    ctx.lineTo(screenX - gapSize, screenY);
+    // Right
+    ctx.moveTo(screenX + gapSize, screenY);
+    ctx.lineTo(screenX + crosshairSize, screenY);
+    ctx.stroke();
+
+    // Small center dot
+    ctx.fillStyle = isInRange ? 'rgba(255, 255, 255, 0.8)' : 'rgba(255, 200, 100, 0.8)';
+    ctx.beginPath();
+    ctx.arc(screenX, screenY, 2, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.restore();
+}
+
+// ============================================================================
 // EXPORTS
 // ============================================================================
 
@@ -1931,6 +2037,7 @@ if (typeof window !== 'undefined') {
     window.performMouseAttack = performMouseAttack;
     window.updateMouseAttackSystem = updateMouseAttackSystem;
     window.drawSlashEffects = drawSlashEffects;
+    window.drawRangeIndicator = drawRangeIndicator;
     window.checkMeleeHits = checkMeleeHits;
     window.isPlayerMovementLocked = isPlayerMovementLocked;
     window.triggerHitstop = triggerHitstop;

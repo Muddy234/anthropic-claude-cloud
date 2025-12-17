@@ -864,6 +864,9 @@ const camY = game.camera.y + (shakeOffset.y / (TILE_SIZE * currentZoom));
         // Melee slash effects (mouse-driven combat) - legacy code-based
         if (typeof drawSlashEffects === 'function') { drawSlashEffects(ctx, camX, camY, effectiveTileSize, TRACKER_WIDTH); }
 
+        // Range indicator crosshair (clamped to weapon range)
+        if (typeof drawRangeIndicator === 'function') { drawRangeIndicator(ctx, camX, camY, effectiveTileSize, TRACKER_WIDTH); }
+
         // New code-based melee slash effects (arc + particles)
         if (typeof MeleeSlashEffect !== 'undefined') {
             MeleeSlashEffect.render(ctx, camX, camY, effectiveTileSize, TRACKER_WIDTH);
