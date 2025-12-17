@@ -401,41 +401,88 @@ function getMonsterAIConfig(monsterName) {
 }
 
 // ============================================================
-// FLOOR-BASED STAT SCALING (Compound/Exponential)
+// FLOOR-BASED STAT SCALING (Tiered System)
 // ============================================================
-// HP scales faster (survival), damage scales slower (prevent one-shots)
+// Floor 1: Base stats
+// Floor 2: HP/XP +15%, Other stats +5%
+// Floor 3: HP/XP +15%, Other stats +10%
+// Floor 4: All stats +12%
+// Floor 5+: All stats increase by +1% per floor (13%, 14%, 15%, etc.)
+// No cap - difficulty scales indefinitely
 
 const FLOOR_SCALING = {
-    hp: 0.10,    // +10% compound per floor
-    str: 0.07,   // +7% compound per floor
-    int: 0.07,
-    agi: 0.06,
-    pDef: 0.08,
-    mDef: 0.08,
-    xp: 0.08,
-    gold: 0.08,
-    maxMultiplier: 4.0
+    // Tiered scaling rates per floor
+    tiers: {
+        2: { hpXp: 0.15, other: 0.05 },   // Floor 2: HP/XP +15%, other +5%
+        3: { hpXp: 0.15, other: 0.10 },   // Floor 3: HP/XP +15%, other +10%
+        4: { hpXp: 0.12, other: 0.12 }    // Floor 4: All +12%
+    },
+    // Floor 5+ base rate (increases by 1% each floor)
+    baseRateFloor5Plus: 0.12,  // 12% + (floor - 4)% = 13% at floor 5, 14% at floor 6, etc.
+    rateIncreasePerFloor: 0.01
 };
 
 function applyTierMultipliers(baseStats, monsterName, floor = 1) {
-    const cfg = FLOOR_SCALING;
+    // Floor 1 = base stats, no scaling
+    if (floor <= 1) {
+        return {
+            hp: baseStats.hp,
+            str: baseStats.str,
+            int: baseStats.int,
+            agi: baseStats.agi,
+            pDef: baseStats.pDef,
+            mDef: baseStats.mDef,
+            xp: baseStats.xp,
+            goldMin: baseStats.goldMin,
+            goldMax: baseStats.goldMax,
+            level: floor
+        };
+    }
 
-    const scale = (base, rate) => {
+    // Calculate cumulative multipliers
+    let hpXpMult = 1.0;
+    let otherMult = 1.0;
+
+    for (let f = 2; f <= floor; f++) {
+        let hpXpRate, otherRate;
+
+        if (f <= 4) {
+            // Use tiered rates for floors 2-4
+            const tier = FLOOR_SCALING.tiers[f];
+            hpXpRate = tier.hpXp;
+            otherRate = tier.other;
+        } else {
+            // Floor 5+: base rate + 1% per floor above 4
+            const dynamicRate = FLOOR_SCALING.baseRateFloor5Plus +
+                                (f - 4) * FLOOR_SCALING.rateIncreasePerFloor;
+            hpXpRate = dynamicRate;
+            otherRate = dynamicRate;
+        }
+
+        hpXpMult *= (1 + hpXpRate);
+        otherMult *= (1 + otherRate);
+    }
+
+    const scaleHpXp = (base) => {
         if (typeof base !== 'number' || isNaN(base)) return base;
-        const mult = Math.min(cfg.maxMultiplier, Math.pow(1 + rate, floor - 1));
-        return Math.floor(base * mult);
+        return Math.floor(base * hpXpMult);
+    };
+
+    const scaleOther = (base) => {
+        if (typeof base !== 'number' || isNaN(base)) return base;
+        return Math.floor(base * otherMult);
     };
 
     return {
-        hp: scale(baseStats.hp, cfg.hp),
-        str: scale(baseStats.str, cfg.str),
-        int: scale(baseStats.int, cfg.int),
-        agi: scale(baseStats.agi, cfg.agi),
-        pDef: scale(baseStats.pDef, cfg.pDef),
-        mDef: scale(baseStats.mDef, cfg.mDef),
-        xp: scale(baseStats.xp, cfg.xp),
-        goldMin: scale(baseStats.goldMin, cfg.gold),
-        goldMax: scale(baseStats.goldMax, cfg.gold),
+        hp: scaleHpXp(baseStats.hp),
+        str: scaleOther(baseStats.str),
+        int: scaleOther(baseStats.int),
+        agi: scaleOther(baseStats.agi),
+        pDef: scaleOther(baseStats.pDef),
+        mDef: scaleOther(baseStats.mDef),
+        xp: scaleHpXp(baseStats.xp),
+        goldMin: scaleOther(baseStats.goldMin),
+        goldMax: scaleOther(baseStats.goldMax),
         level: floor
     };
 }
