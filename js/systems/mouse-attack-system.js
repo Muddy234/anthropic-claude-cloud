@@ -698,6 +698,20 @@ function applyMeleeDamage(player, enemy, isSpecial) {
         }
     }
 
+    // Check for AMBUSH (stealth attack on unaware enemy)
+    const isAmbush = typeof checkAmbush === 'function' && checkAmbush(player, enemy);
+    if (isAmbush && typeof AMBUSH_CONFIG !== 'undefined') {
+        // Force critical hit if not already
+        if (AMBUSH_CONFIG.guaranteedCrit && !damageResult.isCrit) {
+            damageResult.isCrit = true;
+            damageResult.finalDamage = Math.floor(damageResult.finalDamage * 1.5);
+        }
+        // Apply ambush multiplier
+        damageResult.finalDamage = Math.floor(damageResult.finalDamage * AMBUSH_CONFIG.damageMultiplier);
+        damageResult.isAmbush = true;
+        console.log(`[MouseAttack] AMBUSH! Damage boosted to ${damageResult.finalDamage}`);
+    }
+
     // Ensure damage is a valid number (defensive check)
     if (isNaN(damageResult.finalDamage) || damageResult.finalDamage === undefined) {
         console.warn('[MouseAttack] Invalid damage calculated, using base damage');
@@ -721,8 +735,20 @@ function applyMeleeDamage(player, enemy, isSpecial) {
 
     // Show damage number
     if (typeof showDamageNumber === 'function') {
-        const color = damageResult.isCrit ? '#ffff00' : '#ffffff';
-        showDamageNumber(enemy, damageResult.finalDamage, color);
+        // Ambush gets gold color, crit gets yellow, normal gets white
+        let color = '#ffffff';
+        if (damageResult.isAmbush) {
+            color = typeof COMBAT_TEXT_COLORS !== 'undefined' ? COMBAT_TEXT_COLORS.ambush : '#ffd700';
+            // Show "AMBUSH!" floating text
+            showDamageNumber(enemy, 'AMBUSH!', color, { isCrit: true });
+            // Trigger screen shake for ambush
+            if (typeof triggerScreenEffect === 'function' && typeof AMBUSH_CONFIG !== 'undefined') {
+                triggerScreenEffect('shake', AMBUSH_CONFIG.screenShakeIntensity, AMBUSH_CONFIG.screenShakeDuration);
+            }
+        } else if (damageResult.isCrit) {
+            color = '#ffff00';
+        }
+        showDamageNumber(enemy, damageResult.finalDamage, color, { isCrit: damageResult.isCrit || damageResult.isAmbush });
     }
 
     // Combat enhancements hook (knockback, stagger - screen shake handled above)
@@ -1966,10 +1992,10 @@ function drawRangeIndicator(ctx, camX, camY, tileSize, offsetX) {
     const screenX = (indicatorX - camX) * tileSize + offsetX;
     const screenY = (indicatorY - camY) * tileSize;
 
-    // Crosshair size
-    const crosshairSize = tileSize * 0.4;
+    // Crosshair size (reduced by 33%)
+    const crosshairSize = tileSize * 0.27;
     const lineWidth = 2;
-    const gapSize = tileSize * 0.1;
+    const gapSize = tileSize * 0.07;
 
     ctx.save();
 
