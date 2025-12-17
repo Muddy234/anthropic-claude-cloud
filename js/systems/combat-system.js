@@ -389,12 +389,30 @@ function checkAmbush(attacker, defender) {
     // Only player can perform ambush attacks
     if (attacker !== game.player) return false;
 
-    // Defender must be an enemy with AI state
-    if (!defender.ai || defender === game.player) return false;
+    // Defender must be an enemy (not the player)
+    if (defender === game.player) return false;
+
+    // Get AI state - check both defender.ai.currentState and defender.state
+    let currentState = null;
+    if (defender.ai && defender.ai.currentState) {
+        currentState = defender.ai.currentState;
+    } else if (defender.state) {
+        // Fallback to direct state property
+        currentState = defender.state;
+    }
+
+    if (COMBAT_CONFIG.debugLogging) {
+        console.log(`[Ambush Check] Enemy: ${defender.name}, AI exists: ${!!defender.ai}, state: ${currentState}, facing: ${defender.facing}`);
+    }
+
+    // No AI state found - can't determine if unaware
+    if (!currentState) return false;
 
     // Check if enemy is in an unaware state
-    const currentState = defender.ai.currentState;
     if (!AMBUSH_CONFIG.unawareStates.includes(currentState)) {
+        if (COMBAT_CONFIG.debugLogging) {
+            console.log(`[Ambush Check] State '${currentState}' is not unaware (needs: ${AMBUSH_CONFIG.unawareStates.join(', ')})`);
+        }
         return false;
     }
 
@@ -410,23 +428,27 @@ function checkAmbush(attacker, defender) {
     const dy = playerY - enemyY;
     const angleToPlayer = Math.atan2(dy, dx) * (180 / Math.PI);
 
-    // Get enemy's facing angle
+    // Get enemy's facing angle (handle 'up' edge case with -90/270)
     const facingAngles = { right: 0, down: 90, left: 180, up: -90 };
-    const facingAngle = facingAngles[defender.facing] || 0;
+    const facingAngle = facingAngles[defender.facing] ?? 0;
 
     // Calculate angle difference (how far player is from enemy's line of sight)
     let angleDiff = Math.abs(angleToPlayer - facingAngle);
     if (angleDiff > 180) angleDiff = 360 - angleDiff;
 
+    if (COMBAT_CONFIG.debugLogging) {
+        console.log(`[Ambush Check] AngleToPlayer: ${angleToPlayer.toFixed(1)}°, FacingAngle: ${facingAngle}°, Diff: ${angleDiff.toFixed(1)}°, Threshold: ${AMBUSH_CONFIG.sideAngleThreshold}°`);
+    }
+
     // Player must be outside the frontal cone (side or behind)
     if (angleDiff <= AMBUSH_CONFIG.sideAngleThreshold) {
+        if (COMBAT_CONFIG.debugLogging) {
+            console.log(`[Ambush Check] FAILED - Player is in frontal cone`);
+        }
         return false;  // Player is in front of enemy
     }
 
-    if (COMBAT_CONFIG.debugLogging) {
-        console.log(`[Combat] AMBUSH! Enemy state: ${currentState}, angle diff: ${angleDiff.toFixed(1)}°`);
-    }
-
+    console.log(`[Combat] AMBUSH! Enemy: ${defender.name}, state: ${currentState}, angle diff: ${angleDiff.toFixed(1)}°`);
     return true;
 }
 

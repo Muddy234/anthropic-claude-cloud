@@ -1925,21 +1925,28 @@ if (typeof SystemManager !== 'undefined') {
 function drawRangeIndicator(ctx, camX, camY, tileSize, offsetX) {
     if (!game.player || game.state !== 'playing') return;
 
-    // Get player position (use display position for smooth visuals)
-    const playerX = game.player.displayX !== undefined ? game.player.displayX : game.player.gridX;
-    const playerY = game.player.displayY !== undefined ? game.player.displayY : game.player.gridY;
+    // Get player CENTER position (display position + 0.5 to center on tile)
+    const playerBaseX = game.player.displayX !== undefined ? game.player.displayX : game.player.gridX;
+    const playerBaseY = game.player.displayY !== undefined ? game.player.displayY : game.player.gridY;
+    const playerX = playerBaseX + 0.5;  // Center of player tile
+    const playerY = playerBaseY + 0.5;
 
     // Get mouse world position
     const mousePos = getMouseWorldPosition();
 
-    // Calculate direction and distance from player to mouse
+    // Calculate direction and distance from player CENTER to mouse
     const dx = mousePos.x - playerX;
     const dy = mousePos.y - playerY;
     const distance = Math.sqrt(dx * dx + dy * dy);
 
     // Get weapon range from arc config (this accounts for weapon type)
     const arcConfig = getWeaponArcConfig();
-    const maxRange = arcConfig.arcRange || 1.5;
+    // For ranged weapons (arcRange = 0), use a larger default range
+    let maxRange = arcConfig.arcRange;
+    if (!maxRange || maxRange === 0) {
+        // Ranged weapons - use combat attack range or default
+        maxRange = game.player.combat?.attackRange || 6;
+    }
 
     // Calculate clamped position
     let indicatorX, indicatorY;
@@ -1949,13 +1956,13 @@ function drawRangeIndicator(ctx, camX, camY, tileSize, offsetX) {
         indicatorX = mousePos.x;
         indicatorY = mousePos.y;
     } else {
-        // Beyond range - clamp to max range
+        // Beyond range - clamp to max range from player center
         const angle = Math.atan2(dy, dx);
         indicatorX = playerX + Math.cos(angle) * maxRange;
         indicatorY = playerY + Math.sin(angle) * maxRange;
     }
 
-    // Convert to screen coordinates
+    // Convert to screen coordinates (accounting for tile size offset)
     const screenX = (indicatorX - camX) * tileSize + offsetX;
     const screenY = (indicatorY - camY) * tileSize;
 
