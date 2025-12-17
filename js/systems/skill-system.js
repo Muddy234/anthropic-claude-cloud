@@ -1391,7 +1391,9 @@ window.debugGrantXp = debugGrantXp;
 console.log('âœ“ Skills system loaded');
 console.log(`  ${Object.keys(PROFICIENCIES).length} proficiencies`);
 console.log(`  ${Object.keys(SPECIALTIES).length} specialties`);
-console.log(`  ${Object.keys(ACTIONS).length} actions`);// ============================================================================
+console.log(`  ${Object.keys(ACTIONS).length} actions`);
+
+// ============================================================================
 // SYSTEM MANAGER REGISTRATION - Add to end of skill-system.js
 // ============================================================================
 
