@@ -196,13 +196,13 @@ const LightSourceSystem = {
     // ========================================================================
     config: {
         debugLogging: false,
-        defaultPlayerLightRadius: 3,
-        flickerIntensity: 0.25,      // Increased from 0.1 - more dramatic flicker
-        flickerSpeed: 12,            // Slightly faster for more lively feel
-        flickerOctaves: 3,           // More octaves for complex organic movement
-        flickerPersistence: 0.6,     // How much each octave contributes
-        useCookieTextures: true,     // Enable irregular light shapes
-        cookieIrregularity: 0.3      // Slightly more irregular shapes
+        defaultPlayerLightRadius: 10,  // Matches VisionSystem torch ON: 4 base + 6 torch = 10
+        flickerIntensity: 0.08,       // Subtle flicker - just enough to feel alive
+        flickerSpeed: 6,              // Slow, gentle movement
+        flickerOctaves: 2,            // Simpler pattern for smoother feel
+        flickerPersistence: 0.4,      // Gentle layering
+        useCookieTextures: false,     // DISABLED - was erasing glows with destination-out
+        cookieIrregularity: 0.3       // Slightly more irregular shapes
     },
 
     // ========================================================================
@@ -246,7 +246,7 @@ const LightSourceSystem = {
         'brazier': {
             radius: 5,
             intensity: 1.0,
-            color: '#ffaa44',
+            color: '#ff8844',
             flicker: true,
             fuel: 60,
             burnRate: 1,
@@ -256,7 +256,7 @@ const LightSourceSystem = {
         'lantern': {
             radius: 3,
             intensity: 0.7,
-            color: '#ffdd88',
+            color: '#ff8844',
             flicker: true,
             fuel: 300,
             burnRate: 1,
@@ -264,14 +264,18 @@ const LightSourceSystem = {
             attachable: true  // Can attach to player
         },
         'campfire': {
-            radius: 6,
-            intensity: 1.0,
-            color: '#ff6622',
+            radius: 5,
+            intensity: 1,
+            color: '#ff8844',
             flicker: true,
-            fuel: 180,
-            burnRate: 1,
-            permanent: false,
-            warmthBonus: 12
+            fuel: Infinity,
+            burnRate: 0,
+            permanent: true,
+            warmthBonus: 12,
+            // Healing properties (only when player is out of combat)
+            heals: true,
+            healRadius: 2,
+            healRate: 0.01  // 1% of max HP per second
         },
         'spell': {
             radius: 4,
@@ -356,6 +360,11 @@ const LightSourceSystem = {
             // Special properties
             warmthBonus: config.warmthBonus ?? defaults.warmthBonus ?? 0,
             damageToUndead: config.damageToUndead ?? defaults.damageToUndead ?? false,
+
+            // Healing properties (for campfires, bonfires, etc.)
+            heals: config.heals ?? defaults.heals ?? false,
+            healRadius: config.healRadius ?? defaults.healRadius ?? 0,
+            healRate: config.healRate ?? defaults.healRate ?? 0,
 
             // Rendering
             flickerPhase: Math.random() * Math.PI * 2,
@@ -753,6 +762,62 @@ const LightSourceSystem = {
                 });
             });
         }
+
+        // Apply healing from light sources (campfires, bonfires, etc.)
+        this._updateHealing(dtSeconds);
+    },
+
+    /**
+     * Update healing for light sources that provide healing
+     * @param {number} dtSeconds - Delta time in seconds
+     */
+    _updateHealing(dtSeconds) {
+        const player = game?.player;
+        if (!player || player.hp <= 0) return;
+
+        // Check if player is in combat - no healing during combat
+        if (player.inCombat === true || player.combat?.isInCombat === true) return;
+
+        // Check if player is already at full HP
+        if (player.hp >= player.maxHp) return;
+
+        // Track if we need to show healing (accumulate from multiple sources)
+        let totalHeal = 0;
+
+        // Check each active source for healing
+        this.sources.forEach(source => {
+            if (!source.active || !source.heals) return;
+
+            const srcX = source.gridX;
+            const srcY = source.gridY;
+            const dist = Math.sqrt((player.gridX - srcX) ** 2 + (player.gridY - srcY) ** 2);
+
+            // Check if player is within healing radius
+            if (dist <= source.healRadius) {
+                // Calculate heal amount: healRate is % of max HP per second
+                const healAmount = player.maxHp * source.healRate * dtSeconds;
+                totalHeal += healAmount;
+            }
+        });
+
+        // Apply accumulated healing
+        if (totalHeal > 0) {
+            const actualHeal = Math.min(totalHeal, player.maxHp - player.hp);
+            player.hp += actualHeal;
+
+            // Track partial HP for smooth healing display
+            if (!this._healAccumulator) this._healAccumulator = 0;
+            this._healAccumulator += actualHeal;
+
+            // Show heal number when we've accumulated at least 1 HP
+            if (this._healAccumulator >= 1) {
+                const displayHeal = Math.floor(this._healAccumulator);
+                this._healAccumulator -= displayHeal;
+                if (typeof showDamageNumber === 'function' && displayHeal > 0) {
+                    showDamageNumber(player, displayHeal, '#88FF88');
+                }
+            }
+        }
     },
 
     /**
@@ -905,6 +970,211 @@ const LightSourceSystem = {
             activeSources: this.getActiveCount(),
             sourcesByType
         };
+    },
+
+    // ========================================================================
+    // UNIFIED RENDERING SYSTEM
+    // ========================================================================
+    // All light rendering now goes through these methods for consistent behavior
+
+    // Rendering configuration
+    renderConfig: {
+        glowColor: { r: 255, g: 147, b: 41 },  // Warm orange #ff9329
+        playerGlowIntensity: 0.2,               // Base glow intensity for player
+        sourceGlowIntensity: 0.25,              // Base glow intensity for placed sources
+        fadeDistance: 2                          // Tiles of gradient fade
+    },
+
+    /**
+     * Get the unified flicker multiplier
+     * All light sources use this same value for consistent animation
+     * @returns {number} - Flicker multiplier (typically 0.9 to 1.1)
+     */
+    getFlicker() {
+        return 1 + this.flickerOffset * 0.2;
+    },
+
+    /**
+     * Render warm glow for a single light source
+     * @param {CanvasRenderingContext2D} ctx - Canvas context
+     * @param {number} sourceX - Screen X position of light center
+     * @param {number} sourceY - Screen Y position of light center
+     * @param {number} radius - Light radius in tiles
+     * @param {number} tileSize - Pixel size of tiles
+     * @param {object} options - Optional overrides { color, intensity }
+     */
+    renderLightGlow(ctx, sourceX, sourceY, radius, tileSize, options = {}) {
+        const flickerMultiplier = this.getFlicker();
+        const fadeDistance = this.renderConfig.fadeDistance;
+
+        // Calculate glow radius with flicker
+        const glowRadius = (radius + fadeDistance) * tileSize * flickerMultiplier;
+
+        // Get color (default to warm orange)
+        const color = options.color || this.renderConfig.glowColor;
+        const baseIntensity = options.intensity || this.renderConfig.sourceGlowIntensity;
+        const intensity = baseIntensity * flickerMultiplier;
+
+        // Calculate gradient stops
+        const innerEdge = radius / (radius + fadeDistance);
+
+        // Create radial gradient
+        const gradient = ctx.createRadialGradient(
+            sourceX, sourceY, 0,
+            sourceX, sourceY, glowRadius
+        );
+
+        gradient.addColorStop(0, `rgba(${color.r}, ${color.g}, ${color.b}, ${intensity})`);
+        gradient.addColorStop(innerEdge * 0.5, `rgba(${color.r}, ${color.g}, ${color.b}, ${intensity * 0.8})`);
+        gradient.addColorStop(innerEdge, `rgba(${color.r}, ${color.g}, ${color.b}, ${intensity * 0.5})`);
+        gradient.addColorStop(1, `rgba(${color.r}, ${color.g}, ${color.b}, 0)`);
+
+        ctx.save();
+        ctx.globalCompositeOperation = 'screen';
+        ctx.fillStyle = gradient;
+        ctx.fillRect(sourceX - glowRadius, sourceY - glowRadius, glowRadius * 2, glowRadius * 2);
+        ctx.restore();
+    },
+
+    /**
+     * Render glows for all active light sources including player
+     * @param {CanvasRenderingContext2D} ctx - Canvas context
+     * @param {number} camX - Camera X offset
+     * @param {number} camY - Camera Y offset
+     * @param {number} tileSize - Effective tile size (with zoom)
+     * @param {number} offsetX - X offset (e.g., sidebar width)
+     */
+    renderAllLightGlows(ctx, camX, camY, tileSize, offsetX) {
+        // Render player's torch glow (only if torch is ON)
+        if (game.player) {
+            const torchOn = game.player.isTorchOn !== false; // Default to true
+
+            // Player position - displayX/displayY represent top-left of tile
+            // Add 0.5 tiles to center the glow on the player sprite
+            const playerScreenX = (game.player.displayX + 0.5 - camX) * tileSize + offsetX;
+            const playerScreenY = (game.player.displayY + 0.5 - camY) * tileSize;
+
+            if (torchOn) {
+                // Torch ON: warm orange glow with flicker
+                const torchRadius = typeof VisionSystem !== 'undefined'
+                    ? VisionSystem.getPlayerVisionRange()
+                    : 4;
+
+                this.renderLightGlow(ctx, playerScreenX, playerScreenY, torchRadius, tileSize, {
+                    intensity: this.renderConfig.playerGlowIntensity
+                });
+            }
+            // Torch OFF: no glow rendered - player relies on ambient light only
+        }
+
+        // Render all other active light sources - use SAME approach as player torch
+        this.sources.forEach(source => {
+            // Skip inactive sources and player-attached sources (handled above)
+            if (!source.active) return;
+            if (source.type === 'player' || source.attachedTo === game.player) return;
+
+            // Get source position - center on tile (add 0.5) for proper glow positioning
+            let sourceGridX = source.gridX + 0.5;
+            let sourceGridY = source.gridY + 0.5;
+            if (source.attachedTo) {
+                sourceGridX = (source.attachedTo.displayX ?? source.attachedTo.gridX ?? source.gridX) + 0.5;
+                sourceGridY = (source.attachedTo.displayY ?? source.attachedTo.gridY ?? source.gridY) + 0.5;
+            }
+
+            // Convert to screen coordinates
+            const sourceScreenX = (sourceGridX - camX) * tileSize + offsetX;
+            const sourceScreenY = (sourceGridY - camY) * tileSize;
+
+            // Use the light source's own radius (not player vision range)
+            const sourceRadius = source.radius || 5;
+
+            this.renderLightGlow(ctx, sourceScreenX, sourceScreenY, sourceRadius, tileSize, {
+                intensity: source.intensity || this.renderConfig.playerGlowIntensity
+            });
+        });
+    },
+
+    /**
+     * Get brightness contribution from all light sources at a tile
+     * Uses unified flicker for consistent animation
+     * @param {number} tileX - Tile X position
+     * @param {number} tileY - Tile Y position
+     * @param {number} minBrightness - Minimum brightness floor
+     * @returns {number} - Brightness value
+     */
+    getTileBrightnessAt(tileX, tileY, minBrightness = 0.55) {
+        let maxBrightness = minBrightness;
+        const flickerMultiplier = this.getFlicker();
+        const fadeDistance = this.renderConfig.fadeDistance;
+
+        // Check player's torch (only contributes if torch is ON)
+        if (game.player) {
+            const torchOn = game.player.isTorchOn !== false; // Default to true
+
+            if (torchOn) {
+                const playerX = game.player.gridX;
+                const playerY = game.player.gridY;
+                const torchRadius = typeof VisionSystem !== 'undefined'
+                    ? VisionSystem.getPlayerVisionRange()
+                    : 4;
+
+                const dx = tileX - playerX;
+                const dy = tileY - playerY;
+                const distance = Math.sqrt(dx * dx + dy * dy);
+
+                const effectiveRadius = torchRadius * flickerMultiplier;
+                const playerIntensity = 0.75; // Player torch dimmer than placed sources
+
+                if (distance <= effectiveRadius) {
+                    maxBrightness = Math.max(maxBrightness, playerIntensity);
+                } else {
+                    const fadeEnd = effectiveRadius + fadeDistance;
+                    if (distance < fadeEnd) {
+                        const fadeProgress = (distance - effectiveRadius) / fadeDistance;
+                        const smoothProgress = fadeProgress * fadeProgress * (3 - 2 * fadeProgress);
+                        const brightness = playerIntensity - (smoothProgress * (playerIntensity - minBrightness));
+                        maxBrightness = Math.max(maxBrightness, brightness);
+                    }
+                }
+            }
+            // Torch OFF: no brightness contribution from player - relies on ambient light
+        }
+
+        // Check all light sources
+        this.sources.forEach(source => {
+            if (!source.active) return;
+            if (source.type === 'player' || source.attachedTo === game.player) return;
+
+            // Center on tile (add 0.5) to match glow rendering
+            let sourceX = source.gridX + 0.5;
+            let sourceY = source.gridY + 0.5;
+            if (source.attachedTo) {
+                sourceX = (source.attachedTo.displayX ?? source.attachedTo.gridX ?? source.gridX) + 0.5;
+                sourceY = (source.attachedTo.displayY ?? source.attachedTo.gridY ?? source.gridY) + 0.5;
+            }
+
+            const dx = tileX - sourceX;
+            const dy = tileY - sourceY;
+            const distance = Math.sqrt(dx * dx + dy * dy);
+
+            const effectiveRadius = (source.radius || 5) * flickerMultiplier;
+            const sourceIntensity = source.intensity || 1.0;
+
+            // Use same flat brightness as player torch (no smooth falloff inside radius)
+            if (distance <= effectiveRadius) {
+                maxBrightness = Math.max(maxBrightness, sourceIntensity);
+            } else {
+                const fadeEnd = effectiveRadius + fadeDistance;
+                if (distance < fadeEnd) {
+                    const fadeProgress = (distance - effectiveRadius) / fadeDistance;
+                    const smoothProgress = fadeProgress * fadeProgress * (3 - 2 * fadeProgress);
+                    const brightness = sourceIntensity - (smoothProgress * (sourceIntensity - minBrightness));
+                    maxBrightness = Math.max(maxBrightness, brightness);
+                }
+            }
+        });
+
+        return Math.min(1.0, maxBrightness);
     }
 };
 
@@ -945,3 +1215,4 @@ window.PerlinNoise = PerlinNoise;
 window.LightCookieSystem = LightCookieSystem;
 
 console.log('✅ Light Source System loaded (with Perlin noise flicker & cookie textures)');
+

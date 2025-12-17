@@ -133,7 +133,7 @@ function performDash(player, mouseX, mouseY) {
     // Calculate direction toward mouse
     const trackerWidth = typeof TRACKER_WIDTH !== 'undefined' ? TRACKER_WIDTH : 250;
     const tileSize = (typeof TILE_SIZE !== 'undefined' ? TILE_SIZE : 32) *
-                     (typeof ZOOM_LEVEL !== 'undefined' ? ZOOM_LEVEL : 2);
+                     (window.currentZoom || ZOOM_LEVEL || 2);
     const camX = game.camera ? game.camera.x : 0;
     const camY = game.camera ? game.camera.y : 0;
 
@@ -307,12 +307,7 @@ function updateDash(deltaTime) {
     }
 }
 
-/**
- * Ease-out quadratic for smooth dash
- */
-function easeOutQuad(t) {
-    return t * (2 - t);
-}
+// NOTE: easeOutQuad is now provided by movement-utils.js
 
 /**
  * Check if player currently has i-frames
@@ -474,6 +469,7 @@ function triggerScreenShake(isCrit = false) {
 
 /**
  * Update screen shake each frame
+ * Supports both random shake and directional shake
  */
 function updateScreenShake(deltaTime) {
     const dt = deltaTime / 1000;
@@ -485,13 +481,35 @@ function updateScreenShake(deltaTime) {
             screenShakeState.active = false;
             screenShakeState.offsetX = 0;
             screenShakeState.offsetY = 0;
+            // Clear directional components
+            screenShakeState.directionalX = 0;
+            screenShakeState.directionalY = 0;
         } else {
             // Calculate shake offset with decay
-            const decay = screenShakeState.timer / COMBAT_ENHANCEMENTS_CONFIG.screenShake.duration;
+            const duration = COMBAT_ENHANCEMENTS_CONFIG.screenShake.duration;
+            const decay = screenShakeState.timer / duration;
             const intensity = screenShakeState.intensity * decay;
 
-            screenShakeState.offsetX = (Math.random() - 0.5) * 2 * intensity;
-            screenShakeState.offsetY = (Math.random() - 0.5) * 2 * intensity;
+            // Check for directional shake (from mouse-attack-system)
+            if (screenShakeState.directionalX || screenShakeState.directionalY) {
+                // DIRECTIONAL SHAKE: Primary movement along attack direction + minor perpendicular jitter
+                const dirX = screenShakeState.directionalX;
+                const dirY = screenShakeState.directionalY;
+
+                // Oscillate along direction (impact feel)
+                const phase = (1 - decay) * Math.PI * 4; // Fast oscillation
+                const dirMag = Math.sin(phase) * decay;
+
+                // Add minor perpendicular jitter
+                const perpJitter = (Math.random() - 0.5) * intensity * 0.3;
+
+                screenShakeState.offsetX = dirX * dirMag + perpJitter;
+                screenShakeState.offsetY = dirY * dirMag + perpJitter;
+            } else {
+                // RANDOM SHAKE: Standard shake in all directions
+                screenShakeState.offsetX = (Math.random() - 0.5) * 2 * intensity;
+                screenShakeState.offsetY = (Math.random() - 0.5) * 2 * intensity;
+            }
         }
     }
 }
@@ -606,8 +624,11 @@ function getEnemyStaggerFlash(enemy) {
  */
 function onCombatHit(attacker, defender, damageResult) {
     // Apply screen shake when player hits or gets hit
-    if (attacker === game.player || defender === game.player) {
-        triggerScreenShake(damageResult?.isCrit || false);
+    // Skip if already handled by mouse-attack-system (directional shake)
+    if (!damageResult?.skipScreenShake) {
+        if (attacker === game.player || defender === game.player) {
+            triggerScreenShake(damageResult?.isCrit || false);
+        }
     }
 
     // Apply knockback and stagger when player hits enemy
@@ -632,8 +653,7 @@ window.addEventListener('mousemove', (e) => {
     lastMouseY = e.clientY;
 });
 
-// Spacebar handler for dash (add to existing keydown)
-const originalKeydownHandler = window.addEventListener;
+// Spacebar handler for dash
 window.addEventListener('keydown', (e) => {
     // Spacebar for dash (only in playing state, not in menus)
     if (e.key === ' ' && game.state === 'playing') {

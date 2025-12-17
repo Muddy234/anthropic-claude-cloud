@@ -1,5 +1,5 @@
-﻿// === RIGHT-CLICK SYSTEM WITH CLICK DEBUG ===
-// This file handles the logic of handling a Player Right-Click
+// === RIGHT-CLICK SYSTEM ===
+// Handles right-click context menu, inspect popup, and related interactions
 
 window.contextMenu = {
     visible: false, x: 0, y: 0, target: null, targetType: null, options: [], hoveredOption: -1
@@ -8,8 +8,7 @@ window.contextMenu = {
 // Flag to prevent click-to-move after context menu action
 window.contextMenuJustClosed = false;
 
-// inspectPopup is now defined in input-handler.js and exported to window
-// We just ensure it exists with defaults if not yet loaded
+// Ensure inspectPopup exists
 if (!window.inspectPopup) {
     window.inspectPopup = { visible: false, target: null, targetType: null, tab: 0 };
 }
@@ -18,9 +17,10 @@ let rightClickSystemInitialized = false;
 
 function initRightClickSystem() {
     if (rightClickSystemInitialized) return;
-    console.log('Initializing right-click system...');
+
     const canvas = document.getElementById('gameCanvas') || document.getElementById('canvas') || document.querySelector('canvas');
     if (!canvas) { console.error('Canvas not found!'); return; }
+
     window.gameCanvas = canvas;
     canvas.addEventListener('contextmenu', handleRightClick);
     canvas.addEventListener('click', handleContextMenuClick);
@@ -28,7 +28,6 @@ function initRightClickSystem() {
     canvas.addEventListener('click', handleInspectPopupClick);
     document.addEventListener('keydown', handleEscapeKey);
     rightClickSystemInitialized = true;
-    console.log('✓ Right-click system initialized');
 }
 
 function handleRightClick(e) {
@@ -45,64 +44,40 @@ function handleRightClick(e) {
     const clickX = (e.clientX - rect.left) * scaleX;
     const clickY = (e.clientY - rect.top) * scaleY;
 
-    const trackerWidth = (typeof TRACKER_WIDTH !== 'undefined') ? TRACKER_WIDTH : 
+    const trackerWidth = (typeof TRACKER_WIDTH !== 'undefined') ? TRACKER_WIDTH :
                          (window.TRACKER_WIDTH || 400);
-    const tileSize = (typeof TILE_SIZE !== 'undefined') ? TILE_SIZE : 
+    const tileSize = (typeof TILE_SIZE !== 'undefined') ? TILE_SIZE :
                      (window.TILE_SIZE || 32);
-    const zoomLevel = (typeof ZOOM_LEVEL !== 'undefined') ? ZOOM_LEVEL : 
-                      (window.ZOOM_LEVEL || 2);
-    
+    const zoomLevel = window.currentZoom || ZOOM_LEVEL || 2;
+
     const effectiveTileSize = tileSize * zoomLevel;
-    
+
     const viewX = clickX - trackerWidth;
     const viewY = clickY;
-    
-    if (viewX < 0) {
-        console.log('Clicked in tracker area, ignoring');
-        return;
-    }
-    
+
+    // Ignore clicks in tracker area
+    if (viewX < 0) return;
+
     const camX = game.camera ? game.camera.x : 0;
     const camY = game.camera ? game.camera.y : 0;
-    
+
     const gridX = Math.floor(viewX / effectiveTileSize + camX);
     const gridY = Math.floor(viewY / effectiveTileSize + camY);
-    
-    console.log('=== GRID CALCULATION DEBUG ===');
-    console.log('Click screen coords:', Math.round(clickX), Math.round(clickY));
-    console.log('TRACKER_WIDTH used:', trackerWidth);
-    console.log('View coords (after tracker):', Math.round(viewX), Math.round(viewY));
-    console.log('Camera:', camX.toFixed(2), camY.toFixed(2));
-    console.log('Tile size:', tileSize, '× zoom:', zoomLevel, '=', effectiveTileSize);
-    console.log('Calculated grid:', gridX, gridY);
-    console.log('Player actual grid:', game.player.gridX, game.player.gridY);
-    console.log('===========================');
-    
-    // === DIRECT ACTIONS (no context menu) ===
-    // Right-click on enemy: Open inspect popup directly
-    // Right-click on loot: Pick up directly
-    // Right-click on NPC: Open dialog/inspect
-    // Right-click elsewhere: Context menu for walk (disabled)
 
-    // Check for enemy first
+    // Check for enemy - open inspect popup
     if (game.enemies) {
         const clickedEnemy = game.enemies.find(e =>
             Math.floor(e.gridX) === gridX && Math.floor(e.gridY) === gridY
         );
 
-        // FOG OF WAR: Only allow interaction with visible enemies
         if (clickedEnemy) {
             const tile = game.map?.[gridY]?.[gridX];
             if (tile && tile.visible) {
-                console.log('Right-click: Inspecting enemy:', clickedEnemy.name);
-                // Direct action: Open inspect popup
                 window.inspectPopup.visible = true;
                 window.inspectPopup.target = clickedEnemy;
                 window.inspectPopup.targetType = 'enemy';
                 window.inspectPopup.tab = 0;
-                return; // Don't show context menu
-            } else {
-                console.log('Enemy not visible - ignoring click');
+                return;
             }
         }
     }
@@ -112,15 +87,13 @@ function handleRightClick(e) {
         const dx = Math.abs(gridX - game.merchant.gridX);
         const dy = Math.abs(gridY - game.merchant.gridY);
         if (dx <= 1 && dy <= 1) {
-            console.log('Right-click: Opening merchant dialog');
-            // Direct action: Open merchant dialog
             game.state = 'merchant';
             game.merchantMsg = "";
-            return; // Don't show context menu
+            return;
         }
     }
 
-    // Check for loot
+    // Check for loot - pick up directly
     if (game.groundLoot) {
         const clickedLoot = game.groundLoot.find(pile =>
             Math.floor(pile.x) === gridX && Math.floor(pile.y) === gridY
@@ -129,12 +102,10 @@ function handleRightClick(e) {
         if (clickedLoot) {
             const tile = game.map?.[gridY]?.[gridX];
             if (tile && tile.visible) {
-                console.log('Right-click: Picking up loot pile');
-                // Direct action: Pick up loot
                 if (typeof window.pickupLootPile === 'function') {
                     window.pickupLootPile(clickedLoot);
                 }
-                return; // Don't show context menu
+                return;
             }
         }
     }
@@ -148,18 +119,14 @@ function handleRightClick(e) {
         if (clickedDecoration) {
             const tile = game.map?.[gridY]?.[gridX];
             if (tile && tile.visible) {
-                // Check if player is close enough (within 2 tiles)
                 const dx = Math.abs(gridX - game.player.gridX);
                 const dy = Math.abs(gridY - game.player.gridY);
                 if (dx <= 2 && dy <= 2) {
-                    console.log('Right-click: Interacting with decoration:', clickedDecoration.type);
-                    // Direct action: Interact with decoration
                     if (typeof window.interactWithDecoration === 'function') {
                         window.interactWithDecoration(clickedDecoration, game.player);
                     }
-                    return; // Don't show context menu
+                    return;
                 } else {
-                    console.log('Decoration too far away - move closer to interact');
                     if (typeof addMessage === 'function') {
                         addMessage('Move closer to interact.');
                     }
@@ -169,9 +136,7 @@ function handleRightClick(e) {
         }
     }
 
-    // Empty tile - no action (walk disabled with new mouse combat)
-    // Could show context menu but walk is disabled anyway
-    console.log('Right-click on empty tile - no action');
+    // Empty tile - no action (walk disabled with mouse combat)
 }
 
 function handleMouseMove(e) {
@@ -194,15 +159,8 @@ function handleMouseMove(e) {
 }
 
 function handleContextMenuClick(e) {
-    // DEBUG: Log EVERY click
-    console.log('%c=== CLICK DETECTED ===', 'color: yellow; font-weight: bold');
-    console.log('Menu visible:', window.contextMenu.visible);
-    
-    if (!window.contextMenu.visible) {
-        console.log('Menu not visible, ignoring click');
-        return;
-    }
-    
+    if (!window.contextMenu.visible) return;
+
     const canvas = e.target;
     const rect = canvas.getBoundingClientRect();
     const scaleX = canvas.width / rect.width;
@@ -217,110 +175,64 @@ function handleContextMenuClick(e) {
     const menuY = window.contextMenu.y;
     const menuHeight = window.contextMenu.options.length * optionHeight;
 
-    console.log('Click at (scaled):', Math.round(clickX), Math.round(clickY));
-    console.log('Menu bounds: X[', Math.round(menuX), '-', Math.round(menuX + menuWidth), '] Y[', Math.round(menuY), '-', Math.round(menuY + menuHeight), ']');
-    
     const withinX = clickX >= menuX && clickX <= menuX + menuWidth;
     const withinY = clickY >= menuY && clickY <= menuY + menuHeight;
-    
-    console.log('Within X bounds:', withinX);
-    console.log('Within Y bounds:', withinY);
 
     if (withinX && withinY) {
         const optionIndex = Math.floor((clickY - menuY) / optionHeight);
-        console.log('Option index:', optionIndex);
-        
+
         if (optionIndex >= 0 && optionIndex < window.contextMenu.options.length) {
             const option = window.contextMenu.options[optionIndex];
-            console.log('%c✓ SELECTED: ' + option.text + ' (action: ' + option.action + ')', 'color: lime; font-weight: bold');
-
-            console.log('About to call executeContextAction...');
-            console.log('Target:', window.contextMenu.target);
-            console.log('TargetType:', window.contextMenu.targetType);
-
-            // Execute action BEFORE closing menu
-            try {
-                console.log('Calling function now...');
-                const result = executeContextAction(option.action, window.contextMenu.target, window.contextMenu.targetType);
-                console.log('Function returned:', result);
-            } catch (error) {
-                console.error('ERROR calling executeContextAction:', error);
-                console.error('Error stack:', error.stack);
-            }
-            console.log('After executeContextAction call');
-        } else {
-            console.log('Invalid option index');
+            executeContextAction(option.action, window.contextMenu.target, window.contextMenu.targetType);
         }
-    } else {
-        console.log('Click outside menu bounds');
     }
-    
+
     // Close menu and set flag to prevent click-to-move
     window.contextMenu.visible = false;
     window.contextMenu.hoveredOption = -1;
     window.contextMenuJustClosed = true;
 
-    // Reset flag after a short delay (prevents the same click from triggering walk)
+    // Reset flag after a short delay
     setTimeout(() => { window.contextMenuJustClosed = false; }, 50);
 }
 
 function executeContextAction(action, target, targetType) {
-    console.log('%c=== EXECUTING ACTION ===', 'color: cyan; font-weight: bold');
-    console.log('Action:', action);
-    console.log('Target:', target);
-    console.log('TargetType:', targetType);
-    
-    try {
-        switch (action) {
-            case 'attack':
-                if (typeof engageCombat === 'function' && targetType === 'enemy') {
-                    console.log('Engaging combat with', target.name);
-                    engageCombat(game.player, target);
-                }
-                break;
+    switch (action) {
+        case 'attack':
+            if (typeof engageCombat === 'function' && targetType === 'enemy') {
+                engageCombat(game.player, target);
+            }
+            break;
 
-            case 'pickup':
-                console.log('Pickup action triggered, targetType:', targetType);
-                console.log('pickupLootPile function exists:', typeof window.pickupLootPile);
-                if (typeof window.pickupLootPile === 'function' && targetType === 'loot') {
-                    console.log('Calling pickupLootPile with:', target);
-                    window.pickupLootPile(target);
-                } else {
-                    console.error('Cannot pickup: function not available or wrong target type');
-                }
-                break;
-            case 'inspect':
-                console.log('Opening inspect popup');
-                window.inspectPopup.visible = true;
-                window.inspectPopup.target = target;
-                window.inspectPopup.targetType = targetType;
-                break;
-            case 'talk':
-                if (targetType === 'npc' && target === game.merchant) {
-                    console.log('Opening merchant dialog');
-                    game.state = 'merchant';
-                    game.merchantMsg = "";
-                }
-                break;
-            case 'walk':
-                // Auto-walk disabled for player - manual movement only
-                console.log('Click-to-move disabled. Use WASD/Arrow keys to move.');
-                break;
-            case 'cancel':
-                console.log('Menu cancelled');
-                break;
-            default:
-                console.log('Unknown action:', action);
-        }
-    } catch (error) {
-        console.error('Error executing action:', error);
+        case 'pickup':
+            if (typeof window.pickupLootPile === 'function' && targetType === 'loot') {
+                window.pickupLootPile(target);
+            }
+            break;
+
+        case 'inspect':
+            window.inspectPopup.visible = true;
+            window.inspectPopup.target = target;
+            window.inspectPopup.targetType = targetType;
+            break;
+
+        case 'talk':
+            if (targetType === 'npc' && target === game.merchant) {
+                game.state = 'merchant';
+                game.merchantMsg = "";
+            }
+            break;
+
+        case 'walk':
+        case 'cancel':
+            // No action needed
+            break;
     }
-    
-    console.log('=== ACTION COMPLETE ===');
 }
 
 function handleInspectPopupClick(e) {
     if (!window.inspectPopup.visible) return;
+
     const canvas = e.target;
     const rect = canvas.getBoundingClientRect();
     const scaleX = canvas.width / rect.width;
@@ -329,7 +241,7 @@ function handleInspectPopupClick(e) {
     const mouseX = (e.clientX - rect.left) * scaleX;
     const mouseY = (e.clientY - rect.top) * scaleY;
 
-    // New dimensions: 300x400, bottom-right position
+    // Popup dimensions: 300x400, bottom-right position
     const popupWidth = 300;
     const popupHeight = 400;
     const margin = 20;
@@ -349,34 +261,30 @@ function handleInspectPopupClick(e) {
             const tabIndex = Math.floor((mouseX - popupX) / tabWidth);
             if (tabIndex >= 0 && tabIndex <= 3) {
                 window.inspectPopup.tab = tabIndex;
-                console.log('Switched to tab:', tabIndex);
             }
         }
-        // Click inside popup, don't close
         return;
     }
 
-    // Click outside popup - don't close (let player interact with game)
-    // Only close with ESC key
+    // Click outside popup - don't close (only ESC closes it)
 }
 
 function handleEscapeKey(e) {
     if (e.key === 'Escape' || e.keyCode === 27) {
         if (window.inspectPopup.visible) {
-            console.log('ESC: Closing inspect popup');
             window.inspectPopup.visible = false;
         } else if (window.contextMenu.visible) {
-            console.log('ESC: Closing context menu');
             window.contextMenu.visible = false;
             window.contextMenu.hoveredOption = -1;
         }
     }
 }
 
+// Initialize when DOM is ready
 if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', initRightClickSystem);
 } else {
     initRightClickSystem();
 }
 
-console.log('✓ Right-click system loaded (DEBUG VERSION)');
+// Right-click system loaded

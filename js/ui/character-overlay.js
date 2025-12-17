@@ -375,7 +375,7 @@ function drawEquipmentSlot(ctx, x, y, width, slot, item, colors) {
     ctx.fillText(slot.label + ':', x + 5, y);
 
     // Item name (with tier color if available)
-    if (item) {
+    if (item && item.name) {
         const tierColor = item.tierColor || colors.textPrimary || '#ffffff';
         ctx.fillStyle = tierColor;
         ctx.font = '12px monospace';

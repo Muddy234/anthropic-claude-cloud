@@ -1,7 +1,7 @@
 // ============================================================================
 // COMBAT SYSTEM - The Shifting Chasm
 // ============================================================================
-// Updated: Integrates 3-layer damage system (Weapon/Armor, Element, Attunement)
+// Updated: Integrates 2-layer damage system (Weapon/Armor, Element)
 // Uses DamageCalculator for all damage calculations
 // ============================================================================
 
@@ -362,7 +362,7 @@ function disengageCombat(entity) {
 // ============================================================================
 
 function performAttack(attacker, defender) {
-    // Get current room for attunement
+    // Get current room for context
     const room = getCurrentRoom(attacker);
 
     // Enemy combo system: track which attack in the combo (1, 2, or 3)
@@ -408,6 +408,12 @@ function performAttack(attacker, defender) {
     // Combat enhancements hook (knockback, screen shake, stagger)
     if (typeof onCombatHit === 'function') {
         onCombatHit(attacker, defender, result);
+    }
+
+    // Visual combat effects for enemy attacks
+    if (isEnemy && typeof MeleeSlashEffect !== 'undefined') {
+        const attackType = attacker.combat?.attackAnimation?.type || 'melee';
+        createMonsterAttackEffect(attacker, defender, attackType, result);
     }
 
     // Build message
@@ -1113,6 +1119,112 @@ if (typeof SystemManager !== 'undefined') {
 }
 
 // ============================================================================
+// MONSTER ATTACK EFFECTS
+// ============================================================================
+
+/**
+ * Create visual effect for monster attacks
+ * @param {Object} attacker - The attacking monster
+ * @param {Object} defender - The target (usually player)
+ * @param {string} attackType - 'melee', 'ranged', or 'magic'
+ * @param {Object} result - Damage calculation result
+ */
+function createMonsterAttackEffect(attacker, defender, attackType, result) {
+    // Get attacker position (tile coordinates, centered)
+    const ax = (attacker.displayX ?? attacker.gridX) + 0.5;
+    const ay = (attacker.displayY ?? attacker.gridY) + 0.5;
+
+    // Get target position
+    const tx = (defender.displayX ?? defender.gridX) + 0.5;
+    const ty = (defender.displayY ?? defender.gridY) + 0.5;
+
+    // Calculate facing angle
+    const facingAngle = Math.atan2(ty - ay, tx - ax);
+
+    switch (attackType) {
+        case 'melee':
+            createMonsterMeleeEffect(ax, ay, facingAngle, attacker, result);
+            break;
+        case 'magic':
+            createMonsterMagicEffect(ax, ay, tx, ty, attacker, result);
+            break;
+        case 'ranged':
+            createMonsterRangedEffect(ax, ay, tx, ty, attacker, result);
+            break;
+    }
+}
+
+/**
+ * Create melee slash effect for monster
+ */
+function createMonsterMeleeEffect(ax, ay, facingAngle, attacker, result) {
+    if (typeof MeleeSlashEffect === 'undefined') return;
+
+    // Base options for monster melee
+    const options = {
+        range: attacker.attackRange || 1.0,
+        arcDegrees: 70,
+        windupDuration: 0,  // No windup (already done)
+        slashDuration: 6,
+        particlesPerFrame: 4,
+        color: '#CC4444',       // Red-ish for enemy attacks
+        particleColor: '#FF6666'
+    };
+
+    // Customize by monster element
+    if (attacker.element) {
+        const elementColors = {
+            fire: { color: '#FF6B35', particleColor: '#FFAA00', glowColor: '#FF4400' },
+            ice: { color: '#74B9FF', particleColor: '#A8E6CF', glowColor: '#0984E3' },
+            water: { color: '#0984E3', particleColor: '#74B9FF', glowColor: '#0056B3' },
+            earth: { color: '#C4A35A', particleColor: '#8B7355', glowColor: '#6B4423' },
+            nature: { color: '#2ECC71', particleColor: '#A8E6CF', glowColor: '#27AE60' },
+            death: { color: '#6C5CE7', particleColor: '#A29BFE', glowColor: '#5B4FCF' },
+            void: { color: '#1E1E2E', particleColor: '#4A4A6A', glowColor: '#2D2D4D' },
+            arcane: { color: '#A29BFE', particleColor: '#DDA0DD', glowColor: '#9B59B6' }
+        };
+        if (elementColors[attacker.element]) {
+            Object.assign(options, elementColors[attacker.element]);
+        }
+    }
+
+    // Stronger effect for crits
+    if (result.isCrit) {
+        options.slashDuration = 8;
+        options.particlesPerFrame = 6;
+    }
+
+    MeleeSlashEffect.create(ax, ay, facingAngle, options);
+}
+
+/**
+ * Create magic attack effect for monster
+ */
+function createMonsterMagicEffect(ax, ay, tx, ty, attacker, result) {
+    if (typeof MonsterMagicEffect === 'undefined') return;
+
+    // Get element-specific options
+    const element = attacker.element || 'arcane';
+    MonsterMagicEffect.create(ax, ay, tx, ty, {
+        element: element,
+        isCrit: result.isCrit
+    });
+}
+
+/**
+ * Create ranged attack effect for monster
+ */
+function createMonsterRangedEffect(ax, ay, tx, ty, attacker, result) {
+    if (typeof MonsterRangedEffect === 'undefined') return;
+
+    MonsterRangedEffect.create(ax, ay, tx, ty, {
+        color: attacker.element ? undefined : '#AA6633',
+        element: attacker.element,
+        isCrit: result.isCrit
+    });
+}
+
+// ============================================================================
 // EXPORTS
 // ============================================================================
 
@@ -1138,6 +1250,7 @@ if (typeof window !== 'undefined') {
     // Attack animation exports
     window.getAttackAnimationState = getAttackAnimationState;
     window.startAttackWindup = startAttackWindup;
+    window.createMonsterAttackEffect = createMonsterAttackEffect;
 
     // DEBUG: God mode toggle (controlled via debug.godMode())
     window.godMode = false;

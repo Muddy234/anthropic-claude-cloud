@@ -41,7 +41,6 @@ function findPath(startX, startY, goalX, goalY, options = {}) {
             goalX = adjacent.x;
             goalY = adjacent.y;
         } else {
-            console.log('⚠️ Pathfinding: Goal and surroundings are blocked');
             return [];
         }
     }
@@ -80,9 +79,7 @@ function findPath(startX, startY, goalX, goalY, options = {}) {
 
         // Reached goal?
         if (current.x === goalX && current.y === goalY) {
-            const path = reconstructPath(cameFrom, current, startX, startY);
-            console.log(`✓ Path found in ${iterations} iterations, ${path.length} steps`);
-            return path;
+            return reconstructPath(cameFrom, current, startX, startY);
         }
 
         closedSet.add(currentKey);
@@ -121,12 +118,6 @@ function findPath(startX, startY, goalX, goalY, options = {}) {
     }
 
     // No path found
-    if (iterations >= maxIterations) {
-        console.warn(`⚠️ Pathfinding: Max iterations (${maxIterations}) reached`);
-    } else {
-        console.log('⚠️ Pathfinding: No path exists');
-    }
-
     return [];
 }
 
@@ -328,4 +319,4 @@ window.isWalkable = isWalkable;
 window.isValidTile = isValidTile;
 window.getAdjacentWalkableTile = getAdjacentWalkableTile;
 
-console.log('✓ A* Pathfinding system loaded');
+// A* Pathfinding system loaded

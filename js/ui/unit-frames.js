@@ -590,7 +590,7 @@ function initUnitFrameHandlers() {
 
         // Calculate grid position to check for interactables
         const tileSize = (typeof TILE_SIZE !== 'undefined') ? TILE_SIZE : 32;
-        const zoomLevel = (typeof ZOOM_LEVEL !== 'undefined') ? ZOOM_LEVEL : 2;
+        const zoomLevel = window.currentZoom || ZOOM_LEVEL || 2;
         const effectiveTileSize = tileSize * zoomLevel;
 
         const viewX = clickX - TRACKER_WIDTH;
@@ -602,22 +602,36 @@ function initUnitFrameHandlers() {
         const gridX = Math.floor(viewX / effectiveTileSize + camX);
         const gridY = Math.floor(viewY / effectiveTileSize + camY);
 
-        // Check if clicking on an enemy
+        // Check if clicking on a VISIBLE enemy (can't interact with invisible enemies)
         if (game.enemies) {
             const clickedEnemy = game.enemies.find(e =>
                 Math.floor(e.gridX) === gridX && Math.floor(e.gridY) === gridY
             );
             if (clickedEnemy) {
-                return;
+                // Only allow interaction if enemy is visible
+                const enemyVisible = clickedEnemy.isVisible ||
+                    (typeof VisionSystem !== 'undefined' && VisionSystem.getEntityVisibility &&
+                     VisionSystem.getEntityVisibility(clickedEnemy.gridX, clickedEnemy.gridY) > 0);
+                if (enemyVisible) {
+                    return;
+                }
+                // Enemy is not visible - treat as empty click (fall through to clear target)
             }
         }
 
-        // Check if clicking on merchant/NPC
+        // Check if clicking on VISIBLE merchant/NPC
         if (game.merchant) {
             const mx = game.merchant.x !== undefined ? game.merchant.x : game.merchant.gridX;
             const my = game.merchant.y !== undefined ? game.merchant.y : game.merchant.gridY;
             if (gridX === mx && gridY === my) {
-                return;
+                // Check visibility
+                let merchantVisible = true;
+                if (typeof VisionSystem !== 'undefined' && VisionSystem.getEntityVisibility) {
+                    merchantVisible = VisionSystem.getEntityVisibility(mx, my) > 0;
+                }
+                if (merchantVisible) {
+                    return;
+                }
             }
         }
 
@@ -627,7 +641,6 @@ function initUnitFrameHandlers() {
         }
     });
 
-    console.log('Unit frame handlers initialized');
 }
 
 // Initialize on load
@@ -639,4 +652,4 @@ if (typeof window !== 'undefined') {
 window.renderUnitFrames = renderUnitFrames;
 window.UNIT_FRAME_CONFIG = UNIT_FRAME_CONFIG;
 
-console.log('Unit frames loaded (CotDG style)');
+// Unit frames loaded

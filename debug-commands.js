@@ -58,10 +58,6 @@ const Debug = {
 ║   debug.listStatus(t)       - List active statuses           ║
 ║   debug.clearStatus(t)      - Clear all statuses             ║
 ║                                                              ║
-║ ATTUNEMENT                                                   ║
-║   debug.showAttunement()    - Show player attunement         ║
-║   debug.setAttunement(e, v) - Set attunement value           ║
-║                                                              ║
 ║ HAZARDS                                                      ║
 ║   debug.spawnHazard(id,x,y) - Spawn hazard at position       ║
 ║   debug.listHazards()       - List all hazard types          ║
@@ -102,6 +98,15 @@ const Debug = {
 ║   debug.startQuest(type,n)  - Start collection quest         ║
 ║   debug.spawnNPC(type,x,y)  - Spawn NPC                      ║
 ║   debug.spawnBoss(type,x,y) - Spawn boss                     ║
+║                                                              ║
+║ FLOOR NAVIGATION                                             ║
+║   debug.showExit()          - Show floor descent location    ║
+║   debug.goToExit()          - Teleport to floor descent      ║
+║   debug.unlockAllFloors()   - Unlock shortcuts to all floors ║
+║   debug.goFloor(n)          - Jump directly to floor n (1-10)║
+║                                                              ║
+║ JOURNAL/CODEX                                                ║
+║   debug.giveAllJournal()    - Unlock all lore, monsters, NPCs║
 ╚══════════════════════════════════════════════════════════════╝
         `);
     },
@@ -264,6 +269,74 @@ const Debug = {
 
         console.log(`✅ Total items added to inventory: ${count}`);
         console.log('Use inventory tabs (1-4) to browse: 1=Weapons, 2=Armor, 3=Consumables, 4=Materials');
+
+        // Also give all journal/codex items
+        this.giveAllJournal();
+    },
+
+    giveAllJournal() {
+        console.log('\n📖 Adding all journal/codex items...');
+
+        // Give all lore fragments
+        if (typeof LORE_FRAGMENTS !== 'undefined' && typeof persistentState !== 'undefined') {
+            persistentState.loreCollected = persistentState.loreCollected || [];
+            const loreCount = Object.keys(LORE_FRAGMENTS).length;
+            Object.keys(LORE_FRAGMENTS).forEach(loreId => {
+                if (!persistentState.loreCollected.includes(loreId)) {
+                    persistentState.loreCollected.push(loreId);
+                }
+            });
+            console.log(`   Lore fragments: ${loreCount} collected`);
+        } else {
+            console.warn('   LORE_FRAGMENTS or persistentState not available');
+        }
+
+        // Discover all monsters
+        if (typeof MONSTER_DATA !== 'undefined' && typeof persistentState !== 'undefined') {
+            persistentState.monstersDiscovered = persistentState.monstersDiscovered || [];
+            persistentState.monsterKillCounts = persistentState.monsterKillCounts || {};
+            const monsterCount = Object.keys(MONSTER_DATA).length;
+            Object.keys(MONSTER_DATA).forEach(monsterName => {
+                if (!persistentState.monstersDiscovered.includes(monsterName)) {
+                    persistentState.monstersDiscovered.push(monsterName);
+                }
+                // Also give some kill count for each
+                persistentState.monsterKillCounts[monsterName] =
+                    (persistentState.monsterKillCounts[monsterName] || 0) + 10;
+            });
+            console.log(`   Monsters discovered: ${monsterCount}`);
+        } else {
+            console.warn('   MONSTER_DATA or persistentState not available');
+        }
+
+        // Encounter all NPCs
+        if (typeof NPC_DATA !== 'undefined' && typeof persistentState !== 'undefined') {
+            persistentState.npcsEncountered = persistentState.npcsEncountered || [];
+            let npcCount = 0;
+            Object.keys(NPC_DATA).forEach(npcId => {
+                const npc = NPC_DATA[npcId];
+                if (!npc.aliasOf) {  // Skip aliases
+                    if (!persistentState.npcsEncountered.includes(npcId)) {
+                        persistentState.npcsEncountered.push(npcId);
+                    }
+                    npcCount++;
+                }
+            });
+            console.log(`   NPCs encountered: ${npcCount}`);
+        } else {
+            console.warn('   NPC_DATA or persistentState not available');
+        }
+
+        // Give quest items
+        if (typeof persistentState !== 'undefined') {
+            persistentState.questItems = persistentState.questItems || {};
+            persistentState.questItems.dagger = true;
+            persistentState.questItems.wardsCollected = 5;
+            console.log('   Quest items: Betrayal Dagger + 5 Wards');
+        }
+
+        console.log('✅ All journal/codex items added');
+        console.log('   Press J to open the Journal and view everything!');
     },
 
     equip(id) {
@@ -401,23 +474,6 @@ const Debug = {
             clearStatusEffects(entity);
             console.log(`Cleared all status effects from ${entity.name || 'player'}`);
         }
-    },
-
-    // ========================================================================
-    // ATTUNEMENT
-    // ========================================================================
-    showAttunement() {
-        if (typeof AttunementSystem === 'undefined') { console.log('AttunementSystem not loaded'); return; }
-        const summary = AttunementSystem.getAttunementSummary(game.player);
-        console.log('Player Attunement:', summary);
-        const all = AttunementSystem.getAllAttunements(game.player);
-        console.table(all);
-    },
-
-    setAttunement(element, value) {
-        if (typeof AttunementSystem === 'undefined') { console.log('AttunementSystem not loaded'); return; }
-        AttunementSystem.playerAttunement.values[element] = value;
-        console.log(`Set ${element} attunement to ${value}`);
     },
 
     // ========================================================================
@@ -1445,6 +1501,161 @@ const Debug = {
 
         if (typeof addMessage === 'function') {
             addMessage(`Floor set to ${floor}`);
+        }
+    },
+
+    // ========================================================================
+    // FLOOR NAVIGATION HELPERS
+    // ========================================================================
+
+    showExit() {
+        console.log('\n🚪 FLOOR EXIT/DESCENT LOCATION:');
+
+        let exitX = null, exitY = null;
+
+        // Check game.exitPosition first (this is what dungeon gen sets)
+        if (typeof game !== 'undefined' && game.exitPosition) {
+            exitX = game.exitPosition.x;
+            exitY = game.exitPosition.y;
+            console.log(`   Exit Position: (${exitX}, ${exitY})`);
+        }
+
+        // Check sessionState.pathDown and sync if needed
+        if (typeof sessionState !== 'undefined' && sessionState.pathDown) {
+            const pd = sessionState.pathDown;
+            if (pd.x !== null && pd.y !== null) {
+                exitX = pd.x;
+                exitY = pd.y;
+                console.log(`   Discovered: ${pd.discovered ? 'Yes' : 'No'}`);
+                console.log(`   Revealed: ${pd.revealed ? 'Yes' : 'No'}`);
+            } else if (exitX !== null) {
+                // Sync from game.exitPosition
+                sessionState.pathDown.x = exitX;
+                sessionState.pathDown.y = exitY;
+                console.log(`   (Synced pathDown from exitPosition)`);
+            }
+
+            // Reveal it on the map
+            if (exitX !== null && !pd.revealed) {
+                sessionState.pathDown.revealed = true;
+                sessionState.pathDown.discovered = true;
+                console.log('   (Exit has been revealed on map!)');
+            }
+        }
+
+        if (exitX !== null && exitY !== null) {
+            console.log(`\n   To teleport: debug.goToExit()`);
+        } else {
+            console.log('   No exit position found on this floor');
+        }
+
+        // Check for extraction points
+        if (typeof ExtractionSystem !== 'undefined' && ExtractionSystem.points && ExtractionSystem.points.length > 0) {
+            console.log('\n📤 EXTRACTION POINTS:');
+            ExtractionSystem.points.forEach((ep, i) => {
+                const status = ep.isActive() ? 'Active' : 'Collapsed';
+                console.log(`   ${i + 1}. (${ep.x}, ${ep.y}) - ${status}`);
+            });
+        }
+
+        console.log('\n💡 Current floor:', game?.floor || 1);
+    },
+
+    goToExit() {
+        let exitX = null, exitY = null;
+
+        // Try game.exitPosition first (primary source)
+        if (typeof game !== 'undefined' && game.exitPosition) {
+            exitX = game.exitPosition.x;
+            exitY = game.exitPosition.y;
+        }
+
+        // Also check sessionState.pathDown
+        if (typeof sessionState !== 'undefined' && sessionState.pathDown &&
+            sessionState.pathDown.x !== null && sessionState.pathDown.y !== null) {
+            exitX = sessionState.pathDown.x;
+            exitY = sessionState.pathDown.y;
+        }
+
+        if (exitX !== null && exitY !== null) {
+            this.teleport(exitX, exitY);
+            console.log(`Teleported to exit at (${exitX}, ${exitY})!`);
+            return;
+        }
+
+        console.error('No exit/descent location found on this floor');
+    },
+
+    unlockAllFloors(maxFloor = 10) {
+        console.log(`\n🔓 UNLOCKING ALL FLOORS (1-${maxFloor})...`);
+
+        if (typeof persistentState === 'undefined') {
+            console.error('persistentState not available');
+            return;
+        }
+
+        // Ensure shortcuts structure exists
+        if (!persistentState.shortcuts) {
+            persistentState.shortcuts = { unlockedFloors: [1], extractedFrom: {} };
+        }
+        if (!persistentState.shortcuts.unlockedFloors) {
+            persistentState.shortcuts.unlockedFloors = [1];
+        }
+
+        // Unlock all floors
+        for (let floor = 1; floor <= maxFloor; floor++) {
+            if (!persistentState.shortcuts.unlockedFloors.includes(floor)) {
+                persistentState.shortcuts.unlockedFloors.push(floor);
+            }
+            // Also mark as extracted from (for shortcut purposes)
+            if (!persistentState.shortcuts.extractedFrom) {
+                persistentState.shortcuts.extractedFrom = {};
+            }
+            persistentState.shortcuts.extractedFrom[floor] = true;
+        }
+
+        // Sort floors
+        persistentState.shortcuts.unlockedFloors.sort((a, b) => a - b);
+
+        // Update deepest floor stat
+        if (persistentState.stats) {
+            persistentState.stats.deepestFloor = Math.max(persistentState.stats.deepestFloor || 1, maxFloor);
+        }
+
+        console.log(`✅ Unlocked floors: ${persistentState.shortcuts.unlockedFloors.join(', ')}`);
+        console.log('   Use the Loadout UI in village to select starting floor');
+        console.log('   Or use debug.goFloor(n) to jump directly');
+    },
+
+    goFloor(floor) {
+        if (typeof floor !== 'number' || floor < 1 || floor > 10) {
+            console.error('Usage: debug.goFloor(1-10)');
+            return;
+        }
+
+        // Make sure floor is unlocked
+        this.unlockAllFloors(floor);
+
+        // Set the floor
+        game.floor = floor;
+
+        // If SessionManager exists, use it
+        if (typeof SessionManager !== 'undefined' && typeof SessionManager.startFloor === 'function') {
+            SessionManager.startFloor(floor);
+            console.log(`Starting new run on floor ${floor}...`);
+        } else {
+            // Manual dungeon regen
+            if (typeof generateBlobDungeon === 'function') {
+                game.enemies = [];
+                if (typeof HazardSystem !== 'undefined') HazardSystem.cleanup();
+                generateBlobDungeon();
+                console.log(`Regenerated dungeon for floor ${floor}`);
+            }
+        }
+
+        console.log(`\n🏔️ Now on Floor ${floor}`);
+        if (typeof addMessage === 'function') {
+            addMessage(`Jumped to Floor ${floor}`);
         }
     }
 };

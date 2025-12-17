@@ -22,39 +22,52 @@ const ENEMY_CONFIG = {
 /**
  * Check if enemy can see the player
  * Uses perception stats from new monster schema
+ * Torch OFF: enemy vision reduced by 50% unless player is in a light source
  */
 function canSeePlayer(enemy) {
     if (!game.player || game.player.isDead) return false;
-    
+
     // Check if player is invisible
     if (game.player.isInvisible) return false;
-    
-    // Get vision range from perception or fallback
-    const visionRange = enemy.perception?.sightRange || enemy.aggression || ENEMY_CONFIG.defaultVisionRange;
-    
+
+    // Get base vision range from perception or fallback
+    let visionRange = enemy.perception?.sightRange || enemy.aggression || ENEMY_CONFIG.defaultVisionRange;
+
+    // TORCH STEALTH MECHANIC:
+    // If player's torch is OFF, enemy vision is greatly reduced (0.25x)
+    // UNLESS player is standing in another light source (campfire, brazier, etc.)
+    const playerTorchOn = game.player.isTorchOn !== false;
+    const playerInLightSource = typeof LightSourceSystem !== 'undefined' &&
+        LightSourceSystem.isNearLightSource(game.player.gridX, game.player.gridY);
+
+    if (!playerTorchOn && !playerInLightSource) {
+        // Player is in stealth - enemy sees at 25% range (was 50%)
+        visionRange *= 0.25;
+    }
+
     // Calculate distance
     const dx = game.player.gridX - (enemy.gridX ?? enemy.x);
     const dy = game.player.gridY - (enemy.gridY ?? enemy.y);
     const dist = Math.sqrt(dx * dx + dy * dy);
-    
+
     if (dist > visionRange) return false;
-    
+
     // Check if in same room (optional - some enemies can see across rooms)
     if (enemy.perception?.requiresSameRoom !== false) {
         if (!isInSameRoom(enemy, game.player)) return false;
     }
-    
+
     // Check facing direction (cone of vision)
     if (enemy.facing && !isInVisionCone(enemy, game.player)) {
         // Not in cone, but close enemies can still detect
         if (dist > 2) return false;
     }
-    
+
     // Line of sight check (optional)
     if (enemy.perception?.requiresLineOfSight) {
         if (!hasLineOfSight(enemy, game.player)) return false;
     }
-    
+
     return true;
 }
 
@@ -468,19 +481,10 @@ function isEnemyInFavorableRoom(enemy) {
 }
 
 /**
- * Get room attunement bonus for enemy
+ * Get room bonus for enemy (attunement system removed)
+ * Kept for API compatibility, always returns 1.0
  */
 function getEnemyRoomBonus(enemy) {
-    const room = getEntityRoom(enemy);
-    if (!room?.element) return 1.0;
-    
-    if (typeof getRoomAttunementModifier === 'function') {
-        return getRoomAttunementModifier(enemy.element, room.element);
-    }
-    
-    if (enemy.element === room.element) return 1.25;
-    if (typeof isOpposed === 'function' && isOpposed(enemy.element, room.element)) return 0.8;
-    
     return 1.0;
 }
 

@@ -16,21 +16,14 @@ const SPAWNER_CONFIG = {
     maxEnemiesPerRoom: 3,         // Reduced from 8 - max 3 enemies per room
     elementMatchBonus: 3.0,       // 3x weight for matching element
     elementPenalty: 0.3,          // 0.3x weight for opposed element
-    // Floor-based tier weights (baseline)
-    tierWeights: {
-        1: { TIER_3: 0.6, TIER_2: 0.3, TIER_1: 0.1, ELITE: 0.0 },
-        3: { TIER_3: 0.5, TIER_2: 0.35, TIER_1: 0.12, ELITE: 0.03 },
-        5: { TIER_3: 0.4, TIER_2: 0.35, TIER_1: 0.18, ELITE: 0.07 },
-        10: { TIER_3: 0.25, TIER_2: 0.35, TIER_1: 0.25, ELITE: 0.15 }
-    },
-    // Distance-based tier weights (applied on top of floor weights)
+    // Distance-based tier weights
     // Room difficulty 1-10: 1-3 = near entrance, 4-6 = mid, 7-10 = far
     difficultyTierWeights: {
         near:   { TIER_3: 0.80, TIER_2: 0.18, TIER_1: 0.02, ELITE: 0.00 },  // difficulty 1-3
         mid:    { TIER_3: 0.50, TIER_2: 0.35, TIER_1: 0.12, ELITE: 0.03 },  // difficulty 4-6
         far:    { TIER_3: 0.25, TIER_2: 0.35, TIER_1: 0.30, ELITE: 0.10 }   // difficulty 7-10
     },
-    debugLogging: true
+    debugLogging: false
 };
 
 // ============================================================================
@@ -211,23 +204,6 @@ function selectMonsterForRoom(room) {
 }
 
 /**
- * Get tier weights based on floor number
- */
-function getTierWeightsForFloor(floor) {
-    // Find closest floor threshold
-    const thresholds = Object.keys(SPAWNER_CONFIG.tierWeights).map(Number).sort((a, b) => a - b);
-    let weights = SPAWNER_CONFIG.tierWeights[1];
-
-    for (const threshold of thresholds) {
-        if (floor >= threshold) {
-            weights = SPAWNER_CONFIG.tierWeights[threshold];
-        }
-    }
-
-    return weights;
-}
-
-/**
  * Get tier weights based on room difficulty (distance from entrance)
  * Rooms near entrance spawn mostly weak enemies, far rooms spawn stronger ones
  * @param {number} difficulty - Room difficulty 1-10 (from blob.difficulty)
@@ -398,7 +374,12 @@ function createEnemy(monsterType, x, y, room) {
     if (SPAWNER_CONFIG.debugLogging) {
         console.log(`[Spawner] Created ${monsterType} (${enemy.tier}) at (${x}, ${y}) - ${enemy.element}`);
     }
-    
+
+    // Journal/Codex tracking - discover monster type
+    if (typeof discoverMonster === 'function') {
+        discoverMonster(monsterType);
+    }
+
     return enemy;
 }
 
@@ -623,4 +604,4 @@ if (typeof window !== 'undefined') {
     window.spawnEnemiesForAllRooms = spawnEnemiesForAllRooms;
 }
 
-console.log('✅ Enemy spawner loaded (element-based selection)');
+// Enemy spawner loaded (element-based selection)

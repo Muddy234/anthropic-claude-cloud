@@ -1,7 +1,7 @@
 // ============================================================================
 // PLAYER - The Shifting Chasm
 // ============================================================================
-// Updated: Removed starting gear, added attunement tracking, normalized stats
+// Updated: Removed starting gear, normalized stats
 // ============================================================================
 
 function createPlayer() {
@@ -76,17 +76,10 @@ function createPlayer() {
         maxMana: 50,                  // Legacy (deprecated)
 
         // ====================================================================
-        // ELEMENT & ATTUNEMENT
+        // ELEMENT
         // ====================================================================
-        
+
         element: 'physical',          // Current attack element (from weapon)
-        attunement: {
-            primary: null,            // Dominant element affinity
-            values: {                 // 0-100 for each element
-                fire: 0, ice: 0, water: 0, earth: 0, nature: 0,
-                death: 0, arcane: 0, dark: 0, holy: 0, physical: 0
-            }
-        },
 
         // ====================================================================
         // DERIVED COMBAT STATS
@@ -201,9 +194,15 @@ function createPlayer() {
         // ====================================================================
         // FLAGS
         // ====================================================================
-        
+
         isDead: false,
-        isUndead: false               // For holy damage bonus
+        isUndead: false,              // For holy damage bonus
+
+        // ====================================================================
+        // TORCH SYSTEM
+        // ====================================================================
+
+        isTorchOn: true               // Torch toggle - affects vision and stealth
     };
 
     // ========================================================================
@@ -412,37 +411,6 @@ function unequipItem(player, slot) {
 }
 
 // ============================================================================
-// ATTUNEMENT
-// ============================================================================
-
-/**
- * Get player's current attunement to an element
- */
-function getPlayerAttunement(element) {
-    if (!game.player?.attunement?.values) return 0;
-    return game.player.attunement.values[element] || 0;
-}
-
-/**
- * Update player's attunement (called by AttunementSystem)
- */
-function setPlayerAttunement(element, value) {
-    if (!game.player?.attunement?.values) return;
-    game.player.attunement.values[element] = Math.max(0, Math.min(100, value));
-    
-    // Update primary if this is now highest
-    let highest = 0;
-    let primary = null;
-    for (const el in game.player.attunement.values) {
-        if (game.player.attunement.values[el] > highest) {
-            highest = game.player.attunement.values[el];
-            primary = el;
-        }
-    }
-    game.player.attunement.primary = highest >= 25 ? primary : null;
-}
-
-// ============================================================================
 // LEVEL UP
 // ============================================================================
 
@@ -507,6 +475,37 @@ function handlePlayerDeath() {
 }
 
 // ============================================================================
+// TORCH SYSTEM
+// ============================================================================
+
+/**
+ * Toggle the player's torch on/off
+ * When ON: Full vision (4 tiles), warm lighting, enemies see you at full range
+ * When OFF: Reduced vision (2 tiles), cool tint, enemies detect at 0.5x range
+ */
+function toggleTorch() {
+    if (!game.player) return;
+
+    game.player.isTorchOn = !game.player.isTorchOn;
+
+    // Play feedback
+    if (typeof addMessage === 'function') {
+        if (game.player.isTorchOn) {
+            addMessage('Torch lit - you can see further but enemies can spot you.', 'info');
+        } else {
+            addMessage('Torch extinguished - moving in shadows...', 'info');
+        }
+    }
+
+    // Invalidate vision cache to force recalculation
+    if (typeof VisionSystem !== 'undefined' && VisionSystem.clearVisibility) {
+        VisionSystem.clearVisibility();
+    }
+
+    console.log(`[Torch] Toggled to ${game.player.isTorchOn ? 'ON' : 'OFF'}`);
+}
+
+// ============================================================================
 // EXPORTS
 // ============================================================================
 
@@ -515,11 +514,10 @@ if (typeof window !== 'undefined') {
     window.recalculatePlayerStats = recalculatePlayerStats;
     window.equipItem = equipItem;
     window.unequipItem = unequipItem;
-    window.getPlayerAttunement = getPlayerAttunement;
-    window.setPlayerAttunement = setPlayerAttunement;
     window.checkLevelUp = checkLevelUp;
     window.resetPlayer = resetPlayer;
     window.handlePlayerDeath = handlePlayerDeath;
+    window.toggleTorch = toggleTorch;
 }
 
 console.log('✅ Player system loaded (normalized stats, no starting gear)');

@@ -8,6 +8,13 @@
 
 const CONSUMABLES = {
     // === HEALING ===
+    'weak_health_potion': {
+        id: 'weak_health_potion', name: 'Weak Health Potion', type: 'consumable', subtype: 'healing',
+        rarity: 'common', stackable: true, maxStack: 10,
+        effect: { type: 'heal', value: 25 },
+        description: 'Restores 25 HP. Basic starter potion.',
+        goldValue: 15
+    },
     'health_potion_small': {
         id: 'health_potion_small', name: 'Small Health Potion', type: 'consumable', subtype: 'healing',
         rarity: 'common', stackable: true, maxStack: 10,
@@ -169,6 +176,15 @@ const CONSUMABLES = {
         effect: { type: 'healOverTime', value: 5, duration: 10 },
         description: 'Restores 5 HP per second for 10 seconds.',
         goldValue: 35
+    },
+
+    // === DEPLOYABLES ===
+    'fire_starter_kit': {
+        id: 'fire_starter_kit', name: 'Fire Starter Kit', type: 'consumable', subtype: 'deployable',
+        rarity: 'common', stackable: true, maxStack: 5,
+        effect: { type: 'deployable', deployType: 'campfire' },
+        description: 'Deploy a campfire that heals 1% HP/sec when resting nearby. Provides light.',
+        goldValue: 50
     }
 };
 
@@ -320,25 +336,14 @@ const MATERIALS = {
 };
 
 // ============================================================================
-// QUEST ITEMS - Special non-consumable items
-// ============================================================================
-
-const QUEST_ITEMS = {
-    'ancient_key': { id: 'ancient_key', name: 'Ancient Key', type: 'quest', rarity: 'rare', stackable: false, description: 'An ornate key of unknown origin.' },
-    'mysterious_orb': { id: 'mysterious_orb', name: 'Mysterious Orb', type: 'quest', rarity: 'epic', stackable: false, description: 'A glowing orb pulsing with energy.' },
-    'forgotten_tome': { id: 'forgotten_tome', name: 'Forgotten Tome', type: 'quest', rarity: 'rare', stackable: false, description: 'An ancient book written in a dead language.' },
-    'cultist_orders': { id: 'cultist_orders', name: 'Cultist Orders', type: 'quest', rarity: 'uncommon', stackable: false, description: 'Documents detailing cultist activities.' }
-};
-
-// ============================================================================
 // COMBINED ITEMS DATA
 // ============================================================================
+// Note: QUEST_ITEMS is defined in quest-items.js (story items)
 
 const ITEMS_DATA = {
     ...CONSUMABLES,
     ...AMMO,
-    ...MATERIALS,
-    ...QUEST_ITEMS
+    ...MATERIALS
 };
 
 // ============================================================================
@@ -403,6 +408,33 @@ const itemEffects = {
         player.isStealthed = true;
         player.stealthDuration = duration;
         return `Invisible for ${duration}s`;
+    },
+
+    // Deployables - directly use LightSourceSystem
+    'deployable': (player, deployType) => {
+        if (typeof LightSourceSystem === 'undefined') {
+            return 'Light system not available';
+        }
+
+        if (deployType === 'campfire') {
+            // Add campfire light source at player position
+            const campfireId = `campfire_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`;
+            LightSourceSystem.addSource({
+                id: campfireId,
+                type: 'campfire',
+                gridX: player.gridX,
+                gridY: player.gridY
+            });
+
+            // Mark tile for visual rendering
+            if (game.map?.[player.gridY]?.[player.gridX]) {
+                game.map[player.gridY][player.gridX].hasCampfire = true;
+            }
+
+            return 'Campfire placed!';
+        }
+
+        return 'Unknown deployable type';
     }
 };
 
@@ -426,8 +458,28 @@ function getItemsByRarity(rarity) {
     return Object.values(ITEMS_DATA).filter(item => item.rarity === rarity);
 }
 
-function useItem(player, itemId) {
-    const item = ITEMS_DATA[itemId];
+function useItem(player, itemId, inventoryItem = null) {
+    // Try to find item definition: first by ID, then by name lookup
+    let item = ITEMS_DATA[itemId];
+
+    // If not found by ID, search ITEMS_DATA by name
+    if (!item) {
+        item = Object.values(ITEMS_DATA).find(i => i.name === itemId);
+    }
+
+    // If still not found but we have an inventory item with an effect, use that
+    if (!item && inventoryItem && inventoryItem.effect) {
+        item = inventoryItem;
+    }
+
+    // Final fallback: search player inventory for the item
+    if (!item && player.inventory) {
+        const invItem = player.inventory.find(i => i.id === itemId || i.name === itemId);
+        if (invItem && invItem.effect) {
+            item = invItem;
+        }
+    }
+
     if (!item || item.type !== 'consumable') {
         return { success: false, message: 'Cannot use this item' };
     }
@@ -456,6 +508,13 @@ function useItem(player, itemId) {
             break;
         case 'stealth':
             message = itemEffects.stealth(player, effect.duration);
+            break;
+        case 'deployable':
+            message = itemEffects.deployable(player, effect.deployType);
+            // Check if deployment failed
+            if (message.includes('Cannot')) {
+                return { success: false, message: message };
+            }
             break;
         default:
             message = 'Unknown effect';

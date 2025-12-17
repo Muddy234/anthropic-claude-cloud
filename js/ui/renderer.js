@@ -5,92 +5,47 @@ ctx.imageSmoothingEnabled = false; // Optimize for pixel art
 canvas.width = window.innerWidth;
 canvas.height = window.innerHeight;
 
+// Export canvas and ctx for other UI components
+window.canvas = canvas;
+window.ctx = ctx;
+
+// Dynamic zoom - calculated to maintain fixed viewport tile count
+let currentZoom = typeof calculateDynamicZoom === 'function'
+    ? calculateDynamicZoom(canvas.width)
+    : ZOOM_LEVEL;
+window.currentZoom = currentZoom;
+
 // Handle window resizing
 window.addEventListener('resize', () => {
     canvas.width = window.innerWidth;
     canvas.height = window.innerHeight;
-    console.log('Canvas resized to:', canvas.width, 'x', canvas.height);
+
+    // Recalculate zoom for new screen size
+    currentZoom = typeof calculateDynamicZoom === 'function'
+        ? calculateDynamicZoom(canvas.width)
+        : ZOOM_LEVEL;
+    window.currentZoom = currentZoom;
+
+    // Resize particle canvas overlay to match
+    if (typeof ParticleCanvas !== 'undefined') {
+        ParticleCanvas.resize();
+    }
 });
 
-// Create health bar during combat
-function drawHealthBar(x, y, width, hp, maxHp) {
-    const pct = Math.max(0, Math.min(1, hp / maxHp));
-    ctx.fillStyle = '#333'; ctx.fillRect(x, y, width, 20);
-    ctx.fillStyle = pct > 0.5 ? '#2ecc71' : pct > 0.2 ? '#f1c40f' : '#e74c3c';
-    ctx.fillRect(x, y, width * pct, 20);
-    ctx.strokeStyle = '#333'; ctx.strokeRect(x, y, width, 20);
-}
+// Shared color constants
+const RARITY_COLORS = {
+    'common': '#ffffff',
+    'uncommon': '#2ecc71',
+    'rare': '#3498db',
+    'epic': '#e67e22'
+};
 
-function drawTracker() {
-    if (!game.player) return;
-    ctx.fillStyle = '#0a0a0a'; ctx.fillRect(0, 0, TRACKER_WIDTH, canvas.height);
-    ctx.strokeStyle = '#333'; ctx.lineWidth = 2; ctx.strokeRect(0, 0, TRACKER_WIDTH, canvas.height);
-    let y = 50; const cx = TRACKER_WIDTH / 2;
-    ctx.fillStyle = '#FFD700'; ctx.font = 'bold 32px monospace'; ctx.textAlign = 'center'; ctx.fillText('ADVENTURER', cx, y); y += 40;
-    ctx.fillStyle = '#fff'; ctx.font = '20px monospace'; ctx.fillText(`Level ${game.player.level}`, cx, y); y += 20;
-    const xpNeeded = 100 + (game.player.level - 1) * 150;
-    const xpPct = Math.min(1, game.player.xp / xpNeeded);
-    ctx.fillStyle = '#333'; ctx.fillRect(50, y, TRACKER_WIDTH - 100, 10);
-    ctx.fillStyle = '#3498db'; ctx.fillRect(50, y, (TRACKER_WIDTH - 100) * xpPct, 10);
-    y += 30; ctx.fillStyle = '#888'; ctx.font = '14px monospace'; ctx.fillText(`${game.player.xp} / ${xpNeeded} XP`, cx, y); y += 50;
-    ctx.fillStyle = '#FFD700'; ctx.font = 'bold 24px monospace'; ctx.fillText('STATS', cx, y); y += 30;
-    ctx.fillStyle = '#fff'; ctx.font = '18px monospace'; ctx.textAlign = 'left'; const px = 80;
-    ctx.fillText(`STR: ${game.player.stats.STR}`, px, y); y += 30;
-    ctx.fillText(`AGI: ${game.player.stats.AGI}`, px, y); y += 30;
-    ctx.fillText(`INT: ${game.player.stats.INT}`, px, y); y += 30;
-    ctx.fillText(`STA: ${game.player.stats.STA}`, px, y); y += 30;
-    y += 10;
-    ctx.fillText(`P.DEF: ${Math.floor(game.player.pDef)}`, px, y); y += 30;
-    ctx.fillText(`M.DEF: ${Math.floor(game.player.mDef)}`, px, y); y += 30;
-    y += 10;
-    // HP Bar
-    ctx.fillText(`HP: ${Math.floor(game.player.hp)}/${game.player.maxHp}`, px, y); y += 5;
-    const hpBarWidth = TRACKER_WIDTH - 160;
-    const hpPct = game.player.hp / game.player.maxHp;
-    ctx.fillStyle = '#333'; ctx.fillRect(px, y, hpBarWidth, 15);
-    ctx.fillStyle = '#e74c3c'; ctx.fillRect(px, y, hpBarWidth * hpPct, 15);
-    ctx.strokeStyle = '#fff'; ctx.strokeRect(px, y, hpBarWidth, 15);
-    y += 25;
-
-    // Mana Bar (new system: mp/maxMp)
-    const mp = Math.floor(game.player.mp || 0);
-    const maxMp = game.player.maxMp || 100;
-    ctx.fillStyle = '#fff';
-    ctx.fillText(`MP: ${mp}/${maxMp}`, px, y); y += 5;
-    const mpPct = mp / maxMp;
-    ctx.fillStyle = '#333'; ctx.fillRect(px, y, hpBarWidth, 15);
-    ctx.fillStyle = '#3498db'; ctx.fillRect(px, y, hpBarWidth * mpPct, 15);
-    ctx.strokeStyle = '#fff'; ctx.strokeRect(px, y, hpBarWidth, 15);
-    y += 25;
-
-    // Stamina (text only for now)
-    ctx.fillText(`STM: ${Math.floor(game.player.stamina)}/${game.player.maxStamina}`, px, y); y += 50;
-    ctx.fillStyle = '#9b59b6'; ctx.textAlign = 'center'; ctx.font = 'bold 24px monospace'; ctx.fillText('INVENTORY', cx, y); y += 30;
-    ctx.fillStyle = '#fff'; ctx.font = '16px monospace';
-    if (game.player.inventory.length === 0) { ctx.fillText('Empty', cx, y); } else { for (const item of game.player.inventory) { ctx.fillText(`${item.name} x${item.count}`, cx, y); y += 25; } }
-    ctx.fillStyle = '#888'; ctx.font = '14px monospace'; ctx.fillText('[E] Open Inventory', cx, canvas.height - 30);
-}
-
-function drawInspectPanel() {
-    if (!game.combat || !game.combat.inspecting) return;
-    const enemy = game.combat.enemy;
-    const px = 1200 + (TRACKER_WIDTH / 2), py = 100, pw = 600, ph = 600;
-    const finalX = Math.min(canvas.width - pw - 20, px);
-    ctx.fillStyle = 'rgba(20, 20, 30, 0.95)'; ctx.fillRect(finalX, py, pw, ph);
-    ctx.strokeStyle = '#FFD700'; ctx.lineWidth = 4; ctx.strokeRect(finalX, py, pw, ph);
-    ctx.fillStyle = '#FFD700'; ctx.font = 'bold 36px monospace'; ctx.textAlign = 'center'; ctx.fillText('MONSTER DATA', finalX + pw / 2, py + 50);
-    ctx.fillStyle = enemy.element === 'fire' ? '#e74c3c' : enemy.element === 'nature' ? '#27ae60' : '#8e44ad';
-    ctx.fillRect(finalX + 175, py + 80, 250, 250); ctx.strokeStyle = '#fff'; ctx.lineWidth = 3; ctx.strokeRect(finalX + 175, py + 80, 250, 250);
-    ctx.fillStyle = '#fff'; ctx.font = 'bold 32px monospace'; ctx.textAlign = 'left'; ctx.fillText(enemy.name.toUpperCase(), finalX + 30, py + 380);
-    ctx.font = '18px monospace'; ctx.fillText(`STR: ${enemy.str} AGI: ${enemy.agi} INT: ${enemy.int}`, finalX + 40, py + 450);
-    ctx.fillText(`P.DEF: ${enemy.pDef} M.DEF: ${enemy.mDef}`, finalX + 40, py + 480);
-    ctx.fillStyle = '#ccc'; ctx.font = '16px monospace';
-    const description = enemy.description || (MONSTER_DATA[enemy.name] ? MONSTER_DATA[enemy.name].description : 'No description available.');
-    const words = description.split(' '); let line = '', yo = py + 530;
-    for (let w of words) { if (ctx.measureText(line + w).width > pw - 80) { ctx.fillText(line, finalX + 40, yo); line = w + ' '; yo += 24; } else line += w + ' '; }
-    ctx.fillText(line, finalX + 40, yo);
-    ctx.fillStyle = '#888'; ctx.textAlign = 'center'; ctx.fillText('[I] or [4] to close', finalX + pw / 2, py + ph - 20);
-}
+const ELEMENT_COLORS = {
+    'FIRE': '#ff6b35', 'ICE': '#3498db', 'WATER': '#5dade2',
+    'EARTH': '#8b4513', 'NATURE': '#27ae60', 'DARK': '#9b59b6',
+    'HOLY': '#f1c40f', 'DEATH': '#666', 'ARCANE': '#e67e22',
+    'PHYSICAL': '#ccc'
+};
 
 function drawInventoryOverlay() {
     // Initialize scroll offsets if not exists
@@ -311,15 +266,7 @@ function drawInventoryOverlay() {
                 const itemData = EQUIPMENT_DATA[item.name] || ITEMS_DATA[item.name] || item;
                 const rarity = itemData.rarity || 'common';
 
-                // Color by rarity
-                const rarityColors = {
-                    'common': '#ffffff',
-                    'uncommon': '#2ecc71',
-                    'rare': '#3498db',
-                    'epic': '#e67e22'
-                };
-
-                ctx.fillStyle = rarityColors[rarity] || '#ffffff';
+                ctx.fillStyle = RARITY_COLORS[rarity] || '#ffffff';
                 ctx.font = isSelected ? 'bold 18px monospace' : '18px monospace';
                 ctx.fillText(`${item.name}`, listX, itemY);
 
@@ -362,14 +309,8 @@ function drawItemInspectPanel(item, x, y, w, h, itemType) {
     let dy = y;
 
     // Item name with rarity color
-    const rarityColors = {
-        'common': '#ffffff',
-        'uncommon': '#2ecc71',
-        'rare': '#3498db',
-        'epic': '#e67e22'
-    };
     const rarity = itemData.rarity || 'common';
-    ctx.fillStyle = rarityColors[rarity];
+    ctx.fillStyle = RARITY_COLORS[rarity] || '#ffffff';
     ctx.font = 'bold 24px monospace';
     ctx.textAlign = 'center';
     ctx.fillText(item.name.toUpperCase(), x + w / 2, dy);
@@ -461,13 +402,7 @@ function drawItemInspectPanel(item, x, y, w, h, itemType) {
         ctx.fillText('Element:', x + 20, dy);
         ctx.textAlign = 'right';
         const thisElement = (itemData.element || 'physical').toUpperCase();
-        const elementColors = {
-            'FIRE': '#ff6b35', 'ICE': '#3498db', 'WATER': '#5dade2',
-            'EARTH': '#8b4513', 'NATURE': '#27ae60', 'DARK': '#9b59b6',
-            'HOLY': '#f1c40f', 'DEATH': '#666', 'ARCANE': '#e67e22',
-            'PHYSICAL': '#ccc'
-        };
-        ctx.fillStyle = elementColors[thisElement] || '#fff';
+        ctx.fillStyle = ELEMENT_COLORS[thisElement] || '#fff';
         ctx.fillText(thisElement, x + w - 20, dy);
         dy += 20;
 
@@ -565,12 +500,6 @@ function drawItemInspectPanel(item, x, y, w, h, itemType) {
     }
 }
 
-// Merchant removed - gold system replaced with Altar sacrifice system
-function drawMerchant() {
-    // Merchant functionality disabled
-    game.showMerchant = false;
-}
-
 function drawLevelUpScreen() {
     ctx.fillStyle = 'rgba(0, 0, 0, 0.95)'; ctx.fillRect(0, 0, canvas.width, canvas.height);
     const cx = canvas.width / 2; const cy = canvas.height / 2; const y = cy - 200;
@@ -583,76 +512,6 @@ function drawLevelUpScreen() {
         ly += 40; ctx.textAlign = 'center';
         if (game.levelUpData.attributePoints === 0) { ctx.fillStyle = '#2ecc71'; ctx.fillText('[SPACE] CONFIRM', cx, ly); } else { ctx.fillStyle = '#888'; ctx.fillText('Spend all points to confirm', cx, ly); }
     }
-}
-
-function drawBattleScene() {
-    const enemy = game.combat.enemy; const offset = TRACKER_WIDTH;
-    ctx.fillStyle = '#f8f9fa'; ctx.fillRect(offset, 0, canvas.width - offset, canvas.height);
-    ctx.fillStyle = '#e0e0e0'; ctx.strokeStyle = '#bdc3c7'; ctx.lineWidth = 4;
-    ctx.beginPath(); ctx.ellipse(1400 + (offset / 2), 450, 300, 100, 0, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
-    ctx.beginPath(); ctx.ellipse(500 + offset, 750, 350, 120, 0, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
-    ctx.fillStyle = enemy.element === 'fire' ? '#e74c3c' : enemy.element === 'nature' ? '#27ae60' : '#8e44ad';
-    ctx.fillRect(1250 + (offset / 2), 150, 300, 300);
-    ctx.fillStyle = '#3498db'; ctx.fillRect(350 + offset, 450, 350, 350);
-    ctx.fillStyle = '#fff'; ctx.strokeStyle = '#333'; ctx.fillRect(80 + offset, 80, 540, 120); ctx.strokeRect(80 + offset, 80, 540, 120);
-    ctx.fillStyle = '#000'; ctx.font = 'bold 32px monospace'; ctx.textAlign = 'left'; ctx.fillText(enemy.name.toUpperCase(), 100 + offset, 120);
-    drawHealthBar(120 + offset, 150, 460, enemy.hp, enemy.maxHp);
-    ctx.fillStyle = '#fff'; ctx.fillRect(1180 + (offset / 3), 580, 540, 140); ctx.strokeRect(1180 + (offset / 3), 580, 540, 140);
-    ctx.fillStyle = '#000'; ctx.fillText('ADVENTURER', 1200 + (offset / 3), 620);
-    drawHealthBar(1220 + (offset / 3), 650, 460, game.player.hp, game.player.maxHp);
-    ctx.fillStyle = '#2c3e50'; ctx.fillRect(offset, 830, canvas.width - offset, 250);
-    ctx.fillStyle = '#fff'; ctx.fillRect(offset + 10, 840, canvas.width - offset - 20, 230);
-    ctx.fillStyle = '#000'; ctx.font = '28px monospace';
-    for (let i = 0; i < game.combat.log.length && i < 4; i++) { ctx.fillText(game.combat.log[game.combat.log.length - 1 - i], offset + 40, 1030 - i * 40); }
-    const menuX = 1240 + (offset / 3);
-    if (game.combat.menuState === 'main') {
-        ctx.font = 'bold 36px monospace'; ctx.fillStyle = '#000'; ctx.textAlign = 'left';
-        ctx.fillText('[1] FIGHT', menuX, 900); ctx.fillText('[2] INSPECT', menuX, 960); ctx.fillText('[3] BAG', menuX, 1020); ctx.fillText('[4] RUN', menuX + 300, 900);
-    }
-    if (game.combat.menuState === 'fight_popup') {
-        const px = 1200 + (TRACKER_WIDTH / 2), py = 100, pw = 600, ph = 600; const finalX = Math.min(canvas.width - pw - 20, px);
-        ctx.fillStyle = 'rgba(20, 20, 30, 0.95)'; ctx.fillRect(finalX, py, pw, ph); ctx.strokeStyle = '#FFD700'; ctx.lineWidth = 4; ctx.strokeRect(finalX, py, pw, ph);
-        ctx.fillStyle = '#FFD700'; ctx.font = 'bold 28px monospace'; ctx.textAlign = 'center'; ctx.fillText('SELECT ATTACK', finalX + pw / 2, py + 50);
-        ctx.fillStyle = '#fff'; ctx.font = '22px monospace'; ctx.textAlign = 'left'; let ay = py + 120;
-        for (let i = 0; i < 4; i++) {
-            const ability = game.player.abilities[i];
-            if (ability) {
-                ctx.fillStyle = '#2ecc71'; ctx.fillText(`[${i + 1}] ${ability.name}`, finalX + 40, ay);
-                ctx.fillStyle = '#aaa'; ctx.font = '16px monospace'; ctx.fillText(`Cost: ${ability.cost} ${ability.type === 'stamina' ? 'STM' : 'MANA'} | Dmg: ${ability.baseDmg} | Acc: ${ability.accuracy}%`, finalX + 60, ay + 28); ctx.font = '22px monospace';
-            } else { ctx.fillStyle = '#666'; ctx.fillText(`[${i + 1}] Unselected`, finalX + 40, ay); }
-            ay += 100;
-        }
-        ctx.fillStyle = '#888'; ctx.font = '18px monospace'; ctx.textAlign = 'center'; ctx.fillText('[C] or [ESC] to Cancel', finalX + pw / 2, py + ph - 30);
-    }
-    if (game.combat.menuState === 'bag_popup') {
-        const px = 1200 + (TRACKER_WIDTH / 2), py = 100, pw = 600, ph = 600; const finalX = Math.min(canvas.width - pw - 20, px);
-        ctx.fillStyle = 'rgba(20, 20, 30, 0.95)'; ctx.fillRect(finalX, py, pw, ph); ctx.strokeStyle = '#FFD700'; ctx.lineWidth = 4; ctx.strokeRect(finalX, py, pw, ph);
-        ctx.fillStyle = '#FFD700'; ctx.font = 'bold 28px monospace'; ctx.textAlign = 'center'; ctx.fillText('CONSUMABLES', finalX + pw / 2, py + 50);
-        const consumables = game.player.inventory.filter(i => i.type === 'consumable');
-        if (consumables.length === 0) { ctx.fillStyle = '#888'; ctx.font = '22px monospace'; ctx.fillText('No consumables available', finalX + pw / 2, py + 300); } else {
-            ctx.fillStyle = '#fff'; ctx.font = '22px monospace'; ctx.textAlign = 'left'; let iy = py + 120;
-            consumables.forEach((item, idx) => { if (idx < 9) { ctx.fillText(`[${idx + 1}] ${item.name} x${item.count}`, finalX + 40, iy); iy += 50; } });
-        }
-        ctx.fillStyle = '#888'; ctx.font = '18px monospace'; ctx.textAlign = 'center'; ctx.fillText('[C] or [ESC] to Cancel', finalX + pw / 2, py + ph - 30);
-    }
-    drawInspectPanel();
-}
-
-function drawNotification() {
-    // Placeholder for notification drawing logic
-}
-
-function getFloorColorByTheme(room) {
-    return ['#222', '#2a2a2a', '#333'];
-}
-
-function drawThemedFloor(tile, x, y, size) {
-    const room = game.rooms.find(r => x >= r.x && x < r.x + r.w && y >= r.y && y < r.y + r.h);
-    if (!room) { ctx.fillStyle = '#222'; ctx.fillRect(x, y, size, size); return; }
-    const colors = getFloorColorByTheme(room);
-    const pattern = (room.x + room.y + Math.floor(tile.x) + Math.floor(tile.y)) % colors.length;
-    ctx.fillStyle = colors[pattern];
-    ctx.fillRect(x, y, size, size);
 }
 
 // ============================================================================
@@ -669,53 +528,42 @@ const FOG_COLOR = { r: 26, g: 26, b: 45 }; // #1a1a2d
 const TORCH_COLOR = { r: 255, g: 147, b: 41 }; // Warm orange #ff9329
 
 // Visibility settings
-const MIN_BRIGHTNESS = 0.55; // 55% brightness outside torch (45% dimmed)
-const FADE_DISTANCE = 2; // 2 tile gradient from torch edge
+const MIN_BRIGHTNESS = 0.15; // 15% brightness outside torch (85% dimmed)
+const FADE_DISTANCE = 2;     // 2 tile gradient from torch edge
 
 /**
- * Calculate tile brightness based on distance from player
- * Returns 1.0 (full brightness) inside torch, smooth gradient in fade zone, MIN_BRIGHTNESS outside
+ * Calculate tile brightness based on distance from player AND light sources
+ * Delegates to LightSourceSystem for unified flicker behavior
  * @param {number} tileX - Tile X position
  * @param {number} tileY - Tile Y position
  * @returns {number} - Brightness from MIN_BRIGHTNESS to 1.0
  */
 function getTileBrightness(tileX, tileY) {
+    // Use LightSourceSystem's unified brightness calculation
+    if (typeof LightSourceSystem !== 'undefined') {
+        return LightSourceSystem.getTileBrightnessAt(tileX, tileY, MIN_BRIGHTNESS);
+    }
+
+    // Fallback if LightSourceSystem not available
     if (!game.player) return MIN_BRIGHTNESS;
 
     const playerX = game.player.gridX;
     const playerY = game.player.gridY;
+    const torchRadius = 4;
 
-    // Get torch/vision radius
-    const torchRadius = typeof VisionSystem !== 'undefined'
-        ? VisionSystem.getPlayerVisionRange()
-        : 4;
-
-    // Calculate distance from player
     const dx = tileX - playerX;
     const dy = tileY - playerY;
     const distance = Math.sqrt(dx * dx + dy * dy);
 
-    // Inside torch radius = full brightness
-    if (distance <= torchRadius) {
-        return 1.0;
-    }
+    if (distance <= torchRadius) return 1.0;
 
-    // In fade zone = smooth gradient
-    const fadeStart = torchRadius;
     const fadeEnd = torchRadius + FADE_DISTANCE;
-
     if (distance < fadeEnd) {
-        // Calculate progress through fade zone (0 at torch edge, 1 at fade end)
-        const fadeProgress = (distance - fadeStart) / FADE_DISTANCE;
-
-        // Smoothstep for natural transition
+        const fadeProgress = (distance - torchRadius) / FADE_DISTANCE;
         const smoothProgress = fadeProgress * fadeProgress * (3 - 2 * fadeProgress);
-
-        // Interpolate from 1.0 to MIN_BRIGHTNESS
         return 1.0 - (smoothProgress * (1.0 - MIN_BRIGHTNESS));
     }
 
-    // Beyond fade zone = minimum brightness
     return MIN_BRIGHTNESS;
 }
 
@@ -737,54 +585,15 @@ window.getTileBrightness = getTileBrightness;
 window.getTileDimAmount = getTileDimAmount;
 
 /**
- * Render warm torchlight glow around the player
- * Glow blends into the dimmed areas using the same gradient
- */
-function renderTorchlightGlow(ctx, player, camX, camY, tileSize, offsetX) {
-    const torchRadius = typeof VisionSystem !== 'undefined'
-        ? VisionSystem.getPlayerVisionRange()
-        : 4;
-
-    const playerScreenX = (player.displayX - camX) * tileSize + offsetX;
-    const playerScreenY = (player.displayY - camY) * tileSize;
-
-    // Get flicker for animated glow
-    let flickerMultiplier = 1.0;
-    if (typeof LightSourceSystem !== 'undefined') {
-        flickerMultiplier = 1 + LightSourceSystem.flickerOffset * 0.2;
-    }
-
-    // Glow extends to the fade zone edge
-    const glowRadius = (torchRadius + FADE_DISTANCE) * tileSize * flickerMultiplier;
-
-    // Create radial gradient for warm glow
-    const gradient = ctx.createRadialGradient(
-        playerScreenX, playerScreenY, 0,
-        playerScreenX, playerScreenY, glowRadius
-    );
-
-    // Warm orange glow that follows the same falloff as brightness
-    const intensity = 0.2 * flickerMultiplier;
-    const torchEdge = torchRadius / (torchRadius + FADE_DISTANCE); // Where torch radius ends in gradient
-
-    gradient.addColorStop(0, `rgba(${TORCH_COLOR.r}, ${TORCH_COLOR.g}, ${TORCH_COLOR.b}, ${intensity})`);
-    gradient.addColorStop(torchEdge * 0.5, `rgba(${TORCH_COLOR.r}, ${TORCH_COLOR.g}, ${TORCH_COLOR.b}, ${intensity * 0.8})`);
-    gradient.addColorStop(torchEdge, `rgba(${TORCH_COLOR.r}, ${TORCH_COLOR.g}, ${TORCH_COLOR.b}, ${intensity * 0.5})`);
-    gradient.addColorStop(1, `rgba(${TORCH_COLOR.r}, ${TORCH_COLOR.g}, ${TORCH_COLOR.b}, 0)`);
-
-    ctx.save();
-    ctx.globalCompositeOperation = 'screen';
-    ctx.fillStyle = gradient;
-    ctx.fillRect(playerScreenX - glowRadius, playerScreenY - glowRadius, glowRadius * 2, glowRadius * 2);
-    ctx.restore();
-}
-
-/**
  * Apply fog overlay and torchlight effects
+ * Now delegates all glow rendering to LightSourceSystem for unified behavior
  */
 function applyRadialFogOverlay(ctx, player, camX, camY, tileSize, offsetX, viewW, viewH) {
-    // Render warm torchlight glow
-    renderTorchlightGlow(ctx, player, camX, camY, tileSize, offsetX);
+    // Render warm glow for ALL light sources (player + campfires + braziers, etc.)
+    // Uses unified flicker from LightSourceSystem
+    if (typeof LightSourceSystem !== 'undefined') {
+        LightSourceSystem.renderAllLightGlows(ctx, camX, camY, tileSize, offsetX);
+    }
 
     // Render light source cookie textures for organic shapes
     if (typeof LightSourceSystem !== 'undefined' && LightSourceSystem.config.useCookieTextures) {
@@ -820,8 +629,8 @@ function renderLightCookies(ctx, camX, camY, tileSize, offsetX) {
         const screenX = (srcX - camX) * tileSize + offsetX;
         const screenY = (srcY - camY) * tileSize;
 
-        // Get flicker multiplier for animated radius
-        const flickerMultiplier = LightSourceSystem.getSourceFlicker(source);
+        // Get unified flicker multiplier for consistent animation
+        const flickerMultiplier = LightSourceSystem.getFlicker();
         const effectiveRadius = source.radius * flickerMultiplier * tileSize;
 
         // Get cookie texture
@@ -855,9 +664,34 @@ function render() {
 
 if (game.state === 'menu') {
         ctx.fillStyle = '#fff'; ctx.font = '64px monospace'; ctx.textAlign = 'center'; ctx.fillText('THE SHIFTING CHASM', canvas.width / 2, 400); ctx.font = '32px monospace'; ctx.fillText('Press SPACE to Start', canvas.width / 2, 500);
-    } else if (game.state === 'playing' || game.state === 'merchant' || game.state === 'inventory' || game.state === 'map' || game.state === 'skills' || game.state === 'moveset' || game.state === 'levelup' || game.state === 'character' || game.state === 'shift' || game.state === 'sacrifice' || game.state === 'chest') {
+    } else if (game.state === 'village' || game.state === 'dialogue' || game.state === 'bank' || game.state === 'loadout' || game.state === 'shop' || game.state === 'crafting') {
+        // VILLAGE STATE RENDERING
+        if (typeof VillageSystem !== 'undefined' && VillageSystem.initialized) {
+            VillageSystem.render(ctx);
+        } else {
+            // Fallback: show loading message
+            ctx.fillStyle = '#fff';
+            ctx.font = '24px monospace';
+            ctx.textAlign = 'center';
+            ctx.fillText('Loading Village...', canvas.width / 2, canvas.height / 2);
+        }
 
-const effectiveTileSize = TILE_SIZE * ZOOM_LEVEL;
+        // Render overlays for bank, loadout, shop, and crafting states
+        if (game.state === 'bank' && typeof BankUI !== 'undefined') {
+            BankUI.render(ctx);
+        }
+        if (game.state === 'loadout' && typeof LoadoutUI !== 'undefined') {
+            LoadoutUI.render(ctx);
+        }
+        if (game.state === 'shop' && typeof ShopUI !== 'undefined') {
+            ShopUI.render(ctx);
+        }
+        if (game.state === 'crafting' && typeof CraftingUI !== 'undefined') {
+            CraftingUI.render(ctx);
+        }
+    } else if (game.state === 'playing' || game.state === 'inventory' || game.state === 'map' || game.state === 'skills' || game.state === 'levelup' || game.state === 'character' || game.state === 'shift' || game.state === 'chest' || game.state === 'extraction') {
+
+const effectiveTileSize = TILE_SIZE * currentZoom;
 const viewW = canvas.width - TRACKER_WIDTH;
 const viewH = canvas.height;
 
@@ -904,8 +738,8 @@ game.camera.y += (game.camera.targetY - game.camera.y) * CAMERA_SMOOTHING;
 
 // Apply screen shake offset
 const shakeOffset = typeof getScreenShakeOffset === 'function' ? getScreenShakeOffset() : { x: 0, y: 0 };
-const camX = game.camera.x + (shakeOffset.x / (TILE_SIZE * ZOOM_LEVEL));
-const camY = game.camera.y + (shakeOffset.y / (TILE_SIZE * ZOOM_LEVEL));
+const camX = game.camera.x + (shakeOffset.x / (TILE_SIZE * currentZoom));
+const camY = game.camera.y + (shakeOffset.y / (TILE_SIZE * currentZoom));
 
         ctx.save(); ctx.beginPath(); ctx.rect(TRACKER_WIDTH, 0, viewW, canvas.height); ctx.clip();
         
@@ -928,9 +762,9 @@ const camY = game.camera.y + (shakeOffset.y / (TILE_SIZE * ZOOM_LEVEL));
                 } else if (tile.type === 'doorway') {
                     drawDoorwayTile(ctx, screenX, screenY, effectiveTileSize);
                 } else if (tile.type === 'wall') {
-                    drawWallTile(ctx, screenX, screenY, effectiveTileSize);
+                    drawWallTile(ctx, screenX, screenY, effectiveTileSize, x, y);
                 } else if (tile.type === 'interior_wall') {
-                    drawWallTile(ctx, screenX, screenY, effectiveTileSize);
+                    drawWallTile(ctx, screenX, screenY, effectiveTileSize, x, y);
                 } else if (tile.type === 'void') {
                     drawVoidTile(ctx, screenX, screenY, effectiveTileSize);
                 } else if (tile.type === 'lava') {
@@ -943,6 +777,9 @@ const camY = game.camera.y + (shakeOffset.y / (TILE_SIZE * ZOOM_LEVEL));
                     ctx.fillRect(screenX, screenY, effectiveTileSize, effectiveTileSize);
                     ctx.strokeStyle = '#111';
                     ctx.strokeRect(screenX, screenY, effectiveTileSize, effectiveTileSize);
+                } else {
+                    // Unknown tile type or undefined - render as void (black)
+                    drawVoidTile(ctx, screenX, screenY, effectiveTileSize);
                 }
 
                 // FOG OF WAR: Apply dimming overlay to ALL tiles
@@ -972,35 +809,40 @@ const camY = game.camera.y + (shakeOffset.y / (TILE_SIZE * ZOOM_LEVEL));
         // NOTE: Layer 1.45 removed - single overlay above handles all dimming
         // No need for double-overlay which was making things too dark
 
-        // LAYER 1.5: Draw room perimeter walls with proper corners/edges (NEW!)
-        // DISABLED for blob-based dungeons - walls are rendered in Layer 1 based on game.map[y][x].type
-        // The renderAllWalls() function draws rectangular perimeters which don't work for organic blob shapes
-        // if (typeof renderAllWalls === 'function') {
-        //     renderAllWalls(ctx, camX, camY, effectiveTileSize, TRACKER_WIDTH);
-        // }
+        // NOTE: Walls rendered in Layer 1 based on game.map[y][x].type (blob-based dungeons)
         
         // LAYER 2: Draw loot piles
         if (typeof renderLootPiles === 'function') {
             renderLootPiles(ctx, camX, camY, effectiveTileSize, TRACKER_WIDTH);
         }
-        
-        // LAYER 3: Draw decorations
-        if (typeof renderRoomDecorations === 'function') {
-            renderRoomDecorations(camX, camY, effectiveTileSize, TRACKER_WIDTH);
+
+        // LAYER 2.5: Draw extraction points
+        if (typeof renderExtractionPoints === 'function') {
+            renderExtractionPoints(ctx, camX, camY, effectiveTileSize, TRACKER_WIDTH);
         }
-        
-        // Merchant rendering (only if visible)
+
+        // Merchant rendering (only if visible within light sources)
         if (game.merchant) {
-            const merchantTile = game.map[game.merchant.y]?.[game.merchant.x];
-            if (merchantTile && merchantTile.visible) {
+            let merchantVisibility = 0;
+            if (typeof VisionSystem !== 'undefined' && VisionSystem.getEntityVisibility) {
+                merchantVisibility = VisionSystem.getEntityVisibility(game.merchant.x, game.merchant.y);
+            } else {
+                const merchantTile = game.map[game.merchant.y]?.[game.merchant.x];
+                merchantVisibility = (merchantTile && merchantTile.visible) ? 1.0 : 0;
+            }
+
+            if (merchantVisibility > 0) {
                 const mx = (game.merchant.x - camX) * effectiveTileSize + TRACKER_WIDTH;
                 const my = (game.merchant.y - camY) * effectiveTileSize;
+                ctx.save();
+                ctx.globalAlpha = merchantVisibility;
                 ctx.fillStyle = '#f1c40f';
                 ctx.fillRect(mx + 10, my + 10, effectiveTileSize - 20, effectiveTileSize - 20);
                 ctx.fillStyle = '#000';
                 ctx.font = 'bold 24px monospace';
                 ctx.textAlign = 'center';
                 ctx.fillText('$', mx + effectiveTileSize / 2, my + effectiveTileSize / 2 + 8);
+                ctx.restore();
             }
         }
 
@@ -1019,8 +861,29 @@ const camY = game.camera.y + (shakeOffset.y / (TILE_SIZE * ZOOM_LEVEL));
         // Projectiles (arrows, bolts, magic)
         if (typeof renderProjectiles === 'function') { renderProjectiles(ctx, camX, camY, effectiveTileSize, TRACKER_WIDTH); }
 
-        // Melee slash effects (mouse-driven combat)
+        // Melee slash effects (mouse-driven combat) - legacy code-based
         if (typeof drawSlashEffects === 'function') { drawSlashEffects(ctx, camX, camY, effectiveTileSize, TRACKER_WIDTH); }
+
+        // New code-based melee slash effects (arc + particles)
+        if (typeof MeleeSlashEffect !== 'undefined') {
+            MeleeSlashEffect.render(ctx, camX, camY, effectiveTileSize, TRACKER_WIDTH);
+        }
+
+        // Monster magic/ranged attack effects
+        if (typeof MonsterMagicEffect !== 'undefined') {
+            MonsterMagicEffect.render(ctx, camX, camY, effectiveTileSize, TRACKER_WIDTH);
+        }
+        if (typeof MonsterRangedEffect !== 'undefined') {
+            MonsterRangedEffect.render(ctx, camX, camY, effectiveTileSize, TRACKER_WIDTH);
+        }
+
+        // Combat effects (sprite-based slash, magic, explosions)
+        if (typeof renderCombatEffects === 'function') { renderCombatEffects(ctx, camX, camY, effectiveTileSize, TRACKER_WIDTH); }
+
+        // Particle effects (fire sparks, magic particles, etc.) - renders to separate canvas layer
+        if (typeof ParticleSystemManager !== 'undefined') {
+            ParticleSystemManager.render(camX, camY, effectiveTileSize, TRACKER_WIDTH);
+        }
 
         if (typeof renderDamageNumbers === 'function') { renderDamageNumbers(camX, camY, effectiveTileSize, TRACKER_WIDTH); }
         ctx.restore();
@@ -1040,15 +903,10 @@ const camY = game.camera.y + (shakeOffset.y / (TILE_SIZE * ZOOM_LEVEL));
             renderMiniMap(ctx, canvas.width);
         }
 
-        // DISABLED: Old skills action bar (replaced by combat action bar)
-        // if (typeof drawActionBar === 'function') {
-        //     drawActionBar();
-        // }
         if (!game.merchant && game.state !== 'inventory' && game.state !== 'map' && game.state !== 'skills' && game.state !== 'moveset' && game.state !== 'levelup') {
             ctx.fillStyle = '#fff'; ctx.font = '20px monospace'; ctx.textAlign = 'left'; const msgX = TRACKER_WIDTH + 20; const msgY = canvas.height - 40;
             if (game.messageLog.length > 0 && Date.now() - game.lastMessageTime < 3000) { ctx.fillText(game.messageLog[game.messageLog.length - 1].text, msgX, msgY); }
         }
-        drawNotification();
     } else if (game.state === 'gameover') {
         ctx.fillStyle = '#e74c3c'; ctx.font = '64px monospace'; ctx.textAlign = 'center'; ctx.fillText('GAME OVER', canvas.width / 2, 500); ctx.fillStyle = '#fff'; ctx.font = '32px monospace'; ctx.fillText('Press SPACE to Restart', canvas.width / 2, 600);
     }
@@ -1060,16 +918,14 @@ const camY = game.camera.y + (shakeOffset.y / (TILE_SIZE * ZOOM_LEVEL));
     }
 
     // Draw popup menus LAST so they appear on top of action icons
-    if (game.state === 'merchant') drawMerchant();
     if (game.state === 'character' && typeof drawCharacterOverlay === 'function') drawCharacterOverlay();
     if (game.state === 'inventory') drawInventoryOverlay();
     if (game.state === 'map' && typeof drawMapOverlay === 'function') drawMapOverlay();
     if (game.state === 'shift' && typeof drawShiftOverlay === 'function') drawShiftOverlay();
     if (game.state === 'skills') drawSkillsOverlay();
-    if (game.state === 'moveset') drawMoveSetOverlay();
     if (game.state === 'levelup') drawLevelUpScreen();
-    if (game.state === 'sacrifice' && typeof renderSacrificeUI === 'function') renderSacrificeUI(ctx);
     if (game.state === 'chest' && typeof renderChestUI === 'function') renderChestUI(ctx);
+    if (game.state === 'extraction' && typeof ExtractionUI !== 'undefined') ExtractionUI.render(ctx);
 
     // Draw shift countdown timer at top of screen
     drawShiftCountdown();
@@ -1101,11 +957,19 @@ function drawShiftCountdown() {
     // Calculate corruption percentage (inverted - more time passed = more corruption)
     const corruptionPct = 1 - (countdown / maxTime);
 
-    // Position at bottom-right, above action bar
-    const barWidth = 180;
+    // Position above the unified action bar, spanning its full width
+    // Use stored action bar dimensions if available
+    const actionBar = window.actionBarDimensions || {
+        x: canvas.width - 290,
+        y: canvas.height - 96,
+        width: 270,
+        height: 76
+    };
+
+    const barWidth = actionBar.width;
     const barHeight = 20;
-    const barX = canvas.width - barWidth - 25;
-    const barY = canvas.height - 110;
+    const barX = actionBar.x;
+    const barY = actionBar.y - barHeight - 8; // 8px gap above action bar
 
     const pulse = typeof getPulseValue === 'function' ? getPulseValue(0.003) : (Math.sin(Date.now() * 0.003) + 1) / 2;
 

@@ -24,6 +24,8 @@
     <!-- ==================== -->
     <script src="js/core/constants.js"></script>
     <script src="js/core/game-state.js"></script>
+    <script src="js/core/save-manager.js"></script>
+    <script src="js/core/session-manager.js"></script>
     <script src="js/core/system-manager.js"></script>
     
     <!-- ==================== -->
@@ -43,10 +45,18 @@
     <script src="js/data/armor-defense.js"></script>
     <script src="js/data/armor-mobility.js"></script>
     <script src="js/data/weapon-armor-matrix.js"></script>
-    <script src="js/data/room-attunement-matrix.js"></script>
     <script src="js/data/tileset-reference.js"></script>
+    <script src="js/data/tileset-floors-1-2.js"></script>
     <script src="js/data/room-themes.js"></script>
-    <script src="js/data/room-types.js"></script>
+    <script src="js/data/npcs.js"></script>
+    <script src="js/data/elder-dialogue.js"></script>
+    <script src="js/data/lore-fragments.js"></script>
+    <script src="js/data/quest-items.js"></script>
+    <script src="js/data/village-tile-states.js"></script>
+    <script src="js/data/materials.js"></script>
+    <script src="js/data/quests.js"></script>
+    <script src="js/data/crafting-data.js"></script>
+    <script src="js/data/core-data.js"></script>
 
     <!-- ==================== -->
     <!-- UTILS: Helper functions (no registration) -->
@@ -66,19 +76,27 @@
     <script src="js/entities/enemy.js"></script>
     <script src="js/entities/npc.js"></script>
     <script src="js/entities/boss.js"></script>
-    
+    <script src="js/entities/extraction-point.js"></script>
+    <script src="js/entities/core-boss.js"></script>
+    <script src="js/entities/malphas-boss.js"></script>
+
     <!-- ==================== -->
     <!-- GENERATION: Map building (no registration) -->
     <!-- ==================== -->
-    <script src="js/generation/room-decorator.js"></script>
-    <script src="js/generation/room-generator.js"></script>
     <script src="js/generation/chamber-generator.js"></script>
-    <script src="js/generation/enemy-spawner.js"></script>
-    <script src="js/generation/map-generator.js"></script>
 
-    <!-- NEW: Blob-based dungeon system -->
+    <!-- Blob-based dungeon system -->
     <script src="js/generation/dungeon-generator.js"></script>
     <script src="js/generation/dungeon-integration.js"></script>
+
+    <!-- NEW: Extraction system generation -->
+    <script src="js/generation/extraction-spawner.js"></script>
+
+    <!-- NEW: Village generation -->
+    <script src="js/generation/village-generator.js"></script>
+
+    <!-- NEW: Core (final boss) generation -->
+    <script src="js/generation/core-generator.js"></script>
 
     <!-- ==================== -->
     <!-- TESTING: Analysis tools (no registration) -->
@@ -90,7 +108,6 @@
     <!-- ==================== -->
     <script src="js/ui/ui-design-system.js"></script>
     <script src="js/ui/tile-renderer.js"></script>
-    <script src="js/ui/decoration-renderer.js"></script>
     <script src="js/ui/monster-animations.js"></script>
     <script src="js/ui/sprite-loader.js"></script>
     <script src="js/ui/enemy-renderer.js"></script>
@@ -107,12 +124,19 @@
     <script src="js/ui/character-overlay.js"></script>
     <script src="js/ui/map-overlay.js"></script>
     <script src="js/ui/shift-overlay.js"></script>
-    <script src="js/ui/sacrifice-ui.js"></script>
     <script src="js/ui/chest-ui.js"></script>
 
-    <!-- DISABLED FOR ACTIVE COMBAT: Auto-walk no longer used -->
-    <!-- <script src="js/ui/auto-walk.js"></script> -->
-    <!-- <script src="js/ui/left-click-init.js"></script> -->
+    <!-- NEW: Village UI components -->
+    <script src="js/ui/village-renderer.js"></script>
+    <script src="js/ui/dialogue-ui.js"></script>
+    <script src="js/ui/bank-ui.js"></script>
+    <script src="js/ui/loadout-ui.js"></script>
+    <script src="js/ui/shop-ui.js"></script>
+    <script src="js/ui/quest-ui.js"></script>
+    <script src="js/ui/crafting-ui.js"></script>
+    <script src="js/ui/extraction-ui.js"></script>
+    <script src="js/ui/journal-ui.js"></script>
+
     <script src="js/ui/right-click-init.js"></script>
     
     <!-- ==================== -->
@@ -120,11 +144,13 @@
     <!-- Order doesn't matter - priority handles execution order -->
     <!-- ==================== -->
 
+    <!-- NEW: World State System (narrative progression) -->
+    <script src="js/systems/world-state-system.js"></script>
+
     <!-- NEW: Shift shared systems (load early, low priorities) -->
     <script src="js/systems/light-source-system.js"></script>       <!-- Priority 4 (before vision) -->
     <script src="js/systems/shift-bonus-system.js"></script>        <!-- Priority 5 (bonuses) -->
 
-    <script src="js/systems/room-type-system.js"></script>          <!-- Priority 10 (room types) -->
     <script src="js/systems/vision-system.js"></script>             <!-- Priority 5 (Fog of War) -->
     <script src="js/systems/input-handler.js"></script>             <!-- Priority 10 -->
     <script src="js/systems/pokemon-movement.js"></script>          <!-- Priority 20 -->
@@ -141,9 +167,13 @@
     <script src="js/systems/enemy-ai.js"></script>                  <!-- Priority 40 -->
     <script src="js/systems/monster-social-system.js"></script>     <!-- Priority 42 -->
     <script src="js/systems/monster-animation-system.js"></script>  <!-- Priority 43 -->
-    <script src="js/systems/attunement-system.js"></script>         <!-- Priority 45 -->
     <script src="js/systems/combat-system.js"></script>             <!-- Priority 50 -->
     <script src="js/systems/projectile-system.js"></script>         <!-- Projectile travel time -->
+    <script src="js/effects/melee-slash-effect.js"></script>        <!-- Code-based melee attack effects -->
+    <script src="js/effects/monster-attack-effects.js"></script>    <!-- Monster magic/ranged attack effects -->
+    <script src="js/effects/village-atmosphere.js"></script>        <!-- Village world state atmosphere -->
+    <script src="js/effects/particle-system.js"></script>          <!-- Particle canvas layer for fire, magic, etc. -->
+    <script src="js/systems/combat-effect-system.js"></script>      <!-- Priority 51: Combat visual effects -->
     <script src="js/systems/active-combat.js"></script>             <!-- Active combat hotkeys -->
     <script src="js/systems/combat-enhancements.js"></script>       <!-- Dash, knockback, screen shake, stagger -->
     <script src="js/systems/mouse-attack-system.js"></script>      <!-- Mouse-driven attacks -->
@@ -153,9 +183,22 @@
     <script src="js/systems/inventory-system.js"></script>          <!-- Priority 65 -->
     <script src="js/systems/quest-item-system.js"></script>         <!-- Priority 66 (quest items) -->
     <script src="js/systems/loot-system.js"></script>               <!-- Priority 70 -->
+
+    <!-- NEW: Survival Extraction systems -->
+    <script src="js/systems/banking-system.js"></script>           <!-- Banking/storage -->
+    <script src="js/systems/loadout-system.js"></script>           <!-- Pre-run loadout -->
+    <script src="js/systems/extraction-system.js"></script>        <!-- Priority 75: Extraction points -->
+    <script src="js/systems/village-system.js"></script>           <!-- Village hub management -->
+    <script src="js/systems/quest-system.js"></script>             <!-- Priority 85: Quest tracking -->
+    <script src="js/systems/shortcut-system.js"></script>          <!-- Floor shortcuts -->
+    <script src="js/systems/degradation-system.js"></script>       <!-- Village/floor degradation -->
+    <script src="js/systems/rescue-system.js"></script>            <!-- Death drop/rescue runs -->
+    <script src="js/systems/crafting-system.js"></script>          <!-- Priority 88: Crafting -->
+    <script src="js/systems/core-system.js"></script>              <!-- Priority 95: The Core -->
+    <script src="js/systems/survival-integration.js"></script>     <!-- Priority 1: Integration layer -->
+
     <script src="js/systems/shift-system.js"></script>              <!-- Priority 80 -->
-    <script src="js/systems/merchant-shop.js"></script>             <!-- Priority 90 -->
-    
+
     <!-- ==================== -->
     <!-- MAIN: Load last      -->
     <!-- ==================== -->

@@ -282,43 +282,70 @@ function drawEnemyOverlays(ctx, enemy, ex, ey, cx, cy, tileSize) {
     // Draw tier indicator
     drawTierIndicator(ctx, enemy, cx, ey, tileSize);
 
-    // Draw combo finisher telegraph (when next attack is the powerful 3rd hit)
-    const comboCount = enemy.combat?.comboCount || 1;
-    if (comboCount === 3 && enemy.combat?.isInCombat) {
-        // Pulsing red glow to warn player of incoming combo finisher
-        const pulseSpeed = 8;
-        const pulse = 0.5 + 0.5 * Math.sin(Date.now() / 1000 * pulseSpeed);
-        const glowRadius = tileSize / 2 + 8 + (pulse * 6);
-
-        ctx.strokeStyle = `rgba(255, 0, 255, ${0.4 + pulse * 0.4})`;
-        ctx.lineWidth = 3;
-        ctx.beginPath();
-        ctx.arc(cx, cy, glowRadius, 0, Math.PI * 2);
-        ctx.stroke();
-
-        // Draw "!!" warning
-        ctx.fillStyle = `rgba(255, 0, 255, ${0.7 + pulse * 0.3})`;
-        ctx.font = 'bold 16px monospace';
-        ctx.textAlign = 'center';
-        ctx.fillText('!!', cx, ey + 12);
-    }
-
     // Draw alert indicators
     if (enemy.ai) {
         const state = enemy.ai.currentState;
-        // Only show alert indicator if not showing combo telegraph
-        if (comboCount !== 3 || !enemy.combat?.isInCombat) {
-            if (state === 'chasing' || state === 'combat') {
-                ctx.fillStyle = '#f00';
-                ctx.font = 'bold 20px monospace';
-                ctx.textAlign = 'center';
-                ctx.fillText('!', cx, ey + 10);
-            } else if (state === 'alert' || state === 'searching') {
-                ctx.fillStyle = '#ff0';
-                ctx.font = 'bold 20px monospace';
-                ctx.textAlign = 'center';
-                ctx.fillText('?', cx, ey + 10);
-            }
+        if (state === 'chasing' || state === 'combat') {
+            ctx.fillStyle = '#f00';
+            ctx.font = 'bold 20px monospace';
+            ctx.textAlign = 'center';
+            ctx.fillText('!', cx, ey + 10);
+        } else if (state === 'alert' || state === 'searching') {
+            ctx.fillStyle = '#ff0';
+            ctx.font = 'bold 20px monospace';
+            ctx.textAlign = 'center';
+            ctx.fillText('?', cx, ey + 10);
+        } else if (state === 'panicked') {
+            // Panicked indicator - flashing exclamation with spiral effect
+            ctx.fillStyle = Math.floor(Date.now() / 150) % 2 ? '#FF6B6B' : '#FFB3B3';
+            ctx.font = 'bold 18px monospace';
+            ctx.textAlign = 'center';
+            ctx.fillText('!!', cx, ey + 10);
+            // Spiral lines showing panic
+            ctx.strokeStyle = 'rgba(255, 107, 107, 0.4)';
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            const panicOffset = (Date.now() % 1000) / 1000 * Math.PI * 2;
+            ctx.arc(cx, cy, tileSize * 0.4, panicOffset, panicOffset + Math.PI);
+            ctx.stroke();
+        } else if (state === 'enraged') {
+            // Enraged indicator - pulsing angry face/symbol
+            const pulse = 1 + 0.2 * Math.sin(Date.now() / 100);
+            ctx.fillStyle = '#FF4444';
+            ctx.font = `bold ${Math.floor(22 * pulse)}px monospace`;
+            ctx.textAlign = 'center';
+            ctx.fillText('💢', cx, ey + 12);
+            // Red glow around enemy
+            ctx.strokeStyle = `rgba(255, 0, 0, ${0.3 + 0.2 * Math.sin(Date.now() / 100)})`;
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.arc(cx, cy, tileSize * 0.6, 0, Math.PI * 2);
+            ctx.stroke();
+        } else if (state === 'reacting') {
+            // Reacting indicator - "Huh?" moment - slow to notice player
+            ctx.fillStyle = '#AAAAFF';
+            ctx.font = 'bold 18px monospace';
+            ctx.textAlign = 'center';
+            ctx.fillText('?!', cx, ey + 10);
+            // Growing awareness ring
+            const progress = Math.min(enemy.ai?.stateTimer / (enemy.ai?.reactionDelay || 600), 1);
+            ctx.strokeStyle = `rgba(170, 170, 255, ${0.3 + progress * 0.4})`;
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.arc(cx, cy, tileSize * 0.3 + progress * tileSize * 0.3, 0, Math.PI * 2);
+            ctx.stroke();
+        } else if (state === 'sacrificing') {
+            // Sacrificing indicator - Elite consuming a minion
+            ctx.fillStyle = '#8B0000';
+            ctx.font = 'bold 20px monospace';
+            ctx.textAlign = 'center';
+            ctx.fillText('🩸', cx, ey + 12);
+            // Dark aura
+            ctx.strokeStyle = 'rgba(139, 0, 0, 0.6)';
+            ctx.lineWidth = 3;
+            ctx.beginPath();
+            ctx.arc(cx, cy, tileSize * 0.5, 0, Math.PI * 2);
+            ctx.stroke();
         }
         if (state === 'shouting') {
             // Shouting indicator - concentric circles
@@ -332,7 +359,7 @@ function drawEnemyOverlays(ctx, enemy, ex, ey, cx, cy, tileSize) {
                 ctx.stroke();
             }
         }
-    } else if (enemy.state === 'chasing' && (comboCount !== 3 || !enemy.combat?.isInCombat)) {
+    } else if (enemy.state === 'chasing') {
         ctx.fillStyle = '#f00';
         ctx.font = 'bold 20px monospace';
         ctx.textAlign = 'center';
@@ -608,32 +635,52 @@ function drawEnemyHealthBar(ctx, x, y, width, hp, maxHp, isTargeted, barHeight) 
 function renderAllEnemies(ctx, camX, camY, tileSize, offsetX) {
     if (!game.enemies) return;
 
-    // MIN_BRIGHTNESS constant for unexplored tiles (matches renderer.js)
-    const MIN_BRIGHTNESS = 0.55;
+    // Calculate view bounds for frustum culling (with 2 tile margin)
+    const viewLeft = camX - 2;
+    const viewRight = camX + (ctx.canvas.width - offsetX) / tileSize + 2;
+    const viewTop = camY - 2;
+    const viewBottom = camY + ctx.canvas.height / tileSize + 2;
 
     for (const enemy of game.enemies) {
-        const enemyTileX = Math.floor(enemy.gridX);
-        const enemyTileY = Math.floor(enemy.gridY);
-        const tile = game.map[enemyTileY]?.[enemyTileX];
-
-        // Skip if no tile data
-        if (!tile) continue;
-
-        // Determine brightness based on tile exploration status
-        let brightness;
-        if (tile.explored) {
-            // Distance-based dimming for explored tiles
-            brightness = typeof getTileBrightness === 'function'
-                ? getTileBrightness(enemyTileX, enemyTileY)
-                : 1.0;
-        } else {
-            // Maximum dimming for unexplored tiles
-            brightness = MIN_BRIGHTNESS;
+        // Frustum culling - skip enemies far outside view
+        if (enemy.gridX < viewLeft || enemy.gridX > viewRight ||
+            enemy.gridY < viewTop || enemy.gridY > viewBottom) {
+            continue;
         }
 
-        // Apply brightness as globalAlpha for dimming effect
+        // =====================================================================
+        // ENTITY VISIBILITY CULLING
+        // =====================================================================
+        // Entities are only visible within light source ranges
+        // Uses distance from ALL light sources (player torch + campfires, etc.)
+
+        let visibility = 0;
+
+        // Use new entity visibility system if available
+        if (typeof VisionSystem !== 'undefined' && VisionSystem.getEntityVisibility) {
+            visibility = VisionSystem.getEntityVisibility(enemy.gridX, enemy.gridY);
+        } else if (typeof getEntityVisibility === 'function') {
+            visibility = getEntityVisibility(enemy.gridX, enemy.gridY);
+        } else {
+            // Fallback: use old tile-based visibility
+            const enemyTileX = Math.floor(enemy.gridX);
+            const enemyTileY = Math.floor(enemy.gridY);
+            const tile = game.map[enemyTileY]?.[enemyTileX];
+            visibility = (tile && tile.visible) ? 1.0 : 0;
+        }
+
+        // Store visibility on enemy for other systems (health bars, targeting)
+        enemy.visibilityAlpha = visibility;
+        enemy.isVisible = visibility > 0;
+
+        // CASE B: Outside Max Range - DO NOT DRAW
+        if (visibility <= 0) {
+            continue;
+        }
+
+        // CASE A & C: Inside clear zone or fade zone - draw with alpha
         ctx.save();
-        ctx.globalAlpha = brightness;
+        ctx.globalAlpha = visibility;
 
         drawEnemy(ctx, enemy, camX, camY, tileSize, offsetX);
 

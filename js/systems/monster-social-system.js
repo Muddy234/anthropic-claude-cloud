@@ -74,6 +74,129 @@ const MonsterSocialSystem = {
         this.updatePacks();
         this.updateSwarms();
         this.updateCommandChains();
+
+        // Coordinate swarm movements toward targets
+        this.coordinateSwarms();
+
+        // Merge orphaned pack members into nearby packs
+        this.mergeLoneWolves();
+    },
+
+    /**
+     * Merge orphaned pack members into nearby compatible packs
+     */
+    mergeLoneWolves() {
+        if (!game?.enemies) return;
+
+        const now = performance.now();
+        const mergeDelay = 2000; // Wait 2 seconds before trying to merge
+
+        for (const enemy of game.enemies) {
+            // Skip non-orphans or recently orphaned
+            if (!enemy.isOrphan || enemy.hp <= 0) continue;
+            if (now - enemy.orphanedAt < mergeDelay) continue;
+
+            // Look for nearby compatible packs
+            let bestPack = null;
+            let bestDistance = Infinity;
+
+            for (const [packId, pack] of this.packs) {
+                // Skip full packs
+                if (pack.members.length >= this.config.maxPackSize) continue;
+
+                // Check if compatible
+                if (!this.arePackCompatible(enemy, pack.leader)) continue;
+
+                // Check distance to pack leader
+                const dist = this.getDistance(enemy, pack.leader);
+                if (dist <= this.config.packRadius && dist < bestDistance) {
+                    bestPack = pack;
+                    bestDistance = dist;
+                }
+            }
+
+            if (bestPack) {
+                // Join the pack
+                bestPack.members.push(enemy);
+                enemy.packId = bestPack.id;
+                delete enemy.isOrphan;
+                delete enemy.orphanedAt;
+
+                if (this.config.debugLogging) {
+                    console.log(`[MonsterSocial] ${enemy.name} joined pack ${bestPack.id}`);
+                }
+            } else {
+                // No pack found - try to form new pack with other orphans
+                this.tryFormOrphanPack(enemy);
+            }
+        }
+    },
+
+    /**
+     * Try to form a new pack from nearby orphans
+     */
+    tryFormOrphanPack(enemy) {
+        if (!game?.enemies) return;
+
+        const candidates = [enemy];
+
+        for (const other of game.enemies) {
+            if (other === enemy || other.hp <= 0) continue;
+            if (!other.isOrphan || other.packId) continue;
+
+            // Optimized: uses squared distance to avoid sqrt
+            if (this.isWithinRange(enemy, other, this.config.packRadius) && this.arePackCompatible(enemy, other)) {
+                candidates.push(other);
+                if (candidates.length >= 2) break; // Only need 2 for pack
+            }
+        }
+
+        if (candidates.length >= 2) {
+            // Form new pack
+            const packId = `pack_${++this._groupIdCounter}`;
+            const leader = this.selectPackLeader(candidates);
+
+            this.packs.set(packId, {
+                id: packId,
+                leader: leader,
+                members: candidates,
+                element: leader.element || 'physical'
+            });
+
+            for (const member of candidates) {
+                member.packId = packId;
+                member.isPackLeader = (member === leader);
+                delete member.isOrphan;
+                delete member.orphanedAt;
+            }
+
+            if (this.config.debugLogging) {
+                console.log(`[MonsterSocial] Orphans formed new pack ${packId} with ${candidates.length} members`);
+            }
+        }
+    },
+
+    /**
+     * Coordinate all active swarms toward their targets
+     */
+    coordinateSwarms() {
+        if (!game?.player) return;
+
+        for (const [swarmId, swarm] of this.swarms) {
+            // Find if any swarm member has a target
+            let swarmTarget = null;
+            for (const member of swarm.members) {
+                if (member.ai?.target) {
+                    swarmTarget = member.ai.target;
+                    break;
+                }
+            }
+
+            // If swarm has a target, coordinate all members
+            if (swarmTarget) {
+                this.coordinateSwarmMovement(swarmId, swarmTarget);
+            }
+        }
     },
 
     // ========================================================================
@@ -162,8 +285,8 @@ const MonsterSocialSystem = {
                 if (assigned.has(other)) continue;
                 if (packMembers.length >= this.config.maxPackSize) break;
 
-                const dist = this.getDistance(enemy, other);
-                if (dist <= this.config.packRadius && this.arePackCompatible(enemy, other)) {
+                // Optimized: uses squared distance to avoid sqrt
+                if (this.isWithinRange(enemy, other, this.config.packRadius) && this.arePackCompatible(enemy, other)) {
                     packMembers.push(other);
                     assigned.add(other);
                 }
@@ -210,8 +333,8 @@ const MonsterSocialSystem = {
                 if (assigned.has(other)) continue;
                 if (swarmMembers.length >= this.config.maxSwarmSize) break;
 
-                const dist = this.getDistance(enemy, other);
-                if (dist <= this.config.swarmRadius && this.areSwarmCompatible(enemy, other)) {
+                // Optimized: uses squared distance to avoid sqrt
+                if (this.isWithinRange(enemy, other, this.config.swarmRadius) && this.areSwarmCompatible(enemy, other)) {
                     swarmMembers.push(other);
                     assigned.add(other);
                 }
@@ -246,6 +369,7 @@ const MonsterSocialSystem = {
     updatePacks() {
         for (const [packId, pack] of this.packs) {
             // Remove dead members
+            const deadMembers = pack.members.filter(m => m.hp <= 0);
             pack.members = pack.members.filter(m => m.hp > 0);
 
             // Disband if too few members
@@ -254,18 +378,25 @@ const MonsterSocialSystem = {
                 continue;
             }
 
-            // Update leader if dead
+            // LEADER LOCK-IN: Only update leader if dead (prevents flickering)
             if (!pack.leader || pack.leader.hp <= 0) {
+                // Clear old leader flag
+                if (pack.leader) {
+                    pack.leader.isPackLeader = false;
+                }
+                // Select new leader
                 pack.leader = this.selectPackLeader(pack.members);
                 if (pack.leader) {
                     pack.leader.isPackLeader = true;
+                    if (this.config.debugLogging) {
+                        console.log(`[MonsterSocial] ${pack.leader.name} is now pack leader of ${packId}`);
+                    }
                 }
             }
 
             // Check if pack is still cohesive
             const scattered = this.isPackScattered(pack);
             if (scattered) {
-                // Try to regroup or split
                 this.handleScatteredPack(pack);
             }
         }
@@ -371,8 +502,8 @@ const MonsterSocialSystem = {
         for (const enemy of game.enemies) {
             if (enemy === alerter || enemy.hp <= 0) continue;
 
-            const dist = this.getDistance(alerter, enemy);
-            if (dist > alertRange) continue;
+            // Optimized: uses squared distance to avoid sqrt
+            if (!this.isWithinRange(alerter, enemy, alertRange)) continue;
 
             // Check if can receive alert
             if (this.canReceiveAlert(enemy, alerter, alertType)) {
@@ -580,6 +711,18 @@ const MonsterSocialSystem = {
         return Math.sqrt(dx * dx + dy * dy);
     },
 
+    // Optimized: avoids sqrt() for range comparisons
+    getDistanceSquared(e1, e2) {
+        const dx = (e1.gridX || e1.x) - (e2.gridX || e2.x);
+        const dy = (e1.gridY || e1.y) - (e2.gridY || e2.y);
+        return dx * dx + dy * dy;
+    },
+
+    // Check if two entities are within range (optimized, no sqrt)
+    isWithinRange(e1, e2, range) {
+        return this.getDistanceSquared(e1, e2) <= range * range;
+    },
+
     calculateCenter(members) {
         let sumX = 0, sumY = 0;
         for (const m of members) {
@@ -593,24 +736,31 @@ const MonsterSocialSystem = {
     },
 
     selectPackLeader(members) {
-        // Prefer highest tier, then highest HP
+        // Prefer highest tier, then highest MaxHP (NOT current HP - prevents flickering)
         return members.reduce((best, current) => {
             const tierOrder = { 'TIER_3': 0, 'TIER_2': 1, 'TIER_1': 2, 'ELITE': 3 };
             const bestTier = tierOrder[best.tier] || 0;
             const currentTier = tierOrder[current.tier] || 0;
-            
+
             if (currentTier > bestTier) return current;
-            if (currentTier === bestTier && current.hp > best.hp) return current;
+            if (currentTier === bestTier) {
+                // Use maxHP for stability, not current HP
+                const bestMaxHP = best.maxHp || best.hp || 0;
+                const currentMaxHP = current.maxHp || current.hp || 0;
+                if (currentMaxHP > bestMaxHP) return current;
+            }
             return best;
         }, members[0]);
     },
 
     isPackScattered(pack) {
         if (!pack.leader) return true;
-        
+
+        const scatterRadius = this.config.packRadius * 2;
         for (const member of pack.members) {
             if (member === pack.leader) continue;
-            if (this.getDistance(pack.leader, member) > this.config.packRadius * 2) {
+            // Optimized: uses squared distance to avoid sqrt
+            if (!this.isWithinRange(pack.leader, member, scatterRadius)) {
                 return true;
             }
         }
@@ -629,12 +779,15 @@ const MonsterSocialSystem = {
         for (const member of pack.members) {
             delete member.packId;
             delete member.isPackLeader;
+            // Mark as orphan for merging
+            member.isOrphan = true;
+            member.orphanedAt = performance.now();
         }
 
         this.packs.delete(packId);
-        
+
         if (this.config.debugLogging) {
-            console.log(`[MonsterSocial] Disbanded pack ${packId}`);
+            console.log(`[MonsterSocial] Disbanded pack ${packId}, ${pack.members.length} orphans`);
         }
     },
 
@@ -649,15 +802,46 @@ const MonsterSocialSystem = {
         this.swarms.delete(swarmId);
     },
 
-    disbandCommandChain(leaderId) {
+    disbandCommandChain(leaderId, leaderDied = true) {
         const chain = this.commandChains.get(leaderId);
         if (!chain) return;
 
+        // Process followers based on leader death trigger
         for (const follower of chain.followers) {
             delete follower.commandedBy;
+
+            if (leaderDied && follower.ai) {
+                // Determine reaction based on tier
+                const tierOrder = { 'TIER_3': 0, 'TIER_2': 1, 'TIER_1': 2, 'ELITE': 3 };
+                const followerTier = tierOrder[follower.tier] || 0;
+
+                if (followerTier <= 1) {
+                    // Weak minions (TIER_3, TIER_2) panic and flee
+                    follower.ai._changeState(AI_STATES.PANICKED);
+                    if (typeof showStatusText === 'function') {
+                        showStatusText(follower, 'BROKEN!', '#FF6B6B');
+                    }
+                    if (this.config.debugLogging) {
+                        console.log(`[MonsterSocial] ${follower.name} panicked (leader died)`);
+                    }
+                } else {
+                    // Strong guards (TIER_1, ELITE) become enraged
+                    follower.ai._changeState(AI_STATES.ENRAGED);
+                    if (typeof showStatusText === 'function') {
+                        showStatusText(follower, 'ENRAGED!', '#FF4444');
+                    }
+                    if (this.config.debugLogging) {
+                        console.log(`[MonsterSocial] ${follower.name} enraged (leader died)`);
+                    }
+                }
+            }
         }
 
         this.commandChains.delete(leaderId);
+
+        if (this.config.debugLogging) {
+            console.log(`[MonsterSocial] Disbanded command chain ${leaderId}`);
+        }
     },
 
 /**
@@ -704,7 +888,6 @@ const MonsterSocialSystem = {
 // EXPORTS
 // ============================================================================
 
-window.MonsterSocialSystem = MonsterSocialSystem;
 window.MonsterSocialSystem = MonsterSocialSystem;
 
 console.log('[MonsterSocialSystem] Loaded');

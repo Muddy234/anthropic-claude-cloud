@@ -70,12 +70,16 @@ window.skillsBarState = {
 
 /**
  * Draw the skills action bar - CotDG style
- * Positioned above the consumable action bar
+ * NOTE: Weapon skill slot is now rendered by action-bar-ui.js in the unified bar
+ * This function now only renders ADDITIONAL expertise slots (6-9) if unlocked
  */
 function drawActionBar() {
     const player = game.player;
     if (!player || !player.skills) return;
     if (game.state !== 'playing') return;
+
+    // Weapon skill (slot 5) is now handled by action-bar-ui.js
+    // Only render additional expertise actions here if any are unlocked
 
     // Get colors from design system
     const colors = typeof UI_COLORS !== 'undefined' ? UI_COLORS : {
@@ -98,19 +102,8 @@ function drawActionBar() {
     // Update animation
     window.skillsBarState.pulsePhase = (window.skillsBarState.pulsePhase + 0.05) % (Math.PI * 2);
 
-    // Collect actions to display
+    // Collect actions to display - ONLY expertise slots 6-9 (weapon skill 5 is in unified bar)
     const actionsToShow = [];
-
-    // Slot 5: Weapon action
-    const weaponAction = getPlayerWeaponAction(player);
-    if (weaponAction) {
-        actionsToShow.push({
-            slot: 5,
-            action: weaponAction.action,
-            specialty: weaponAction.specialty,
-            available: weaponAction.available
-        });
-    }
 
     // Slots 6-9: Expertise actions (only if unlocked)
     const expertiseSlots = [
@@ -137,16 +130,19 @@ function drawActionBar() {
 
     if (actionsToShow.length === 0) return; // Don't show empty bar
 
-    // Calculate position - above the consumable action bar
-    const slotSize = 52;
-    const slotSpacing = 8;
+    // Calculate position - SAME ROW as consumable action bar, to its left
+    // Use same slot dimensions as consumable bar for visual consistency
+    const slotSize = 56;      // Match ACTION_BAR_CONFIG.slotSize
+    const slotSpacing = 10;   // Match ACTION_BAR_CONFIG.slotSpacing
     const padding = 20;
     const barWidth = (slotSize * actionsToShow.length) + (slotSpacing * (actionsToShow.length - 1)) + 20;
     const barHeight = slotSize + 20;
 
-    // Position above consumable bar (consumable bar height ~76px + padding)
-    const barX = canvas.width - barWidth - padding;
-    const barY = canvas.height - barHeight - padding - 90; // Above consumable bar
+    // Match the consumable bar's Y position (same as action-bar-ui.js)
+    // Consumable bar: numSlots=3, slotSize=56, slotSpacing=10
+    const consumableBarWidth = (slotSize * 3) + (slotSpacing * 2) + 20;
+    const barX = canvas.width - barWidth - padding - consumableBarWidth - 10; // 10px gap between bars
+    const barY = canvas.height - barHeight - padding; // Same Y as consumable bar
 
     ctx.save();
 
@@ -1207,4 +1203,4 @@ window.actionTooltip = actionTooltip;
 window.SKILLS_UI_CONFIG = SKILLS_UI_CONFIG;
 window.skillsUIState = window.skillsUIState;
 
-console.log('Skills UI loaded (Pentagon Radar - CotDG style)');
+// Skills UI loaded

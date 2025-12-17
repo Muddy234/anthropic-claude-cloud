@@ -5,23 +5,14 @@
 // Track held keys for smooth movement
 const keys = {};
 
-// Context menu state
-const contextMenu = {
-    visible: false,
-    x: 0,
-    y: 0,
-    target: null,  // What was right-clicked
-    targetType: null,  // 'enemy', 'npc', 'item', 'tile'
-    options: []
-};
-
-// Inspect popup state
-const inspectPopup = {
-    visible: false,
-    target: null,
-    targetType: null,
-    tab: 0  // 0=STATS, 1=COMBAT, 2=BEHAVIOR, 3=LORE
-};
+// Context menu and inspect popup state are defined in right-click-init.js
+// We just ensure they exist with defaults if not yet loaded
+if (!window.contextMenu) {
+    window.contextMenu = { visible: false, x: 0, y: 0, target: null, targetType: null, options: [] };
+}
+if (!window.inspectPopup) {
+    window.inspectPopup = { visible: false, target: null, targetType: null, tab: 0 };
+}
 
 // Key down - mark as held
 window.addEventListener('keydown', e => {
@@ -55,11 +46,13 @@ window.addEventListener('keydown', e => {
         return;
     }
 
-    // Close sacrifice UI on ESC or Enter to confirm
-    if (game.state === 'sacrifice') {
-        if (typeof handleSacrificeKey === 'function' && handleSacrificeKey(e.key)) {
-            return;
+    // JOURNAL UI - Handle all input when journal is open
+    if (game.state === 'journal') {
+        if (typeof JournalUI !== 'undefined') {
+            JournalUI.handleInput(e.key);
+            e.preventDefault();
         }
+        return;
     }
 
     // Chest UI input handling
@@ -70,16 +63,10 @@ window.addEventListener('keydown', e => {
     }
 
     // PRIORITY 2: Context menu and inspect popup (only if game.state === 'playing')
-    // Close inspect popup on ESC
-    if (e.key === 'Escape' && inspectPopup.visible && game.state === 'playing') {
-        inspectPopup.visible = false;
-        inspectPopup.target = null;
-        inspectPopup.tab = 0;
-        return;
-    }
+    // ESC handling for context menu/inspect popup is in right-click-init.js
 
     // Tab switching for inspect popup
-    if (inspectPopup.visible && inspectPopup.targetType === 'enemy') {
+    if (window.inspectPopup.visible && window.inspectPopup.targetType === 'enemy') {
         // Shift+Tab: Cycle through enemies
         if (e.key === 'Tab' && e.shiftKey) {
             e.preventDefault();
@@ -88,34 +75,27 @@ window.addEventListener('keydown', e => {
                 return tile && tile.visible && enemy.hp > 0;
             });
             if (visibleEnemies.length > 1) {
-                const currentIndex = visibleEnemies.indexOf(inspectPopup.target);
+                const currentIndex = visibleEnemies.indexOf(window.inspectPopup.target);
                 const nextIndex = (currentIndex + 1) % visibleEnemies.length;
-                inspectPopup.target = visibleEnemies[nextIndex];
+                window.inspectPopup.target = visibleEnemies[nextIndex];
             }
             return;
         }
         // Tab: Cycle through tabs
         if (e.key === 'Tab') {
             e.preventDefault();
-            inspectPopup.tab = (inspectPopup.tab + 1) % 4;
+            window.inspectPopup.tab = (window.inspectPopup.tab + 1) % 4;
             return;
         }
         // Arrow keys: Cycle through tabs
         if (e.key === 'ArrowRight') {
-            inspectPopup.tab = (inspectPopup.tab + 1) % 4;
+            window.inspectPopup.tab = (window.inspectPopup.tab + 1) % 4;
             return;
         }
         if (e.key === 'ArrowLeft') {
-            inspectPopup.tab = (inspectPopup.tab + 3) % 4; // +3 is same as -1 mod 4
+            window.inspectPopup.tab = (window.inspectPopup.tab + 3) % 4; // +3 is same as -1 mod 4
             return;
         }
-    }
-
-    // Close context menu on ESC
-    if (e.key === 'Escape' && contextMenu.visible) {
-        contextMenu.visible = false;
-        contextMenu.target = null;
-        return;
     }
 
     // Start new game
@@ -152,12 +132,6 @@ window.addEventListener('keydown', e => {
                 addMessage("Stats updated!");
             }
         }
-        return;
-    }
-
-    // Merchant interactions
-    if (game.state === 'merchant') {
-        handleMerchantInput(e);
         return;
     }
 
@@ -222,6 +196,53 @@ window.addEventListener('keydown', e => {
             }
             return;
         }
+
+        // Descent interaction (D key) - Go to next floor
+        if (e.key === 'd' || e.key === 'D') {
+            const playerX = Math.floor(game.player.gridX);
+            const playerY = Math.floor(game.player.gridY);
+            const tile = game.map[playerY]?.[playerX];
+
+            if (tile && tile.type === 'exit') {
+                console.log('[Input] D pressed on exit tile - descending!');
+                if (typeof addMessage === 'function') {
+                    addMessage("Descending deeper into the dungeon...", 'info');
+                }
+                if (typeof advanceToNextFloor === 'function') {
+                    advanceToNextFloor();
+                } else {
+                    // Fallback: manually increment floor and regenerate
+                    game.floor = (game.floor || 1) + 1;
+                    if (typeof generateBlobDungeon === 'function') {
+                        game.enemies = [];
+                        generateBlobDungeon();
+                    }
+                }
+                return;
+            }
+        }
+
+        // Torch toggle (T key) - Also checks for extraction interaction
+        if (e.key === 't' || e.key === 'T') {
+            // First check if player is on an extraction point
+            let onExtractionPoint = false;
+
+            if (typeof ExtractionSystem !== 'undefined' && ExtractionSystem.initialized) {
+                const point = ExtractionSystem.getPointAtPlayer();
+                if (point && point.isActive()) {
+                    // Player is on extraction point - extract instead of torch toggle
+                    console.log('[Input] Extraction point found, attempting extract...');
+                    ExtractionSystem.tryExtract(point);
+                    return;
+                }
+            }
+
+            // Not on extraction point - toggle torch
+            if (typeof toggleTorch === 'function') {
+                toggleTorch();
+            }
+            return;
+        }
     }
 });
 
@@ -229,119 +250,6 @@ window.addEventListener('keydown', e => {
 window.addEventListener('keyup', e => {
     keys[e.key] = false;
 });
-
-/**
- * Handle merchant screen input
- */
-function handleMerchantInput(e) {
-    if (!game.merchantMode) game.merchantMode = 'menu';
-
-    if (game.merchantMode === 'menu') {
-        if (e.key === ' ') {
-            game.state = 'playing';
-            game.merchantMode = 'menu';
-            game.merchantMsg = "";
-        }
-        if (e.key === '1') {
-            game.merchantMode = 'buy';
-            game.merchantMsg = "";
-        }
-        if (e.key === '2') {
-            game.merchantMode = 'sell';
-            game.inventoryTab = 0;
-        }
-    } else if (game.merchantMode === 'buy') {
-        if (e.key === 'Escape') {
-            game.merchantMode = 'menu';
-            game.merchantMsg = "";
-        }
-        if (e.key === ' ') {
-            game.state = 'playing';
-            game.merchantMode = 'menu';
-            game.merchantMsg = "";
-        }
-
-        if (e.key === '1') {
-            if (game.gold >= 30) {
-                game.gold -= 30;
-                const pot = game.player.inventory.find(i => i.name === 'Health Potion');
-                if (pot) pot.count++;
-                else game.player.inventory.push({
-                    name: 'Health Potion',
-                    count: 1,
-                    type: 'consumable',
-                    description: 'Restores 50 HP'
-                });
-                game.merchantMsg = "Bought Health Potion!";
-                addMessage("Bought Health Potion");
-            } else {
-                game.merchantMsg = "Not enough gold!";
-            }
-        }
-        // Starter Weapons
-        if (e.key === '2') {
-            const result = typeof purchaseFromMerchant === 'function' 
-                ? purchaseFromMerchant('Rusty Broadsword')
-                : { success: false, message: 'Shop not loaded' };
-            game.merchantMsg = result.message;
-            if (result.success) addMessage(result.message);
-        }
-        if (e.key === '3') {
-            const result = typeof purchaseFromMerchant === 'function' 
-                ? purchaseFromMerchant('Stone Club')
-                : { success: false, message: 'Shop not loaded' };
-            game.merchantMsg = result.message;
-            if (result.success) addMessage(result.message);
-        }
-        if (e.key === '4') {
-            const result = typeof purchaseFromMerchant === 'function' 
-                ? purchaseFromMerchant('Ember Wand')
-                : { success: false, message: 'Shop not loaded' };
-            game.merchantMsg = result.message;
-            if (result.success) addMessage(result.message);
-        }
-        if (e.key === '5') {
-            const result = typeof purchaseFromMerchant === 'function' 
-                ? purchaseFromMerchant('Hunting Shortbow')
-                : { success: false, message: 'Shop not loaded' };
-            game.merchantMsg = result.message;
-            if (result.success) addMessage(result.message);
-        }
-    } else if (game.merchantMode === 'sell') {
-        if (e.key === 'Escape') {
-            game.merchantMode = 'menu';
-        }
-        if (e.key === 'ArrowLeft') {
-            game.inventoryTab = (game.inventoryTab - 1 + 4) % 4;
-        }
-        if (e.key === 'ArrowRight') {
-            game.inventoryTab = (game.inventoryTab + 1) % 4;
-        }
-
-        // Selling items
-        if (['1', '2', '3', '4', '5', '6', '7', '8', '9'].includes(e.key)) {
-            const types = ['weapon', 'armor', 'consumable', 'material'];
-            const targetType = types[game.inventoryTab];
-            const filteredItems = game.player.inventory.filter(i => i.type === targetType);
-            const index = parseInt(e.key) - 1;
-
-            if (index >= 0 && index < filteredItems.length) {
-                const item = filteredItems[index];
-                const itemData = typeof EQUIPMENT_DATA !== 'undefined' ? EQUIPMENT_DATA[item.name] : null;
-                const sellPrice = itemData ? Math.floor(itemData.goldValue / 2) : Math.floor((item.goldValue || 1) / 2);
-
-                game.gold += sellPrice;
-                item.count--;
-                addMessage(`Sold ${item.name} for ${sellPrice} gold`);
-
-                if (item.count <= 0) {
-                    const realIndex = game.player.inventory.indexOf(item);
-                    game.player.inventory.splice(realIndex, 1);
-                }
-            }
-        }
-    }
-}
 
 /**
  * Handle inventory screen input
@@ -422,20 +330,16 @@ function handleInventoryInput(e) {
 
                     addMessage(`Equipped ${selectedItem.name}`);
                 } else if (selectedItem.type === 'consumable') {
-                    // Use consumable
-                    if (selectedItem.name === 'Health Potion') {
-                        const healAmount = 50;
-                        game.player.hp = Math.min(game.player.maxHp, game.player.hp + healAmount);
-                        addMessage(`Used Health Potion. Restored ${healAmount} HP.`);
-
-                        // Decrease count or remove
-                        if (selectedItem.count > 1) {
-                            selectedItem.count--;
-                        } else {
-                            const invIndex = game.player.inventory.indexOf(selectedItem);
-                            if (invIndex !== -1) {
-                                game.player.inventory.splice(invIndex, 1);
-                                game.selectedItemIndex = Math.max(0, game.selectedItemIndex - 1);
+                    // Use consumable via useItemByIndex from inventory-system.js
+                    // This handles all effect types: heal, deployable, buff, etc.
+                    if (typeof useItemByIndex === 'function') {
+                        const success = useItemByIndex(game.selectedItemIndex);
+                        if (success) {
+                            // useItemByIndex handles count decrement and removal
+                            // Just update selection if needed
+                            const newFilteredItems = game.player.inventory.filter(i => i.type === 'consumable');
+                            if (game.selectedItemIndex >= newFilteredItems.length) {
+                                game.selectedItemIndex = Math.max(0, newFilteredItems.length - 1);
                             }
                         }
                     }
@@ -566,11 +470,28 @@ function checkTileInteractions(player) {
 
     if (!tile) return;
 
-    // Exit tile - advance floor
+    // Exit/descent tile - show prompt (D key to descend)
     if (tile.type === 'exit') {
-        addMessage("Found the exit! Descending deeper...");
-        advanceToNextFloor();
-        return;
+        if (!game.descentPromptShown) {
+            addMessage("Press [D] to descend deeper!", 'info');
+            game.descentPromptShown = true;
+        }
+    } else {
+        game.descentPromptShown = false;
+    }
+
+    // Extraction point interaction
+    if (typeof ExtractionSystem !== 'undefined' && ExtractionSystem.initialized) {
+        const point = ExtractionSystem.getPointAtPlayer();
+        if (point && point.isActive()) {
+            // Show extraction prompt
+            if (!game.extractionPromptShown) {
+                addMessage("Press [T] to extract to the surface!", 'info');
+                game.extractionPromptShown = true;
+            }
+        } else {
+            game.extractionPromptShown = false;
+        }
     }
 
     // Merchant interaction
@@ -656,82 +577,8 @@ const setupCanvasHandlers = () => {
         }
     });
 
-    // RIGHT CLICK - Context menu
-    canvas.addEventListener('contextmenu', (e) => {
-        e.preventDefault();
-
-        if (game.state !== 'playing') return;
-
-        inspectPopup.visible = false;
-
-        const rect = canvas.getBoundingClientRect();
-        const clickX = e.clientX - rect.left;
-        const clickY = e.clientY - rect.top;
-
-        const trackerWidth = typeof TRACKER_WIDTH !== 'undefined' ? TRACKER_WIDTH : 400;
-        const viewX = clickX - trackerWidth;
-        const viewY = clickY;
-
-        if (viewX < 0) return;
-
-        const tileSize = (typeof TILE_SIZE !== 'undefined' ? TILE_SIZE : 32) * 
-                         (typeof ZOOM_LEVEL !== 'undefined' ? ZOOM_LEVEL : 2);
-        const camX = game.camera ? game.camera.x : 0;
-        const camY = game.camera ? game.camera.y : 0;
-
-        const gridX = Math.floor(viewX / tileSize + camX);
-        const gridY = Math.floor(viewY / tileSize + camY);
-
-        let target = null;
-        let targetType = null;
-        let options = [];
-
-        // Check for enemy
-        const clickedEnemy = game.enemies.find(enemy =>
-            Math.floor(enemy.gridX) === gridX && Math.floor(enemy.gridY) === gridY
-        );
-
-        if (clickedEnemy) {
-            target = clickedEnemy;
-            targetType = 'enemy';
-            options = [
-                { text: 'Attack', action: 'attack' },
-                { text: 'Inspect', action: 'inspect' },
-                { text: 'Cancel', action: 'cancel' }
-            ];
-        }
-        // Check for NPC (merchant)
-        else if (game.merchant) {
-            const dx = Math.abs(gridX - game.merchant.x);
-            const dy = Math.abs(gridY - game.merchant.y);
-            if (dx <= 1 && dy <= 1) {
-                target = game.merchant;
-                targetType = 'npc';
-                options = [
-                    { text: 'Talk', action: 'talk' },
-                    { text: 'Inspect', action: 'inspect' },
-                    { text: 'Cancel', action: 'cancel' }
-                ];
-            }
-        }
-
-        // Empty tile
-        if (!target) {
-            target = { x: gridX, y: gridY };
-            targetType = 'tile';
-            options = [
-                { text: 'Walk here', action: 'walk' },
-                { text: 'Cancel', action: 'cancel' }
-            ];
-        }
-
-        contextMenu.visible = true;
-        contextMenu.x = clickX;
-        contextMenu.y = clickY;
-        contextMenu.target = target;
-        contextMenu.targetType = targetType;
-        contextMenu.options = options;
-    });
+    // RIGHT CLICK - Context menu handled by right-click-init.js
+    // Removed duplicate handler to prevent double rendering
 
     console.log('✓ Canvas click handlers initialized');
 };
@@ -739,68 +586,18 @@ const setupCanvasHandlers = () => {
 // Initialize canvas handlers
 setupCanvasHandlers();
 
-/**
- * Execute context menu action
- */
-function executeContextAction(action, target, targetType) {
-    switch (action) {
-        case 'attack':
-            if (targetType === 'enemy') {
-                engageCombat(game.player, target);
-            }
-            break;
-
-        case 'pickup':
-            if (typeof window.pickupLootPile === 'function' && targetType === 'loot') {
-                console.log('Picking up loot pile');
-                window.pickupLootPile(target);
-            }
-            break;
-
-        case 'inspect':
-            inspectPopup.visible = true;
-            inspectPopup.target = target;
-            inspectPopup.targetType = targetType;
-            break;
-
-        case 'talk':
-            if (targetType === 'npc') {
-                game.state = 'merchant';
-                game.merchantMsg = "";
-            }
-            break;
-
-        case 'walk':
-            if (targetType === 'tile') {
-                game.player.manualMoveTarget = { x: target.x, y: target.y };
-                const dx = target.x - game.player.gridX;
-                const dy = target.y - game.player.gridY;
-
-                // Calculate 8-directional movement
-                const dir = getDirectionFromDelta(dx, dy);
-
-                if (dir && typeof startPlayerMove === 'function') {
-                    startPlayerMove(dir);
-                }
-            }
-            break;
-
-        case 'cancel':
-        default:
-            break;
-    }
-}
+// executeContextAction is defined in right-click-init.js
 
 /**
  * Close popups when player is hit
  */
 function onPlayerHit() {
-    if (inspectPopup.visible) {
-        inspectPopup.visible = false;
+    if (window.inspectPopup?.visible) {
+        window.inspectPopup.visible = false;
         addMessage("Inspection interrupted!");
     }
-    if (contextMenu.visible) {
-        contextMenu.visible = false;
+    if (window.contextMenu?.visible) {
+        window.contextMenu.visible = false;
     }
 }
 
@@ -833,12 +630,11 @@ if (typeof SystemManager !== 'undefined') {
 // ============================================================================
 
 window.onPlayerHit = onPlayerHit;
-window.contextMenu = contextMenu;
-window.inspectPopup = inspectPopup;
+// contextMenu and inspectPopup are exported by right-click-init.js
 window.keys = keys;
 window.handleMovementInput = handleMovementInput;
 window.checkTileInteractions = checkTileInteractions;
-window.executeContextAction = executeContextAction;
+// executeContextAction is defined in right-click-init.js
 window.getDirectionFromDelta = getDirectionFromDelta;
 
 console.log('✅ Input handler loaded');

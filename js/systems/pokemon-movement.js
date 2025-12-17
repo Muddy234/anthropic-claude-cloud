@@ -201,20 +201,6 @@ function canMoveToTile(targetX, targetY, fromX, fromY) {
     return canMoveToPosition(targetX, targetY, fromX || targetX, fromY || targetY);
 }
 
-/**
- * Update player movement state
- * Called every frame from main update loop
- * Now just ensures isMoving flag is properly managed
- */
-function updatePlayerMovement(deltaTime) {
-    // Movement is handled by movePlayerContinuous called from input handler
-    // This function is kept for compatibility but does minimal work
-    const player = game.player;
-    if (!player) return;
-
-    // Player positions are updated directly by movePlayerContinuous
-    // No interpolation needed anymore
-}
 
 /**
  * Cancel current movement and snap player to nearest .125 tile increment
@@ -248,68 +234,11 @@ function cancelPlayerMove() {
     }
 }
 
-/**
- * Ease-out quadratic - starts fast, ends slow (feels natural)
- */
-function easeOutQuad(t) {
-    return t * (2 - t);
-}
+// NOTE: easeOutQuad and lerp are provided by movement-utils.js
+// NOTE: Camera updates handled by renderer.js (deadzone-based smoothing)
 
-/**
- * Update camera to smoothly follow player (Pokemon-style)
- */
-function updateCameraForPokemon(deltaTime) {
-    if (!game.player) return;
-
-    const viewW = canvas.width - TRACKER_WIDTH;
-
-    // Calculate target camera position (center on player)
-    const targetCamX = game.player.displayX - viewW / (2 * TILE_SIZE * ZOOM_LEVEL);
-    const targetCamY = game.player.displayY - canvas.height / (2 * TILE_SIZE * ZOOM_LEVEL);
-
-    // Initialize camera if needed
-    if (!game.camera) {
-        game.camera = { x: targetCamX, y: targetCamY, targetX: targetCamX, targetY: targetCamY };
-        return;
-    }
-
-    // Smooth camera follow
-    const cameraSpeed = 8;
-    const smoothing = Math.min(cameraSpeed * (deltaTime / 1000), 1);
-
-    game.camera.x = lerp(game.camera.x, targetCamX, smoothing);
-    game.camera.y = lerp(game.camera.y, targetCamY, smoothing);
-
-    // Snap when very close
-    if (Math.abs(game.camera.x - targetCamX) < 0.01) {
-        game.camera.x = targetCamX;
-    }
-    if (Math.abs(game.camera.y - targetCamY) < 0.01) {
-        game.camera.y = targetCamY;
-    }
-}
-
-// ============================================================================
-// SYSTEM MANAGER REGISTRATION
-// ============================================================================
-
-const PokemonMovementSystem = {
-    name: 'pokemon-movement',
-    
-    update(dt) {
-        // Update player movement animation
-        if (game.player) {
-            updatePlayerMovement(dt);
-        }
-    }
-};
-
-// Register with SystemManager
-if (typeof SystemManager !== 'undefined') {
-    SystemManager.register('pokemon-movement', PokemonMovementSystem, 20);
-} else {
-    console.warn('⚠️ SystemManager not found - pokemon-movement running standalone');
-}
+// NOTE: No SystemManager registration needed - movement is driven by input handler
+// calling movePlayerContinuous() directly each frame
 
 // ============================================================================
 // EXPORTS
@@ -320,9 +249,7 @@ window.cancelPlayerMove = cancelPlayerMove;
 window.canMoveToPosition = canMoveToPosition;
 window.canMoveToTile = canMoveToTile; // Legacy compatibility
 window.isTileWalkable = isTileWalkable;
-window.updatePlayerMovement = updatePlayerMovement;
-window.updateCameraForPokemon = updateCameraForPokemon;
 window.isDiagonalDirection = isDiagonalDirection;
 window.getCardinalFacing = getCardinalFacing;
 
-console.log('✅ Continuous movement system loaded');
+// Continuous movement system loaded

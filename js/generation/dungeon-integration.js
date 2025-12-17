@@ -5,11 +5,109 @@
 // ============================================================================
 
 /**
+ * Create an enemy at the specified position (for blob dungeon spawning)
+ * Different from enemy-spawner.js createEnemy which takes monsterType explicitly
+ * @param {number} x - Grid X position
+ * @param {number} y - Grid Y position
+ * @param {string} element - Element type for selecting appropriate monsters
+ * @param {number} difficulty - Difficulty scaling factor
+ * @returns {object} The created enemy
+ */
+function createEnemyAtPosition(x, y, element, difficulty) {
+    // Get element-appropriate monsters from MONSTER_DATA
+    const elementMonsters = [];
+    const fallbackMonsters = [];
+
+    if (typeof MONSTER_DATA !== 'undefined') {
+        for (const [name, data] of Object.entries(MONSTER_DATA)) {
+            if (data.elite) continue; // Skip elites for regular spawning
+
+            if (data.element === element) {
+                elementMonsters.push({ name, data });
+            } else {
+                fallbackMonsters.push({ name, data });
+            }
+        }
+    }
+
+    // Pick a monster - prefer element-matching, fallback to any
+    const pool = elementMonsters.length > 0 ? elementMonsters : fallbackMonsters;
+
+    if (pool.length === 0) {
+        console.warn('[createEnemy] No monsters available in MONSTER_DATA');
+        return null;
+    }
+
+    // Weight-based selection
+    const totalWeight = pool.reduce((sum, m) => sum + (m.data.spawnWeight || 10), 0);
+    let roll = Math.random() * totalWeight;
+    let selected = pool[0];
+
+    for (const monster of pool) {
+        roll -= monster.data.spawnWeight || 10;
+        if (roll <= 0) {
+            selected = monster;
+            break;
+        }
+    }
+
+    const template = selected.data;
+    const difficultyScale = 1 + (difficulty - 1) * 0.15;
+
+    const enemy = {
+        id: `enemy_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+        name: selected.name,
+        typeId: selected.name,
+        gridX: x,
+        gridY: y,
+        x: x,
+        y: y,
+        displayX: x,
+        displayY: y,
+        hp: Math.floor((template.hp || 50) * difficultyScale),
+        maxHp: Math.floor((template.hp || 50) * difficultyScale),
+        str: Math.floor((template.str || 10) * difficultyScale),
+        agi: template.agi || 5,
+        int: template.int || 5,
+        pDef: Math.floor((template.pDef || 5) * difficultyScale),
+        mDef: Math.floor((template.mDef || 5) * difficultyScale),
+        damage: Math.floor((template.str || 10) * difficultyScale),
+        defense: Math.floor((template.pDef || 5) * difficultyScale),
+        element: template.element || 'physical',
+        xp: Math.floor((template.xp || 20) * difficultyScale),
+        attackRange: template.attackRange || 1,
+        attackSpeed: template.attackSpeed || 2.0,
+        moveInterval: template.moveInterval || 2,
+        aggression: template.aggression || 3,
+        loot: template.loot || [],
+        combat: {
+            isInCombat: false,
+            currentTarget: null,
+            attackCooldown: 0,
+            attackSpeed: template.attackSpeed || 2.0,
+            autoRetaliate: true,
+            attackRange: template.attackRange || 1,
+            comboCount: 1
+        }
+    };
+
+    // Register with AI system
+    if (typeof AIManager !== 'undefined') {
+        AIManager.registerEnemy(enemy);
+    }
+
+    // Initialize abilities
+    if (typeof EnemyAbilitySystem !== 'undefined') {
+        EnemyAbilitySystem.initializeEnemy(enemy);
+    }
+
+    return enemy;
+}
+
+/**
  * Convert blob-based dungeon to game.map format
  */
 function applyDungeonToGame() {
-    console.log('🔄 Converting dungeon to game format...');
-
     // Initialize game map with void
     game.map = [];
     for (let y = 0; y < GRID_HEIGHT; y++) {
@@ -66,19 +164,19 @@ function applyDungeonToGame() {
         }
     }
 
-    // Fill remaining tiles with walls
+    // Keep void tiles as void (inaccessible black areas)
+    // Don't convert to walls - void areas should remain black/inaccessible
     for (let y = 0; y < GRID_HEIGHT; y++) {
         for (let x = 0; x < GRID_WIDTH; x++) {
             if (game.map[y][x].type === 'void') {
                 game.map[y][x] = {
-                    type: 'wall',
+                    type: 'void',
                     blocked: true
                 };
             }
         }
     }
 
-    console.log(`✅ Converted ${game.rooms.length} blobs to rooms`);
 }
 
 /**
@@ -184,8 +282,6 @@ function spawnPlayerInDungeon() {
     // Spawn at connection point (guaranteed floor)
     game.player.x = entrance.connectionPoint.x;
     game.player.y = entrance.connectionPoint.y;
-
-    console.log(`👤 Player spawned at entrance (${game.player.x}, ${game.player.y})`);
 }
 
 /**
@@ -220,40 +316,19 @@ function spawnEnemiesInDungeon() {
                 const randomTile = tileKeys[Math.floor(Math.random() * tileKeys.length)];
                 const [x, y] = randomTile.split(',').map(Number);
 
-                if (typeof createEnemy === 'function') {
-                    const enemy = createEnemy(x, y, blob.element, blob.difficulty);
+                const enemy = createEnemyAtPosition(x, y, blob.element, blob.difficulty);
+                if (enemy) {
                     game.enemies.push(enemy);
                 }
             }
         }
     }
-
-    console.log(`👹 Spawned ${game.enemies.length} enemies across ${DUNGEON_STATE.blobs.length} blobs`);
-}
-
-/**
- * Decorate blobs with environmental details
- */
-function decorateDungeon() {
-    for (const blob of DUNGEON_STATE.blobs) {
-        const room = game.rooms.find(r => r.blob === blob);
-        if (!room) continue;
-
-        // Use existing decorator if available
-        if (typeof decorateRoom === 'function') {
-            decorateRoom(room);
-        }
-    }
-
-    console.log(`🎨 Decorated ${game.rooms.length} blobs`);
 }
 
 /**
  * Main integration function - replaces generateMap()
  */
 function generateBlobDungeon() {
-    console.log('🗺️  Generating blob-based dungeon...');
-
     // Reset game state
     game.rooms = [];
     game.doorways = [];
@@ -266,9 +341,6 @@ function generateBlobDungeon() {
     // Convert to game format
     applyDungeonToGame();
 
-    // Decorate
-    decorateDungeon();
-
     // Spawn enemies
     spawnEnemiesInDungeon();
 
@@ -276,8 +348,6 @@ function generateBlobDungeon() {
 
     // Place exit in farthest room from entrance
     placeExitInFarthestRoom();
-
-    console.log(`✅ Blob dungeon generated: ${game.rooms.length} blobs, ${game.enemies.length} enemies`);
 }
 
 /**
@@ -332,8 +402,6 @@ function placeExitInFarthestRoom() {
         const path = findPath(entranceX, entranceY, exitX, exitY, { ignoreEnemies: true });
 
         if (!path || path.length === 0) {
-            console.warn(`Exit at (${exitX}, ${exitY}) not reachable from entrance. Trying alternate position...`);
-
             // Try to find an alternate floor tile in the farthest blob
             const tiles = Array.from(farthestBlob.tiles);
             for (const tileKey of tiles) {
@@ -342,31 +410,43 @@ function placeExitInFarthestRoom() {
                 if (alternatePath && alternatePath.length > 0) {
                     exitX = tx;
                     exitY = ty;
-                    console.log(`Found alternate exit position at (${exitX}, ${exitY})`);
                     break;
                 }
             }
         }
     }
 
-    // Set exit position in game state
+    // SURVIVAL EXTRACTION UPDATE: Old exit system disabled
+    // Extraction points are now used instead (see ExtractionSystem)
+    // Keeping exitPosition for potential legacy compatibility
     game.exitPosition = { x: exitX, y: exitY };
 
-    // Create exit tile on the map
+    // Sync with sessionState.pathDown for the new system
+    if (typeof sessionState !== 'undefined' && sessionState.pathDown) {
+        sessionState.pathDown.x = exitX;
+        sessionState.pathDown.y = exitY;
+        // Don't auto-discover - player needs to find it or defeat mini-boss
+    }
+
+    // Also sync via SessionManager if available
+    if (typeof SessionManager !== 'undefined' && typeof SessionManager.discoverPathDown === 'function') {
+        // Set the position but don't mark as discovered yet
+        if (sessionState && sessionState.pathDown) {
+            sessionState.pathDown.x = exitX;
+            sessionState.pathDown.y = exitY;
+        }
+    }
+
+    // Create descent/exit tile on the map
     if (game.map[exitY] && game.map[exitY][exitX]) {
         game.map[exitY][exitX] = {
             type: 'exit',
             explored: false,
             visible: false,
+            lit: false,
             room: game.rooms.find(r => r.blob === farthestBlob) || null
         };
     }
-
-    // Calculate distance from entrance for logging
-    const distFromEntrance = Math.abs(exitX - entranceBlob.connectionPoint.x) +
-                             Math.abs(exitY - entranceBlob.connectionPoint.y);
-
-    console.log(`🚪 Exit placed at (${exitX}, ${exitY}) - Distance from entrance: ${distFromEntrance} tiles, Room difficulty: ${farthestBlob.difficulty}`);
 }
 
 // ============================================================================
@@ -379,6 +459,7 @@ if (typeof window !== 'undefined') {
     window.spawnPlayerInDungeon = spawnPlayerInDungeon;
     window.spawnEnemiesInDungeon = spawnEnemiesInDungeon;
     window.placeExitInFarthestRoom = placeExitInFarthestRoom;
+    window.createEnemyAtPosition = createEnemyAtPosition;
 }
 
-console.log('✅ Dungeon integration adapter loaded');
+// Dungeon integration adapter loaded

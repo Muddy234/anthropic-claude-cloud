@@ -148,18 +148,7 @@ const TIER_COLORS = {
     'BOSS': '#f1c40f'     // Gold - boss
 };
 
-/**
- * Element colors for display
- */
-const ELEMENT_COLORS = {
-    'fire': '#ff6b35',
-    'water': '#3498db',
-    'earth': '#8b4513',
-    'shadow': '#9b59b6',
-    'death': '#666666',
-    'nature': '#27ae60',
-    'physical': '#cccccc'
-};
+// Note: ELEMENT_COLORS is defined in renderer.js
 
 // ============================================================================
 // INFO POPUP CONTENT - Detailed information for hyperlinks
@@ -1356,13 +1345,6 @@ canvas.addEventListener('click', (e) => {
     const clickX = (e.clientX - rect.left) * scaleX;
     const clickY = (e.clientY - rect.top) * scaleY;
 
-    // Handle sacrifice UI clicks first
-    if (game.state === 'sacrifice' && typeof handleSacrificeClick === 'function') {
-        if (handleSacrificeClick(clickX, clickY)) {
-            return; // Click was handled by sacrifice UI
-        }
-    }
-
     const infoPopup = getInfoPopup();
     const inspectPopup = getInspectPopup();
 
@@ -1489,6 +1471,11 @@ function renderUIOverlays(ctx) {
         renderInfoPopup(ctx);
     } else {
         renderInspectPopup(ctx);
+    }
+
+    // Render journal if active (can be opened in dungeon too)
+    if (typeof JournalUI !== 'undefined' && JournalUI.active) {
+        JournalUI.render(ctx);
     }
 }
 

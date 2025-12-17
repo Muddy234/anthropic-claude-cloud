@@ -2,6 +2,7 @@
 // GAME INITIALIZATION - The Shifting Chasm
 // ============================================================================
 // Updated: Registers all new systems, element-based initialization
+// Now supports starting in village hub (Survival Extraction Update)
 // ============================================================================
 
 // ============================================================================
@@ -9,33 +10,178 @@
 // ============================================================================
 
 /**
- * Start a new game - generates dungeon, spawns player, initializes systems
+ * Start the game in the village hub (default start)
+ * This is the new default entry point for the Survival Extraction update
+ */
+function startInVillage() {
+    cleanupPreviousGame();
+    initializePersistentState();
+    initializeVillage();
+    initializeVillagePlayer();
+    initializeVillageSystems();
+}
+
+/**
+ * Initialize persistent state for survival mode
+ */
+function initializePersistentState() {
+    if (typeof SurvivalIntegration !== 'undefined') {
+        SurvivalIntegration.init();
+    }
+}
+
+/**
+ * Initialize the village
+ */
+function initializeVillage() {
+    game.state = GAME_STATES ? GAME_STATES.VILLAGE : 'village';
+
+    if (typeof VillageSystem !== 'undefined') {
+        VillageSystem.init();
+    } else {
+        console.error('[Init] VillageSystem not found!');
+    }
+}
+
+/**
+ * Initialize player for village (minimal, no combat)
+ */
+function initializeVillagePlayer() {
+    if (!game.player) {
+        game.player = typeof createPlayer === 'function' ? createPlayer() : createDefaultPlayer();
+    }
+}
+
+/**
+ * Initialize systems needed for village
+ */
+function initializeVillageSystems() {
+    const villageSystems = [
+        'BankingSystem',
+        'QuestSystem',
+        'CraftingSystem',
+        'ShortcutSystem',
+        'DegradationSystem',
+        'RescueSystem'
+    ];
+
+    villageSystems.forEach(systemName => {
+        if (typeof window[systemName] !== 'undefined' && typeof window[systemName].init === 'function') {
+            try {
+                window[systemName].init();
+            } catch (e) {
+                console.error(`[Init] ${systemName} failed:`, e);
+            }
+        }
+    });
+}
+
+/**
+ * Start a dungeon run from the village
+ * Called when player confirms loadout at Chasm Entrance
+ * @param {Object} options - { startingFloor, loadout }
+ */
+function startDungeonRun(options = {}) {
+    const { startingFloor = 1, loadout = null } = options;
+
+    // Clean up village state
+    if (typeof VillageSystem !== 'undefined' && VillageSystem._keyHandler) {
+        window.removeEventListener('keydown', VillageSystem._keyHandler);
+    }
+
+    // Start session through SessionManager
+    if (typeof SessionManager !== 'undefined') {
+        SessionManager.startRun(startingFloor, loadout || [], 0);
+    } else if (typeof sessionState !== 'undefined') {
+        // Fallback if SessionManager not loaded yet
+        sessionState.active = true;
+        sessionState.runId = Date.now().toString(36);
+        sessionState.startTime = Date.now();
+        sessionState.startFloor = startingFloor;
+        sessionState.currentFloor = startingFloor;
+        sessionState.floorStartTime = Date.now();
+        sessionState.inventory = [];
+        sessionState.gold = 0;
+
+        if (typeof persistentState !== 'undefined' && persistentState.stats) {
+            persistentState.stats.totalRuns = (persistentState.stats.totalRuns || 0) + 1;
+        }
+    }
+
+    // Use shared initialization
+    initializeDungeonCore({ floor: startingFloor, loadout });
+}
+
+/**
+ * Apply loadout equipment to player
+ * @param {Object} loadout - { weapon, armor, consumables }
+ */
+function applyLoadoutToPlayer(loadout) {
+    if (!game.player || !loadout) return;
+
+    if (loadout.weapon && game.player.equipped) {
+        game.player.equipped.MAIN = { ...loadout.weapon };
+    }
+
+    if (loadout.armor && game.player.equipped) {
+        game.player.equipped.CHEST = { ...loadout.armor };
+    }
+
+    if (loadout.consumables && Array.isArray(loadout.consumables)) {
+        loadout.consumables.forEach(item => {
+            if (item) {
+                game.player.inventory = game.player.inventory || [];
+                game.player.inventory.push({ ...item });
+            }
+        });
+    }
+}
+
+/**
+ * Return to village from dungeon (after extraction or death)
+ */
+function returnToVillage() {
+    cleanupPreviousGame();
+    game.state = GAME_STATES ? GAME_STATES.VILLAGE : 'village';
+
+    if (typeof VillageSystem !== 'undefined') {
+        VillageSystem.init();
+    }
+
+    if (typeof sessionState !== 'undefined') {
+        sessionState.active = false;
+    }
+}
+
+/**
+ * Start a new game - now starts in village by default
+ * For Survival Extraction update
  */
 function startNewGame() {
-    console.log('🎮 Starting new game...');
-    console.log('═'.repeat(50));
-    
-    // === Phase 1: Cleanup ===
-    cleanupPreviousGame();
-    
-    // === Phase 2: Reset Game State ===
-    resetGameState();
-    
-    // === Phase 3: Generate Dungeon ===
-    generateDungeon();
-    
-    // === Phase 4: Create Player ===
-    initializePlayer();
-    
-    // === Phase 5: Initialize All Systems ===
-    initializeAllSystems();
-    
-    // === Phase 6: Post-Init ===
-    postInitialization();
-    
-    console.log('═'.repeat(50));
-    console.log('✅ Game initialized successfully!');
-    logGameStats();
+    // Start in village hub by default
+    startInVillage();
+}
+
+/**
+ * Legacy function: Start directly in dungeon (for testing or quick play)
+ */
+function startNewGameDungeon() {
+    // Start session (CRITICAL for extraction to work)
+    if (typeof SessionManager !== 'undefined') {
+        SessionManager.startRun(1, [], 0);
+    } else if (typeof sessionState !== 'undefined') {
+        sessionState.active = true;
+        sessionState.runId = Date.now().toString(36);
+        sessionState.startTime = Date.now();
+        sessionState.startFloor = 1;
+        sessionState.currentFloor = 1;
+        sessionState.floorStartTime = Date.now();
+        sessionState.inventory = [];
+        sessionState.gold = 0;
+    }
+
+    // Use shared initialization
+    initializeDungeonCore({ floor: 1 });
 }
 
 // ============================================================================
@@ -43,15 +189,55 @@ function startNewGame() {
 // ============================================================================
 
 /**
+ * Core dungeon initialization - shared logic for all dungeon start scenarios
+ * @param {Object} options - { floor, loadout, skipCleanup, skipSession }
+ */
+function initializeDungeonCore(options = {}) {
+    const { floor = 1, loadout = null, skipCleanup = false, skipSession = false } = options;
+
+    // Step 1: Cleanup (unless skipped, e.g., for floor advancement)
+    if (!skipCleanup) {
+        cleanupPreviousGame();
+    }
+
+    // Step 2: Reset game state
+    resetGameState();
+    game.floor = floor;
+
+    // Step 3: Generate dungeon
+    generateDungeon();
+
+    // Step 4: Initialize player
+    initializePlayer();
+
+    // Step 5: Apply loadout if provided
+    if (loadout) {
+        applyLoadoutToPlayer(loadout);
+    }
+
+    // Step 6: Initialize all systems
+    initializeAllSystems();
+
+    // Step 7: Initialize extraction points
+    if (typeof ExtractionSystem !== 'undefined' && game.rooms) {
+        const spawnRoom = game.rooms.find(r => r.type === 'entrance');
+        ExtractionSystem.init(floor, game.rooms, spawnRoom);
+    }
+
+    // Step 8: Post-initialization
+    postInitialization();
+
+    logGameStats();
+}
+
+/**
  * Phase 1: Cleanup previous game state
  */
 function cleanupPreviousGame() {
-    console.log('[Init] Cleaning up previous game...');
-    
     if (typeof SystemManager !== 'undefined') {
         SystemManager.cleanupAll();
     }
-    
+
     // Clear any lingering intervals/timeouts
     if (game._intervals) {
         game._intervals.forEach(id => clearInterval(id));
@@ -65,26 +251,18 @@ function cleanupPreviousGame() {
  * Phase 2: Reset game state to defaults
  */
 function resetGameState() {
-    console.log('[Init] Resetting game state...');
-    
     game.state = 'playing';
     game.floor = 1;
     game.enemies = [];
     game.decorations = [];
-    game._altarsPlacedThisFloor = 0; // Reset altar counter for new floor
+    game._altarsPlacedThisFloor = 0;
     game.doorways = [];
     game.rooms = [];
     game.groundLoot = [];
-    
-    // Shift system
     game.shiftMeter = 0;
     game.shiftActive = false;
     game.activeShift = null;
-    
-    // Eruption timer
     game.eruption = { timer: 180, lastDamage: 0 };
-    
-    // Tracking
     game._intervals = [];
     game._timeouts = [];
 }
@@ -93,19 +271,13 @@ function resetGameState() {
  * Phase 3: Generate the dungeon
  */
 function generateDungeon() {
-    console.log('[Init] Generating dungeon...');
-
-    // ONLY use blob-based generator (no fallback to old system)
     if (typeof generateBlobDungeon !== 'function') {
-        console.error('[Init] ❌ generateBlobDungeon not found! Check that dungeon-integration.js is loaded.');
-        console.error('[Init] Available functions:', Object.keys(window).filter(k => k.includes('generate')));
+        console.error('[Init] generateBlobDungeon not found!');
         throw new Error('Blob dungeon generator not available');
     }
 
-    console.log('[Init] ✅ Using blob-based dungeon generator');
     generateBlobDungeon();
 
-    // Spawn hazards (blob generator doesn't handle this yet)
     if (typeof HazardSystem !== 'undefined') {
         HazardSystem.spawnForAllRooms();
     }
@@ -115,19 +287,12 @@ function generateDungeon() {
  * Phase 4: Create and place player
  */
 function initializePlayer() {
-    console.log('[Init] Creating player...');
-
     game.player = typeof createPlayer === 'function' ? createPlayer() : createDefaultPlayer();
-
-    // Equip starting torch for fog of war vision
     equipStartingTorch();
 
-    // Find entrance room
     const entranceRoom = game.rooms.find(r => r.type === 'entrance');
 
     if (entranceRoom) {
-        // Use safe spawn chamber to ensure we spawn on a valid floor tile
-        // This handles the case where chamber center might be a wall
         let spawnX, spawnY;
 
         if (typeof getSafeSpawnChamber === 'function') {
@@ -135,7 +300,6 @@ function initializePlayer() {
             spawnX = safeSpawn.x;
             spawnY = safeSpawn.y;
         } else {
-            // Fallback if chamber generator not loaded
             spawnX = (entranceRoom.floorX || entranceRoom.x + 1) +
                            Math.floor((entranceRoom.floorWidth || 20) / 2);
             spawnY = (entranceRoom.floorY || entranceRoom.y + 1) +
@@ -143,13 +307,11 @@ function initializePlayer() {
         }
 
         setPlayerPosition(spawnX, spawnY);
-        console.log(`[Init] Player spawned at (${spawnX}, ${spawnY})`);
     } else {
         console.error('[Init] No entrance room found!');
         setPlayerPosition(40, 40);
     }
 
-    // Initialize camera
     initializeCamera();
 }
 
@@ -157,49 +319,25 @@ function initializePlayer() {
  * Phase 5: Initialize all game systems
  */
 function initializeAllSystems() {
-    console.log('[Init] Initializing systems...');
-
-    // Load monster sprites
     if (typeof loadMonsterSprites === 'function') {
         loadMonsterSprites();
-        console.log('[Init] Loading monster sprites...');
     }
 
-    if (typeof SystemManager !== 'undefined') {
-        // Register new systems if not already registered
-        registerNewSystems();
-
-        // Initialize all systems
-        SystemManager.initAll(game);
-
-        // Verify all expected systems are present
-        SystemManager.verify();
-    } else {
-        // Fallback: Initialize systems manually
-        initializeSystemsManually();
-    }
+    registerNewSystems();
+    SystemManager.initAll(game);
+    SystemManager.verify();
 }
 
 /**
  * Phase 6: Post-initialization tasks
  */
 function postInitialization() {
-    console.log('[Init] Post-initialization...');
-
-    // Form social groups
     if (typeof MonsterSocialSystem !== 'undefined') {
         MonsterSocialSystem.scanAndFormGroups();
     }
 
-    // Initialize attunement
-    if (typeof AttunementSystem !== 'undefined') {
-        AttunementSystem.init();
-    }
-
-    // Place starter chest near player
     placeStarterChest();
 
-    // Show entrance room message
     const entranceRoom = game.rooms.find(r => r.type === 'entrance');
     if (entranceRoom && typeof getRoomEnterEffect === 'function') {
         const effect = getRoomEnterEffect(entranceRoom, game.player);
@@ -213,29 +351,17 @@ function postInitialization() {
  * Place a starter chest near the player spawn with guaranteed loot
  */
 function placeStarterChest() {
-    if (!game.player || !game.rooms) {
-        console.warn('[Init] Cannot place starter chest - player or rooms not initialized');
-        return;
-    }
+    if (!game.player || !game.rooms) return;
 
-    // Find entrance room
     const entranceRoom = game.rooms.find(r => r.type === 'entrance');
-    if (!entranceRoom) {
-        console.warn('[Init] Cannot place starter chest - no entrance room found');
-        return;
-    }
+    if (!entranceRoom) return;
 
     const playerX = game.player.gridX;
     const playerY = game.player.gridY;
 
-    // Find a valid floor tile adjacent to player (prefer right or down)
     const offsets = [
-        { x: 1, y: 0 },   // Right
-        { x: 0, y: 1 },   // Down
-        { x: -1, y: 0 },  // Left
-        { x: 0, y: -1 },  // Up
-        { x: 1, y: 1 },   // Down-right
-        { x: -1, y: 1 },  // Down-left
+        { x: 1, y: 0 }, { x: 0, y: 1 }, { x: -1, y: 0 },
+        { x: 0, y: -1 }, { x: 1, y: 1 }, { x: -1, y: 1 }
     ];
 
     let chestX = null, chestY = null;
@@ -243,11 +369,8 @@ function placeStarterChest() {
     for (const offset of offsets) {
         const testX = playerX + offset.x;
         const testY = playerY + offset.y;
-
-        // Check if valid floor tile
         const tile = game.map[testY]?.[testX];
         if (tile && tile.type === 'floor' && !tile.blocked && !tile.decoration) {
-            // Check no decoration already there in global array
             const existingDec = game.decorations?.find(d => d.x === testX && d.y === testY);
             if (!existingDec) {
                 chestX = testX;
@@ -257,12 +380,8 @@ function placeStarterChest() {
         }
     }
 
-    if (chestX === null) {
-        console.warn('[Init] Could not find valid position for starter chest');
-        return;
-    }
+    if (chestX === null) return;
 
-    // Create the starter chest decoration with proper format for rendering
     const starterChest = {
         x: chestX,
         y: chestY,
@@ -275,8 +394,6 @@ function placeStarterChest() {
         color: '#FFD700',
         name: 'Supply Chest',
         description: 'A chest left by previous adventurers.',
-
-        // Data object for decoration-renderer.js compatibility
         data: {
             color: '#FFD700',
             symbol: '📦',
@@ -286,21 +403,16 @@ function placeStarterChest() {
         }
     };
 
-    // Add to game decorations array
     if (!game.decorations) game.decorations = [];
     game.decorations.push(starterChest);
 
-    // Add to room's decorations array (required for rendering)
     if (!entranceRoom.decorations) entranceRoom.decorations = [];
     entranceRoom.decorations.push(starterChest);
 
-    // Mark tile as having decoration
     const tile = game.map?.[chestY]?.[chestX];
     if (tile) {
         tile.decoration = starterChest;
     }
-
-    console.log(`[Init] Placed starter chest at (${chestX}, ${chestY})`);
 }
 
 /**
@@ -349,10 +461,8 @@ function openStarterChest(chest, player) {
         });
     }
 
-    // Open the chest UI with contents
     if (typeof openChestUI === 'function' && contents.length > 0) {
         openChestUI(chest, contents);
-        console.log('[Init] Starter chest UI opened with', contents.length, 'items');
         return true;
     }
 
@@ -364,8 +474,6 @@ function openStarterChest(chest, player) {
         chest.data.symbol = '📭';
         chest.data.glow = false;
     }
-
-    console.log('[Init] Starter chest opened (no UI)');
     return true;
 }
 
@@ -406,7 +514,6 @@ function getRandomUncommonMainhand() {
     }
 
     if (uncommonWeapons.length === 0) {
-        console.warn('[Init] No uncommon mainhand weapons found');
         return null;
     }
 
@@ -446,20 +553,7 @@ function registerNewSystems() {
             cleanup: () => HazardSystem.cleanup()
         }, 35);
     }
-    
-    // Attunement System
-    if (typeof AttunementSystem !== 'undefined' && !SystemManager.has('attunement')) {
-        SystemManager.register('attunement', {
-            name: 'attunement',
-            init: () => AttunementSystem.init(),
-            update: (dt) => {
-                const room = typeof getCurrentRoom === 'function' ? getCurrentRoom(game.player) : null;
-                AttunementSystem.update(dt, game.player, room);
-            },
-            cleanup: () => AttunementSystem.cleanup()
-        }, 45);
-    }
-    
+
     // Monster Social System
     if (typeof MonsterSocialSystem !== 'undefined' && !SystemManager.has('monster-social')) {
         SystemManager.register('monster-social', {
@@ -481,91 +575,9 @@ function registerNewSystems() {
     }
 }
 
-/**
- * Fallback: Initialize systems without SystemManager
- */
-function initializeSystemsManually() {
-    console.warn('[Init] SystemManager not found - manual initialization');
-    
-    // Noise System
-    if (typeof NoiseSystem !== 'undefined') {
-        NoiseSystem.init(game);
-        console.log('  ✅ NoiseSystem initialized');
-    }
-    
-    // AI Manager
-    if (typeof AIManager !== 'undefined') {
-        AIManager.init(game);
-        // Register existing enemies
-        for (const enemy of game.enemies) {
-            if (!enemy.ai) {
-                AIManager.registerEnemy(enemy);
-            }
-        }
-        console.log('  ✅ AIManager initialized');
-    }
-    
-    // Status Effects
-    if (typeof StatusEffectSystem !== 'undefined') {
-        StatusEffectSystem.init();
-        console.log('  ✅ StatusEffectSystem initialized');
-    }
-    
-    // Hazards
-    if (typeof HazardSystem !== 'undefined') {
-        HazardSystem.init();
-        console.log('  ✅ HazardSystem initialized');
-    }
-    
-    // Attunement
-    if (typeof AttunementSystem !== 'undefined') {
-        AttunementSystem.init();
-        console.log('  ✅ AttunementSystem initialized');
-    }
-    
-    // Social System
-    if (typeof MonsterSocialSystem !== 'undefined') {
-        MonsterSocialSystem.init();
-        console.log('  ✅ MonsterSocialSystem initialized');
-    }
-}
-
 // ============================================================================
 // HELPER FUNCTIONS
 // ============================================================================
-
-/**
- * Assign elements to rooms if not already assigned
- */
-function assignRoomElements() {
-    if (!game.rooms) return;
-    
-    for (let i = 0; i < game.rooms.length; i++) {
-        const room = game.rooms[i];
-        
-        if (!room.element) {
-            // Get adjacent rooms for element spreading
-            const adjacentRooms = game.rooms.filter((r, j) => {
-                if (i === j) return false;
-                // Simple adjacency check
-                const dist = Math.abs(r.x - room.x) + Math.abs(r.y - room.y);
-                return dist < 50; // Within range
-            });
-            
-            room.element = typeof selectRoomElement === 'function'
-                ? selectRoomElement(adjacentRooms)
-                : getRandomElement();
-        }
-    }
-}
-
-/**
- * Get random element (fallback)
- */
-function getRandomElement() {
-    const elements = ['fire', 'ice', 'water', 'earth', 'nature', 'death', 'arcane', 'dark', 'holy', 'physical'];
-    return elements[Math.floor(Math.random() * elements.length)];
-}
 
 /**
  * Set player position
@@ -588,7 +600,6 @@ function setPlayerPosition(x, y) {
 function equipStartingTorch() {
     // Starting torch is now in the starter chest instead of being auto-equipped
     // Player spawns without a torch and must open the nearby chest to get one
-    console.log('[Init] No starting torch - player must find one in starter chest');
 }
 
 /**
@@ -664,21 +675,19 @@ function logEnemyTierDistribution() {
 // ============================================================================
 
 /**
- * Advance to next floor
+ * Advance to next floor (preserves player state)
  */
 function advanceToNextFloor() {
-    console.log(`📈 Advancing to floor ${game.floor + 1}...`);
-    
-    // Cleanup
+    const nextFloor = game.floor + 1;
+
+    // Cleanup systems
     cleanupPreviousGame();
-    
-    // Increment floor
-    game.floor++;
-    
+
     // Reset floor-specific state (keep player, gold, etc.)
+    game.floor = nextFloor;
     game.enemies = [];
     game.decorations = [];
-    game._altarsPlacedThisFloor = 0; // Reset altar counter for new floor
+    game._altarsPlacedThisFloor = 0;
     game.doorways = [];
     game.rooms = [];
     game.groundLoot = [];
@@ -686,23 +695,27 @@ function advanceToNextFloor() {
     game.shiftActive = false;
     game.activeShift = null;
     game.eruption = { timer: 180, lastDamage: 0 };
-    
-    // Regenerate
+
+    // Regenerate dungeon
     generateDungeon();
-    
-    // Place player
+
+    // Reposition player at entrance
     const entranceRoom = game.rooms.find(r => r.type === 'entrance');
     if (entranceRoom) {
         const spawnX = (entranceRoom.floorX || entranceRoom.x + 1) + Math.floor((entranceRoom.floorWidth || 20) / 2);
         const spawnY = (entranceRoom.floorY || entranceRoom.y + 1) + Math.floor((entranceRoom.floorHeight || 20) / 2);
         setPlayerPosition(spawnX, spawnY);
     }
-    
+
     initializeCamera();
     initializeAllSystems();
+
+    // Re-initialize extraction points
+    if (typeof ExtractionSystem !== 'undefined' && game.rooms) {
+        ExtractionSystem.init(nextFloor, game.rooms, entranceRoom);
+    }
+
     postInitialization();
-    
-    console.log(`✅ Floor ${game.floor} ready!`);
     logGameStats();
 }
 
@@ -710,7 +723,6 @@ function advanceToNextFloor() {
  * Restart game after death
  */
 function restartGame() {
-    console.log('🔄 Restarting game...');
     startNewGame();
 }
 
@@ -719,11 +731,16 @@ function restartGame() {
 // ============================================================================
 
 if (typeof window !== 'undefined') {
+    // Village start functions (Survival Extraction Update)
+    window.startInVillage = startInVillage;
+    window.startDungeonRun = startDungeonRun;
+    window.returnToVillage = returnToVillage;
+
+    // Legacy/core functions
     window.startNewGame = startNewGame;
+    window.startNewGameDungeon = startNewGameDungeon;
     window.restartGame = restartGame;
     window.advanceToNextFloor = advanceToNextFloor;
     window.logGameStats = logGameStats;
     window.logEnemyTierDistribution = logEnemyTierDistribution;
 }
-
-console.log('✅ Game initialization loaded (with new systems)');

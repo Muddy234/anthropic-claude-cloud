@@ -29,7 +29,7 @@ const DUNGEON_CONFIG = {
     treasureBlobRatio: 0.20, // 20% of blobs are treasure
 
     // Debug
-    debugLogging: true,
+    debugLogging: false,
     validateConnectivity: true
 };
 
@@ -591,4 +591,4 @@ if (typeof window !== 'undefined') {
     window.getThemeAtPosition = getThemeAtPosition;
 }
 
-console.log('✅ Dungeon generator loaded (Blob-based BSP)');
+// Dungeon generator loaded (Blob-based BSP)
