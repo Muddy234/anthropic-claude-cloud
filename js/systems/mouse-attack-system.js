@@ -1992,10 +1992,10 @@ function drawRangeIndicator(ctx, camX, camY, tileSize, offsetX) {
     const screenX = (indicatorX - camX) * tileSize + offsetX;
     const screenY = (indicatorY - camY) * tileSize;
 
-    // Crosshair size (reduced by 33%)
-    const crosshairSize = tileSize * 0.27;
+    // Crosshair size (reduced by ~55% from original)
+    const crosshairSize = tileSize * 0.18;
     const lineWidth = 2;
-    const gapSize = tileSize * 0.07;
+    const gapSize = tileSize * 0.05;
 
     ctx.save();
 

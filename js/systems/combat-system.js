@@ -786,9 +786,14 @@ function handleDeath(entity, killer) {
     // Award XP
     const xpReward = entity.xp || calculateXPReward(entity);
     game.player.xp += xpReward;
-    
+
     if (typeof addMessage === 'function') {
         addMessage(`Gained ${xpReward} XP!`);
+    }
+
+    // Track kill in bestiary
+    if (typeof trackMonsterKill === 'function') {
+        trackMonsterKill(entity.name || entity.typeId);
     }
 
     // Check level up
