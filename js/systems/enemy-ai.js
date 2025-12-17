@@ -962,7 +962,20 @@ class EnemyAI {
     // VISION
     _canSeeTarget(target, game) {
         const d = this._dist(target.gridX, target.gridY);
-        const range = this.enemy.perception?.sightRange || 6;
+        let range = this.enemy.perception?.sightRange || 6;
+
+        // TORCH STEALTH: Reduce enemy vision when player torch is OFF
+        // Unless player is standing in another light source
+        if (target === game.player) {
+            const playerTorchOn = game.player.isTorchOn !== false;
+            const playerInLightSource = typeof LightSourceSystem !== 'undefined' &&
+                LightSourceSystem.isNearLightSource(game.player.gridX, game.player.gridY);
+
+            if (!playerTorchOn && !playerInLightSource) {
+                range *= 0.25; // 25% vision range when player is in darkness
+            }
+        }
+
         if (d > range) return false;
         if (!this._inVisionCone(target.gridX, target.gridY)) return false;
         return this._hasLOS(target.gridX, target.gridY, game);
