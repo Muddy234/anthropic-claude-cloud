@@ -34,15 +34,15 @@ function canSeePlayer(enemy) {
     let visionRange = enemy.perception?.sightRange || enemy.aggression || ENEMY_CONFIG.defaultVisionRange;
 
     // TORCH STEALTH MECHANIC:
-    // If player's torch is OFF, enemy vision is halved (0.5x)
+    // If player's torch is OFF, enemy vision is greatly reduced (0.25x)
     // UNLESS player is standing in another light source (campfire, brazier, etc.)
     const playerTorchOn = game.player.isTorchOn !== false;
     const playerInLightSource = typeof LightSourceSystem !== 'undefined' &&
         LightSourceSystem.isNearLightSource(game.player.gridX, game.player.gridY);
 
     if (!playerTorchOn && !playerInLightSource) {
-        // Player is in stealth - enemy sees at half range
-        visionRange *= 0.5;
+        // Player is in stealth - enemy sees at 25% range (was 50%)
+        visionRange *= 0.25;
     }
 
     // Calculate distance
