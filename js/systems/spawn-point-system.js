@@ -452,6 +452,8 @@ const SpawnPointSystem = {
             defense: Math.floor((template?.stats?.defense || 0) * totalScale),
             element: template?.element || 'physical',
             tier: template?.tier || 'common',
+            // Monster level equals floor number
+            level: game.floor || 1,
             ...template,
             // Track spawn point origin
             spawnPointId: spawnPoint.id,

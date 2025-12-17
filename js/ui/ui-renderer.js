@@ -683,9 +683,10 @@ function renderInspectPopup(ctx) {
 
     const popupWidth = 300;
     const popupHeight = 400;
-    const margin = 20;
-    const popupX = canvas.width - popupWidth - margin;
-    const popupY = canvas.height - popupHeight - margin;
+    const marginRight = 20;
+    const marginBottom = 80;  // Increased to clear action bar
+    const popupX = canvas.width - popupWidth - marginRight;
+    const popupY = canvas.height - popupHeight - marginBottom;
     const radius = 8;
 
     // Get tier color for accent
