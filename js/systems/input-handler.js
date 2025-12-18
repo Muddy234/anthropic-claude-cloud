@@ -43,6 +43,7 @@ window.addEventListener('keydown', e => {
     // Close skills menu on ESC (hotkey 'K' handled by icon-sidebar)
     if (e.key === 'Escape' && game.state === 'skills') {
         game.state = 'playing';
+        if (window.sidebarState) window.sidebarState.activeOverlay = null;
         return;
     }
 

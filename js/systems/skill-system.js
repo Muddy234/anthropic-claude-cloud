@@ -1020,7 +1020,7 @@ function getProficiencyForSpecialty(specialtyId) {
  */
 function getSpecialtiesForProficiency(proficiencyId) {
     const prof = PROFICIENCIES[proficiencyId];
-    return prof ? prof.specialties : [];
+    return prof ? (prof.specializations || []) : [];
 }
 
 // ============================================================================
