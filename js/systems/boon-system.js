@@ -647,8 +647,8 @@ const BOONS = {
     life_of_the_flame: {
         id: 'life_of_the_flame',
         name: 'Life of the Flame',
-        description: 'Light Radius scales with HP (Low HP = Darkness)',
-        lore: 'Tethered to the spark.',
+        description: 'Torch ON: Regenerate 1% Max HP per second',
+        lore: 'The flame sustains.',
         icon: String.fromCodePoint(0x1F56F), // 🕯
         color: '#c0392b',
         ancestor: null,
@@ -656,8 +656,8 @@ const BOONS = {
         requires: ['torchbearer', 'maniac'],
         stackable: false,
         maxStacks: 1,
-        effect: { type: 'hp_scaling', stat: 'lightRadius' },
-        getBonus: () => ({ lightScalesWithHp: true })
+        effect: { type: 'torch_on_regen', hpPercentPerSecond: 0.01 },
+        getBonus: () => ({ torchOnRegen: true, torchRegenPercent: 0.01 })
     },
 
     // ========================================================================
@@ -1063,8 +1063,8 @@ const BOONS = {
     momentum_burn: {
         id: 'momentum_burn',
         name: 'Momentum Burn',
-        description: '+30% Speed, but stopping stuns YOU for 0.5s',
-        lore: "Can't stop.",
+        description: '+15% Speed while moving; Stopping applies -15% Speed for 3s',
+        lore: 'Build momentum.',
         icon: String.fromCodePoint(0x26A1), // ⚡
         color: '#a93226',
         ancestor: null,
@@ -1072,8 +1072,8 @@ const BOONS = {
         requires: ['storm_caller', 'maniac'],
         stackable: false,
         maxStacks: 1,
-        effect: { type: 'tradeoff', bonus: { speed: 0.30 }, penalty: { stopStunsSelf: 0.5 } },
-        getBonus: () => ({ momentumSpeed: 0.30, stopSelfStun: 0.5 })
+        effect: { type: 'momentum', movingBonus: 0.15, stoppedPenalty: 0.15, penaltyDuration: 3 },
+        getBonus: () => ({ momentumSpeedBonus: 0.15, momentumSpeedPenalty: 0.15, momentumPenaltyDuration: 3 })
     },
 
     static_feedback: {
