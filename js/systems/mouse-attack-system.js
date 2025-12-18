@@ -698,6 +698,20 @@ function applyMeleeDamage(player, enemy, isSpecial) {
         }
     }
 
+    // Check for AMBUSH (stealth attack on unaware enemy)
+    const isAmbush = typeof checkAmbush === 'function' && checkAmbush(player, enemy);
+    if (isAmbush && typeof AMBUSH_CONFIG !== 'undefined') {
+        // Force critical hit if not already
+        if (AMBUSH_CONFIG.guaranteedCrit && !damageResult.isCrit) {
+            damageResult.isCrit = true;
+            damageResult.finalDamage = Math.floor(damageResult.finalDamage * 1.5);
+        }
+        // Apply ambush multiplier
+        damageResult.finalDamage = Math.floor(damageResult.finalDamage * AMBUSH_CONFIG.damageMultiplier);
+        damageResult.isAmbush = true;
+        console.log(`[MouseAttack] AMBUSH! Damage boosted to ${damageResult.finalDamage}`);
+    }
+
     // Ensure damage is a valid number (defensive check)
     if (isNaN(damageResult.finalDamage) || damageResult.finalDamage === undefined) {
         console.warn('[MouseAttack] Invalid damage calculated, using base damage');
@@ -719,10 +733,41 @@ function applyMeleeDamage(player, enemy, isSpecial) {
         enemy.hp = 0;
     }
 
+    // Soul & Body: Award skill XP based on damage dealt
+    // Determine proficiency type from weapon
+    const weaponType = weapon?.weaponType || weapon?.damageType || 'unarmed';
+    let proficiencyType = 'melee';
+    if (['bow', 'crossbow', 'throwing'].includes(weaponType)) {
+        proficiencyType = 'ranged';
+    } else if (['staff', 'wand', 'tome'].includes(weaponType)) {
+        proficiencyType = 'magic';
+    }
+
+    // Award XP for damage dealt
+    if (proficiencyType === 'melee' && typeof awardMeleeXp === 'function') {
+        awardMeleeXp(player, damageResult.finalDamage);
+    } else if (proficiencyType === 'ranged' && typeof awardRangedXp === 'function') {
+        awardRangedXp(player, damageResult.finalDamage);
+    } else if (proficiencyType === 'magic' && typeof awardMagicXp === 'function') {
+        awardMagicXp(player, damageResult.finalDamage);
+    }
+
     // Show damage number
     if (typeof showDamageNumber === 'function') {
-        const color = damageResult.isCrit ? '#ffff00' : '#ffffff';
-        showDamageNumber(enemy, damageResult.finalDamage, color);
+        // Ambush gets gold color, crit gets yellow, normal gets white
+        let color = '#ffffff';
+        if (damageResult.isAmbush) {
+            color = typeof COMBAT_TEXT_COLORS !== 'undefined' ? COMBAT_TEXT_COLORS.ambush : '#ffd700';
+            // Show "AMBUSH!" floating text
+            showDamageNumber(enemy, 'AMBUSH!', color, { isCrit: true });
+            // Trigger screen shake for ambush
+            if (typeof triggerScreenEffect === 'function' && typeof AMBUSH_CONFIG !== 'undefined') {
+                triggerScreenEffect('shake', AMBUSH_CONFIG.screenShakeIntensity, AMBUSH_CONFIG.screenShakeDuration);
+            }
+        } else if (damageResult.isCrit) {
+            color = '#ffff00';
+        }
+        showDamageNumber(enemy, damageResult.finalDamage, color, { isCrit: damageResult.isCrit || damageResult.isAmbush });
     }
 
     // Combat enhancements hook (knockback, stagger - screen shake handled above)
@@ -1911,6 +1956,119 @@ if (typeof SystemManager !== 'undefined') {
 }
 
 // ============================================================================
+// RANGE INDICATOR - Crosshair clamped to weapon range
+// ============================================================================
+
+/**
+ * Draw a crosshair at mouse position, clamped to player's attack range
+ * @param {CanvasRenderingContext2D} ctx - Canvas context
+ * @param {number} camX - Camera X position
+ * @param {number} camY - Camera Y position
+ * @param {number} tileSize - Effective tile size (with zoom)
+ * @param {number} offsetX - X offset (tracker width)
+ */
+function drawRangeIndicator(ctx, camX, camY, tileSize, offsetX) {
+    if (!game.player || game.state !== 'playing') return;
+
+    // Get player CENTER position (display position + 0.5 to center on tile)
+    const playerBaseX = game.player.displayX !== undefined ? game.player.displayX : game.player.gridX;
+    const playerBaseY = game.player.displayY !== undefined ? game.player.displayY : game.player.gridY;
+    const playerX = playerBaseX + 0.5;  // Center of player tile
+    const playerY = playerBaseY + 0.5;
+
+    // Get mouse world position
+    const mousePos = getMouseWorldPosition();
+
+    // Calculate direction and distance from player CENTER to mouse
+    const dx = mousePos.x - playerX;
+    const dy = mousePos.y - playerY;
+    const distance = Math.sqrt(dx * dx + dy * dy);
+
+    // Get weapon range from arc config (this accounts for weapon type)
+    const arcConfig = getWeaponArcConfig();
+    // For ranged weapons (arcRange = 0), use a larger default range
+    let maxRange = arcConfig.arcRange;
+    if (!maxRange || maxRange === 0) {
+        // Ranged weapons - use combat attack range or default
+        maxRange = game.player.combat?.attackRange || 6;
+    }
+
+    // Calculate clamped position
+    let indicatorX, indicatorY;
+
+    if (distance <= maxRange || distance === 0) {
+        // Within range - show at mouse position
+        indicatorX = mousePos.x;
+        indicatorY = mousePos.y;
+    } else {
+        // Beyond range - clamp to max range from player center
+        const angle = Math.atan2(dy, dx);
+        indicatorX = playerX + Math.cos(angle) * maxRange;
+        indicatorY = playerY + Math.sin(angle) * maxRange;
+    }
+
+    // Convert to screen coordinates (accounting for tile size offset)
+    const screenX = (indicatorX - camX) * tileSize + offsetX;
+    const screenY = (indicatorY - camY) * tileSize;
+
+    // Crosshair size (reduced by ~55% from original)
+    const crosshairSize = tileSize * 0.18;
+    const lineWidth = 2;
+    const gapSize = tileSize * 0.05;
+
+    ctx.save();
+
+    // Outer stroke (dark outline for visibility)
+    ctx.strokeStyle = 'rgba(0, 0, 0, 0.7)';
+    ctx.lineWidth = lineWidth + 2;
+    ctx.lineCap = 'round';
+
+    // Draw crosshair with gap in center
+    ctx.beginPath();
+    // Top
+    ctx.moveTo(screenX, screenY - crosshairSize);
+    ctx.lineTo(screenX, screenY - gapSize);
+    // Bottom
+    ctx.moveTo(screenX, screenY + gapSize);
+    ctx.lineTo(screenX, screenY + crosshairSize);
+    // Left
+    ctx.moveTo(screenX - crosshairSize, screenY);
+    ctx.lineTo(screenX - gapSize, screenY);
+    // Right
+    ctx.moveTo(screenX + gapSize, screenY);
+    ctx.lineTo(screenX + crosshairSize, screenY);
+    ctx.stroke();
+
+    // Inner stroke (white/colored)
+    const isInRange = distance <= maxRange;
+    ctx.strokeStyle = isInRange ? 'rgba(255, 255, 255, 0.9)' : 'rgba(255, 200, 100, 0.9)';
+    ctx.lineWidth = lineWidth;
+
+    ctx.beginPath();
+    // Top
+    ctx.moveTo(screenX, screenY - crosshairSize);
+    ctx.lineTo(screenX, screenY - gapSize);
+    // Bottom
+    ctx.moveTo(screenX, screenY + gapSize);
+    ctx.lineTo(screenX, screenY + crosshairSize);
+    // Left
+    ctx.moveTo(screenX - crosshairSize, screenY);
+    ctx.lineTo(screenX - gapSize, screenY);
+    // Right
+    ctx.moveTo(screenX + gapSize, screenY);
+    ctx.lineTo(screenX + crosshairSize, screenY);
+    ctx.stroke();
+
+    // Small center dot
+    ctx.fillStyle = isInRange ? 'rgba(255, 255, 255, 0.8)' : 'rgba(255, 200, 100, 0.8)';
+    ctx.beginPath();
+    ctx.arc(screenX, screenY, 2, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.restore();
+}
+
+// ============================================================================
 // EXPORTS
 // ============================================================================
 
@@ -1931,6 +2089,7 @@ if (typeof window !== 'undefined') {
     window.performMouseAttack = performMouseAttack;
     window.updateMouseAttackSystem = updateMouseAttackSystem;
     window.drawSlashEffects = drawSlashEffects;
+    window.drawRangeIndicator = drawRangeIndicator;
     window.checkMeleeHits = checkMeleeHits;
     window.isPlayerMovementLocked = isPlayerMovementLocked;
     window.triggerHitstop = triggerHitstop;

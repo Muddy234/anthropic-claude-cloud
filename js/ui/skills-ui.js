@@ -30,13 +30,13 @@ const SKILLS_UI_CONFIG = {
         deploy_turret: 'DT'
     },
 
-    // Proficiency configuration for radar chart
+    // Proficiency configuration for radar chart (Soul & Body Model)
     proficiencies: {
-        blade:     { icon: 'B', name: 'BLADE',     angle: -90,  color: '#c0392b' },  // Top
-        blunt:     { icon: 'H', name: 'BLUNT',     angle: -18,  color: '#e67e22' },  // Top-right
-        magic:     { icon: 'M', name: 'MAGIC',     angle: 54,   color: '#9b59b6' },  // Bottom-right
-        ranged:    { icon: 'R', name: 'RANGED',    angle: 126,  color: '#27ae60' },  // Bottom-left
-        expertise: { icon: 'E', name: 'EXPERTISE', angle: 198,  color: '#3498db' }   // Top-left
+        melee:    { icon: 'M', name: 'MELEE',    angle: -90,  color: '#c0392b' },  // Top
+        ranged:   { icon: 'R', name: 'RANGED',   angle: -18,  color: '#27ae60' },  // Top-right
+        magic:    { icon: 'A', name: 'MAGIC',    angle: 54,   color: '#9b59b6' },  // Bottom-right
+        defense:  { icon: 'D', name: 'DEFENSE',  angle: 126,  color: '#3498db' },  // Bottom-left
+        vitality: { icon: 'V', name: 'VITALITY', angle: 198,  color: '#e74c3c' }   // Top-left
     },
 
     // Radar chart settings
@@ -429,18 +429,28 @@ function drawSkillsOverlay() {
     // Update animation
     window.skillsUIState.pulsePhase += SKILLS_UI_CONFIG.radar.pulseSpeed * 16;
 
-    // Background vignette
+    const viewX = TRACKER_WIDTH;
+    const viewWidth = canvas.width - TRACKER_WIDTH;
+
+    // === ATMOSPHERE LAYER 1: Dark base ===
+    ctx.fillStyle = '#080810';
+    ctx.fillRect(viewX, 0, viewWidth, canvas.height);
+
+    // === ATMOSPHERE LAYER 2: Subtle noise/grain texture ===
+    drawNoiseOverlay(ctx, viewX, 0, viewWidth, canvas.height, 0.03);
+
+    // === ATMOSPHERE LAYER 3: Heavy vignette (focus eye on center) ===
     const vignetteGrad = ctx.createRadialGradient(
-        canvas.width / 2, canvas.height / 2, canvas.height * 0.3,
-        canvas.width / 2, canvas.height / 2, canvas.height
+        viewX + viewWidth / 2, canvas.height / 2, canvas.height * 0.15,
+        viewX + viewWidth / 2, canvas.height / 2, canvas.height * 0.9
     );
-    vignetteGrad.addColorStop(0, 'rgba(0, 0, 0, 0.6)');
-    vignetteGrad.addColorStop(1, 'rgba(0, 0, 0, 0.9)');
+    vignetteGrad.addColorStop(0, 'rgba(0, 0, 0, 0)');
+    vignetteGrad.addColorStop(0.5, 'rgba(0, 0, 0, 0.4)');
+    vignetteGrad.addColorStop(1, 'rgba(0, 0, 0, 0.85)');
     ctx.fillStyle = vignetteGrad;
-    ctx.fillRect(TRACKER_WIDTH, 0, canvas.width - TRACKER_WIDTH, canvas.height);
+    ctx.fillRect(viewX, 0, viewWidth, canvas.height);
 
     // Panel dimensions
-    const viewWidth = canvas.width - TRACKER_WIDTH;
     const panelWidth = Math.min(700, viewWidth - 80);
     const panelHeight = Math.min(700, canvas.height - 60);
     const panelX = TRACKER_WIDTH + (viewWidth - panelWidth) / 2;
@@ -539,37 +549,121 @@ function drawPentagonRadar(ctx, centerX, centerY, proficiencies, colors) {
 }
 
 /**
+ * Draw subtle noise/grain texture overlay for atmosphere
+ */
+function drawNoiseOverlay(ctx, x, y, width, height, opacity) {
+    // Create noise pattern if not cached
+    if (!window._skillsNoisePattern) {
+        const noiseCanvas = document.createElement('canvas');
+        noiseCanvas.width = 64;
+        noiseCanvas.height = 64;
+        const noiseCtx = noiseCanvas.getContext('2d');
+        const imageData = noiseCtx.createImageData(64, 64);
+
+        for (let i = 0; i < imageData.data.length; i += 4) {
+            const val = Math.random() * 255;
+            imageData.data[i] = val;
+            imageData.data[i + 1] = val;
+            imageData.data[i + 2] = val;
+            imageData.data[i + 3] = 255;
+        }
+
+        noiseCtx.putImageData(imageData, 0, 0);
+        window._skillsNoisePattern = ctx.createPattern(noiseCanvas, 'repeat');
+    }
+
+    ctx.save();
+    ctx.globalAlpha = opacity;
+    ctx.fillStyle = window._skillsNoisePattern;
+    ctx.fillRect(x, y, width, height);
+    ctx.restore();
+}
+
+/**
  * Draw occult rune/magic circle background behind radar
+ * Enhanced with slow rotation and better visibility
  */
 function drawRuneBackground(ctx, centerX, centerY, radius, colors) {
+    ctx.save();
+
+    // Slow rotation based on animation phase
+    const rotationAngle = window.skillsUIState.pulsePhase * 0.1;
+
+    ctx.translate(centerX, centerY);
+    ctx.rotate(rotationAngle);
+    ctx.translate(-centerX, -centerY);
+
     // Use the design system's rune pattern if available
     if (typeof createRunePattern === 'function') {
         const size = radius * 2.5;
-        const runeCanvas = createRunePattern(size, 'rgba(93, 161, 130, 0.06)');
+        const runeCanvas = createRunePattern(size, 'rgba(93, 161, 130, 0.08)');
         ctx.drawImage(runeCanvas, centerX - size / 2, centerY - size / 2, size, size);
     } else {
-        // Fallback: draw simple magic circle
-        ctx.save();
-        ctx.strokeStyle = 'rgba(93, 161, 130, 0.08)';
-        ctx.lineWidth = 1;
+        // Enhanced fallback: draw elaborate magic circle with runes
+        const runeColor = 'rgba(93, 161, 130, 0.12)';
+        const runeColorBright = 'rgba(93, 161, 130, 0.2)';
 
-        // Outer magic circles
-        [1.15, 1.0, 0.5].forEach(scale => {
+        // Outer ring with glow
+        ctx.strokeStyle = runeColorBright;
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.arc(centerX, centerY, radius * 1.18, 0, Math.PI * 2);
+        ctx.stroke();
+
+        // Inner rings
+        ctx.strokeStyle = runeColor;
+        ctx.lineWidth = 1;
+        [1.1, 0.95, 0.5, 0.25].forEach(scale => {
             ctx.beginPath();
             ctx.arc(centerX, centerY, radius * scale, 0, Math.PI * 2);
             ctx.stroke();
         });
 
-        // Cross lines
-        ctx.beginPath();
-        ctx.moveTo(centerX - radius * 1.1, centerY);
-        ctx.lineTo(centerX + radius * 1.1, centerY);
-        ctx.moveTo(centerX, centerY - radius * 1.1);
-        ctx.lineTo(centerX, centerY + radius * 1.1);
-        ctx.stroke();
+        // Rune symbols around outer ring (simplified glyphs)
+        const runeCount = 12;
+        ctx.font = '10px serif';
+        ctx.fillStyle = runeColor;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
 
-        ctx.restore();
+        const runeSymbols = ['◇', '△', '○', '□', '☆', '◈', '▽', '◎', '⬡', '✧', '⬢', '❖'];
+        for (let i = 0; i < runeCount; i++) {
+            const angle = (i / runeCount) * Math.PI * 2;
+            const rx = centerX + Math.cos(angle) * radius * 1.05;
+            const ry = centerY + Math.sin(angle) * radius * 1.05;
+            ctx.fillText(runeSymbols[i], rx, ry);
+        }
+
+        // Cross/star lines through center
+        ctx.strokeStyle = runeColor;
+        ctx.lineWidth = 1;
+        for (let i = 0; i < 5; i++) {
+            const angle = (i / 5) * Math.PI * 2 - Math.PI / 2;
+            ctx.beginPath();
+            ctx.moveTo(centerX, centerY);
+            ctx.lineTo(
+                centerX + Math.cos(angle) * radius * 1.1,
+                centerY + Math.sin(angle) * radius * 1.1
+            );
+            ctx.stroke();
+        }
+
+        // Small decorative dots at intersections
+        ctx.fillStyle = runeColorBright;
+        for (let ring = 1; ring <= 2; ring++) {
+            for (let i = 0; i < 5; i++) {
+                const angle = (i / 5) * Math.PI * 2 - Math.PI / 2;
+                const dist = radius * (ring * 0.35);
+                const dx = centerX + Math.cos(angle) * dist;
+                const dy = centerY + Math.sin(angle) * dist;
+                ctx.beginPath();
+                ctx.arc(dx, dy, 2, 0, Math.PI * 2);
+                ctx.fill();
+            }
+        }
     }
+
+    ctx.restore();
 }
 
 /**
@@ -640,35 +734,53 @@ function drawRadarGrid(ctx, centerX, centerY, radius, vertices, colors) {
         }
     }
 
-    // Center rune mark (instead of simple dot)
+    // Center icon: Stylized Eye (representing insight/soul)
     ctx.save();
-    ctx.fillStyle = colors.border || '#3a3530';
+
+    // Outer eye shape background
+    ctx.fillStyle = colors.bgDark || '#1a1a24';
     ctx.beginPath();
-    ctx.arc(centerX, centerY, 5, 0, Math.PI * 2);
+    ctx.arc(centerX, centerY, 10, 0, Math.PI * 2);
     ctx.fill();
 
-    // Inner star/rune
-    ctx.strokeStyle = 'rgba(239, 228, 176, 0.3)';
-    ctx.lineWidth = 1;
+    // Eye outline (almond shape)
+    ctx.strokeStyle = colors.gold || '#d4af37';
+    ctx.lineWidth = 1.5;
     ctx.beginPath();
-    for (let i = 0; i < 5; i++) {
-        const angle = (i / 5) * Math.PI * 2 - Math.PI / 2;
-        const px = centerX + Math.cos(angle) * 3;
-        const py = centerY + Math.sin(angle) * 3;
-        if (i === 0) ctx.moveTo(px, py);
-        else ctx.lineTo(px, py);
-    }
-    ctx.closePath();
+    ctx.moveTo(centerX - 8, centerY);
+    ctx.quadraticCurveTo(centerX, centerY - 6, centerX + 8, centerY);
+    ctx.quadraticCurveTo(centerX, centerY + 6, centerX - 8, centerY);
     ctx.stroke();
+
+    // Iris (outer)
+    ctx.fillStyle = 'rgba(212, 175, 55, 0.6)';
+    ctx.beginPath();
+    ctx.arc(centerX, centerY, 4, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Pupil (inner)
+    ctx.fillStyle = colors.bgDarkest || '#0a0a0f';
+    ctx.beginPath();
+    ctx.arc(centerX, centerY, 2, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Eye highlight/gleam
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.7)';
+    ctx.beginPath();
+    ctx.arc(centerX - 1, centerY - 1, 1, 0, Math.PI * 2);
+    ctx.fill();
+
     ctx.restore();
 }
 
 /**
  * Draw the player's proficiency polygon (filled shape)
+ * Minimum 12% radius to show "base soul" potential even at level 0
  */
 function drawPlayerPolygon(ctx, centerX, centerY, radius, proficiencies, profConfig, profIds, colors) {
     const maxLevel = SKILLS_UI_CONFIG.radar.maxLevel;
     const pulse = Math.sin(window.skillsUIState.pulsePhase) * 0.15 + 0.85;
+    const MIN_RADIUS_PCT = 0.12; // 12% minimum - "base soul" shape
 
     // Calculate polygon points based on proficiency levels
     const points = [];
@@ -676,7 +788,8 @@ function drawPlayerPolygon(ctx, centerX, centerY, radius, proficiencies, profCon
         const profId = profIds[i];
         const profData = proficiencies[profId];
         const level = profData ? profData.level : 0;
-        const normalizedLevel = Math.max(0.05, level / maxLevel); // Minimum 5% so shape is visible
+        // Minimum 12% so the polygon is always visible with nice gold fill
+        const normalizedLevel = Math.max(MIN_RADIUS_PCT, level / maxLevel);
 
         const angle = (profConfig[profId].angle * Math.PI / 180);
         const dist = radius * normalizedLevel;
@@ -689,9 +802,9 @@ function drawPlayerPolygon(ctx, centerX, centerY, radius, proficiencies, profCon
 
     // Fill gradient (gold/amber like Old Greg's Tavern)
     const fillGrad = ctx.createRadialGradient(centerX, centerY, 0, centerX, centerY, radius);
-    fillGrad.addColorStop(0, 'rgba(212, 175, 55, 0.4)');  // Gold center
-    fillGrad.addColorStop(0.7, 'rgba(212, 175, 55, 0.25)');
-    fillGrad.addColorStop(1, 'rgba(212, 175, 55, 0.1)');
+    fillGrad.addColorStop(0, 'rgba(212, 175, 55, 0.5)');  // Brighter gold center
+    fillGrad.addColorStop(0.5, 'rgba(212, 175, 55, 0.35)');
+    fillGrad.addColorStop(1, 'rgba(212, 175, 55, 0.15)');
 
     // Draw filled polygon
     ctx.fillStyle = fillGrad;
@@ -807,17 +920,24 @@ function drawVertexGemSockets(ctx, centerX, centerY, radius, profConfig, profIds
 
 /**
  * Draw proficiency selection tabs below radar - with dark red selection
+ * Active tab visually merges with content pane below (no bottom border)
  */
 function drawProficiencyTabs(ctx, x, y, width, selectedProf, proficiencies, colors) {
     const profIds = ['blade', 'blunt', 'magic', 'ranged', 'expertise'];
     const tabWidth = width / 5;
     const tabHeight = 32;
     const fontFamily = typeof UI_FONT_FAMILY !== 'undefined' ? UI_FONT_FAMILY.display : 'Georgia, serif';
+    const radius = 4;
 
     ctx.save();
 
     // Store clickable areas
     if (!window.skillsUITabAreas) window.skillsUITabAreas = {};
+
+    // First pass: Draw the content pane background connector line
+    // This creates the visual "connected" effect
+    ctx.fillStyle = colors.selectionGradientEnd || '#2a1010';
+    ctx.fillRect(x, y + tabHeight - 2, width, 4);
 
     for (let i = 0; i < 5; i++) {
         const profId = profIds[i];
@@ -838,27 +958,50 @@ function drawProficiencyTabs(ctx, x, y, width, selectedProf, proficiencies, colo
                 grad.addColorStop(1, colors.selectionGradientEnd || '#2a1010');
                 ctx.fillStyle = grad;
             }
+
+            // Selected tab: rounded top, flat bottom (merges with content)
+            ctx.beginPath();
+            ctx.moveTo(tabX + radius, y);
+            ctx.lineTo(tabX + tabWidth - radius, y);
+            ctx.quadraticCurveTo(tabX + tabWidth, y, tabX + tabWidth, y + radius);
+            ctx.lineTo(tabX + tabWidth, y + tabHeight + 2); // Extend past bottom
+            ctx.lineTo(tabX, y + tabHeight + 2);
+            ctx.lineTo(tabX, y + radius);
+            ctx.quadraticCurveTo(tabX, y, tabX + radius, y);
+            ctx.closePath();
+            ctx.fill();
+
+            // Border: top and sides only (no bottom border - merges with content)
+            ctx.strokeStyle = '#fff';
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.moveTo(tabX, y + tabHeight + 2);
+            ctx.lineTo(tabX, y + radius);
+            ctx.quadraticCurveTo(tabX, y, tabX + radius, y);
+            ctx.lineTo(tabX + tabWidth - radius, y);
+            ctx.quadraticCurveTo(tabX + tabWidth, y, tabX + tabWidth, y + radius);
+            ctx.lineTo(tabX + tabWidth, y + tabHeight + 2);
+            ctx.stroke();
         } else {
             ctx.fillStyle = 'rgba(0, 0, 0, 0.3)';
+
+            // Unselected tab: full rounded corners with bottom
+            ctx.beginPath();
+            ctx.moveTo(tabX + radius, y);
+            ctx.lineTo(tabX + tabWidth - radius, y);
+            ctx.quadraticCurveTo(tabX + tabWidth, y, tabX + tabWidth, y + radius);
+            ctx.lineTo(tabX + tabWidth, y + tabHeight);
+            ctx.lineTo(tabX, y + tabHeight);
+            ctx.lineTo(tabX, y + radius);
+            ctx.quadraticCurveTo(tabX, y, tabX + radius, y);
+            ctx.closePath();
+            ctx.fill();
+
+            // Full border for unselected
+            ctx.strokeStyle = colors.border || '#3a3a4a';
+            ctx.lineWidth = 1;
+            ctx.stroke();
         }
-
-        // Rounded top corners for tabs
-        const radius = 4;
-        ctx.beginPath();
-        ctx.moveTo(tabX + radius, y);
-        ctx.lineTo(tabX + tabWidth - radius, y);
-        ctx.quadraticCurveTo(tabX + tabWidth, y, tabX + tabWidth, y + radius);
-        ctx.lineTo(tabX + tabWidth, y + tabHeight);
-        ctx.lineTo(tabX, y + tabHeight);
-        ctx.lineTo(tabX, y + radius);
-        ctx.quadraticCurveTo(tabX, y, tabX + radius, y);
-        ctx.closePath();
-        ctx.fill();
-
-        // Border
-        ctx.strokeStyle = isSelected ? '#fff' : colors.border;
-        ctx.lineWidth = isSelected ? 2 : 1;
-        ctx.stroke();
 
         // Tab text - use serif font
         ctx.fillStyle = isSelected ? colors.textPrimary || '#efe4b0' : colors.textSecondary || '#b8a878';
@@ -967,9 +1110,25 @@ function drawSpecialtyDetails(ctx, x, y, width, selectedProf, skills, colors) {
                 ctx.fillText(`Lv 5 to unlock action`, x + width - 5, y);
             }
         } else {
-            ctx.fillStyle = colors.textMuted || '#706850';
-            ctx.font = `italic 12px ${fontFamily}`;
-            ctx.fillText('(Use weapon to unlock)', x + 100, y);
+            // LOCKED STATE - Visual language instead of text clutter
+            // Lock icon + XP to unlock
+            ctx.fillStyle = colors.textMuted || '#555';
+            ctx.font = `12px ${fontFamily}`;
+            ctx.textAlign = 'right';
+            ctx.fillText('0 / 100 XP', x + width - 25, y);
+
+            // Lock icon (unicode padlock)
+            ctx.font = `14px ${fontFamily}`;
+            ctx.fillText('🔒', x + width - 5, y);
+
+            // "Carrot" hint: Show what unlocking gives
+            const unlockBonus = getSpecialtyUnlockBonus(specId);
+            if (unlockBonus) {
+                ctx.fillStyle = 'rgba(100, 100, 100, 0.7)';
+                ctx.font = `italic 10px ${fontFamily}`;
+                ctx.textAlign = 'left';
+                ctx.fillText(`Unlock: ${unlockBonus}`, x + 5, y + 14);
+            }
         }
 
         y += 38;
@@ -1089,6 +1248,40 @@ function getSpecialtiesForProficiency(profId) {
         expertise: ['traps', 'potions', 'lockpicking', 'tinkering']
     };
     return mapping[profId] || [];
+}
+
+/**
+ * Get the Tier 1 unlock bonus text for a specialty
+ * This shows the player what they'll gain by unlocking
+ */
+function getSpecialtyUnlockBonus(specId) {
+    const bonuses = {
+        // Blade
+        sword: '+2% Damage',
+        knife: '+3% Crit Chance',
+        axe: '+2% Cleave Damage',
+        polearm: '+0.2 Range',
+        // Blunt
+        mace: '+3% Stun Chance',
+        staff: '+2% Spell Power',
+        unarmed: '+5% Attack Speed',
+        shield: '+2% Block Chance',
+        // Magic
+        fire: '+3% Burn Damage',
+        ice: '+2% Slow Effect',
+        lightning: '+2% Chain Chance',
+        necromancy: '+2% Life Steal',
+        // Ranged
+        bow: '+2% Accuracy',
+        crossbow: '+3% Armor Pierce',
+        throwing: '+2% Multi-hit',
+        // Expertise
+        traps: '+1 Trap Duration',
+        potions: '+10% Potion Effect',
+        lockpicking: '+5% Loot Quality',
+        tinkering: '+1 Gadget Charge'
+    };
+    return bonuses[specId] || '+2% Effectiveness';
 }
 
 function getActionForSpecialtyById(specialtyId) {

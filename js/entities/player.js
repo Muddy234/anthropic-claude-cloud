@@ -48,16 +48,17 @@ function createPlayer() {
         // CORE STATS (Normalized - start at 10)
         // ====================================================================
         
-        stats: { 
+        // Base attributes (gear provides bonuses)
+        stats: {
             STR: 10,    // Physical damage, carry capacity
             AGI: 10,    // Attack speed, dodge, crit chance
             INT: 10,    // Magic damage, mana pool
-            STA: 10     // Health pool, stamina regen
+            STA: 10     // Health pool, stamina regen (deprecated in Soul & Body)
         },
-        
-        level: 1,
-        xp: 0,
-        xpToNextLevel: 100,
+
+        // Soul & Body Model: No player level - skills are the permanent progression
+        // HP = 100 (base) + Vitality Bonus + Gear Flat HP
+        // Damage = Gear Base × Skill Multiplier × Boon Bonus
 
         // ====================================================================
         // RESOURCES
@@ -280,12 +281,29 @@ function recalculatePlayerStats(player) {
         // For now we skip this - status effects modify damage directly
     }
 
-    // Calculate max HP from STA
-    const totalSTA = stats.STA + bonusSTA;
-    player.maxHp = 80 + (totalSTA * 2);  // 80 base + 2 per STA
+    // Soul & Body HP Formula: 100 (base) + Vitality Bonus + Gear Flat HP
+    const baseHp = typeof SKILL_CONFIG !== 'undefined' ? SKILL_CONFIG.basePlayerHp : 100;
+    const vitalityBonus = typeof getVitalityBonusHp === 'function' ? getVitalityBonusHp(player) : 0;
 
-    // Calculate max Stamina from STA
-    player.maxStamina = 80 + (totalSTA * 2);
+    // Calculate gear flat HP bonus
+    let gearFlatHp = 0;
+    for (const slot of slots) {
+        const item = equipped[slot];
+        if (item?.stats?.hp) gearFlatHp += item.stats.hp;
+        if (item?.hp) gearFlatHp += item.hp;
+    }
+
+    let totalHp = baseHp + vitalityBonus + gearFlatHp;
+
+    // Apply boon HP bonus (multiplicative)
+    if (typeof applyBoonHpBonus === 'function') {
+        totalHp = applyBoonHpBonus(totalHp);
+    }
+
+    player.maxHp = totalHp;
+
+    // Calculate max Stamina (simplified - base 100)
+    player.maxStamina = 100;
 
     // Calculate max Mana from INT (legacy system)
     const totalINT = stats.INT + bonusINT;
@@ -411,38 +429,23 @@ function unequipItem(player, slot) {
 }
 
 // ============================================================================
-// LEVEL UP
+// LEVEL UP (DEPRECATED in Soul & Body Model)
 // ============================================================================
 
 /**
- * Check for level up and apply
+ * Check for level up - DEPRECATED
+ * Soul & Body model uses skill proficiencies instead of player level.
+ * This function exists for backwards compatibility but does nothing.
  */
 function checkLevelUp(player) {
-    if (!player) player = game.player;
-    if (!player) return;
-
-    while (player.xp >= player.xpToNextLevel) {
-        player.xp -= player.xpToNextLevel;
-        player.level++;
-        player.xpToNextLevel = Math.floor(player.xpToNextLevel * 1.5);
-
-        // Stat gains per level
-        player.stats.STR += 1;
-        player.stats.AGI += 1;
-        player.stats.INT += 1;
-        player.stats.STA += 1;
-
-        // Recalculate and heal
-        recalculatePlayerStats(player);
-        player.hp = player.maxHp;
-        player.stamina = player.maxStamina;
-        player.mana = player.maxMana;
-
-        if (typeof addMessage === 'function') {
-            addMessage(`Level up! You are now level ${player.level}!`);
-        }
-        console.log(`[Player] Leveled up to ${player.level}`);
-    }
+    // Soul & Body Model: No player levels
+    // Skills level up automatically when XP is gained from:
+    // - Melee: dealing melee damage
+    // - Ranged: dealing ranged damage
+    // - Magic: dealing spell damage
+    // - Defense: taking damage
+    // - Vitality: effective healing
+    return;
 }
 
 // ============================================================================
@@ -458,18 +461,48 @@ function resetPlayer() {
 }
 
 /**
- * Handle player death
+ * Handle player death - Soul & Body Model
+ * - Skills PERSIST (saved in persistentState)
+ * - Boons are LOST (session-only)
+ * - Gear is DROPPED at death location
+ * - Player respawns in village with Tier 0 starter kit
  */
 function handlePlayerDeath() {
+    // Soul & Body: Skills are NOT reset - they persist forever
+    // resetPlayerSkills now only resets cooldowns, not skill levels
     if (game.player.skills && typeof resetPlayerSkills === 'function') {
         resetPlayerSkills(game.player);
     }
-    
+
+    // Soul & Body: Boons ARE cleared on death (session-only power)
+    if (typeof BoonSystem !== 'undefined' && BOON_CONFIG?.clearOnDeath) {
+        BoonSystem.clearBoons();
+        console.log('[Death] Boons cleared (session-only)');
+    }
+
     // Clear status effects
     if (typeof clearStatusEffects === 'function') {
         clearStatusEffects(game.player);
     }
-    
+
+    // Store death drop location (for future rescue run feature)
+    if (typeof persistentState !== 'undefined') {
+        persistentState.deathDrop = {
+            floor: game.floor || 1,
+            x: game.player.gridX,
+            y: game.player.gridY,
+            equipped: JSON.parse(JSON.stringify(game.player.equipped)),
+            inventory: JSON.parse(JSON.stringify(game.player.inventory)),
+            timestamp: Date.now()
+        };
+        console.log('[Death] Gear dropped at floor', persistentState.deathDrop.floor);
+    }
+
+    // Update death stats
+    if (typeof persistentState !== 'undefined' && persistentState.stats) {
+        persistentState.stats.deaths = (persistentState.stats.deaths || 0) + 1;
+    }
+
     game.player.isDead = true;
     game.state = 'gameover';
 }

@@ -120,6 +120,10 @@ let persistentState = {
     // Lore collection tracking
     loreCollected: [],
 
+    // Bestiary tracking
+    monstersDiscovered: [],
+    monsterKillCounts: {},
+
     // Quest items for main storyline
     questItems: {
         dagger: false,          // Betrayal dagger (unlocks Elder confrontation)
@@ -135,7 +139,10 @@ let persistentState = {
     victoryTimestamp: null,
 
     // Death drop (for rescue runs)
-    deathDrop: null
+    deathDrop: null,
+
+    // Soul & Body: Permanent skill progression (NEVER lost on death)
+    skills: null  // Populated by skill-system.js when player is created
 };
 
 // ============================================================================
@@ -282,6 +289,10 @@ function createNewPersistentState() {
 
         loreCollected: [],
 
+        // Bestiary tracking
+        monstersDiscovered: [],
+        monsterKillCounts: {},
+
         questItems: {
             dagger: false,
             wardsCollected: 0,
@@ -293,7 +304,10 @@ function createNewPersistentState() {
         victoryAchieved: false,
         victoryTimestamp: null,
 
-        deathDrop: null
+        deathDrop: null,
+
+        // Soul & Body: Permanent skill progression
+        skills: null  // Initialized by skill-system.js
     };
 }
 
@@ -428,6 +442,51 @@ function initializeStartingKit() {
 }
 
 // ============================================================================
+// BESTIARY TRACKING
+// ============================================================================
+
+/**
+ * Discover a monster type for the bestiary
+ * Called when player first sees/encounters a monster
+ * @param {string} monsterName - The monster type name
+ */
+function discoverMonster(monsterName) {
+    if (!monsterName) return;
+
+    // Ensure arrays exist
+    if (!persistentState.monstersDiscovered) {
+        persistentState.monstersDiscovered = [];
+    }
+
+    // Only add if not already discovered
+    if (!persistentState.monstersDiscovered.includes(monsterName)) {
+        persistentState.monstersDiscovered.push(monsterName);
+        console.log(`[Bestiary] Discovered: ${monsterName}`);
+    }
+}
+
+/**
+ * Track a monster kill for the bestiary
+ * Called when player defeats a monster
+ * @param {string} monsterName - The monster type name
+ */
+function trackMonsterKill(monsterName) {
+    if (!monsterName) return;
+
+    // Ensure object exists
+    if (!persistentState.monsterKillCounts) {
+        persistentState.monsterKillCounts = {};
+    }
+
+    // Increment kill count
+    persistentState.monsterKillCounts[monsterName] =
+        (persistentState.monsterKillCounts[monsterName] || 0) + 1;
+
+    // Also ensure monster is discovered
+    discoverMonster(monsterName);
+}
+
+// ============================================================================
 // EXPORTS
 // ============================================================================
 
@@ -445,5 +504,9 @@ window.resetSessionState = resetSessionState;
 window.resetVillageState = resetVillageState;
 window.loadPersistentState = loadPersistentState;
 window.initializeStartingKit = initializeStartingKit;
+
+// Bestiary tracking functions
+window.discoverMonster = discoverMonster;
+window.trackMonsterKill = trackMonsterKill;
 
 console.log('[GameState] State management initialized (Survival Extraction v1)');

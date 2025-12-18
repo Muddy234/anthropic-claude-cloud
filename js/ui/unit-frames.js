@@ -159,10 +159,11 @@ function renderPlayerFrame(ctx) {
     ctx.shadowBlur = 3;
     ctx.fillText('ADVENTURER', textX, textY);
 
-    // Level badge - serif font
+    // Floor indicator (Soul & Body model - no player levels)
     ctx.font = `bold 11px ${fontFamily}`;
     ctx.fillStyle = colors.gold || '#c9a227';
-    ctx.fillText(`LV.${player.level}`, textX + 95, textY);
+    const floorNum = game.floor || 1;
+    ctx.fillText(`F${floorNum}`, textX + 95, textY);
 
     ctx.shadowBlur = 0;
 
