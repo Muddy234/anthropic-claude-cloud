@@ -654,6 +654,153 @@ function renderLightCookies(ctx, camX, camY, tileSize, offsetX) {
     ctx.restore();
 }
 
+/**
+ * Render decorations (shrines, chests, etc.) in the game world
+ * Called from the main render loop between loot and extraction points
+ */
+function renderDecorations(ctx, camX, camY, tileSize, offsetX) {
+    if (!game.decorations || game.decorations.length === 0) return;
+
+    const time = Date.now();
+
+    for (const decoration of game.decorations) {
+        const screenX = (decoration.x - camX) * tileSize + offsetX;
+        const screenY = (decoration.y - camY) * tileSize;
+
+        // Skip if off-screen
+        if (screenX < -tileSize * 2 || screenX > ctx.canvas.width + tileSize * 2) continue;
+        if (screenY < -tileSize * 2 || screenY > ctx.canvas.height + tileSize * 2) continue;
+
+        // Check tile visibility
+        const tileX = Math.floor(decoration.x);
+        const tileY = Math.floor(decoration.y);
+        const tile = game?.map?.[tileY]?.[tileX];
+
+        // Only render if tile is visible or explored
+        if (!tile || (!tile.visible && !tile.explored)) continue;
+
+        // Determine alpha based on visibility
+        const alpha = tile.visible ? 1.0 : 0.5;
+
+        // Render based on decoration type
+        if (decoration.type === 'shrine') {
+            renderShrine(ctx, decoration, screenX, screenY, tileSize, time, alpha);
+        } else if (decoration.type === 'chest') {
+            renderChest(ctx, decoration, screenX, screenY, tileSize, alpha);
+        }
+    }
+}
+
+/**
+ * Render a shrine decoration with glow effect
+ */
+function renderShrine(ctx, shrine, screenX, screenY, tileSize, time, alpha) {
+    ctx.save();
+    ctx.globalAlpha = alpha;
+
+    const centerX = screenX + tileSize / 2;
+    const centerY = screenY + tileSize / 2;
+    const size = tileSize * 0.7;
+
+    // Color based on used state
+    const baseColor = shrine.used ? '#666666' : (shrine.color || '#FFD700');
+    const glowColor = shrine.used ? 'rgba(100, 100, 100, 0.3)' : 'rgba(255, 215, 0, 0.5)';
+
+    // Pulsing glow effect (only for unused shrines)
+    if (!shrine.used) {
+        const pulse = Math.sin(time / 800 * Math.PI) * 0.3 + 0.7;
+
+        // Outer glow
+        const gradient = ctx.createRadialGradient(
+            centerX, centerY, 0,
+            centerX, centerY, size * 1.5
+        );
+        gradient.addColorStop(0, glowColor);
+        gradient.addColorStop(0.5, 'rgba(255, 215, 0, 0.2)');
+        gradient.addColorStop(1, 'rgba(255, 215, 0, 0)');
+
+        ctx.globalAlpha = alpha * pulse;
+        ctx.fillStyle = gradient;
+        ctx.beginPath();
+        ctx.arc(centerX, centerY, size * 1.5, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.globalAlpha = alpha;
+    }
+
+    // Shrine base (pedestal)
+    ctx.fillStyle = '#555555';
+    ctx.fillRect(centerX - size * 0.4, centerY + size * 0.2, size * 0.8, size * 0.3);
+
+    // Shrine pillar
+    ctx.fillStyle = '#777777';
+    ctx.fillRect(centerX - size * 0.15, centerY - size * 0.3, size * 0.3, size * 0.5);
+
+    // Shrine top (glowing orb or crystal)
+    const orbY = centerY - size * 0.35;
+    const orbRadius = size * 0.2;
+
+    // Orb glow
+    if (!shrine.used) {
+        const orbGlow = ctx.createRadialGradient(
+            centerX, orbY, 0,
+            centerX, orbY, orbRadius * 2
+        );
+        orbGlow.addColorStop(0, baseColor);
+        orbGlow.addColorStop(0.5, glowColor);
+        orbGlow.addColorStop(1, 'rgba(255, 215, 0, 0)');
+        ctx.fillStyle = orbGlow;
+        ctx.beginPath();
+        ctx.arc(centerX, orbY, orbRadius * 2, 0, Math.PI * 2);
+        ctx.fill();
+    }
+
+    // Orb
+    ctx.fillStyle = baseColor;
+    ctx.beginPath();
+    ctx.arc(centerX, orbY, orbRadius, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Highlight on orb
+    if (!shrine.used) {
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.5)';
+        ctx.beginPath();
+        ctx.arc(centerX - orbRadius * 0.3, orbY - orbRadius * 0.3, orbRadius * 0.3, 0, Math.PI * 2);
+        ctx.fill();
+    }
+
+    ctx.restore();
+}
+
+/**
+ * Render a chest decoration
+ */
+function renderChest(ctx, chest, screenX, screenY, tileSize, alpha) {
+    ctx.save();
+    ctx.globalAlpha = alpha;
+
+    const centerX = screenX + tileSize / 2;
+    const centerY = screenY + tileSize / 2;
+    const size = tileSize * 0.6;
+
+    // Color based on opened state
+    const chestColor = chest.opened ? '#5c4033' : '#8B4513';
+    const trimColor = chest.opened ? '#666666' : '#FFD700';
+
+    // Chest body
+    ctx.fillStyle = chestColor;
+    ctx.fillRect(centerX - size / 2, centerY - size * 0.3, size, size * 0.6);
+
+    // Chest lid
+    ctx.fillStyle = chest.opened ? '#4a3328' : '#6B3300';
+    ctx.fillRect(centerX - size / 2, centerY - size * 0.3, size, size * 0.2);
+
+    // Chest trim/lock
+    ctx.fillStyle = trimColor;
+    ctx.fillRect(centerX - size * 0.1, centerY - size * 0.2, size * 0.2, size * 0.3);
+
+    ctx.restore();
+}
+
 function render() {
     ctx.fillStyle = '#000'; 
     ctx.fillRect(0, 0, canvas.width, canvas.height);
@@ -815,6 +962,9 @@ const camY = game.camera.y + (shakeOffset.y / (TILE_SIZE * currentZoom));
         if (typeof renderLootPiles === 'function') {
             renderLootPiles(ctx, camX, camY, effectiveTileSize, TRACKER_WIDTH);
         }
+
+        // LAYER 2.3: Draw decorations (shrines, etc.)
+        renderDecorations(ctx, camX, camY, effectiveTileSize, TRACKER_WIDTH);
 
         // LAYER 2.5: Draw extraction points
         if (typeof renderExtractionPoints === 'function') {
