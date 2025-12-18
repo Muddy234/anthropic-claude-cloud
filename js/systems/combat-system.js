@@ -24,6 +24,19 @@ const COMBAT_CONFIG = {
     combatDisengageTime: 30000    // Time (ms) without combat before auto-disengage (30 seconds)
 };
 
+// Ambush/Stealth attack configuration
+const AMBUSH_CONFIG = {
+    enabled: true,
+    damageMultiplier: 1.5,        // 1.5x damage on ambush attacks
+    guaranteedCrit: true,         // Ambush attacks always crit
+    screenShakeIntensity: 0.4,    // Screen shake on ambush
+    screenShakeDuration: 200,     // Screen shake duration (ms)
+    // AI states that count as "unaware" (valid ambush targets)
+    unawareStates: ['idle', 'wandering', 'returning', 'searching'],
+    // Angle threshold: player must be outside enemy's frontal cone (degrees from facing)
+    sideAngleThreshold: 60        // Must be >60° from enemy's facing to count as ambush
+};
+
 // ============================================================================
 // MAIN UPDATE LOOP
 // ============================================================================
@@ -361,9 +374,90 @@ function disengageCombat(entity) {
 // ATTACK EXECUTION
 // ============================================================================
 
+/**
+ * Check if an attack qualifies as an ambush (stealth attack)
+ * Requirements:
+ * 1. Attacker must be the player
+ * 2. Defender must be an enemy with AI
+ * 3. Enemy must be in an "unaware" state (IDLE, WANDERING, etc.)
+ * 4. Player must be behind or to the side of the enemy (not in frontal cone)
+ * @returns {boolean} True if this is an ambush attack
+ */
+function checkAmbush(attacker, defender) {
+    if (!AMBUSH_CONFIG.enabled) return false;
+
+    // Only player can perform ambush attacks
+    if (attacker !== game.player) return false;
+
+    // Defender must be an enemy (not the player)
+    if (defender === game.player) return false;
+
+    // Get AI state - check both defender.ai.currentState and defender.state
+    let currentState = null;
+    if (defender.ai && defender.ai.currentState) {
+        currentState = defender.ai.currentState;
+    } else if (defender.state) {
+        // Fallback to direct state property
+        currentState = defender.state;
+    }
+
+    if (COMBAT_CONFIG.debugLogging) {
+        console.log(`[Ambush Check] Enemy: ${defender.name}, AI exists: ${!!defender.ai}, state: ${currentState}, facing: ${defender.facing}`);
+    }
+
+    // No AI state found - can't determine if unaware
+    if (!currentState) return false;
+
+    // Check if enemy is in an unaware state
+    if (!AMBUSH_CONFIG.unawareStates.includes(currentState)) {
+        if (COMBAT_CONFIG.debugLogging) {
+            console.log(`[Ambush Check] State '${currentState}' is not unaware (needs: ${AMBUSH_CONFIG.unawareStates.join(', ')})`);
+        }
+        return false;
+    }
+
+    // Check if player is outside enemy's frontal vision cone
+    // Get positions
+    const enemyX = defender.gridX ?? defender.x;
+    const enemyY = defender.gridY ?? defender.y;
+    const playerX = attacker.gridX ?? attacker.x;
+    const playerY = attacker.gridY ?? attacker.y;
+
+    // Calculate angle from enemy to player (in degrees)
+    const dx = playerX - enemyX;
+    const dy = playerY - enemyY;
+    const angleToPlayer = Math.atan2(dy, dx) * (180 / Math.PI);
+
+    // Get enemy's facing angle (handle 'up' edge case with -90/270)
+    const facingAngles = { right: 0, down: 90, left: 180, up: -90 };
+    const facingAngle = facingAngles[defender.facing] ?? 0;
+
+    // Calculate angle difference (how far player is from enemy's line of sight)
+    let angleDiff = Math.abs(angleToPlayer - facingAngle);
+    if (angleDiff > 180) angleDiff = 360 - angleDiff;
+
+    if (COMBAT_CONFIG.debugLogging) {
+        console.log(`[Ambush Check] AngleToPlayer: ${angleToPlayer.toFixed(1)}°, FacingAngle: ${facingAngle}°, Diff: ${angleDiff.toFixed(1)}°, Threshold: ${AMBUSH_CONFIG.sideAngleThreshold}°`);
+    }
+
+    // Player must be outside the frontal cone (side or behind)
+    if (angleDiff <= AMBUSH_CONFIG.sideAngleThreshold) {
+        if (COMBAT_CONFIG.debugLogging) {
+            console.log(`[Ambush Check] FAILED - Player is in frontal cone`);
+        }
+        return false;  // Player is in front of enemy
+    }
+
+    console.log(`[Combat] AMBUSH! Enemy: ${defender.name}, state: ${currentState}, angle diff: ${angleDiff.toFixed(1)}°`);
+    return true;
+}
+
 function performAttack(attacker, defender) {
     // Get current room for context
     const room = getCurrentRoom(attacker);
+
+    // Check for ambush attack (player attacking unaware enemy from behind/side)
+    const isAmbush = checkAmbush(attacker, defender);
 
     // Enemy combo system: track which attack in the combo (1, 2, or 3)
     const isEnemy = attacker !== game.player;
@@ -389,6 +483,21 @@ function performAttack(attacker, defender) {
         }
         showDamageNumber(defender, 0, '#888888');
         return;
+    }
+
+    // Apply AMBUSH bonus (guaranteed crit + damage multiplier)
+    if (isAmbush) {
+        // Force critical hit
+        if (AMBUSH_CONFIG.guaranteedCrit && !result.isCrit) {
+            result.isCrit = true;
+            // Apply crit damage if it wasn't already calculated as crit
+            result.finalDamage = Math.floor(result.finalDamage * 1.5);
+            if (!result.messages) result.messages = [];
+            result.messages.push('CRITICAL');
+        }
+        // Apply ambush multiplier on top of crit
+        result.finalDamage = Math.floor(result.finalDamage * AMBUSH_CONFIG.damageMultiplier);
+        result.isAmbush = true;
     }
 
     // Apply combo finisher bonus for enemies (1.5x damage on 3rd hit)
@@ -420,7 +529,8 @@ function performAttack(attacker, defender) {
     let message = `${attacker.name || 'You'} hit ${defender.name || 'target'} for ${result.finalDamage}!`;
 
     // Add modifiers to message
-    if (result.isCrit) message += ' CRITICAL!';
+    if (result.isAmbush) message += ' AMBUSH!';
+    if (result.isCrit && !result.isAmbush) message += ' CRITICAL!';  // Don't double-show crit for ambush
     if (result.isComboFinisher) message += ' COMBO!';
     if (result.messages) {
         for (const msg of result.messages) {
@@ -437,11 +547,21 @@ function performAttack(attacker, defender) {
     // Determine damage number color
     let color = '#ff4444';
     if (result.isCrit) color = '#ffff00';
+    if (result.isAmbush) color = COMBAT_TEXT_COLORS.ambush;  // Gold for ambush (overrides crit)
     if (result.isComboFinisher) color = '#ff00ff';  // Purple for enemy combo finisher
     if (result.breakdown?.elementMod > 1.0) color = '#00ff00';
     if (result.breakdown?.elementMod < 1.0) color = '#ff8800';
 
-    showDamageNumber(defender, result.finalDamage, color);
+    // Show "AMBUSH!" floating text above damage number
+    if (result.isAmbush) {
+        showDamageNumber(defender, 'AMBUSH!', COMBAT_TEXT_COLORS.ambush, { isCrit: true });
+        // Trigger screen shake for ambush
+        if (typeof triggerScreenEffect === 'function') {
+            triggerScreenEffect('shake', AMBUSH_CONFIG.screenShakeIntensity, AMBUSH_CONFIG.screenShakeDuration);
+        }
+    }
+
+    showDamageNumber(defender, result.finalDamage, color, { isCrit: result.isCrit || result.isAmbush });
 
     // Generate hit noise
     if (typeof NoiseSystem !== 'undefined') {
@@ -491,6 +611,11 @@ function applyDamage(entity, damage, source, damageResult) {
         }
     }
 
+    // Soul & Body: Apply boon damage reduction (for player only)
+    if (entity === game.player && typeof applyBoonDamageReduction === 'function') {
+        damage = applyBoonDamageReduction(damage);
+    }
+
     // Ensure damage is still valid after modifications
     if (isNaN(damage)) damage = 1;
 
@@ -500,6 +625,11 @@ function applyDamage(entity, damage, source, damageResult) {
     if (isNaN(entity.hp)) {
         console.warn('[Combat] HP became NaN for', entity.name, '- resetting to 0');
         entity.hp = 0;
+    }
+
+    // Soul & Body: Award Defense XP when player takes damage
+    if (entity === game.player && typeof awardDefenseXp === 'function') {
+        awardDefenseXp(game.player, damage);
     }
 
     // === VISUAL FEEDBACK FOR PLAYER DAMAGE ===
@@ -666,9 +796,14 @@ function handleDeath(entity, killer) {
     // Award XP
     const xpReward = entity.xp || calculateXPReward(entity);
     game.player.xp += xpReward;
-    
+
     if (typeof addMessage === 'function') {
         addMessage(`Gained ${xpReward} XP!`);
+    }
+
+    // Track kill in bestiary
+    if (typeof trackMonsterKill === 'function') {
+        trackMonsterKill(entity.name || entity.typeId);
     }
 
     // Check level up
@@ -863,7 +998,8 @@ const COMBAT_TEXT_COLORS = {
     lightning: '#ffff44',
     xp: '#44aaff',
     gold: '#ffcc00',
-    levelup: '#ffdd00'
+    levelup: '#ffdd00',
+    ambush: '#ffd700'  // Gold/yellow for ambush attacks
 };
 
 /**
@@ -1230,6 +1366,8 @@ function createMonsterRangedEffect(ax, ay, tx, ty, attacker, result) {
 
 if (typeof window !== 'undefined') {
     window.COMBAT_CONFIG = COMBAT_CONFIG;
+    window.AMBUSH_CONFIG = AMBUSH_CONFIG;
+    window.checkAmbush = checkAmbush;
     window.updateCombat = updateCombat;
     window.engageCombat = engageCombat;
     window.disengageCombat = disengageCombat;

@@ -269,7 +269,12 @@ function createEnemy(monsterType, x, y, room) {
     const stats = typeof applyTierMultipliers === 'function'
         ? applyTierMultipliers(template, monsterType, currentFloor)
         : { ...template };
-    
+
+    // Debug logging for floor scaling
+    if (SPAWNER_CONFIG.debugLogging) {
+        console.log(`[Spawner] Creating ${monsterType} on Floor ${currentFloor}, level: ${stats.level || currentFloor}`);
+    }
+
     // Random facing direction
     const directions = ['up', 'down', 'left', 'right'];
     const facing = directions[Math.floor(Math.random() * directions.length)];
@@ -307,8 +312,8 @@ function createEnemy(monsterType, x, y, room) {
         // Collision
         blockingRadius: template.elite ? 1.0 : 0.75,
 
-        // Monster level (equal to floor number)
-        level: stats.level || currentFloor,
+        // Monster level (ALWAYS equal to floor number for consistency)
+        level: currentFloor,
 
         // Stats (scaled by floor level)
         hp: stats.hp || 50,

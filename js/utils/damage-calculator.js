@@ -89,7 +89,40 @@ const DamageCalculator = {
             }
         }
 
-        // Step 9: Calculate final damage
+        // Step 9: Soul & Body skill multiplier (for player attacks only)
+        result.breakdown.skillMod = 1.0;
+        if (attacker === game.player && typeof getSkillDamageMultiplier === 'function') {
+            const weapon = attacker.equipped?.MAIN;
+            const weaponType = weapon?.weaponType || weapon?.damageType || 'unarmed';
+            const attackType = this.getAttackElement(attacker);
+
+            // Determine proficiency type based on weapon/attack type
+            let proficiencyType = 'melee';
+            if (['bow', 'crossbow', 'throwing'].includes(weaponType)) {
+                proficiencyType = 'ranged';
+            } else if (['staff', 'wand', 'tome'].includes(weaponType) || attackType !== 'physical') {
+                proficiencyType = 'magic';
+            }
+
+            result.breakdown.skillMod = getSkillDamageMultiplier(attacker, proficiencyType);
+            result.breakdown.proficiencyType = proficiencyType;
+
+            if (result.breakdown.skillMod > 1.01) {
+                result.messages.push(`Skill x${result.breakdown.skillMod.toFixed(2)}`);
+            }
+        }
+
+        // Step 10: Soul & Body defense reduction (for player taking damage only)
+        result.breakdown.skillDefenseMod = 1.0;
+        if (defender === game.player && typeof getDefenseDamageReduction === 'function') {
+            const defenseReduction = getDefenseDamageReduction(defender);
+            result.breakdown.skillDefenseMod = 1.0 - defenseReduction;
+            if (defenseReduction > 0.01) {
+                result.messages.push(`Defense skill -${Math.round(defenseReduction * 100)}%`);
+            }
+        }
+
+        // Step 11: Calculate final damage
         let damage = result.baseDamage;
 
         // Apply weapon vs armor
@@ -98,11 +131,17 @@ const DamageCalculator = {
         // Apply element vs element
         damage *= result.breakdown.elementMod;
 
-        // Apply defense
+        // Apply defense (armor)
         damage *= result.breakdown.defenseMod;
 
         // Apply social bonus
         damage *= result.breakdown.socialMod;
+
+        // Apply skill multiplier (Soul & Body)
+        damage *= result.breakdown.skillMod;
+
+        // Apply skill defense reduction (Soul & Body - defender is player)
+        damage *= result.breakdown.skillDefenseMod;
 
         // Apply crit
         damage *= result.breakdown.critMod;
@@ -375,6 +414,12 @@ const DamageCalculator = {
         console.log(`  Defense: x${result.breakdown.defenseMod.toFixed(2)}`);
         if (result.breakdown.socialMod !== 1.0) {
             console.log(`  Social: x${result.breakdown.socialMod.toFixed(2)}`);
+        }
+        if (result.breakdown.skillMod !== 1.0) {
+            console.log(`  Skill (${result.breakdown.proficiencyType || 'N/A'}): x${result.breakdown.skillMod.toFixed(2)}`);
+        }
+        if (result.breakdown.skillDefenseMod !== 1.0) {
+            console.log(`  Skill Defense: x${result.breakdown.skillDefenseMod.toFixed(2)}`);
         }
         console.log(`  Crit: x${result.breakdown.critMod.toFixed(2)}`);
         console.log(`  Variance: x${result.breakdown.variance.toFixed(2)}`);
