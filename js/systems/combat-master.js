@@ -3058,13 +3058,679 @@ function handleTabTargeting(player) {
 }
 
 // ############################################################################
-// SECTION 9-10: REMAINING SYSTEMS (Loaded from separate files)
+// SECTION 9: SKILLS-COMBAT INTEGRATION
 // ############################################################################
-// The following systems remain in their original files for this phase:
-// - mouse-attack-system.js (2099 lines) - Mouse click attacks, weapon arcs, combo system
-// - skills-combat-integration.js (1086 lines) - Skills-combat bridge, XP awards
-//
-// These can be consolidated in a future update.
+// Bridges skills system with combat:
+// - Placed objects (traps, turrets)
+// - Skill action execution
+// - CC support for combat
+
+// Active placed objects
+const placedObjects = {
+    traps: [],
+    turrets: []
+};
+
+// Place a trap at position
+function placeTrap(owner, position, trapData) {
+    const ownerTraps = placedObjects.traps.filter(t => t.owner === owner);
+    if (ownerTraps.length >= trapData.maxTraps) {
+        const oldestIndex = placedObjects.traps.findIndex(t => t.owner === owner);
+        if (oldestIndex > -1) placedObjects.traps.splice(oldestIndex, 1);
+    }
+
+    placedObjects.traps.push({
+        owner: owner, x: position.x, y: position.y,
+        damage: trapData.damage, slow: trapData.slow, triggered: false
+    });
+    if (typeof addMessage === 'function') addMessage(`Trap placed at (${position.x}, ${position.y})`);
+}
+
+// Place a turret at position
+function placeTurret(owner, position, turretData) {
+    const ownerTurrets = placedObjects.turrets.filter(t => t.owner === owner);
+    if (ownerTurrets.length >= turretData.maxTurrets) {
+        const oldestIndex = placedObjects.turrets.findIndex(t => t.owner === owner);
+        if (oldestIndex > -1) placedObjects.turrets.splice(oldestIndex, 1);
+    }
+
+    placedObjects.turrets.push({
+        owner: owner, x: position.x, y: position.y,
+        damage: turretData.turret.damage, attackInterval: turretData.turret.attackInterval,
+        attackTimer: 0, duration: turretData.turret.duration,
+        hp: turretData.turret.hp, maxHp: turretData.turret.hp
+    });
+    if (typeof addMessage === 'function') addMessage(`Turret deployed at (${position.x}, ${position.y})`);
+}
+
+// Update placed objects (call every frame)
+function updatePlacedObjects(deltaTime) {
+    // Update traps - check for enemy collisions
+    for (let i = placedObjects.traps.length - 1; i >= 0; i--) {
+        const trap = placedObjects.traps[i];
+        if (trap.triggered) continue;
+
+        for (const enemy of game.enemies) {
+            if (Math.floor(enemy.gridX) === trap.x && Math.floor(enemy.gridY) === trap.y) {
+                trap.triggered = true;
+                enemy.hp -= trap.damage;
+                if (typeof showDamageNumber === 'function') showDamageNumber(enemy, trap.damage, '#aa00aa');
+                if (typeof addMessage === 'function') addMessage(`Trap triggered! ${enemy.name} takes ${trap.damage} damage!`);
+
+                if (trap.slow && typeof applyStatusEffect === 'function') {
+                    applyStatusEffect(enemy, {
+                        type: 'slow', duration: trap.slow.duration,
+                        data: { percent: trap.slow.percent }, source: 'trap'
+                    });
+                }
+
+                if (enemy.hp <= 0 && typeof handleDeath === 'function') {
+                    handleDeath(enemy, trap.owner);
+                }
+                placedObjects.traps.splice(i, 1);
+                break;
+            }
+        }
+    }
+
+    // Update turrets
+    for (let i = placedObjects.turrets.length - 1; i >= 0; i--) {
+        const turret = placedObjects.turrets[i];
+        turret.duration -= deltaTime;
+        if (turret.duration <= 0 || turret.hp <= 0) {
+            if (typeof addMessage === 'function') addMessage('Turret destroyed!');
+            placedObjects.turrets.splice(i, 1);
+            continue;
+        }
+
+        turret.attackTimer += deltaTime;
+        if (turret.attackTimer >= turret.attackInterval) {
+            turret.attackTimer = 0;
+
+            let nearestEnemy = null;
+            let nearestDist = Infinity;
+
+            for (const enemy of game.enemies) {
+                const dx = enemy.gridX - turret.x;
+                const dy = enemy.gridY - turret.y;
+                const dist = Math.sqrt(dx * dx + dy * dy);
+                if (dist < nearestDist && dist <= 5) {
+                    nearestDist = dist;
+                    nearestEnemy = enemy;
+                }
+            }
+
+            if (nearestEnemy) {
+                nearestEnemy.hp -= turret.damage;
+                if (typeof showDamageNumber === 'function') showDamageNumber(nearestEnemy, turret.damage, '#00aaaa');
+                if (nearestEnemy.hp <= 0 && typeof handleDeath === 'function') {
+                    handleDeath(nearestEnemy, turret.owner);
+                }
+            }
+        }
+    }
+}
+
+// Update skill-related systems (call from main loop)
+function updateSkillSystems(deltaTime) {
+    if (game.player && typeof updateActionCooldowns === 'function') {
+        updateActionCooldowns(game.player, deltaTime);
+    }
+    updatePlacedObjects(deltaTime);
+}
+
+// Initialize player with skills
+function initializePlayerWithSkills(player) {
+    if (typeof initializePlayerSkills === 'function') {
+        initializePlayerSkills(player);
+    }
+}
+
+// Action hotkeys (1-4 for weapon actions, 5-8 for expertise)
+const actionHotkeys = {
+    '1': null, '2': null, '3': null, '4': null,
+    '5': 'spike_trap', '6': 'volatile_flask', '7': 'expose_weakness', '8': 'deploy_turret'
+};
+
+// Update action hotkeys based on equipped weapon
+function updateActionHotkeys(player) {
+    const weapon = player.equipped?.MAIN;
+    if (weapon?.specialty && typeof getActionForSpecialty === 'function') {
+        const action = getActionForSpecialty(weapon.specialty);
+        if (action) actionHotkeys['1'] = action.id;
+    } else {
+        actionHotkeys['1'] = 'flurry_of_blows';
+    }
+}
+
+// Handle action hotkey press
+function handleActionHotkey(key, player) {
+    const actionId = actionHotkeys[key];
+    if (!actionId) return;
+
+    let target = player.combat?.currentTarget;
+    if (!target && game.enemies.length > 0) {
+        let nearestDist = Infinity;
+        for (const enemy of game.enemies) {
+            const dx = enemy.gridX - player.gridX;
+            const dy = enemy.gridY - player.gridY;
+            const dist = Math.sqrt(dx * dx + dy * dy);
+            if (dist < nearestDist) { nearestDist = dist; target = enemy; }
+        }
+    }
+
+    if (typeof ACTIONS !== 'undefined') {
+        const action = ACTIONS[actionId];
+        if (action && (action.type === 'utility' || action.type === 'summon')) {
+            target = { x: player.gridX, y: player.gridY };
+        }
+    }
+
+    if (target && typeof executeSkillAction === 'function') {
+        executeSkillAction(player, actionId, target);
+    } else if (!target) {
+        if (typeof addMessage === 'function') addMessage('No target!');
+    }
+}
+
+// ############################################################################
+// SECTION 10: MOUSE ATTACK SYSTEM
+// ############################################################################
+// Left-click to attack toward mouse cursor
+// Combo system: Attack 1 (left) -> Attack 2 (right) -> Attack 3 (special)
+
+// Attack state
+const mouseAttackState = {
+    cooldown: 0, isSwinging: false, swingProgress: 0, swingDuration: 0.2,
+    swingDirection: 0, swingArcAngle: 90, swingRange: 1.0, swingStartTime: 0,
+    slashStyle: 'sweep', hitEnemies: new Set(), slashEffects: [],
+    comboCount: 1, comboResetTimer: 0, comboDecayDuration: 1.5,
+    inputBufferTime: 0, inputBufferDuration: 0.2, bufferedAttack: false,
+    isLunging: false, lungeProgress: 0, lungeDuration: 0.1,
+    lungeStartX: 0, lungeStartY: 0, lungeTargetX: 0, lungeTargetY: 0, lungeInputLock: false,
+    hitstopActive: false, hitstopTimer: 0, hitstopDuration: 0.05, hitstopCritDuration: 0.08,
+    activeWindowStart: 0.15, activeWindowEnd: 0.85, pendingDamage: null
+};
+
+// Weapon lunge distances
+const WEAPON_LUNGE_CONFIG = {
+    knife: 0, unarmed: 0.05, wand: 0,
+    sword: 0.15, polearm: 0.2, staff: 0.1,
+    axe: 0.25, mace: 0.3, shield: 0.15
+};
+
+// Track mouse position
+let mouseWorldX = 0, mouseWorldY = 0, mouseScreenX = 0, mouseScreenY = 0;
+
+// Mouse tracking
+window.addEventListener('mousemove', (e) => {
+    mouseScreenX = e.clientX; mouseScreenY = e.clientY;
+    const canvas = document.getElementById('gameCanvas');
+    if (!canvas || !game.camera) return;
+    const rect = canvas.getBoundingClientRect();
+    const scaleX = canvas.width / rect.width;
+    const scaleY = canvas.height / rect.height;
+    const scaledX = (e.clientX - rect.left) * scaleX;
+    const scaledY = (e.clientY - rect.top) * scaleY;
+    const trackerWidth = typeof TRACKER_WIDTH !== 'undefined' ? TRACKER_WIDTH : 70;
+    const tileSize = (typeof TILE_SIZE !== 'undefined' ? TILE_SIZE : 32) * (window.currentZoom || ZOOM_LEVEL || 2);
+    mouseWorldX = (scaledX - trackerWidth) / tileSize + game.camera.x;
+    mouseWorldY = scaledY / tileSize + game.camera.y;
+});
+
+function getMouseWorldPosition() { return { x: mouseWorldX, y: mouseWorldY }; }
+
+function getDirectionToMouse() {
+    if (!game.player) return 0;
+    const playerX = game.player.displayX !== undefined ? game.player.displayX : game.player.gridX;
+    const playerY = game.player.displayY !== undefined ? game.player.displayY : game.player.gridY;
+    return Math.atan2(mouseWorldY - playerY, mouseWorldX - playerX);
+}
+
+function getWeaponArcConfig(player) {
+    const weapon = player?.equipped?.MAIN;
+    if (!weapon) return WEAPON_ARC_CONFIG.unarmed || DEFAULT_ARC_CONFIG;
+    return WEAPON_ARC_CONFIG[weapon.weaponType] || DEFAULT_ARC_CONFIG;
+}
+
+function isWeaponRanged(player) {
+    return (getWeaponArcConfig(player).isRanged || false);
+}
+
+function getAttackCooldown(player) {
+    const weapon = player?.equipped?.MAIN;
+    const baseSpeed = weapon?.stats?.speed || 1.0;
+    return 0.7 / baseSpeed;
+}
+
+function performMouseAttack(player, fromBuffer = false) {
+    if (!player || game.state !== 'playing') return false;
+    if (mouseAttackState.cooldown > 0 && !fromBuffer) {
+        mouseAttackState.bufferedAttack = true;
+        mouseAttackState.inputBufferTime = mouseAttackState.inputBufferDuration;
+        return false;
+    }
+    if (mouseAttackState.isSwinging) {
+        mouseAttackState.bufferedAttack = true;
+        mouseAttackState.inputBufferTime = mouseAttackState.inputBufferDuration;
+        return false;
+    }
+
+    mouseAttackState.bufferedAttack = false;
+    mouseAttackState.inputBufferTime = 0;
+
+    const arcConfig = getWeaponArcConfig(player);
+    const direction = getDirectionToMouse();
+    const comboCount = mouseAttackState.comboCount;
+    const isSpecial = (comboCount === 3);
+    const attackFromLeft = (comboCount === 1);
+
+    updatePlayerFacingFromAngleInternal(player, direction);
+
+    if (arcConfig.isRanged) {
+        performRangedAttackInternal(player, direction, isSpecial, comboCount);
+    } else {
+        performMeleeSwingInternal(player, direction, arcConfig, isSpecial, attackFromLeft, comboCount);
+    }
+
+    mouseAttackState.comboCount = (comboCount % 3) + 1;
+    mouseAttackState.comboResetTimer = mouseAttackState.comboDecayDuration;
+    mouseAttackState.cooldown = getAttackCooldown(player);
+
+    if (player.gcd) { player.gcd.active = true; player.gcd.remaining = player.gcd.duration || 0.5; }
+    return true;
+}
+
+function performMeleeSwingInternal(player, direction, arcConfig, isSpecial, attackFromLeft, comboCount) {
+    mouseAttackState.isSwinging = true;
+    mouseAttackState.swingProgress = 0;
+    mouseAttackState.swingDirection = direction;
+    mouseAttackState.swingArcAngle = arcConfig.arcAngle * (Math.PI / 180);
+    mouseAttackState.swingRange = arcConfig.arcRange;
+    mouseAttackState.swingStartTime = performance.now();
+    mouseAttackState.slashStyle = arcConfig.slashStyle || 'sweep';
+    mouseAttackState.hitEnemies.clear();
+
+    applyMicroLungeInternal(player, direction, arcConfig);
+    createSlashEffectInternal(player, direction, arcConfig, isSpecial, attackFromLeft, comboCount);
+
+    mouseAttackState.pendingDamage = {
+        player: player, direction: direction, arcConfig: arcConfig, isSpecial: isSpecial, triggered: false
+    };
+}
+
+function applyMicroLungeInternal(player, direction, arcConfig) {
+    const weapon = player?.equipped?.MAIN;
+    const weaponType = weapon?.weaponType || 'unarmed';
+    const lungeDist = WEAPON_LUNGE_CONFIG[weaponType] || 0;
+    if (lungeDist <= 0) return;
+
+    const dirX = Math.cos(direction), dirY = Math.sin(direction);
+    const startX = player.gridX, startY = player.gridY;
+    let targetX = startX + dirX * lungeDist, targetY = startY + dirY * lungeDist;
+
+    if (typeof isTileWalkable === 'function') {
+        const steps = Math.ceil(lungeDist / 0.1);
+        let validX = startX, validY = startY;
+        for (let i = 1; i <= steps; i++) {
+            const checkX = startX + dirX * lungeDist * (i / steps);
+            const checkY = startY + dirY * lungeDist * (i / steps);
+            if (isTileWalkable(Math.floor(checkX), Math.floor(checkY))) { validX = checkX; validY = checkY; }
+            else break;
+        }
+        targetX = validX; targetY = validY;
+    }
+
+    if (Math.abs(targetX - startX) < 0.01 && Math.abs(targetY - startY) < 0.01) return;
+
+    mouseAttackState.isLunging = true;
+    mouseAttackState.lungeProgress = 0;
+    mouseAttackState.lungeStartX = startX; mouseAttackState.lungeStartY = startY;
+    mouseAttackState.lungeTargetX = targetX; mouseAttackState.lungeTargetY = targetY;
+    mouseAttackState.lungeInputLock = true;
+}
+
+function performRangedAttackInternal(player, direction, isSpecial, comboCount) {
+    const weapon = player.equipped?.MAIN;
+    const arcConfig = getWeaponArcConfig(player);
+    const isMagic = arcConfig.isMagic || false;
+
+    let angleOffset = 0;
+    if (comboCount === 1) angleOffset = -0.1;
+    else if (comboCount === 2) angleOffset = 0.1;
+    const adjustedDirection = direction + angleOffset;
+
+    const visionRange = typeof VISION_RADIUS !== 'undefined' ? VISION_RADIUS : 8;
+    const dirX = Math.cos(adjustedDirection), dirY = Math.sin(adjustedDirection);
+    const element = weapon?.element || (isMagic ? 'arcane' : 'physical');
+    const originX = player.displayX !== undefined ? player.displayX : player.gridX;
+    const originY = player.displayY !== undefined ? player.displayY : player.gridY;
+
+    if (typeof createProjectile === 'function') {
+        createProjectile({
+            x: originX, y: originY, dirX: dirX, dirY: dirY,
+            speed: arcConfig.projectileSpeed || 8, maxDistance: visionRange + 2,
+            damage: calculateProjectileDamageInternal(player, isSpecial),
+            owner: player, element: element, fadeAfter: visionRange,
+            isSpecial: isSpecial, isMagic: isMagic
+        });
+    }
+}
+
+function calculateProjectileDamageInternal(player, isSpecial) {
+    const weapon = player.equipped?.MAIN;
+    const weaponType = weapon?.weaponType;
+    let baseDamage = weapon?.stats?.damage || 5;
+    const stats = player.stats || {};
+
+    if (weaponType === 'bow' || weaponType === 'crossbow') baseDamage += Math.floor((stats.AGI || 10) / 5);
+    else if (['staff', 'wand', 'tome'].includes(weaponType)) baseDamage += Math.floor((stats.INT || 10) / 3);
+    else baseDamage += Math.floor((stats.STR || 10) / 5);
+
+    if (isSpecial) baseDamage = Math.floor(baseDamage * 1.5);
+    return baseDamage;
+}
+
+function updatePlayerFacingFromAngleInternal(player, angle) {
+    const degrees = angle * (180 / Math.PI);
+    if (degrees >= -45 && degrees < 45) player.facing = 'right';
+    else if (degrees >= 45 && degrees < 135) player.facing = 'down';
+    else if (degrees >= -135 && degrees < -45) player.facing = 'up';
+    else player.facing = 'left';
+}
+
+function checkMeleeHitsInternal(player, direction, arcConfig, isSpecial) {
+    if (!game.enemies) return;
+    const slashStyle = arcConfig.slashStyle || 'sweep';
+    const range = arcConfig.arcRange;
+    const enemiesCopy = [...game.enemies];
+
+    for (const enemy of enemiesCopy) {
+        if (!enemy || enemy.hp <= 0 || isNaN(enemy.hp)) continue;
+        if (mouseAttackState.hitEnemies.has(enemy)) continue;
+
+        const dx = enemy.gridX - player.gridX, dy = enemy.gridY - player.gridY;
+        const distance = Math.sqrt(dx * dx + dy * dy);
+        if (distance > range) continue;
+
+        let isHit = false;
+        if (slashStyle === 'thrust' || slashStyle === 'jab') {
+            isHit = checkThrustHitInternal(player, enemy, direction, range, slashStyle);
+        } else {
+            const halfArc = (arcConfig.arcAngle * (Math.PI / 180)) / 2;
+            const enemyAngle = Math.atan2(dy, dx);
+            let angleDiff = enemyAngle - direction;
+            while (angleDiff > Math.PI) angleDiff -= 2 * Math.PI;
+            while (angleDiff < -Math.PI) angleDiff += 2 * Math.PI;
+            isHit = Math.abs(angleDiff) <= halfArc;
+        }
+
+        if (isHit) {
+            mouseAttackState.hitEnemies.add(enemy);
+            applyMeleeDamageInternal(player, enemy, isSpecial);
+        }
+    }
+}
+
+function checkThrustHitInternal(player, enemy, direction, range, slashStyle) {
+    const width = slashStyle === 'jab' ? 0.25 : 0.4;
+    const perpX = -Math.sin(direction), perpY = Math.cos(direction);
+    const dirX = Math.cos(direction), dirY = Math.sin(direction);
+    const dx = enemy.gridX - player.gridX, dy = enemy.gridY - player.gridY;
+    const alongDist = dx * dirX + dy * dirY;
+    if (alongDist < 0 || alongDist > range) return false;
+    const perpDist = Math.abs(dx * perpX + dy * perpY);
+    return perpDist <= width / 2;
+}
+
+function applyMeleeDamageInternal(player, enemy, isSpecial) {
+    const weapon = player.equipped?.MAIN;
+    let baseDamage = weapon?.stats?.damage || 5;
+    baseDamage += Math.floor((player.stats?.STR || 10) / 5);
+    if (isSpecial) baseDamage = Math.floor(baseDamage * 1.5);
+
+    let damageResult = { finalDamage: baseDamage, isCrit: false };
+    if (typeof DamageCalculator !== 'undefined') {
+        const room = game.rooms?.find(r => enemy.gridX >= r.x && enemy.gridX < r.x + r.width && enemy.gridY >= r.y && enemy.gridY < r.y + r.height);
+        damageResult = DamageCalculator.calculateDamage(player, enemy, room);
+    } else {
+        if (Math.random() * 100 < (player.critChance || 5)) {
+            damageResult.finalDamage = Math.floor(baseDamage * 1.5);
+            damageResult.isCrit = true;
+        }
+    }
+
+    const isAmbush = typeof checkAmbush === 'function' && checkAmbush(player, enemy);
+    if (isAmbush && typeof AMBUSH_CONFIG !== 'undefined') {
+        if (AMBUSH_CONFIG.guaranteedCrit && !damageResult.isCrit) {
+            damageResult.isCrit = true;
+            damageResult.finalDamage = Math.floor(damageResult.finalDamage * 1.5);
+        }
+        damageResult.finalDamage = Math.floor(damageResult.finalDamage * AMBUSH_CONFIG.damageMultiplier);
+        damageResult.isAmbush = true;
+    }
+
+    if (isNaN(damageResult.finalDamage)) damageResult.finalDamage = Math.max(1, baseDamage);
+
+    triggerHitstopInternal(damageResult.isCrit, isSpecial);
+    triggerDirectionalShakeInternal(mouseAttackState.swingDirection, damageResult.isCrit, isSpecial);
+
+    enemy.hp -= damageResult.finalDamage;
+    if (isNaN(enemy.hp)) enemy.hp = 0;
+
+    if (typeof showDamageNumber === 'function') {
+        let color = '#ffffff';
+        if (damageResult.isAmbush) {
+            color = typeof COMBAT_TEXT_COLORS !== 'undefined' ? COMBAT_TEXT_COLORS.ambush : '#ffd700';
+            showDamageNumber(enemy, 'AMBUSH!', color, { isCrit: true });
+        } else if (damageResult.isCrit) color = '#ffff00';
+        showDamageNumber(enemy, damageResult.finalDamage, color, { isCrit: damageResult.isCrit || damageResult.isAmbush });
+    }
+
+    if (typeof onCombatHit === 'function') {
+        damageResult.skipScreenShake = true;
+        onCombatHit(player, enemy, damageResult);
+    }
+
+    if (enemy.hp > 0) {
+        enemy.state = 'chasing';
+        if (!enemy.combat) {
+            enemy.combat = { isInCombat: false, currentTarget: null, attackCooldown: 0, attackSpeed: enemy.attackSpeed || 1.0, autoRetaliate: true, attackRange: enemy.attackRange || 1 };
+        }
+        if (typeof engageCombat === 'function') engageCombat(enemy, player);
+    }
+
+    if (enemy.hp <= 0) {
+        if (typeof handleDeath === 'function') handleDeath(enemy, player);
+        else {
+            const index = game.enemies.indexOf(enemy);
+            if (index > -1) game.enemies.splice(index, 1);
+        }
+    }
+
+    if (typeof addMessage === 'function') {
+        const critText = damageResult.isCrit ? ' CRITICAL!' : '';
+        addMessage(`You hit ${enemy.name} for ${damageResult.finalDamage} damage!${critText}`);
+    }
+}
+
+function triggerHitstopInternal(isCrit, isSpecial) {
+    const duration = isCrit ? mouseAttackState.hitstopCritDuration : isSpecial ? mouseAttackState.hitstopDuration * 1.5 : mouseAttackState.hitstopDuration;
+    mouseAttackState.hitstopActive = true;
+    mouseAttackState.hitstopTimer = duration;
+}
+
+function triggerDirectionalShakeInternal(direction, isCrit, isSpecial) {
+    let intensity = isCrit ? 6 : isSpecial ? 4 : 2;
+    const shakeX = Math.cos(direction) * intensity;
+    const shakeY = Math.sin(direction) * intensity;
+
+    if (typeof screenShakeState !== 'undefined') {
+        screenShakeState.active = true;
+        screenShakeState.intensity = intensity;
+        screenShakeState.timer = isCrit ? 0.12 : 0.08;
+        screenShakeState.directionalX = shakeX;
+        screenShakeState.directionalY = shakeY;
+    } else if (typeof triggerScreenShake === 'function') {
+        triggerScreenShake(isCrit);
+    }
+}
+
+function createSlashEffectInternal(player, direction, arcConfig, isSpecial, attackFromLeft, comboCount) {
+    const originX = (player.displayX !== undefined ? player.displayX : player.gridX) + 0.5;
+    const originY = (player.displayY !== undefined ? player.displayY : player.gridY) + 0.5;
+
+    if (typeof MeleeSlashEffect !== 'undefined') {
+        const weapon = player.equipped?.MAIN;
+        MeleeSlashEffect.create(originX, originY, direction, {
+            range: arcConfig.arcRange || 1.25, arcDegrees: arcConfig.arcAngle || 90,
+            slashDuration: isSpecial ? 10 : 8, particlesPerFrame: isSpecial ? 6 : 4,
+            ...MeleeSlashEffect.getWeaponOptions(weapon)
+        });
+        return;
+    }
+
+    mouseAttackState.slashEffects.push({
+        x: player.displayX !== undefined ? player.displayX : player.gridX,
+        y: player.displayY !== undefined ? player.displayY : player.gridY,
+        angle: direction, arcAngle: arcConfig.arcAngle * (Math.PI / 180),
+        range: arcConfig.arcRange, progress: 0, duration: 0.2,
+        slashStyle: arcConfig.slashStyle || 'sweep', isSpecial: isSpecial,
+        fromLeft: attackFromLeft, comboCount: comboCount
+    });
+}
+
+function updateSlashEffectsInternal(deltaTime) {
+    const dt = deltaTime / 1000;
+    for (let i = mouseAttackState.slashEffects.length - 1; i >= 0; i--) {
+        const slash = mouseAttackState.slashEffects[i];
+        slash.progress += dt / slash.duration;
+        if (slash.progress >= 1) mouseAttackState.slashEffects.splice(i, 1);
+    }
+}
+
+function updateMouseAttackSystem(deltaTime) {
+    const dt = deltaTime / 1000;
+    const player = game?.player;
+
+    if (mouseAttackState.hitstopActive) {
+        mouseAttackState.hitstopTimer -= dt;
+        if (mouseAttackState.hitstopTimer <= 0) mouseAttackState.hitstopActive = false;
+        else {
+            updateSlashEffectsInternal(deltaTime);
+            if (typeof MeleeSlashEffect !== 'undefined') MeleeSlashEffect.update(deltaTime);
+            return;
+        }
+    }
+
+    if (mouseAttackState.comboResetTimer > 0) {
+        mouseAttackState.comboResetTimer -= dt;
+        if (mouseAttackState.comboResetTimer <= 0 && mouseAttackState.comboCount !== 1) {
+            mouseAttackState.comboCount = 1;
+        }
+    }
+
+    if (mouseAttackState.inputBufferTime > 0) mouseAttackState.inputBufferTime -= dt;
+
+    if (mouseAttackState.cooldown > 0) {
+        mouseAttackState.cooldown = Math.max(0, mouseAttackState.cooldown - dt);
+        if (mouseAttackState.cooldown === 0 && mouseAttackState.bufferedAttack && mouseAttackState.inputBufferTime > 0 && player) {
+            performMouseAttack(player, true);
+        }
+    }
+
+    if (mouseAttackState.isLunging && player) {
+        mouseAttackState.lungeProgress += dt / mouseAttackState.lungeDuration;
+        if (mouseAttackState.lungeProgress >= 1) {
+            mouseAttackState.isLunging = false;
+            mouseAttackState.lungeInputLock = false;
+            player.gridX = mouseAttackState.lungeTargetX;
+            player.gridY = mouseAttackState.lungeTargetY;
+            if (player.displayX !== undefined) player.displayX = mouseAttackState.lungeTargetX;
+            if (player.displayY !== undefined) player.displayY = mouseAttackState.lungeTargetY;
+        } else {
+            const t = typeof easeOutQuad === 'function' ? easeOutQuad(mouseAttackState.lungeProgress) : mouseAttackState.lungeProgress;
+            const newX = mouseAttackState.lungeStartX + (mouseAttackState.lungeTargetX - mouseAttackState.lungeStartX) * t;
+            const newY = mouseAttackState.lungeStartY + (mouseAttackState.lungeTargetY - mouseAttackState.lungeStartY) * t;
+            player.gridX = newX; player.gridY = newY;
+            if (player.displayX !== undefined) player.displayX = newX;
+            if (player.displayY !== undefined) player.displayY = newY;
+        }
+    }
+
+    if (mouseAttackState.isSwinging) {
+        mouseAttackState.swingProgress += dt / mouseAttackState.swingDuration;
+        if (mouseAttackState.pendingDamage) {
+            const progress = mouseAttackState.swingProgress;
+            if (progress >= mouseAttackState.activeWindowStart && progress <= mouseAttackState.activeWindowEnd) {
+                const pd = mouseAttackState.pendingDamage;
+                checkMeleeHitsInternal(pd.player, pd.direction, pd.arcConfig, pd.isSpecial);
+            }
+        }
+        if (mouseAttackState.swingProgress >= 1) {
+            mouseAttackState.isSwinging = false;
+            mouseAttackState.hitEnemies.clear();
+            mouseAttackState.pendingDamage = null;
+        }
+    }
+
+    updateSlashEffectsInternal(deltaTime);
+    if (typeof MeleeSlashEffect !== 'undefined') MeleeSlashEffect.update(deltaTime);
+    if (typeof MonsterMagicEffect !== 'undefined') MonsterMagicEffect.update(deltaTime);
+    if (typeof MonsterRangedEffect !== 'undefined') MonsterRangedEffect.update(deltaTime);
+}
+
+function isPlayerMovementLocked() { return mouseAttackState.lungeInputLock; }
+
+function drawRangeIndicator(ctx, camX, camY, tileSize, offsetX) {
+    if (!game.player || game.state !== 'playing') return;
+
+    const playerBaseX = game.player.displayX !== undefined ? game.player.displayX : game.player.gridX;
+    const playerBaseY = game.player.displayY !== undefined ? game.player.displayY : game.player.gridY;
+    const playerX = playerBaseX + 0.5, playerY = playerBaseY + 0.5;
+    const mousePos = getMouseWorldPosition();
+    const dx = mousePos.x - playerX, dy = mousePos.y - playerY;
+    const distance = Math.sqrt(dx * dx + dy * dy);
+
+    const arcConfig = getWeaponArcConfig();
+    let maxRange = arcConfig.arcRange;
+    if (!maxRange || maxRange === 0) maxRange = game.player.combat?.attackRange || 6;
+
+    let indicatorX, indicatorY;
+    if (distance <= maxRange || distance === 0) { indicatorX = mousePos.x; indicatorY = mousePos.y; }
+    else {
+        const angle = Math.atan2(dy, dx);
+        indicatorX = playerX + Math.cos(angle) * maxRange;
+        indicatorY = playerY + Math.sin(angle) * maxRange;
+    }
+
+    const screenX = (indicatorX - camX) * tileSize + offsetX;
+    const screenY = (indicatorY - camY) * tileSize;
+    const crosshairSize = tileSize * 0.18, lineWidth = 2, gapSize = tileSize * 0.05;
+
+    ctx.save();
+    ctx.strokeStyle = 'rgba(0, 0, 0, 0.7)'; ctx.lineWidth = lineWidth + 2; ctx.lineCap = 'round';
+    ctx.beginPath();
+    ctx.moveTo(screenX, screenY - crosshairSize); ctx.lineTo(screenX, screenY - gapSize);
+    ctx.moveTo(screenX, screenY + gapSize); ctx.lineTo(screenX, screenY + crosshairSize);
+    ctx.moveTo(screenX - crosshairSize, screenY); ctx.lineTo(screenX - gapSize, screenY);
+    ctx.moveTo(screenX + gapSize, screenY); ctx.lineTo(screenX + crosshairSize, screenY);
+    ctx.stroke();
+
+    const isInRange = distance <= maxRange;
+    ctx.strokeStyle = isInRange ? 'rgba(255, 255, 255, 0.9)' : 'rgba(255, 200, 100, 0.9)';
+    ctx.lineWidth = lineWidth;
+    ctx.beginPath();
+    ctx.moveTo(screenX, screenY - crosshairSize); ctx.lineTo(screenX, screenY - gapSize);
+    ctx.moveTo(screenX, screenY + gapSize); ctx.lineTo(screenX, screenY + crosshairSize);
+    ctx.moveTo(screenX - crosshairSize, screenY); ctx.lineTo(screenX - gapSize, screenY);
+    ctx.moveTo(screenX + gapSize, screenY); ctx.lineTo(screenX + crosshairSize, screenY);
+    ctx.stroke();
+
+    ctx.fillStyle = isInRange ? 'rgba(255, 255, 255, 0.8)' : 'rgba(255, 200, 100, 0.8)';
+    ctx.beginPath(); ctx.arc(screenX, screenY, 2, 0, Math.PI * 2); ctx.fill();
+    ctx.restore();
+}
 
 // ############################################################################
 // SECTION 11: EXPORTS & REGISTRATION
@@ -3160,6 +3826,30 @@ if (typeof window !== 'undefined') {
     window.executeRangedAttack = executeRangedAttack;
     window.executeMagicAttack = executeMagicAttack;
     window.executeNoManaAttack = executeNoManaAttack;
+
+    // Skills Combat Integration exports (Section 9)
+    window.placedObjects = placedObjects;
+    window.placeTrap = placeTrap;
+    window.placeTurret = placeTurret;
+    window.updatePlacedObjects = updatePlacedObjects;
+    window.updateSkillSystems = updateSkillSystems;
+    window.initializePlayerWithSkills = initializePlayerWithSkills;
+    window.actionHotkeys = actionHotkeys;
+    window.updateActionHotkeys = updateActionHotkeys;
+    window.handleActionHotkey = handleActionHotkey;
+
+    // Mouse Attack System exports (Section 10)
+    window.mouseAttackState = mouseAttackState;
+    window.WEAPON_LUNGE_CONFIG = WEAPON_LUNGE_CONFIG;
+    window.getMouseWorldPosition = getMouseWorldPosition;
+    window.getDirectionToMouse = getDirectionToMouse;
+    window.getWeaponArcConfig = getWeaponArcConfig;
+    window.isWeaponRanged = isWeaponRanged;
+    window.getAttackCooldown = getAttackCooldown;
+    window.performMouseAttack = performMouseAttack;
+    window.updateMouseAttackSystem = updateMouseAttackSystem;
+    window.isPlayerMovementLocked = isPlayerMovementLocked;
+    window.drawRangeIndicator = drawRangeIndicator;
 }
 
 // Initialize Status Effect System
@@ -3167,4 +3857,4 @@ if (typeof StatusEffectSystem !== 'undefined') {
     StatusEffectSystem.init();
 }
 
-console.log('Combat Master loaded (Sections 1-8: Core, enhancements, boons, hotkeys)');
+console.log('Combat Master loaded (All 10 sections consolidated)');
