@@ -62,6 +62,13 @@ window.addEventListener('keydown', e => {
         }
     }
 
+    // Shrine UI input handling
+    if (game.state === 'shrine') {
+        if (typeof handleShrineInput === 'function' && handleShrineInput(e)) {
+            return;
+        }
+    }
+
     // PRIORITY 2: Context menu and inspect popup (only if game.state === 'playing')
     // ESC handling for context menu/inspect popup is in right-click-init.js
 
@@ -544,6 +551,15 @@ const setupCanvasHandlers = () => {
             const clickX = e.clientX - rect.left;
             const clickY = e.clientY - rect.top;
             handleChestClick(clickX, clickY);
+            return;
+        }
+
+        // Handle shrine UI clicks
+        if (game.state === 'shrine' && typeof handleShrineClick === 'function') {
+            const rect = canvas.getBoundingClientRect();
+            const clickX = e.clientX - rect.left;
+            const clickY = e.clientY - rect.top;
+            handleShrineClick(clickX, clickY);
             return;
         }
 

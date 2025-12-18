@@ -527,6 +527,70 @@ window.openStarterChest = openStarterChest;
 window.placeStarterChest = placeStarterChest;
 
 // ============================================================================
+// DECORATION INTERACTION HANDLER
+// ============================================================================
+
+/**
+ * Handle interaction with decorations (shrines, chests, etc.)
+ * Called from right-click-init.js when player clicks an interactable decoration
+ * @param {object} decoration - The decoration being interacted with
+ * @param {object} player - The player object
+ */
+function interactWithDecoration(decoration, player) {
+    if (!decoration || !decoration.interactable) {
+        return false;
+    }
+
+    const decorationType = decoration.type || '';
+
+    // Handle shrine interactions
+    if (decorationType === 'shrine' || decorationType === 'boon_shrine') {
+        if (typeof openShrineUI === 'function') {
+            return openShrineUI(decoration);
+        } else {
+            console.warn('[Interaction] ShrineUI not loaded');
+            if (typeof addMessage === 'function') {
+                addMessage('The shrine pulses with energy, but you cannot interact with it.');
+            }
+            return false;
+        }
+    }
+
+    // Handle starter chest
+    if (decorationType === 'starter_chest') {
+        if (typeof openStarterChest === 'function') {
+            return openStarterChest(decoration, player);
+        }
+        return false;
+    }
+
+    // Handle regular chests
+    if (decorationType.includes('chest') && !decorationType.includes('open')) {
+        if (typeof openChestUI === 'function' && decoration.contents) {
+            return openChestUI(decoration, decoration.contents);
+        }
+        return false;
+    }
+
+    // Handle altars (future)
+    if (decorationType === 'altar') {
+        if (typeof addMessage === 'function') {
+            addMessage('The altar hums with ancient power...');
+        }
+        return false;
+    }
+
+    // Unknown decoration type
+    if (typeof addMessage === 'function') {
+        addMessage(`You examine the ${decoration.name || 'object'}...`);
+    }
+    return false;
+}
+
+// Export interaction handler
+window.interactWithDecoration = interactWithDecoration;
+
+// ============================================================================
 // SYSTEM REGISTRATION
 // ============================================================================
 

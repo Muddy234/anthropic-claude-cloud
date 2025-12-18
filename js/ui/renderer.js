@@ -689,7 +689,7 @@ if (game.state === 'menu') {
         if (game.state === 'crafting' && typeof CraftingUI !== 'undefined') {
             CraftingUI.render(ctx);
         }
-    } else if (game.state === 'playing' || game.state === 'inventory' || game.state === 'map' || game.state === 'skills' || game.state === 'levelup' || game.state === 'character' || game.state === 'shift' || game.state === 'chest' || game.state === 'extraction') {
+    } else if (game.state === 'playing' || game.state === 'inventory' || game.state === 'map' || game.state === 'skills' || game.state === 'levelup' || game.state === 'character' || game.state === 'shift' || game.state === 'chest' || game.state === 'shrine' || game.state === 'extraction') {
 
 const effectiveTileSize = TILE_SIZE * currentZoom;
 const viewW = canvas.width - TRACKER_WIDTH;
@@ -928,6 +928,7 @@ const camY = game.camera.y + (shakeOffset.y / (TILE_SIZE * currentZoom));
     if (game.state === 'skills') drawSkillsOverlay();
     if (game.state === 'levelup') drawLevelUpScreen();
     if (game.state === 'chest' && typeof renderChestUI === 'function') renderChestUI(ctx);
+    if (game.state === 'shrine' && typeof renderShrineUI === 'function') renderShrineUI(ctx);
     if (game.state === 'extraction' && typeof ExtractionUI !== 'undefined') ExtractionUI.render(ctx);
 
     // Draw shift countdown timer at top of screen
