@@ -1637,6 +1637,12 @@ window.saveSkillsToPersistentState = saveSkillsToPersistentState;
 window.debugPrintSkills = debugPrintSkills;
 window.debugGrantXp = debugGrantXp;
 
+console.log('âœ“ Skills system loaded');
+console.log(`  ${Object.keys(PROFICIENCIES).length} proficiencies`);
+console.log(`  ${Object.keys(SPECIALTIES).length} specialties`);
+console.log(`  ${Object.keys(ACTIONS).length} actions`);
+
+// ============================================================================
 console.log('✓ Skills system loaded (Soul & Body Model)');
 console.log(`  ${Object.keys(PROFICIENCIES).length} proficiencies: melee, ranged, magic, defense, vitality`);
 console.log(`  ${Object.keys(SPECIALTIES).length} legacy specialties (backwards compatible)`);// ============================================================================
