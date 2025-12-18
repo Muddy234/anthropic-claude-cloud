@@ -178,16 +178,18 @@ function canMoveToPosition(newX, newY, oldX, oldY) {
     // Check for enemy collision - use small core radius to prevent overlap only
     // This allows player to move freely when adjacent to enemies (no more trap bug)
     const COLLISION_RADIUS = 0.3; // Small radius - prevents literal overlap, not proximity
-    for (const enemy of game.enemies) {
-        if (enemy.hp <= 0) continue; // Skip dead enemies
+    if (game.enemies && Array.isArray(game.enemies)) {
+        for (const enemy of game.enemies) {
+            if (enemy.hp <= 0) continue; // Skip dead enemies
 
-        const dx = newX - enemy.gridX;
-        const dy = newY - enemy.gridY;
-        const distance = Math.sqrt(dx * dx + dy * dy);
+            const dx = newX - enemy.gridX;
+            const dy = newY - enemy.gridY;
+            const distance = Math.sqrt(dx * dx + dy * dy);
 
-        // Only block if player would literally overlap with enemy core
-        if (distance < COLLISION_RADIUS) {
-            return false;
+            // Only block if player would literally overlap with enemy core
+            if (distance < COLLISION_RADIUS) {
+                return false;
+            }
         }
     }
 
