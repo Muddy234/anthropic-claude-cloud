@@ -107,6 +107,109 @@ const StatusEffectSystem = {
             }
         });
 
+        // Alias for boon system - "ignite" maps to "burning"
+        this.registerEffect({
+            id: 'ignite',
+            name: 'Ignited',
+            type: 'dot',
+            element: 'fire',
+            damagePerTick: 3,
+            tickInterval: 1000,
+            duration: 5000,
+            maxStacks: 3,
+            stackBehavior: 'intensity',
+            color: '#ff6b35',
+            icon: '🔥',
+            onApply: (entity) => addMessage(`${entity.name || 'You'} caught fire!`),
+            onTick: (entity, effect) => {
+                const damagePerTick = effect.definition?.damagePerTick || 3;
+                const damage = damagePerTick * (effect.stacks || 1);
+                entity.hp -= damage;
+            },
+            onExpire: (entity) => addMessage(`${entity.name || 'You'} stopped burning.`)
+        });
+
+        // ROT - Armor shred + minor DoT (for Rot-Weaver boons)
+        this.registerEffect({
+            id: 'rot',
+            name: 'Rotting',
+            type: 'dot',
+            element: 'poison',
+            damagePerTick: 1,
+            tickInterval: 1000,
+            duration: 6000,
+            maxStacks: 10,
+            stackBehavior: 'intensity',
+            color: '#27ae60',
+            icon: '🦠',
+            statMods: { armor: -0.10 }, // -10% armor per stack
+            onApply: (entity, effect) => {
+                addMessage(`${entity.name || 'You'} began to rot!`);
+            },
+            onTick: (entity, effect) => {
+                const damagePerTick = effect.definition?.damagePerTick || 1;
+                const damage = damagePerTick * (effect.stacks || 1);
+                entity.hp -= damage;
+                if (this.config.debugLogging) {
+                    console.log(`[Rot] ${entity.name || 'Entity'} takes ${damage} decay damage (${effect.stacks} stacks, -${effect.stacks * 10}% armor)`);
+                }
+            },
+            onExpire: (entity) => addMessage(`${entity.name || 'You'} stopped rotting.`)
+        });
+
+        // FEAR - Enemy flees (for Lurker boons)
+        this.registerEffect({
+            id: 'fear',
+            name: 'Feared',
+            type: 'cc',
+            ccType: 'fear',
+            duration: 3000,
+            maxStacks: 1,
+            stackBehavior: 'refresh',
+            color: '#9b59b6',
+            icon: '😱',
+            preventsAction: true,
+            causesFlee: true,
+            onApply: (entity, effect) => {
+                entity.isFeared = true;
+                entity.fearSource = effect.source; // Track what scared them
+                addMessage(`${entity.name || 'You'} fled in terror!`);
+            },
+            onTick: (entity, effect) => {
+                // Fear makes entity move away from source
+                if (entity.isFeared && effect.source) {
+                    entity.fleeFromX = effect.source.gridX || effect.source.x;
+                    entity.fleeFromY = effect.source.gridY || effect.source.y;
+                }
+            },
+            onExpire: (entity) => {
+                entity.isFeared = false;
+                entity.fearSource = null;
+                entity.fleeFromX = null;
+                entity.fleeFromY = null;
+                addMessage(`${entity.name || 'You'} regained composure.`);
+            }
+        });
+
+        // SLOW - Simple movement reduction (for Headsman boons)
+        this.registerEffect({
+            id: 'slow',
+            name: 'Slowed',
+            type: 'debuff',
+            duration: 3000,
+            maxStacks: 3,
+            stackBehavior: 'intensity',
+            color: '#7f8c8d',
+            icon: '🐌',
+            statMods: { moveSpeed: -0.15 }, // -15% per stack
+            onApply: (entity, effect) => {
+                addMessage(`${entity.name || 'You'} were slowed!`);
+            },
+            onExpire: (entity) => {
+                addMessage(`${entity.name || 'You'} can move freely again.`);
+            }
+        });
+
         this.registerEffect({
             id: 'withered',
             name: 'Withered',
