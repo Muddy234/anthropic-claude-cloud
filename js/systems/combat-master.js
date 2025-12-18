@@ -2025,14 +2025,1044 @@ function renderDamageNumbers(ctx, camX, camY, tileSize, offsetX) {
 }
 
 // ############################################################################
-// SECTION 6-10: ADDITIONAL SYSTEMS (Loaded from separate files)
+// SECTION 6: COMBAT ENHANCEMENTS (Dash, Knockback, Screen Shake, Stagger)
+// ############################################################################
+
+const dashState = {
+    cooldown: 0, isDashing: false, dashProgress: 0, dashDuration: 0.15,
+    dashStartX: 0, dashStartY: 0, dashTargetX: 0, dashTargetY: 0,
+    hasIframes: false, iframeTimer: 0, ghosts: []
+};
+
+const screenShakeState = {
+    active: false, intensity: 0, timer: 0, offsetX: 0, offsetY: 0,
+    directionalX: 0, directionalY: 0
+};
+
+function performDash(player, mouseX, mouseY) {
+    if (!COMBAT_ENHANCEMENTS_CONFIG.dash.enabled || !player) return false;
+    if (dashState.cooldown > 0 || dashState.isDashing) return false;
+
+    const trackerWidth = typeof TRACKER_WIDTH !== 'undefined' ? TRACKER_WIDTH : 250;
+    const tileSize = (typeof TILE_SIZE !== 'undefined' ? TILE_SIZE : 32) * (window.currentZoom || 2);
+    const camX = game.camera ? game.camera.x : 0;
+    const camY = game.camera ? game.camera.y : 0;
+
+    const worldMouseX = (mouseX - trackerWidth) / tileSize + camX;
+    const worldMouseY = mouseY / tileSize + camY;
+
+    const dx = worldMouseX - player.gridX;
+    const dy = worldMouseY - player.gridY;
+    const dist = Math.sqrt(dx * dx + dy * dy);
+    if (dist < 0.1) return false;
+
+    const dirX = dx / dist;
+    const dirY = dy / dist;
+    const dashDist = COMBAT_ENHANCEMENTS_CONFIG.dash.distance;
+
+    const steps = Math.ceil(dashDist / 0.25);
+    let validX = player.gridX, validY = player.gridY;
+
+    for (let i = 1; i <= steps; i++) {
+        const checkX = player.gridX + (dirX * dashDist * i / steps);
+        const checkY = player.gridY + (dirY * dashDist * i / steps);
+        if (typeof isTileWalkable === 'function' && isTileWalkable(Math.floor(checkX), Math.floor(checkY))) {
+            validX = checkX; validY = checkY;
+        } else break;
+    }
+
+    if (validX === player.gridX && validY === player.gridY) return false;
+
+    dashState.isDashing = true;
+    dashState.dashProgress = 0;
+    dashState.dashStartX = player.gridX;
+    dashState.dashStartY = player.gridY;
+    dashState.dashTargetX = validX;
+    dashState.dashTargetY = validY;
+    dashState.hasIframes = true;
+    dashState.iframeTimer = COMBAT_ENHANCEMENTS_CONFIG.dash.iframeDuration;
+    dashState.cooldown = COMBAT_ENHANCEMENTS_CONFIG.dash.cooldown;
+
+    createDashGhosts(player);
+
+    if (Math.abs(dirX) > Math.abs(dirY)) player.facing = dirX > 0 ? 'right' : 'left';
+    else player.facing = dirY > 0 ? 'down' : 'up';
+
+    return true;
+}
+
+function createDashGhosts(player) {
+    dashState.ghosts = [];
+    const ghostCount = COMBAT_ENHANCEMENTS_CONFIG.dash.ghostCount;
+    for (let i = 0; i < ghostCount; i++) {
+        const t = i / ghostCount;
+        dashState.ghosts.push({
+            x: dashState.dashStartX + (dashState.dashTargetX - dashState.dashStartX) * t,
+            y: dashState.dashStartY + (dashState.dashTargetY - dashState.dashStartY) * t,
+            facing: player.facing,
+            alpha: 0.6 - (t * 0.4),
+            timer: COMBAT_ENHANCEMENTS_CONFIG.dash.ghostFadeDuration
+        });
+    }
+}
+
+function updateDash(deltaTime) {
+    const dt = deltaTime / 1000;
+    const player = game.player;
+
+    if (dashState.cooldown > 0) dashState.cooldown = Math.max(0, dashState.cooldown - dt);
+
+    if (dashState.hasIframes) {
+        dashState.iframeTimer -= dt;
+        if (dashState.iframeTimer <= 0) dashState.hasIframes = false;
+    }
+
+    if (dashState.isDashing && player) {
+        dashState.dashProgress += dt / dashState.dashDuration;
+
+        if (dashState.dashProgress >= 1) {
+            dashState.dashProgress = 1;
+            dashState.isDashing = false;
+            player.gridX = dashState.dashTargetX;
+            player.gridY = dashState.dashTargetY;
+            player.displayX = dashState.dashTargetX;
+            player.displayY = dashState.dashTargetY;
+            if (typeof checkTileInteractions === 'function') checkTileInteractions(player);
+        } else {
+            const t = typeof easeOutQuad === 'function' ? easeOutQuad(dashState.dashProgress) : dashState.dashProgress;
+            const newX = dashState.dashStartX + (dashState.dashTargetX - dashState.dashStartX) * t;
+            const newY = dashState.dashStartY + (dashState.dashTargetY - dashState.dashStartY) * t;
+            player.gridX = newX; player.gridY = newY;
+            player.displayX = newX; player.displayY = newY;
+        }
+    }
+
+    for (let i = dashState.ghosts.length - 1; i >= 0; i--) {
+        const ghost = dashState.ghosts[i];
+        ghost.timer -= dt;
+        ghost.alpha = Math.max(0, ghost.alpha * (ghost.timer / COMBAT_ENHANCEMENTS_CONFIG.dash.ghostFadeDuration));
+        if (ghost.timer <= 0) dashState.ghosts.splice(i, 1);
+    }
+}
+
+function playerHasIframes() { return dashState.hasIframes; }
+function playerIsDashing() { return dashState.isDashing; }
+function getDashCooldown() { return dashState.cooldown; }
+function getDashCooldownMax() { return COMBAT_ENHANCEMENTS_CONFIG.dash.cooldown; }
+
+function applyKnockback(enemy, source, weapon) {
+    if (!COMBAT_ENHANCEMENTS_CONFIG.knockback.enabled || !enemy || !source) return;
+    if (enemy.tier === 'ELITE' || enemy.tier === 'BOSS') return;
+
+    let knockbackDist = COMBAT_ENHANCEMENTS_CONFIG.knockback.defaultDistance;
+    if (weapon) {
+        const specialty = weapon.weaponType || weapon.specialty;
+        if (specialty && COMBAT_ENHANCEMENTS_CONFIG.knockback.distances[specialty]) {
+            knockbackDist = COMBAT_ENHANCEMENTS_CONFIG.knockback.distances[specialty];
+        }
+    }
+
+    const dx = enemy.gridX - source.gridX;
+    const dy = enemy.gridY - source.gridY;
+    const dist = Math.sqrt(dx * dx + dy * dy);
+    if (dist < 0.1) return;
+
+    const dirX = dx / dist, dirY = dy / dist;
+    const steps = Math.ceil(knockbackDist / 0.25);
+    let validX = enemy.gridX, validY = enemy.gridY, hitWall = false;
+
+    for (let i = 1; i <= steps; i++) {
+        const checkX = enemy.gridX + (dirX * knockbackDist * i / steps);
+        const checkY = enemy.gridY + (dirY * knockbackDist * i / steps);
+        if (typeof isTileWalkable === 'function' && isTileWalkable(Math.floor(checkX), Math.floor(checkY))) {
+            validX = checkX; validY = checkY;
+        } else { hitWall = true; break; }
+    }
+
+    if (hitWall) {
+        const wallDamage = Math.floor(enemy.maxHp * COMBAT_ENHANCEMENTS_CONFIG.knockback.wallDamagePercent);
+        if (wallDamage > 0) {
+            enemy.hp -= wallDamage;
+            if (typeof addMessage === 'function') addMessage(`${enemy.name} slammed into wall for ${wallDamage} damage!`);
+            showDamageNumber(enemy, wallDamage, '#ff8800');
+            if (enemy.hp <= 0 && typeof handleDeath === 'function') handleDeath(enemy, source);
+        }
+    }
+
+    if (validX !== enemy.gridX || validY !== enemy.gridY) {
+        enemy.gridX = validX; enemy.gridY = validY;
+        enemy.displayX = validX; enemy.displayY = validY;
+    }
+}
+
+function getKnockbackDistance(weapon) {
+    if (!weapon) return COMBAT_ENHANCEMENTS_CONFIG.knockback.defaultDistance;
+    const specialty = weapon.weaponType || weapon.specialty;
+    return COMBAT_ENHANCEMENTS_CONFIG.knockback.distances[specialty] || COMBAT_ENHANCEMENTS_CONFIG.knockback.defaultDistance;
+}
+
+function triggerScreenShake(isCrit = false) {
+    if (!COMBAT_ENHANCEMENTS_CONFIG.screenShake.enabled) return;
+    screenShakeState.active = true;
+    screenShakeState.intensity = isCrit ? COMBAT_ENHANCEMENTS_CONFIG.screenShake.critIntensity : COMBAT_ENHANCEMENTS_CONFIG.screenShake.normalIntensity;
+    screenShakeState.timer = COMBAT_ENHANCEMENTS_CONFIG.screenShake.duration;
+}
+
+function updateScreenShake(deltaTime) {
+    const dt = deltaTime / 1000;
+    if (screenShakeState.active) {
+        screenShakeState.timer -= dt;
+        if (screenShakeState.timer <= 0) {
+            screenShakeState.active = false;
+            screenShakeState.offsetX = 0; screenShakeState.offsetY = 0;
+            screenShakeState.directionalX = 0; screenShakeState.directionalY = 0;
+        } else {
+            const duration = COMBAT_ENHANCEMENTS_CONFIG.screenShake.duration;
+            const decay = screenShakeState.timer / duration;
+            const intensity = screenShakeState.intensity * decay;
+
+            if (screenShakeState.directionalX || screenShakeState.directionalY) {
+                const phase = (1 - decay) * Math.PI * 4;
+                const dirMag = Math.sin(phase) * decay;
+                const perpJitter = (Math.random() - 0.5) * intensity * 0.3;
+                screenShakeState.offsetX = screenShakeState.directionalX * dirMag + perpJitter;
+                screenShakeState.offsetY = screenShakeState.directionalY * dirMag + perpJitter;
+            } else {
+                screenShakeState.offsetX = (Math.random() - 0.5) * 2 * intensity;
+                screenShakeState.offsetY = (Math.random() - 0.5) * 2 * intensity;
+            }
+        }
+    }
+}
+
+function getScreenShakeOffset() { return { x: screenShakeState.offsetX, y: screenShakeState.offsetY }; }
+
+function applyStagger(enemy) {
+    if (!COMBAT_ENHANCEMENTS_CONFIG.stagger.enabled || !enemy) return;
+    if (enemy.tier === 'ELITE' || enemy.tier === 'BOSS') return;
+
+    if (!enemy.stagger) enemy.stagger = { active: false, timer: 0, flashTimer: 0, flashVisible: true };
+
+    enemy.stagger.active = true;
+    enemy.stagger.timer = COMBAT_ENHANCEMENTS_CONFIG.stagger.duration;
+    enemy.stagger.flashTimer = COMBAT_ENHANCEMENTS_CONFIG.stagger.flashDuration;
+    enemy.stagger.flashVisible = false;
+
+    if (enemy.combat) enemy.combat.attackCooldown = Math.max(enemy.combat.attackCooldown, 0.3);
+}
+
+function updateStagger(deltaTime) {
+    const dt = deltaTime / 1000;
+    if (!game.enemies) return;
+
+    for (const enemy of game.enemies) {
+        if (!enemy.stagger || !enemy.stagger.active) continue;
+        enemy.stagger.timer -= dt;
+
+        if (enemy.stagger.timer <= 0) {
+            enemy.stagger.active = false;
+            enemy.stagger.flashVisible = true;
+        } else {
+            enemy.stagger.flashTimer -= dt;
+            if (enemy.stagger.flashTimer <= 0) {
+                enemy.stagger.flashVisible = !enemy.stagger.flashVisible;
+                enemy.stagger.flashTimer = COMBAT_ENHANCEMENTS_CONFIG.stagger.flashDuration;
+            }
+        }
+    }
+}
+
+function isEnemyStaggered(enemy) { return enemy?.stagger?.active || false; }
+function getEnemyStaggerFlash(enemy) { return enemy?.stagger?.active && !enemy.stagger.flashVisible; }
+
+function onCombatHit(attacker, defender, damageResult) {
+    if (!damageResult?.skipScreenShake) {
+        if (attacker === game.player || defender === game.player) {
+            triggerScreenShake(damageResult?.isCrit || false);
+        }
+    }
+
+    if (attacker === game.player && defender !== game.player) {
+        const weapon = attacker.equipped?.MAIN;
+        applyKnockback(defender, attacker, weapon);
+        applyStagger(defender);
+    }
+}
+
+// Spacebar dash input handler
+let lastMouseX = 0, lastMouseY = 0;
+window.addEventListener('mousemove', (e) => { lastMouseX = e.clientX; lastMouseY = e.clientY; });
+window.addEventListener('keydown', (e) => {
+    if (e.key === ' ' && game.state === 'playing') {
+        e.preventDefault();
+        const canvas = document.getElementById('gameCanvas');
+        if (canvas) {
+            const rect = canvas.getBoundingClientRect();
+            performDash(game.player, lastMouseX - rect.left, lastMouseY - rect.top);
+        }
+    }
+});
+
+// ############################################################################
+// SECTION 7: BOON COMBAT INTEGRATION
+// ############################################################################
+// Hooks boon effects into the combat system:
+// - On-hit effects (Kindled Blade, Corrosive Touch, etc.)
+// - On-kill effects (Executioner's Gait, Leech Spores, etc.)
+// - On-damage-taken effects (Kinetic Discharge, Spiked Armor, etc.)
+// - Damage modifiers from boons
+// - Fear AI behavior integration
+
+const BoonCombatIntegration = {
+
+    // Apply boon on-hit effects when player attacks an enemy
+    applyOnHitEffects(attacker, defender, damageResult) {
+        if (attacker !== game.player) return;
+        if (typeof BoonSystem === 'undefined') return;
+
+        // KINDLED BLADE: Attacks apply Ignite
+        if (BoonSystem.hasBoon('kindled_blade')) {
+            if (typeof applyStatusEffect === 'function') {
+                applyStatusEffect(defender, 'ignite', attacker);
+            }
+        }
+
+        // CORROSIVE TOUCH: Attacks apply Rot
+        if (BoonSystem.hasBoon('corrosive_touch')) {
+            if (typeof applyStatusEffect === 'function') {
+                applyStatusEffect(defender, 'rot', attacker);
+            }
+        }
+
+        // GLACIAL PACE: Attacks apply Chill
+        if (BoonSystem.hasBoon('glacial_pace')) {
+            if (typeof applyStatusEffect === 'function') {
+                applyStatusEffect(defender, 'chilled', attacker);
+            }
+        }
+
+        // RUSTED EDGE: Critical hits apply Slow
+        if (BoonSystem.hasBoon('rusted_edge') && damageResult.isCrit) {
+            if (typeof applyStatusEffect === 'function') {
+                applyStatusEffect(defender, 'slow', attacker);
+            }
+        }
+
+        // UNSEEN TERROR: Backstab attacks cause Fear
+        if (BoonSystem.hasBoon('unseen_terror') && damageResult.isBackstab) {
+            if (typeof applyStatusEffect === 'function') {
+                applyStatusEffect(defender, 'fear', attacker);
+            }
+        }
+
+        // THROAT SLIT: Ambush attacks cause permanent Bleed
+        if (BoonSystem.hasBoon('throat_slit') && damageResult.isAmbush) {
+            if (typeof StatusEffectSystem !== 'undefined') {
+                StatusEffectSystem.applyEffect(defender, 'bleeding', attacker, { duration: 60000 });
+            }
+        }
+
+        // SEPTIC WOUND: Bleeding enemies gain Rot on hit
+        if (BoonSystem.hasBoon('septic_wound')) {
+            if (typeof hasStatusEffect === 'function' && hasStatusEffect(defender, 'bleeding')) {
+                if (typeof applyStatusEffect === 'function') {
+                    applyStatusEffect(defender, 'rot', attacker);
+                }
+            }
+        }
+
+        // STATIC FEEDBACK: 5% chance to shock self on hit
+        if (BoonSystem.hasBoon('static_feedback')) {
+            if (Math.random() < 0.05) {
+                if (typeof applyStatusEffect === 'function') {
+                    applyStatusEffect(attacker, 'stunned', null);
+                    if (typeof addMessage === 'function') {
+                        addMessage('Static feedback shocks you!', 'warning');
+                    }
+                }
+            }
+        }
+    },
+
+    // Apply boon effects on critical hits
+    applyOnCritEffects(attacker, defender, damageResult) {
+        if (attacker !== game.player) return;
+        if (typeof BoonSystem === 'undefined') return;
+        if (!damageResult.isCrit) return;
+
+        // CAUTERIZE: Crits on burning enemies consume burn for burst damage
+        if (BoonSystem.hasBoon('cauterize')) {
+            const checkAndCauterize = (effectName) => {
+                if (typeof hasStatusEffect === 'function' && hasStatusEffect(defender, effectName)) {
+                    if (typeof removeStatusEffect === 'function') {
+                        removeStatusEffect(defender, effectName);
+                    }
+                    const burstDamage = Math.floor(damageResult.baseDamage * 0.5);
+                    defender.hp -= burstDamage;
+                    if (typeof addMessage === 'function') {
+                        addMessage(`Cauterize! ${burstDamage} burst damage!`, 'combat');
+                    }
+                }
+            };
+            checkAndCauterize('burning');
+            checkAndCauterize('ignite');
+        }
+    },
+
+    // Apply boon effects when player kills an enemy
+    applyOnKillEffects(killer, killed) {
+        if (killer !== game.player) return;
+        if (typeof BoonSystem === 'undefined') return;
+
+        // EXECUTIONER'S GAIT: Kills grant +20% move speed for 3s
+        if (BoonSystem.hasBoon('executioners_gait')) {
+            const stacks = BoonSystem.getBoonStacks('executioners_gait');
+            const bonus = 0.20 * stacks;
+            if (!game.player.boonBuffs) game.player.boonBuffs = {};
+            game.player.boonBuffs.executionersGait = {
+                speedBonus: bonus,
+                expiresAt: Date.now() + 3000
+            };
+            if (typeof addMessage === 'function') {
+                addMessage(`Executioner's Gait: +${Math.round(bonus * 100)}% speed!`, 'buff');
+            }
+        }
+
+        // LEECH SPORES: Killing a Rotted enemy heals HP
+        if (BoonSystem.hasBoon('leech_spores')) {
+            if (typeof hasStatusEffect === 'function' && hasStatusEffect(killed, 'rot')) {
+                const stacks = BoonSystem.getBoonStacks('leech_spores');
+                const healAmount = 5 * stacks;
+                game.player.hp = Math.min(game.player.hp + healAmount, game.player.maxHp);
+                if (typeof addMessage === 'function') {
+                    addMessage(`Leech Spores: Healed ${healAmount} HP!`, 'heal');
+                }
+            }
+        }
+
+        // BLOOD RITE: Kill heals 10 HP but causes self-bleed
+        if (BoonSystem.hasBoon('blood_rite')) {
+            game.player.hp = Math.min(game.player.hp + 10, game.player.maxHp);
+            if (typeof applyStatusEffect === 'function') {
+                applyStatusEffect(game.player, 'bleeding', null);
+            }
+            if (typeof addMessage === 'function') {
+                addMessage('Blood Rite: Healed 10 HP, but bleeding!', 'warning');
+            }
+        }
+
+        // CRIMSON RAIN (Legendary): Kills explode for AoE + max bleed
+        if (BoonSystem.hasBoon('crimson_rain')) {
+            if (game.enemies) {
+                const explosionRadius = 3;
+                const explosionDamage = 15;
+                for (const enemy of game.enemies) {
+                    if (enemy === killed || enemy.hp <= 0) continue;
+                    const dist = Math.sqrt(
+                        Math.pow(enemy.gridX - killed.gridX, 2) +
+                        Math.pow(enemy.gridY - killed.gridY, 2)
+                    );
+                    if (dist <= explosionRadius) {
+                        enemy.hp -= explosionDamage;
+                        if (typeof StatusEffectSystem !== 'undefined') {
+                            for (let i = 0; i < 3; i++) {
+                                StatusEffectSystem.applyEffect(enemy, 'bleeding', game.player);
+                            }
+                        }
+                    }
+                }
+                if (typeof addMessage === 'function') {
+                    addMessage('CRIMSON RAIN!', 'legendary');
+                }
+            }
+        }
+    },
+
+    // Apply boon effects when player takes damage
+    applyOnDamageTakenEffects(entity, damage, source) {
+        if (entity !== game.player) return;
+        if (typeof BoonSystem === 'undefined') return;
+
+        // KINETIC DISCHARGE: Taking damage knocks back nearby enemies
+        if (BoonSystem.hasBoon('kinetic_discharge') && source) {
+            if (game.enemies) {
+                const knockbackRadius = 2;
+                const knockbackForce = 2;
+                for (const enemy of game.enemies) {
+                    if (enemy.hp <= 0) continue;
+                    const dist = Math.sqrt(
+                        Math.pow(enemy.gridX - entity.gridX, 2) +
+                        Math.pow(enemy.gridY - entity.gridY, 2)
+                    );
+                    if (dist <= knockbackRadius && dist > 0) {
+                        const dx = (enemy.gridX - entity.gridX) / dist;
+                        const dy = (enemy.gridY - entity.gridY) / dist;
+                        enemy.gridX += dx * knockbackForce;
+                        enemy.gridY += dy * knockbackForce;
+                    }
+                }
+            }
+        }
+
+        // SPIKED ARMOR: Reflect damage and apply bleed to attacker
+        if (BoonSystem.hasBoon('spiked_armor') && source && source !== entity) {
+            const reflectDamage = Math.floor(damage * 0.2);
+            source.hp -= reflectDamage;
+            if (typeof applyStatusEffect === 'function') {
+                applyStatusEffect(source, 'bleeding', entity);
+            }
+        }
+
+        // TOXIC BLOOD: Spray acid on attacker (armor break)
+        if (BoonSystem.hasBoon('toxic_blood') && source && source !== entity) {
+            if (typeof applyStatusEffect === 'function') {
+                applyStatusEffect(source, 'rot', entity);
+            }
+        }
+
+        // IRON MAIDEN: Reflect 200% damage
+        if (BoonSystem.hasBoon('iron_maiden') && source && source !== entity) {
+            const reflectDamage = Math.floor(damage * 2.0);
+            source.hp -= reflectDamage;
+            if (typeof addMessage === 'function') {
+                addMessage(`Iron Maiden reflects ${reflectDamage} damage!`, 'combat');
+            }
+        }
+    },
+
+    // Get damage multiplier from boons
+    getDamageMultiplier(attacker, defender, damageResult) {
+        if (attacker !== game.player) return 1.0;
+        if (typeof BoonSystem === 'undefined') return 1.0;
+
+        let multiplier = 1.0;
+
+        // GLASS CANNON: 2x damage
+        if (BoonSystem.hasBoon('glass_cannon')) multiplier *= 2.0;
+
+        // DARK PACT: +100% damage when torch off
+        if (BoonSystem.hasBoon('dark_pact') && game.player.torchOn === false) multiplier *= 2.0;
+
+        // THE CULL: 2x damage to enemies below 20% HP
+        if (BoonSystem.hasBoon('the_cull')) {
+            const defenderHpPct = defender.hp / defender.maxHp;
+            if (defenderHpPct < 0.20) multiplier *= 2.0;
+        }
+
+        // DEEP CUT: 3x damage on ambush
+        if (BoonSystem.hasBoon('deep_cut') && damageResult.isAmbush) multiplier *= 3.0;
+
+        // SEARING RADIANCE: +15% damage to enemies in light
+        if (BoonSystem.hasBoon('searing_radiance')) {
+            const dist = Math.sqrt(
+                Math.pow(defender.gridX - attacker.gridX, 2) +
+                Math.pow(defender.gridY - attacker.gridY, 2)
+            );
+            const lightRadius = attacker.lightRadius || 5;
+            if (dist <= lightRadius) {
+                const stacks = BoonSystem.getBoonStacks('searing_radiance');
+                multiplier *= (1 + 0.15 * stacks);
+            }
+        }
+
+        // FESTERING WOUNDS: +10% damage to enemies with DoT
+        if (BoonSystem.hasBoon('festering_wounds')) {
+            const hasDot = (typeof hasStatusEffect === 'function') && (
+                hasStatusEffect(defender, 'burning') ||
+                hasStatusEffect(defender, 'ignite') ||
+                hasStatusEffect(defender, 'bleeding') ||
+                hasStatusEffect(defender, 'rot') ||
+                hasStatusEffect(defender, 'poisoned')
+            );
+            if (hasDot) {
+                const stacks = BoonSystem.getBoonStacks('festering_wounds');
+                multiplier *= (1 + 0.10 * stacks);
+            }
+        }
+
+        // SHATTER STRIKE: +40% damage to chilled/frozen enemies
+        if (BoonSystem.hasBoon('shatter_strike')) {
+            const isChilled = (typeof hasStatusEffect === 'function') && (
+                hasStatusEffect(defender, 'chilled') ||
+                hasStatusEffect(defender, 'frozen')
+            );
+            if (isChilled) {
+                const stacks = BoonSystem.getBoonStacks('shatter_strike');
+                multiplier *= (1 + 0.40 * stacks);
+            }
+        }
+
+        // PARANOIA: +50% if no enemies visible, -20% if any visible
+        if (BoonSystem.hasBoon('paranoia')) {
+            const visibleEnemies = game.enemies?.filter(e => e.hp > 0 && e.isVisible).length || 0;
+            multiplier *= visibleEnemies === 0 ? 1.5 : 0.8;
+        }
+
+        // FINAL OFFER (Legendary): 5x damage
+        if (BoonSystem.hasBoon('final_offer')) multiplier *= 5.0;
+
+        return multiplier;
+    },
+
+    // Get armor reduction from rot stacks
+    getArmorModifier(defender) {
+        if (typeof StatusEffectSystem === 'undefined') return 1.0;
+        const rotEffect = StatusEffectSystem.getEffect(defender, 'rot');
+        if (!rotEffect) return 1.0;
+
+        const stacks = rotEffect.stacks || 1;
+        const reductionPerStack = 0.10;
+        const totalReduction = Math.min(stacks * reductionPerStack, 1.0);
+        return 1.0 - totalReduction;
+    },
+
+    // Check if enemy should flee due to fear
+    shouldFlee(enemy) {
+        if (enemy.isFeared) return true;
+        if (typeof hasStatusEffect === 'function' && hasStatusEffect(enemy, 'fear')) return true;
+        return false;
+    },
+
+    // Get flee target position (away from fear source)
+    getFleeTarget(enemy) {
+        let fleeFromX = enemy.fleeFromX;
+        let fleeFromY = enemy.fleeFromY;
+
+        if (fleeFromX === undefined || fleeFromY === undefined) {
+            if (game.player) {
+                fleeFromX = game.player.gridX;
+                fleeFromY = game.player.gridY;
+            } else return null;
+        }
+
+        const dx = enemy.gridX - fleeFromX;
+        const dy = enemy.gridY - fleeFromY;
+        const dist = Math.sqrt(dx * dx + dy * dy) || 1;
+
+        return { x: enemy.gridX + (dx / dist) * 5, y: enemy.gridY + (dy / dist) * 5 };
+    },
+
+    // Update boon effects that tick over time
+    update(deltaTime) {
+        if (!game.player) return;
+        if (typeof BoonSystem === 'undefined') return;
+
+        // LIFE OF THE FLAME: Regen 1% HP/s when torch is on
+        if (BoonSystem.hasBoon('life_of_the_flame') && game.player.torchOn) {
+            const regenAmount = game.player.maxHp * 0.01 * deltaTime;
+            game.player.hp = Math.min(game.player.hp + regenAmount, game.player.maxHp);
+        }
+
+        // BLOOD FOR FUEL: Drain 1 HP/5s
+        if (BoonSystem.hasBoon('blood_for_fuel')) {
+            if (!game.player._bloodForFuelTimer) game.player._bloodForFuelTimer = 0;
+            game.player._bloodForFuelTimer += deltaTime;
+            if (game.player._bloodForFuelTimer >= 5) {
+                game.player._bloodForFuelTimer = 0;
+                game.player.hp = Math.max(1, game.player.hp - 1);
+            }
+        }
+
+        // DARK PACT: Drain 1 HP/s when torch off
+        if (BoonSystem.hasBoon('dark_pact') && !game.player.torchOn) {
+            game.player.hp = Math.max(1, game.player.hp - deltaTime);
+        }
+
+        // IMMOLATION AURA: Self-burn + enemy burn
+        if (BoonSystem.hasBoon('immolation_aura')) {
+            game.player.hp = Math.max(1, game.player.hp - deltaTime);
+            if (game.enemies) {
+                const auraRadius = 2;
+                for (const enemy of game.enemies) {
+                    if (enemy.hp <= 0) continue;
+                    const dist = Math.sqrt(
+                        Math.pow(enemy.gridX - game.player.gridX, 2) +
+                        Math.pow(enemy.gridY - game.player.gridY, 2)
+                    );
+                    if (dist <= auraRadius) enemy.hp -= 2 * deltaTime;
+                }
+            }
+        }
+
+        // PLAGUE BEARER: Constant Rot AoE
+        if (BoonSystem.hasBoon('plague_bearer')) {
+            if (game.enemies) {
+                const auraRadius = 2;
+                for (const enemy of game.enemies) {
+                    if (enemy.hp <= 0) continue;
+                    const dist = Math.sqrt(
+                        Math.pow(enemy.gridX - game.player.gridX, 2) +
+                        Math.pow(enemy.gridY - game.player.gridY, 2)
+                    );
+                    if (dist <= auraRadius && typeof applyStatusEffect === 'function') {
+                        applyStatusEffect(enemy, 'rot', game.player);
+                    }
+                }
+            }
+        }
+
+        // Clear expired speed buff
+        if (game.player.boonBuffs?.executionersGait) {
+            if (Date.now() > game.player.boonBuffs.executionersGait.expiresAt) {
+                delete game.player.boonBuffs.executionersGait;
+            }
+        }
+    }
+};
+
+// ############################################################################
+// SECTION 8: ACTIVE COMBAT (Hotkeys 1-4, Tab Targeting)
+// ############################################################################
+
+// Handle attack hotkeys (1-4)
+function handleActiveCombatHotkey(key, player) {
+    if (!player || game.state !== 'playing') return;
+
+    switch(key) {
+        case 1: handleBaseAttack(player); break;
+        case 2: handleSkillAttack(player); break;
+        case 3: handleConsumable(player, 'slot3'); break;
+        case 4: handleConsumable(player, 'slot4'); break;
+    }
+}
+
+// Base Attack (Hotkey 1)
+function handleBaseAttack(player) {
+    if (player.gcd?.active) return;
+    if (player.actionCooldowns?.baseAttack > 0) return;
+
+    const target = player.combat?.currentTarget;
+    if (!target || target.hp <= 0) {
+        if (typeof addMessage === 'function') addMessage('No target selected!');
+        return;
+    }
+
+    const weapon = player.equipped?.MAIN;
+    const weaponType = getWeaponTypeForCombat(weapon);
+    const range = weapon?.stats?.range || 1;
+    const distance = getDistance(player, target);
+    if (distance > range) return;
+
+    switch(weaponType) {
+        case 'melee': executeMeleeAttack(player, target, weapon, false); break;
+        case 'ranged': executeRangedAttack(player, target, weapon, false); break;
+        case 'magic': executeMagicAttack(player, target, weapon, false); break;
+    }
+}
+
+// Skill Attack (Hotkey 2)
+function handleSkillAttack(player) {
+    if (player.gcd?.active) return;
+    if (player.actionCooldowns?.skillAttack > 0) return;
+
+    const target = player.combat?.currentTarget;
+    if (!target || target.hp <= 0) {
+        if (typeof addMessage === 'function') addMessage('No target selected!');
+        return;
+    }
+
+    const weapon = player.equipped?.MAIN;
+    const weaponType = getWeaponTypeForCombat(weapon);
+    const range = weapon?.stats?.range || 1;
+    const distance = getDistance(player, target);
+    if (distance > range) return;
+
+    switch(weaponType) {
+        case 'melee': executeMeleeAttack(player, target, weapon, true); break;
+        case 'ranged': executeRangedAttack(player, target, weapon, true); break;
+        case 'magic': executeMagicAttack(player, target, weapon, true); break;
+    }
+}
+
+// Consumable Use (Hotkeys 3 & 4)
+function handleConsumable(player, slot) {
+    if (player.gcd?.active) return;
+
+    const cooldownKey = slot === 'slot3' ? 'consumable3' : 'consumable4';
+    if (player.actionCooldowns?.[cooldownKey] > 0) return;
+
+    const itemId = player.assignedConsumables?.[slot];
+    if (!itemId) {
+        if (typeof addMessage === 'function') {
+            addMessage(`No item assigned to hotkey ${slot === 'slot3' ? '3' : '4'}!`);
+        }
+        return;
+    }
+
+    if (player.itemCooldowns?.[itemId] > 0) return;
+
+    const item = findItemInInventoryForCombat(player, itemId);
+    if (!item || item.count <= 0) {
+        if (typeof addMessage === 'function') addMessage(`Out of ${item?.name || 'item'}!`);
+        player.assignedConsumables[slot] = null;
+        return;
+    }
+
+    if (typeof useItem === 'function') {
+        const result = useItem(player, itemId, item);
+        if (result.success) {
+            item.count--;
+            if (item.count <= 0) {
+                removeItemFromInventoryForCombat(player, itemId);
+                player.assignedConsumables[slot] = null;
+            }
+            triggerGCDForCombat(player);
+            player.actionCooldowns[cooldownKey] = 10;
+            player.itemCooldowns[itemId] = 10;
+            if (typeof addMessage === 'function') addMessage(result.message);
+        }
+    }
+}
+
+// Melee attack execution
+function executeMeleeAttack(player, target, weapon, isSkill) {
+    const result = typeof DamageCalculator !== 'undefined'
+        ? DamageCalculator.calculateDamage(player, target, null)
+        : { finalDamage: 10, isCrit: false, isHit: true };
+
+    if (!result.isHit) {
+        if (typeof addMessage === 'function') addMessage('You missed!');
+        if (typeof showDamageNumber === 'function') showDamageNumber(target, 0, '#888888');
+        triggerGCDForCombat(player);
+        return;
+    }
+
+    let damage = isSkill ? Math.floor(result.finalDamage * 2) : result.finalDamage;
+    if (typeof applyDamage === 'function') applyDamage(target, damage, player, result);
+    else target.hp -= damage;
+
+    const color = result.isCrit ? '#ffff00' : '#ff4444';
+    if (typeof showDamageNumber === 'function') showDamageNumber(target, damage, color);
+
+    if (typeof addMessage === 'function') {
+        const attackName = isSkill ? 'skill attack' : 'attack';
+        const critText = result.isCrit ? ' CRITICAL!' : '';
+        addMessage(`You ${attackName} ${target.name} for ${damage} damage!${critText}`);
+    }
+
+    triggerGCDForCombat(player);
+    if (isSkill) player.actionCooldowns.skillAttack = 10;
+    else {
+        const attackSpeed = weapon?.stats?.speed || player.combat?.attackSpeed || 1.0;
+        player.actionCooldowns.baseAttack = attackSpeed;
+    }
+
+    if (target.hp <= 0 && typeof handleDeath === 'function') handleDeath(target, player);
+}
+
+// Ranged attack execution
+function executeRangedAttack(player, target, weapon, isSkill) {
+    const weaponType = weapon?.weaponType || 'bow';
+    const result = typeof DamageCalculator !== 'undefined'
+        ? DamageCalculator.calculateDamage(player, target, null)
+        : { finalDamage: 10, isCrit: false, isHit: true };
+
+    if (!result.isHit) {
+        if (typeof addMessage === 'function') addMessage('You missed!');
+        triggerGCDForCombat(player);
+        return;
+    }
+
+    let damage = isSkill ? Math.floor(result.finalDamage * 2) : result.finalDamage;
+
+    if (typeof createProjectile === 'function') {
+        const speed = weaponType === 'crossbow' ? 10 : 6.7;
+        createProjectile({
+            x: player.gridX, y: player.gridY,
+            targetX: target.gridX, targetY: target.gridY,
+            speed: speed, damage: damage,
+            element: weapon?.element || 'physical',
+            attacker: player, target: target,
+            isSkill: isSkill, isCrit: result.isCrit
+        });
+    } else {
+        if (typeof applyDamage === 'function') applyDamage(target, damage, player, result);
+        else target.hp -= damage;
+        const color = result.isCrit ? '#ffff00' : '#ff4444';
+        if (typeof showDamageNumber === 'function') showDamageNumber(target, damage, color);
+    }
+
+    triggerGCDForCombat(player);
+    if (isSkill) player.actionCooldowns.skillAttack = 10;
+    else {
+        const attackSpeed = weapon?.stats?.speed || 1.0;
+        player.actionCooldowns.baseAttack = attackSpeed;
+    }
+
+    if (typeof addMessage === 'function') {
+        const attackName = isSkill ? 'skill shot' : 'shot';
+        addMessage(`You ${attackName} ${target.name}!`);
+    }
+}
+
+// Magic attack execution
+function executeMagicAttack(player, target, weapon, isSkill) {
+    const element = weapon?.element || 'arcane';
+    const elementConfig = MAGIC_CONFIG[element] || MAGIC_CONFIG.arcane;
+
+    if (player.mp < elementConfig.manaCost) {
+        executeNoManaAttack(player, target);
+        return;
+    }
+
+    player.mp -= elementConfig.manaCost;
+
+    const result = typeof DamageCalculator !== 'undefined'
+        ? DamageCalculator.calculateDamage(player, target, null)
+        : { finalDamage: 10, isCrit: false, isHit: true };
+
+    if (!result.isHit) {
+        if (typeof addMessage === 'function') addMessage('Your spell missed!');
+        triggerGCDForCombat(player);
+        return;
+    }
+
+    let damage = isSkill ? Math.floor(result.finalDamage * 2) : result.finalDamage;
+
+    if (typeof createProjectile === 'function') {
+        createProjectile({
+            x: player.gridX, y: player.gridY,
+            targetX: target.gridX, targetY: target.gridY,
+            speed: 6.7, damage: damage, element: element,
+            attacker: player, target: target,
+            isMagic: true, isSkill: isSkill, isCrit: result.isCrit,
+            elementConfig: elementConfig
+        });
+    } else {
+        if (typeof applyDamage === 'function') applyDamage(target, damage, player, result);
+        else target.hp -= damage;
+        const color = result.isCrit ? '#ffff00' : '#00ffff';
+        if (typeof showDamageNumber === 'function') showDamageNumber(target, damage, color);
+        applyMagicEffectsInternal(player, target, element, elementConfig, damage);
+    }
+
+    triggerGCDForCombat(player);
+    if (isSkill) player.actionCooldowns.skillAttack = 10;
+    else player.actionCooldowns.baseAttack = elementConfig.cooldown;
+
+    if (typeof addMessage === 'function') {
+        const attackName = isSkill ? `${element} blast` : `${element} bolt`;
+        addMessage(`You cast ${attackName} at ${target.name}!`);
+    }
+}
+
+// No-mana physical attack (weak punch)
+function executeNoManaAttack(player, target) {
+    const str = player.stats?.STR || 10;
+    const damage = Math.floor(5 + (str * 0.3));
+
+    if (typeof applyDamage === 'function') applyDamage(target, damage, player);
+    else target.hp -= damage;
+
+    if (typeof showDamageNumber === 'function') showDamageNumber(target, damage, '#888888');
+    if (typeof addMessage === 'function') {
+        addMessage(`Out of mana! You punch ${target.name} for ${damage} damage!`);
+    }
+
+    triggerGCDForCombat(player);
+    player.actionCooldowns.baseAttack = 1.0;
+}
+
+// Apply magic status effects (burn/freeze/lifesteal)
+function applyMagicEffectsInternal(player, target, element, elementConfig, damage) {
+    if (typeof applyStatusEffect !== 'function') return;
+
+    if (element === 'fire' && elementConfig.burnChance) {
+        if (Math.random() < elementConfig.burnChance) {
+            applyStatusEffect(target, {
+                type: 'burn', damage: elementConfig.burnDamage,
+                ticks: elementConfig.burnDuration, interval: 1000, source: player
+            });
+            if (typeof addMessage === 'function') addMessage(`${target.name} is burning!`);
+        }
+    }
+
+    if (element === 'ice' && elementConfig.freezeChance) {
+        if (Math.random() < elementConfig.freezeChance) {
+            applyStatusEffect(target, {
+                type: 'freeze', duration: elementConfig.freezeDuration * 1000, source: player
+            });
+            if (typeof addMessage === 'function') addMessage(`${target.name} is frozen!`);
+        }
+    }
+
+    if (element === 'necromancy' && elementConfig.lifestealPercent && damage) {
+        const heal = Math.floor(damage * elementConfig.lifestealPercent);
+        player.hp = Math.min(player.maxHp, player.hp + heal);
+        if (typeof addMessage === 'function') addMessage(`Drained ${heal} HP!`);
+    }
+}
+
+// Helper: Get weapon type for combat
+function getWeaponTypeForCombat(weapon) {
+    if (!weapon) return 'melee';
+    const weaponType = weapon.weaponType || weapon.damageType;
+    if (['staff', 'wand', 'tome'].includes(weaponType)) return 'magic';
+    if (['bow', 'crossbow', 'throwing'].includes(weaponType)) return 'ranged';
+    return 'melee';
+}
+
+// Helper: Trigger GCD
+function triggerGCDForCombat(player) {
+    if (!player.gcd) return;
+    player.gcd.active = true;
+    player.gcd.remaining = player.gcd.duration;
+}
+
+// Helper: Find item in inventory
+function findItemInInventoryForCombat(player, itemId) {
+    if (!player.inventory) return null;
+    return player.inventory.find(item => item.id === itemId || item.name === itemId);
+}
+
+// Helper: Remove item from inventory
+function removeItemFromInventoryForCombat(player, itemId) {
+    if (!player.inventory) return;
+    const index = player.inventory.findIndex(item => item.id === itemId || item.name === itemId);
+    if (index !== -1) player.inventory.splice(index, 1);
+}
+
+// Tab Targeting
+function handleTabTargeting(player) {
+    if (!player || !game.enemies || game.enemies.length === 0) return;
+
+    const currentTarget = player.combat?.currentTarget;
+    let validEnemies = game.enemies.filter(enemy => enemy.hp > 0);
+    if (validEnemies.length === 0) return;
+
+    const enemiesWithAngles = validEnemies.map(enemy => {
+        const dx = enemy.gridX - player.gridX;
+        const dy = enemy.gridY - player.gridY;
+        let angle = Math.atan2(dy, dx) * (180 / Math.PI);
+        if (angle < 0) angle += 360;
+        return { enemy, angle };
+    });
+
+    enemiesWithAngles.sort((a, b) => a.angle - b.angle);
+
+    let currentIndex = -1;
+    if (currentTarget) {
+        currentIndex = enemiesWithAngles.findIndex(e => e.enemy === currentTarget);
+    }
+
+    const nextIndex = (currentIndex + 1) % enemiesWithAngles.length;
+    const nextTarget = enemiesWithAngles[nextIndex].enemy;
+
+    if (typeof engageCombat === 'function') engageCombat(player, nextTarget);
+    else {
+        player.combat.currentTarget = nextTarget;
+        player.combat.isInCombat = true;
+    }
+
+    if (typeof addMessage === 'function') addMessage(`Targeting ${nextTarget.name}`);
+}
+
+// ############################################################################
+// SECTION 9-10: REMAINING SYSTEMS (Loaded from separate files)
 // ############################################################################
 // The following systems remain in their original files for this phase:
 // - mouse-attack-system.js (2099 lines) - Mouse click attacks, weapon arcs, combo system
-// - active-combat.js (650 lines) - Hotkey combat (1-4), Tab targeting
-// - combat-enhancements.js (744 lines) - Dash, knockback, screen shake, stagger
 // - skills-combat-integration.js (1086 lines) - Skills-combat bridge, XP awards
-// - boon-combat-integration.js (557 lines) - Boon on-hit/on-kill effects
 //
 // These can be consolidated in a future update.
 
@@ -2096,6 +3126,40 @@ if (typeof window !== 'undefined') {
     window.updateDamageNumbers = updateDamageNumbers;
     window.renderDamageNumbers = renderDamageNumbers;
     window.COMBAT_TEXT_COLORS = COMBAT_TEXT_COLORS;
+
+    // Combat Enhancements exports (Section 6)
+    window.dashState = dashState;
+    window.screenShakeState = screenShakeState;
+    window.performDash = performDash;
+    window.createDashGhosts = createDashGhosts;
+    window.updateDash = updateDash;
+    window.playerHasIframes = playerHasIframes;
+    window.playerIsDashing = playerIsDashing;
+    window.getDashCooldown = getDashCooldown;
+    window.applyKnockback = applyKnockback;
+    window.getKnockbackDistance = getKnockbackDistance;
+    window.triggerScreenShake = triggerScreenShake;
+    window.updateScreenShake = updateScreenShake;
+    window.getScreenShakeOffset = getScreenShakeOffset;
+    window.applyStagger = applyStagger;
+    window.updateStagger = updateStagger;
+    window.isEnemyStaggered = isEnemyStaggered;
+    window.getEnemyStaggerFlash = getEnemyStaggerFlash;
+    window.onCombatHit = onCombatHit;
+
+    // Boon Combat Integration exports (Section 7)
+    window.BoonCombatIntegration = BoonCombatIntegration;
+
+    // Active Combat exports (Section 8)
+    window.handleActiveCombatHotkey = handleActiveCombatHotkey;
+    window.handleBaseAttack = handleBaseAttack;
+    window.handleSkillAttack = handleSkillAttack;
+    window.handleConsumable = handleConsumable;
+    window.handleTabTargeting = handleTabTargeting;
+    window.executeMeleeAttack = executeMeleeAttack;
+    window.executeRangedAttack = executeRangedAttack;
+    window.executeMagicAttack = executeMagicAttack;
+    window.executeNoManaAttack = executeNoManaAttack;
 }
 
 // Initialize Status Effect System
@@ -2103,4 +3167,4 @@ if (typeof StatusEffectSystem !== 'undefined') {
     StatusEffectSystem.init();
 }
 
-console.log('Combat Master loaded (Sections 1-5, 11: Core systems consolidated)');
+console.log('Combat Master loaded (Sections 1-8: Core, enhancements, boons, hotkeys)');
