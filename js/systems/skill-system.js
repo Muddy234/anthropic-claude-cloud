@@ -1393,6 +1393,11 @@ function initializePlayerSkills(player) {
         console.log('✓ Player skills initialized (fresh)');
     }
 
+    // Ensure actionCooldowns exists (might be missing from old saves)
+    if (!player.skills.actionCooldowns) {
+        player.skills.actionCooldowns = {};
+    }
+
     // Always reset action cooldowns (session-specific)
     for (const actionId in ACTIONS) {
         player.skills.actionCooldowns[actionId] = 0;
