@@ -26,7 +26,13 @@ const DUNGEON_CONFIG = {
     doglegOffset: 5,        // Max chaotic offset for waypoints
 
     // Blob type distribution
-    treasureBlobRatio: 0.20, // 20% of blobs are treasure
+    treasureBlobRatio: 0.15, // 15% of blobs are treasure (reduced to make room for shrines)
+
+    // Shrine settings
+    minShrines: 2,          // Minimum shrines per floor
+    maxShrines: 4,          // Maximum shrines per floor
+    shrineMinDistance: 0.3, // Shrines must be at least 30% distance from entrance
+    maxRegenAttempts: 3,    // Max regeneration attempts if shrine requirements not met
 
     // Debug
     debugLogging: false,
@@ -271,13 +277,120 @@ function digWideCorridorTile(grid, cx, cy, width, corridorTiles) {
 }
 
 // ============================================================================
-// BLOB ASSIGNMENT
+// BLOB ASSIGNMENT (Priority-based with Shrine Support)
 // ============================================================================
 
-function assignBlobProperties(blobs) {
-    if (blobs.length === 0) return;
+/**
+ * Count corridor connections for each blob
+ * Dead-end blobs have exactly 1 connection
+ */
+function countBlobConnections(blobs, corridors) {
+    const connections = new Map();
 
-    // Find center-most blob as entrance
+    // Initialize all blobs with 0 connections
+    for (const blob of blobs) {
+        connections.set(blob, 0);
+    }
+
+    // Count connections from corridors
+    for (const corridor of corridors) {
+        if (corridor.startBlob) {
+            connections.set(corridor.startBlob, connections.get(corridor.startBlob) + 1);
+        }
+        if (corridor.endBlob) {
+            connections.set(corridor.endBlob, connections.get(corridor.endBlob) + 1);
+        }
+    }
+
+    return connections;
+}
+
+/**
+ * Calculate median blob size
+ */
+function getMedianBlobSize(blobs) {
+    const sizes = blobs.map(b => b.tiles.size).sort((a, b) => a - b);
+    const mid = Math.floor(sizes.length / 2);
+    return sizes.length % 2 !== 0 ? sizes[mid] : (sizes[mid - 1] + sizes[mid]) / 2;
+}
+
+/**
+ * Score a blob for shrine suitability (higher = better candidate)
+ * Prefers: dead ends (1 connection), smaller size, not too close to entrance
+ */
+function scoreBlobForShrine(blob, connections, medianSize, normalizedDist) {
+    let score = 0;
+
+    // Dead end bonus (1 connection = ideal)
+    const connectionCount = connections.get(blob) || 0;
+    if (connectionCount === 1) {
+        score += 100;  // Strong preference for dead ends
+    } else if (connectionCount === 2) {
+        score += 20;   // Acceptable but not ideal
+    }
+    // 3+ connections = not suitable (score stays low)
+
+    // Size bonus (smaller is better)
+    const sizeRatio = blob.tiles.size / medianSize;
+    if (sizeRatio < 0.8) {
+        score += 50;   // Below median = good
+    } else if (sizeRatio < 1.0) {
+        score += 25;   // Near median = okay
+    }
+    // Above median = no bonus
+
+    // Distance bonus (not too close, not too far)
+    if (normalizedDist >= 0.3 && normalizedDist <= 0.8) {
+        score += 30;   // Mid-range distance is ideal
+    } else if (normalizedDist > 0.8) {
+        score += 10;   // Far is okay but treasure is better there
+    }
+    // Too close (< 0.3) = no bonus
+
+    return score;
+}
+
+/**
+ * Assign element and theme to a blob
+ */
+function assignBlobElementAndTheme(blob) {
+    const elements = ['fire', 'ice', 'water', 'earth', 'nature', 'death', 'arcane', 'dark', 'holy', 'physical'];
+    blob.element = elements[Math.floor(Math.random() * elements.length)];
+
+    const elementThemes = {
+        fire: ['magma_chamber', 'ember_crypts'],
+        ice: ['frozen_abyss', 'glacial_tombs'],
+        water: ['drowned_halls', 'weeping_caverns'],
+        earth: ['crystal_caverns', 'stone_sanctum'],
+        nature: ['fungal_grotto', 'overgrown_ruins'],
+        death: ['bone_ossuary', 'shadow_crypt'],
+        arcane: ['runic_vaults', 'shattered_observatory'],
+        dark: ['void_chamber', 'lightless_depths'],
+        holy: ['sacred_shrine', 'radiant_halls'],
+        physical: ['ancient_arena', 'gladiator_pits']
+    };
+
+    const themes = elementThemes[blob.element] || ['ancient_arena'];
+    blob.theme = themes[Math.floor(Math.random() * themes.length)];
+}
+
+/**
+ * Main blob property assignment with priority-based hierarchy:
+ * 1. ENTRANCE (1) - center-most blob
+ * 2. SHRINE (2-4) - dead ends, smaller, mid-distance
+ * 3. TREASURE (15%) - far from entrance
+ * 4. COMBAT (remainder) - default
+ */
+function assignBlobProperties(blobs) {
+    if (blobs.length === 0) return { shrineCount: 0 };
+
+    const corridors = DUNGEON_STATE.corridors;
+    const connections = countBlobConnections(blobs, corridors);
+    const medianSize = getMedianBlobSize(blobs);
+
+    // ========================================
+    // STEP 1: Assign ENTRANCE (center-most blob)
+    // ========================================
     const centerX = DUNGEON_CONFIG.mapWidth / 2;
     const centerY = DUNGEON_CONFIG.mapHeight / 2;
 
@@ -297,63 +410,147 @@ function assignBlobProperties(blobs) {
     entranceBlob.element = 'physical';
     entranceBlob.theme = 'ancient_arena';
     entranceBlob.difficulty = 1;
+    entranceBlob.corridorConnections = connections.get(entranceBlob) || 0;
 
     DUNGEON_STATE.entranceBlob = entranceBlob;
 
-    // Calculate distances from entrance
+    // ========================================
+    // Calculate distances and difficulties
+    // ========================================
     const distances = new Map();
+    const normalizedDistances = new Map();
+
     for (const blob of blobs) {
         const dist = Math.abs(blob.connectionPoint.x - entranceBlob.connectionPoint.x) +
                      Math.abs(blob.connectionPoint.y - entranceBlob.connectionPoint.y);
         distances.set(blob, dist);
     }
 
-    // Sort by distance
-    const sortedBlobs = [...blobs].sort((a, b) => distances.get(a) - distances.get(b));
-    const maxDist = distances.get(sortedBlobs[sortedBlobs.length - 1]);
+    const maxDist = Math.max(...distances.values());
 
-    // Assign types and properties
-    const treasureCount = Math.floor(blobs.length * DUNGEON_CONFIG.treasureBlobRatio);
-    let treasureAssigned = 0;
+    for (const blob of blobs) {
+        const normalizedDist = maxDist > 0 ? distances.get(blob) / maxDist : 0;
+        normalizedDistances.set(blob, normalizedDist);
 
-    for (const blob of sortedBlobs) {
-        if (blob === entranceBlob) continue;
-
-        const dist = distances.get(blob);
-        const normalizedDist = maxDist > 0 ? dist / maxDist : 0;
-
-        // Difficulty 1-10 based on distance
+        // Set difficulty 1-10 based on distance
         blob.difficulty = Math.max(1, Math.min(10, Math.floor(normalizedDist * 10) + 1));
-
-        // Assign treasure to furthest blobs
-        if (treasureAssigned < treasureCount && normalizedDist > 0.6) {
-            blob.blobType = 'treasure';
-            treasureAssigned++;
-        } else {
-            blob.blobType = 'combat';
-        }
-
-        // Assign element (random for now, could be distance-based)
-        const elements = ['fire', 'ice', 'water', 'earth', 'nature', 'death', 'arcane', 'dark', 'holy', 'physical'];
-        blob.element = elements[Math.floor(Math.random() * elements.length)];
-
-        // Assign theme based on element
-        const elementThemes = {
-            fire: ['magma_chamber', 'ember_crypts'],
-            ice: ['frozen_abyss', 'glacial_tombs'],
-            water: ['drowned_halls', 'weeping_caverns'],
-            earth: ['crystal_caverns', 'stone_sanctum'],
-            nature: ['fungal_grotto', 'overgrown_ruins'],
-            death: ['bone_ossuary', 'shadow_crypt'],
-            arcane: ['runic_vaults', 'shattered_observatory'],
-            dark: ['void_chamber', 'lightless_depths'],
-            holy: ['sacred_shrine', 'radiant_halls'],
-            physical: ['ancient_arena', 'gladiator_pits']
-        };
-
-        const themes = elementThemes[blob.element] || ['ancient_arena'];
-        blob.theme = themes[Math.floor(Math.random() * themes.length)];
+        blob.corridorConnections = connections.get(blob) || 0;
     }
+
+    // ========================================
+    // STEP 2: Assign SHRINES (priority selection)
+    // ========================================
+    const unassignedBlobs = blobs.filter(b => b !== entranceBlob);
+
+    // Score all blobs for shrine suitability
+    const shrineScores = [];
+    for (const blob of unassignedBlobs) {
+        const normalizedDist = normalizedDistances.get(blob);
+
+        // Skip blobs too close to entrance
+        if (normalizedDist < DUNGEON_CONFIG.shrineMinDistance) continue;
+
+        const score = scoreBlobForShrine(blob, connections, medianSize, normalizedDist);
+        shrineScores.push({ blob, score, normalizedDist });
+    }
+
+    // Sort by score (highest first)
+    shrineScores.sort((a, b) => b.score - a.score);
+
+    // Select shrines (2-4 based on config)
+    const targetShrines = Math.min(
+        DUNGEON_CONFIG.maxShrines,
+        Math.max(DUNGEON_CONFIG.minShrines, Math.floor(shrineScores.length / 3))
+    );
+
+    let shrinesAssigned = 0;
+    const shrineBlobs = new Set();
+
+    // First pass: assign ideal candidates (score >= 100, meaning dead ends)
+    for (const { blob, score } of shrineScores) {
+        if (shrinesAssigned >= DUNGEON_CONFIG.maxShrines) break;
+        if (score >= 100) {  // Dead end threshold
+            blob.blobType = 'shrine';
+            blob.element = 'holy';  // Shrines are always holy element
+            blob.theme = 'sacred_shrine';
+            shrineBlobs.add(blob);
+            shrinesAssigned++;
+        }
+    }
+
+    // Second pass: if we don't have enough, relax criteria
+    if (shrinesAssigned < DUNGEON_CONFIG.minShrines) {
+        for (const { blob, score } of shrineScores) {
+            if (shrinesAssigned >= DUNGEON_CONFIG.minShrines) break;
+            if (shrineBlobs.has(blob)) continue;
+            if (score >= 20) {  // Relaxed threshold
+                blob.blobType = 'shrine';
+                blob.element = 'holy';
+                blob.theme = 'sacred_shrine';
+                shrineBlobs.add(blob);
+                shrinesAssigned++;
+            }
+        }
+    }
+
+    // Third pass: force smallest blobs if still not enough
+    if (shrinesAssigned < DUNGEON_CONFIG.minShrines) {
+        const remainingBySize = unassignedBlobs
+            .filter(b => !shrineBlobs.has(b) && normalizedDistances.get(b) >= DUNGEON_CONFIG.shrineMinDistance)
+            .sort((a, b) => a.tiles.size - b.tiles.size);
+
+        for (const blob of remainingBySize) {
+            if (shrinesAssigned >= DUNGEON_CONFIG.minShrines) break;
+            blob.blobType = 'shrine';
+            blob.element = 'holy';
+            blob.theme = 'sacred_shrine';
+            shrineBlobs.add(blob);
+            shrinesAssigned++;
+        }
+    }
+
+    if (DUNGEON_CONFIG.debugLogging) {
+        console.log(`\n⛩️ SHRINE ASSIGNMENT:`);
+        console.log(`  Target: ${DUNGEON_CONFIG.minShrines}-${DUNGEON_CONFIG.maxShrines}`);
+        console.log(`  Assigned: ${shrinesAssigned}`);
+        console.log(`  Dead-end shrines: ${[...shrineBlobs].filter(b => connections.get(b) === 1).length}`);
+    }
+
+    // ========================================
+    // STEP 3: Assign TREASURE (far blobs)
+    // ========================================
+    const remainingBlobs = unassignedBlobs.filter(b => !shrineBlobs.has(b));
+    const sortedByDistance = [...remainingBlobs].sort(
+        (a, b) => normalizedDistances.get(b) - normalizedDistances.get(a)
+    );
+
+    const treasureCount = Math.floor(remainingBlobs.length * DUNGEON_CONFIG.treasureBlobRatio);
+    let treasureAssigned = 0;
+    const treasureBlobs = new Set();
+
+    for (const blob of sortedByDistance) {
+        if (treasureAssigned >= treasureCount) break;
+
+        const normalizedDist = normalizedDistances.get(blob);
+        if (normalizedDist > 0.5) {  // Treasure should be in far half of dungeon
+            blob.blobType = 'treasure';
+            assignBlobElementAndTheme(blob);
+            treasureBlobs.add(blob);
+            treasureAssigned++;
+        }
+    }
+
+    // ========================================
+    // STEP 4: Assign COMBAT (everything else)
+    // ========================================
+    for (const blob of remainingBlobs) {
+        if (treasureBlobs.has(blob)) continue;
+
+        blob.blobType = 'combat';
+        assignBlobElementAndTheme(blob);
+    }
+
+    return { shrineCount: shrinesAssigned };
 }
 
 // ============================================================================
@@ -415,12 +612,11 @@ function validateConnectivity(grid) {
 // MAIN GENERATION
 // ============================================================================
 
-function generateBlobDungeonMap() {
-    if (DUNGEON_CONFIG.debugLogging) {
-        console.log(`\n🗺️  GENERATING BLOB-BASED DUNGEON (${DUNGEON_CONFIG.mapWidth}×${DUNGEON_CONFIG.mapHeight})`);
-        console.log(`========================================`);
-    }
-
+/**
+ * Internal function to generate a single dungeon attempt
+ * @returns {Object} { state, shrineCount }
+ */
+function generateDungeonAttempt() {
     // 1. Initialize BSP tree
     DUNGEON_STATE.root = new Leaf(0, 0, DUNGEON_CONFIG.mapWidth, DUNGEON_CONFIG.mapHeight);
     const leaves = [DUNGEON_STATE.root];
@@ -445,27 +641,12 @@ function generateBlobDungeonMap() {
 
     const finalLeaves = DUNGEON_STATE.root.getLeaves();
 
-    if (DUNGEON_CONFIG.debugLogging) {
-        console.log(`\n📐 BSP TREE:`);
-        console.log(`  Total leaves: ${finalLeaves.length}`);
-        console.log(`  Max depth: ${Math.max(...finalLeaves.map(l => l.depth))}`);
-    }
-
     // 3. Grow blobs in each leaf
     DUNGEON_STATE.blobs = [];
     for (const leaf of finalLeaves) {
         const blob = growBlob(leaf);
         leaf.blob = blob;
         DUNGEON_STATE.blobs.push(blob);
-    }
-
-    if (DUNGEON_CONFIG.debugLogging) {
-        const blobSizes = DUNGEON_STATE.blobs.map(b => b.tiles.size);
-        console.log(`\n🫧 BLOBS:`);
-        console.log(`  Total blobs: ${DUNGEON_STATE.blobs.length}`);
-        console.log(`  Avg size: ${(blobSizes.reduce((a, b) => a + b, 0) / blobSizes.length).toFixed(0)} tiles`);
-        console.log(`  Min size: ${Math.min(...blobSizes)} tiles`);
-        console.log(`  Max size: ${Math.max(...blobSizes)} tiles`);
     }
 
     // 4. Create grid
@@ -489,33 +670,88 @@ function generateBlobDungeonMap() {
     DUNGEON_STATE.corridors = [];
     createCorridors(DUNGEON_STATE.root, DUNGEON_STATE.grid);
 
-    if (DUNGEON_CONFIG.debugLogging) {
-        const corridorLengths = DUNGEON_STATE.corridors.map(c => c.tiles.size);
-        console.log(`\n🚪 CORRIDORS:`);
-        console.log(`  Total corridors: ${DUNGEON_STATE.corridors.length}`);
-        console.log(`  Avg length: ${(corridorLengths.reduce((a, b) => a + b, 0) / corridorLengths.length).toFixed(0)} tiles`);
-    }
-
-    // 7. Assign blob properties
-    assignBlobProperties(DUNGEON_STATE.blobs);
-
-    if (DUNGEON_CONFIG.debugLogging) {
-        const entranceCount = DUNGEON_STATE.blobs.filter(b => b.blobType === 'entrance').length;
-        const combatCount = DUNGEON_STATE.blobs.filter(b => b.blobType === 'combat').length;
-        const treasureCount = DUNGEON_STATE.blobs.filter(b => b.blobType === 'treasure').length;
-
-        console.log(`\n🎯 BLOB TYPES:`);
-        console.log(`  Entrance: ${entranceCount}`);
-        console.log(`  Combat: ${combatCount}`);
-        console.log(`  Treasure: ${treasureCount}`);
-    }
+    // 7. Assign blob properties (returns shrine count for validation)
+    const { shrineCount } = assignBlobProperties(DUNGEON_STATE.blobs);
 
     // 8. Validate connectivity
     validateConnectivity(DUNGEON_STATE.grid);
 
+    return { state: DUNGEON_STATE, shrineCount, blobCount: DUNGEON_STATE.blobs.length };
+}
+
+/**
+ * Main dungeon generation with shrine validation and regeneration
+ */
+function generateBlobDungeonMap() {
     if (DUNGEON_CONFIG.debugLogging) {
+        console.log(`\n🗺️  GENERATING BLOB-BASED DUNGEON (${DUNGEON_CONFIG.mapWidth}×${DUNGEON_CONFIG.mapHeight})`);
+        console.log(`========================================`);
+    }
+
+    let attempt = 0;
+    let result;
+
+    // Try to generate a valid dungeon with enough shrines
+    while (attempt < DUNGEON_CONFIG.maxRegenAttempts) {
+        attempt++;
+
+        result = generateDungeonAttempt();
+
+        // Check if we have enough shrines
+        if (result.shrineCount >= DUNGEON_CONFIG.minShrines) {
+            if (DUNGEON_CONFIG.debugLogging && attempt > 1) {
+                console.log(`\n✅ Valid dungeon generated on attempt ${attempt}`);
+            }
+            break;
+        }
+
+        // Check if we have enough blobs at all (if not, regen won't help much)
+        if (result.blobCount < 6) {
+            console.warn(`[DungeonGen] Only ${result.blobCount} blobs generated, shrine requirements may not be met`);
+            break;  // Don't regenerate if blob count is too low
+        }
+
+        if (DUNGEON_CONFIG.debugLogging) {
+            console.log(`\n⚠️ Attempt ${attempt}: Only ${result.shrineCount} shrines (need ${DUNGEON_CONFIG.minShrines}), regenerating...`);
+        }
+    }
+
+    // Log final statistics
+    if (DUNGEON_CONFIG.debugLogging) {
+        const blobSizes = DUNGEON_STATE.blobs.map(b => b.tiles.size);
+        console.log(`\n📐 BSP TREE:`);
+        console.log(`  Total leaves: ${DUNGEON_STATE.blobs.length}`);
+
+        console.log(`\n🫧 BLOBS:`);
+        console.log(`  Total blobs: ${DUNGEON_STATE.blobs.length}`);
+        console.log(`  Avg size: ${(blobSizes.reduce((a, b) => a + b, 0) / blobSizes.length).toFixed(0)} tiles`);
+        console.log(`  Min size: ${Math.min(...blobSizes)} tiles`);
+        console.log(`  Max size: ${Math.max(...blobSizes)} tiles`);
+
+        if (DUNGEON_STATE.corridors.length > 0) {
+            const corridorLengths = DUNGEON_STATE.corridors.map(c => c.tiles.size);
+            console.log(`\n🚪 CORRIDORS:`);
+            console.log(`  Total corridors: ${DUNGEON_STATE.corridors.length}`);
+            console.log(`  Avg length: ${(corridorLengths.reduce((a, b) => a + b, 0) / corridorLengths.length).toFixed(0)} tiles`);
+        }
+
+        const entranceCount = DUNGEON_STATE.blobs.filter(b => b.blobType === 'entrance').length;
+        const shrineCount = DUNGEON_STATE.blobs.filter(b => b.blobType === 'shrine').length;
+        const combatCount = DUNGEON_STATE.blobs.filter(b => b.blobType === 'combat').length;
+        const treasureCount = DUNGEON_STATE.blobs.filter(b => b.blobType === 'treasure').length;
+
+        const deadEndShrines = DUNGEON_STATE.blobs.filter(
+            b => b.blobType === 'shrine' && b.corridorConnections === 1
+        ).length;
+
+        console.log(`\n🎯 BLOB TYPES:`);
+        console.log(`  Entrance: ${entranceCount}`);
+        console.log(`  Shrine: ${shrineCount} (${deadEndShrines} dead-ends)`);
+        console.log(`  Combat: ${combatCount}`);
+        console.log(`  Treasure: ${treasureCount}`);
+
         console.log(`\n========================================`);
-        console.log(`✅ DUNGEON GENERATION COMPLETE\n`);
+        console.log(`✅ DUNGEON GENERATION COMPLETE (${attempt} attempt${attempt > 1 ? 's' : ''})\n`);
     }
 
     return DUNGEON_STATE;
