@@ -22,24 +22,24 @@
 // ============================================================================
 
 const COMBAT_CONFIG = {
-    baseAttackTime: 350,          // Base attack speed in ms (reduced from 700 for snappier combat)
+    baseAttackTime: 440,          // Base attack speed in ms (increased 25% from 350)
     engageDelay: 0.4,             // Initial delay when engaging (seconds)
     minDamage: 1,                 // Minimum damage floor
     missChance: 0.08,             // Base 8% miss chance (enemy only - player always hits)
     debugLogging: true,
-    // Weapon-specific attack times (ms) - light to heavy
+    // Weapon-specific attack times (ms) - light to heavy (all increased 25%)
     weaponAttackTimes: {
-        knife: 200,               // Lightning fast
-        unarmed: 220,             // Quick jabs
-        wand: 250,                // Fast casting
-        sword: 350,               // Medium speed
-        axe: 450,                 // Heavier swing
-        mace: 500,                // Blunt impact
-        polearm: 400,             // Long reach compensates
-        staff: 350,               // Medium casting
-        bow: 300,                 // Draw and release
-        crossbow: 450,            // Slower but powerful
-        tome: 400                 // Channel time
+        knife: 250,               // Lightning fast
+        unarmed: 275,             // Quick jabs
+        wand: 315,                // Fast casting
+        sword: 440,               // Medium speed
+        axe: 565,                 // Heavier swing
+        mace: 625,                // Blunt impact
+        polearm: 500,             // Long reach compensates
+        staff: 440,               // Medium casting
+        bow: 375,                 // Draw and release
+        crossbow: 565,            // Slower but powerful
+        tome: 500                 // Channel time
     },
     // Enemy attack animation settings
     enemyAttackDuration: 400,     // Total enemy attack animation duration (ms)
@@ -3452,7 +3452,7 @@ function handleActionHotkey(key, player) {
 
 // Attack state
 const mouseAttackState = {
-    cooldown: 0, isSwinging: false, swingProgress: 0, swingDuration: 0.2,
+    cooldown: 0, isSwinging: false, swingProgress: 0, swingDuration: 0.25,
     swingDirection: 0, swingArcAngle: 90, swingRange: 1.0, swingStartTime: 0,
     slashStyle: 'sweep', hitEnemies: new Set(), slashEffects: [],
     comboCount: 1, comboResetTimer: 0, comboDecayDuration: 1.5,
