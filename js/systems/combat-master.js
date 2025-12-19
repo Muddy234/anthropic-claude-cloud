@@ -3960,7 +3960,38 @@ function drawRangeIndicator(ctx, camX, camY, tileSize, offsetX) {
 }
 
 // ############################################################################
-// SECTION 11: EXPORTS & REGISTRATION
+// SECTION 11: SYSTEM MANAGER REGISTRATION
+// ############################################################################
+
+// Combat Enhancements System (dash, knockback, screen shake, stagger)
+const CombatEnhancementsSystem = {
+    name: 'combat-enhancements',
+
+    init(game) {
+        console.log('[CombatEnhancements] Initialized with dash, knockback, screen shake, stagger');
+    },
+
+    update(deltaTime) {
+        const dt = deltaTime / 1000;
+        updateDash(dt);
+        updateScreenShake(dt);
+        updateStagger(dt);
+    },
+
+    render(ctx, camera) {
+        // Render dash ghosts if needed (handled by player-animation.js)
+    }
+};
+
+// Register with SystemManager
+if (typeof SystemManager !== 'undefined') {
+    SystemManager.register('combat-enhancements', CombatEnhancementsSystem, 45);
+} else {
+    console.warn('⚠️ SystemManager not found - combat-enhancements running standalone');
+}
+
+// ############################################################################
+// SECTION 12: EXPORTS
 // ############################################################################
 
 // Export all functions and objects to window for global access
