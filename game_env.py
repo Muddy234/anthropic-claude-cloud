@@ -7,7 +7,6 @@ import time
 
 # ==========================================
 # PART 1: THE "MIND READER" SCRIPT
-# Updated to prevent crashing if game isn't ready
 # ==========================================
 JS_OBSERVATION_SCRIPT = """
     // 1. Safety Check: Is the game ready?
@@ -16,52 +15,41 @@ JS_OBSERVATION_SCRIPT = """
     }
 
     const p = window.gameState.player;
-    if (p.isDead()) return null; // Treat death as end of episode
-
+    
     // 2. Define View Radius (5 tiles = 11x11 grid)
     const R = 5; 
     let grid = [];
 
-    // 3. Build the Local Grid relative to player
-    // 0=Floor, 1=Wall, 2=Enemy, 3=Loot, 9=Out of Bounds
+    // 3. Build the Local Grid
     if (window.gameState.map && window.gameState.map.tiles) {
         for (let y = p.y - R; y <= p.y + R; y++) {
             for (let x = p.x - R; x <= p.x + R; x++) {
-                // Check bounds
+                // Bounds check
                 if (x < 0 || y < 0 || x >= window.gameState.map.width || y >= window.gameState.map.height) {
                     grid.push(9); 
                     continue;
                 }
 
-                let tileValue = 0; // Default floor
-
-                // Check Walls
+                let tileValue = 0; 
                 const tile = window.gameState.map.tiles[y][x];
-                if (tile && tile.type === 'wall') {
-                    tileValue = 1;
-                }
+                if (tile && tile.type === 'wall') tileValue = 1;
 
-                // Check for Monsters
                 if (window.gameState.monsters) {
                     const monster = window.gameState.monsters.find(m => m.x === x && m.y === y && !m.isDead());
                     if (monster) tileValue = 2;
                 }
                 
-                // Check for Loot
                 if (window.gameState.items) {
                     const item = window.gameState.items.find(i => i.x === x && i.y === y);
                     if (item) tileValue = 3;
                 }
-
                 grid.push(tileValue);
             }
         }
     } else {
-        // Fallback if map isn't loaded yet
         for(let i=0; i<121; i++) grid.push(0);
     }
 
-    // Return the data object to Python
     return {
         "grid": grid,
         "hp": p.hp,
@@ -81,41 +69,45 @@ class ShiftingChasmEnv(gym.Env):
         
         # 1. Start the Browser
         options = webdriver.ChromeOptions()
-        # options.add_argument("--headless") # Uncomment this later to hide the window!
+        # options.add_argument("--headless") # Keep commented out to see what happens
         self.driver = webdriver.Chrome(options=options)
         
         print("Connecting to game...")
         self.driver.get("http://localhost:8000/index.html")
         
-        # WAITING LOOP: Wait until the game variable exists
-        self.wait_for_game_load()
+        # WAITING LOOP: Attempts to Start the Game
+        self.wait_for_game_start()
 
-        # 2. Define Actions
+        # 2. Define Actions and Observation
         self.action_space = gym.spaces.Discrete(5)
-
-        # 3. Define what the AI sees
         self.observation_space = gym.spaces.Dict({
             "grid": gym.spaces.Box(low=0, high=9, shape=(121,), dtype=np.int32),
             "stats": gym.spaces.Box(low=0, high=9999, shape=(4,), dtype=np.float32)
         })
 
-    def wait_for_game_load(self):
-        """Checks every second if window.gameState exists"""
-        for i in range(10):
+    def wait_for_game_start(self):
+        """Presses Spacebar until gameState is found"""
+        print("Attempting to start game...")
+        
+        for i in range(20): # Try for 20 seconds
+            # A. Check if game is already running
+            ready = self.driver.execute_script("return (typeof window.gameState !== 'undefined' && window.gameState.player) ? true : false;")
+            if ready:
+                print("Game successfully loaded and running!")
+                return
+
+            # B. If not, try to press SPACE to start
             try:
-                # Try to interact with the game just in case it needs focus
                 body = self.driver.find_element(By.TAG_NAME, "body")
-                body.click()
-                
-                ready = self.driver.execute_script("return (window.gameState && window.gameState.player) ? true : false;")
-                if ready:
-                    print("Game successfully loaded!")
-                    return
+                body.click() # Focus window
+                body.send_keys(Keys.SPACE) # Press Start
+                print(f"Sent SPACE key... ({i+1}/20)")
             except:
                 pass
-            print(f"Waiting for game load... {i+1}/10")
+
             time.sleep(1)
-        print("Warning: Game might not be fully loaded, but proceeding...")
+            
+        print("Warning: Game start timed out. Make sure the window is active.")
 
     def step(self, action):
         # A. Send Action
@@ -125,16 +117,15 @@ class ShiftingChasmEnv(gym.Env):
             elif action == 2: body.send_keys(Keys.ARROW_DOWN)
             elif action == 3: body.send_keys(Keys.ARROW_LEFT)
             elif action == 4: body.send_keys(Keys.ARROW_RIGHT)
-            else: body.send_keys(Keys.SPACE) 
+            else: body.send_keys(Keys.SPACE) # Wait/Skip
         except:
             pass 
 
         # B. Read the Result
         data = self.driver.execute_script(JS_OBSERVATION_SCRIPT)
         
-        # Handle cases where the game is resetting or player died
         if data is None:
-            # Check if we should reset (player died)
+            # If data is missing mid-game, assume game over or restart needed
             return self._get_empty_obs(), -10, True, False, {}
 
         # C. Process Observation
@@ -151,13 +142,16 @@ class ShiftingChasmEnv(gym.Env):
         return obs, reward, terminated, False, {}
 
     def reset(self, seed=None, options=None):
-        self.driver.refresh()
-        self.wait_for_game_load() # Wait again after refresh
+        # On reset, we might need to refresh or press space again if player died
+        current_health = self.driver.execute_script("return window.gameState ? window.gameState.player.hp : 0;")
+        
+        if current_health <= 0:
+            self.driver.refresh()
+            self.wait_for_game_start()
         
         # Get initial state
         data = self.driver.execute_script(JS_OBSERVATION_SCRIPT)
-        if data is None:
-             return self._get_empty_obs(), {}
+        if data is None: return self._get_empty_obs(), {}
 
         obs = {
             "grid": np.array(data["grid"], dtype=np.int32),
