@@ -52,7 +52,8 @@ Object.assign(MOVEMENT_CONFIG, {
     diagonalFactor: 0.707,        // sqrt(2) / 2 for normalized diagonal speed
 
     // === VELOCITY-BASED MOVEMENT (Inertia) ===
-    acceleration: 25,             // Tiles per second squared (snappy acceleration)
+    // Terminal velocity = acceleration / friction, so to get ~4-5 tiles/sec:
+    acceleration: 60,             // Tiles per second squared (snappy acceleration)
     friction: 12,                 // Friction coefficient (higher = more responsive stops)
     maxVelocity: 5,               // Maximum velocity cap (tiles/sec)
     velocityDeadzone: 0.01,       // Below this velocity, snap to zero
