@@ -1,6 +1,7 @@
 // ============================================================================
 // MOVEMENT MASTER - The Shifting Chasm
 // ============================================================================
+console.log('[MovementMaster] File starting to load...');
 // Consolidated movement system containing:
 // - Math utilities (lerp, easing, distance calculations)
 // - Collision detection (tile walkability, bounding box, circle)
@@ -60,6 +61,8 @@ const MOVEMENT_CONFIG = {
     nudgeStrength: 0.08,          // Perpendicular correction impulse per frame
     nudgeEnabled: true            // Toggle corner sliding
 };
+
+console.log('[MovementMaster] MOVEMENT_CONFIG defined');
 
 // ############################################################################
 // SECTION 2: MATH UTILITIES
@@ -153,6 +156,7 @@ function normalizeDirection(dx, dy) {
 
 // ############################################################################
 // SECTION 3: COLLISION DETECTION
+console.log('[MovementMaster] Section 3: Collision');
 // ############################################################################
 
 /**
@@ -513,6 +517,7 @@ function raycastDetailed(x1, y1, x2, y2) {
 
 // ############################################################################
 // SECTION 5: PATHFINDING (A*)
+console.log('[MovementMaster] Section 5: Pathfinding');
 // ############################################################################
 
 /**
@@ -1009,6 +1014,7 @@ function applySeparationToMovement(enemy, intendedX, intendedY, deltaTime) {
 
 // ############################################################################
 // SECTION 6: PLAYER MOVEMENT (Velocity-Based with Wall Sliding)
+console.log('[MovementMaster] Section 6: Player Movement');
 // ############################################################################
 
 // Player velocity state (persistent across frames)
@@ -1512,6 +1518,7 @@ function getDirectionFromDelta(dx, dy) {
 
 // ############################################################################
 // SECTION 9: EXPORTS
+console.log('[MovementMaster] Section 9: Starting exports');
 // ############################################################################
 
 if (typeof window !== 'undefined') {
