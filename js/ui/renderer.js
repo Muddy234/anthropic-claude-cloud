@@ -1038,7 +1038,7 @@ const camY = game.camera.y + (shakeOffset.y / (TILE_SIZE * currentZoom));
             ParticleSystemManager.render(camX, camY, effectiveTileSize, TRACKER_WIDTH);
         }
 
-        if (typeof renderDamageNumbers === 'function') { renderDamageNumbers(camX, camY, effectiveTileSize, TRACKER_WIDTH); }
+        if (typeof renderDamageNumbers === 'function') { renderDamageNumbers(ctx, camX, camY, effectiveTileSize, TRACKER_WIDTH); }
         ctx.restore();
 
         // NEW UI: Icon sidebar (replaces old tracker)
