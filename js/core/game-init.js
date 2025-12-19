@@ -807,5 +807,5 @@ if (typeof window !== 'undefined') {
     window.advanceToNextFloor = advanceToNextFloor;
     window.logGameStats = logGameStats;
     window.logEnemyTierDistribution = logEnemyTierDistribution;
-    window.gameState = gameState;
+    window.gameState = game;
 }
