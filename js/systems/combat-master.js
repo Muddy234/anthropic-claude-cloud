@@ -22,11 +22,25 @@
 // ============================================================================
 
 const COMBAT_CONFIG = {
-    baseAttackTime: 700,          // Base attack speed in ms (1.0 speed = 700ms)
+    baseAttackTime: 350,          // Base attack speed in ms (reduced from 700 for snappier combat)
     engageDelay: 0.4,             // Initial delay when engaging (seconds)
     minDamage: 1,                 // Minimum damage floor
-    missChance: 0.08,             // Base 8% miss chance
+    missChance: 0.08,             // Base 8% miss chance (enemy only - player always hits)
     debugLogging: true,
+    // Weapon-specific attack times (ms) - light to heavy
+    weaponAttackTimes: {
+        knife: 200,               // Lightning fast
+        unarmed: 220,             // Quick jabs
+        wand: 250,                // Fast casting
+        sword: 350,               // Medium speed
+        axe: 450,                 // Heavier swing
+        mace: 500,                // Blunt impact
+        polearm: 400,             // Long reach compensates
+        staff: 350,               // Medium casting
+        bow: 300,                 // Draw and release
+        crossbow: 450,            // Slower but powerful
+        tome: 400                 // Channel time
+    },
     // Enemy attack animation settings
     enemyAttackDuration: 400,     // Total enemy attack animation duration (ms)
     enemyWindupPercent: 0.35,     // 35% of attack is windup (140ms at 400ms total)
@@ -265,6 +279,121 @@ const MAGIC_CONFIG = {
         baseDamage: 10,
         manaCost: 10,
         cooldown: 7
+    }
+};
+
+// ============================================================================
+// OBJECT POOLING (Optimization)
+// ============================================================================
+// Recycles inactive objects to reduce GC pressure during combat
+// Prevents frame stutters in bullet-hell scenarios
+
+const ObjectPool = {
+    // Projectile pool
+    projectiles: {
+        pool: [],
+        maxSize: 100,
+        activeCount: 0,
+
+        acquire() {
+            // Find inactive projectile in pool
+            for (const proj of this.pool) {
+                if (!proj.active) {
+                    proj.active = true;
+                    this.activeCount++;
+                    return proj;
+                }
+            }
+            // Create new if pool not full
+            if (this.pool.length < this.maxSize) {
+                const proj = { active: true };
+                this.pool.push(proj);
+                this.activeCount++;
+                return proj;
+            }
+            // Pool exhausted - create temporary (will be GC'd)
+            console.warn('[ObjectPool] Projectile pool exhausted!');
+            return { active: true, _temporary: true };
+        },
+
+        release(proj) {
+            if (!proj) return;
+            proj.active = false;
+            this.activeCount--;
+            // Clear references to prevent memory leaks
+            proj.owner = null;
+            proj.target = null;
+            proj.attacker = null;
+        },
+
+        getActiveCount() { return this.activeCount; }
+    },
+
+    // Dash ghost pool
+    ghosts: {
+        pool: [],
+        maxSize: 50,
+
+        acquire() {
+            for (const ghost of this.pool) {
+                if (!ghost.active) {
+                    ghost.active = true;
+                    return ghost;
+                }
+            }
+            if (this.pool.length < this.maxSize) {
+                const ghost = { active: true };
+                this.pool.push(ghost);
+                return ghost;
+            }
+            return { active: true, _temporary: true };
+        },
+
+        release(ghost) {
+            if (!ghost) return;
+            ghost.active = false;
+        },
+
+        releaseAll() {
+            for (const ghost of this.pool) {
+                ghost.active = false;
+            }
+        }
+    },
+
+    // Slash effect pool
+    slashEffects: {
+        pool: [],
+        maxSize: 30,
+
+        acquire() {
+            for (const effect of this.pool) {
+                if (!effect.active) {
+                    effect.active = true;
+                    return effect;
+                }
+            }
+            if (this.pool.length < this.maxSize) {
+                const effect = { active: true };
+                this.pool.push(effect);
+                return effect;
+            }
+            return { active: true, _temporary: true };
+        },
+
+        release(effect) {
+            if (!effect) return;
+            effect.active = false;
+        }
+    },
+
+    // Stats for debugging
+    getStats() {
+        return {
+            projectiles: { poolSize: this.projectiles.pool.length, active: this.projectiles.activeCount },
+            ghosts: { poolSize: this.ghosts.pool.length },
+            slashEffects: { poolSize: this.slashEffects.pool.length }
+        };
     }
 };
 
@@ -605,20 +734,29 @@ const DamageCalculator = {
     // ========================================================================
 
     rollHit(attacker, defender) {
+        // DETERMINISTIC COMBAT: Player attacks always hit
+        // Hit detection is purely collision-based for action roguelike feel
+        // RNG misses feel like input lag - only enemies can miss (simulates player evasion)
+        if (attacker === game.player) {
+            return true;
+        }
+
+        // Enemy attacks can miss based on player evasion
         let hitChance = 0.90;
 
         const attackerAgi = attacker.stats?.AGI || attacker.stats?.agi || 10;
         hitChance += attackerAgi * 0.002;
 
+        // Player AGI provides evasion against enemy attacks
         const defenderAgi = defender.stats?.AGI || defender.stats?.agi || 10;
-        hitChance -= defenderAgi * 0.002;
+        hitChance -= defenderAgi * 0.003;  // Increased evasion scaling for player
 
         if (typeof MonsterSocialSystem !== 'undefined' && defender.swarmId) {
             const bonuses = MonsterSocialSystem.getAllBonuses(defender);
             hitChance -= bonuses.evasion || 0;
         }
 
-        hitChance = Math.max(0.50, Math.min(0.98, hitChance));
+        hitChance = Math.max(0.50, Math.min(0.95, hitChance));
 
         return Math.random() < hitChance;
     },
@@ -1142,34 +1280,36 @@ function createProjectile(config) {
         dy = dy / distance;
     }
 
-    const projectile = {
-        x: config.x,
-        y: config.y,
-        displayX: config.x,
-        displayY: config.y,
-        targetX: config.targetX,
-        targetY: config.targetY,
-        target: config.target,
-        dirX: dx,
-        dirY: dy,
-        velocityX: dx * config.speed,
-        velocityY: dy * config.speed,
-        speed: config.speed,
-        distanceToTravel: config.maxDistance || distance,
-        distanceTraveled: 0,
-        fadeStart: config.fadeAfter || config.maxDistance || distance,
-        alpha: 1.0,
-        damage: config.damage,
-        element: config.element || 'physical',
-        attacker: config.attacker || config.owner,
-        isMagic: config.isMagic || false,
-        isSkill: config.isSkill || false,
-        isSpecial: config.isSpecial || false,
-        elementConfig: config.elementConfig || null,
-        isDirectionBased: config.dirX !== undefined,
-        active: true,
-        hasHit: false
-    };
+    // OBJECT POOLING: Acquire from pool instead of creating new object
+    const projectile = ObjectPool.projectiles.acquire();
+
+    // Initialize/reset all properties
+    projectile.x = config.x;
+    projectile.y = config.y;
+    projectile.displayX = config.x;
+    projectile.displayY = config.y;
+    projectile.targetX = config.targetX;
+    projectile.targetY = config.targetY;
+    projectile.target = config.target;
+    projectile.dirX = dx;
+    projectile.dirY = dy;
+    projectile.velocityX = dx * config.speed;
+    projectile.velocityY = dy * config.speed;
+    projectile.speed = config.speed;
+    projectile.distanceToTravel = config.maxDistance || distance;
+    projectile.distanceTraveled = 0;
+    projectile.fadeStart = config.fadeAfter || config.maxDistance || distance;
+    projectile.alpha = 1.0;
+    projectile.damage = config.damage;
+    projectile.element = config.element || 'physical';
+    projectile.attacker = config.attacker || config.owner;
+    projectile.isMagic = config.isMagic || false;
+    projectile.isSkill = config.isSkill || false;
+    projectile.isSpecial = config.isSpecial || false;
+    projectile.elementConfig = config.elementConfig || null;
+    projectile.isDirectionBased = config.dirX !== undefined;
+    projectile.active = true;
+    projectile.hasHit = false;
 
     projectiles.push(projectile);
     return projectile;
@@ -1182,6 +1322,8 @@ function updateProjectiles(deltaTime) {
         const proj = projectiles[i];
 
         if (!proj.active) {
+            // OBJECT POOLING: Release back to pool
+            ObjectPool.projectiles.release(proj);
             projectiles.splice(i, 1);
             continue;
         }
@@ -1213,6 +1355,7 @@ function updateProjectiles(deltaTime) {
                 }
                 proj.hasHit = true;
                 proj.active = false;
+                ObjectPool.projectiles.release(proj);
                 projectiles.splice(i, 1);
                 continue;
             }
@@ -1231,6 +1374,7 @@ function updateProjectiles(deltaTime) {
                 });
             }
             proj.active = false;
+            ObjectPool.projectiles.release(proj);
             projectiles.splice(i, 1);
             continue;
         }
@@ -1240,6 +1384,7 @@ function updateProjectiles(deltaTime) {
 
         if (checkProjectileCollision(gridX, gridY)) {
             proj.active = false;
+            ObjectPool.projectiles.release(proj);
             projectiles.splice(i, 1);
             continue;
         }
@@ -1498,7 +1643,23 @@ function clearProjectiles() {
 // SECTION 5: CORE COMBAT LOOP
 // ############################################################################
 
+// GLOBAL HITSTOP: Check if combat should be frozen (for impact feel)
+// When active, enemy AI and physics freeze while VFX continue
+function isGlobalHitstopActive() {
+    return mouseAttackState?.hitstopActive || false;
+}
+
+// Get remaining hitstop time (for other systems to sync)
+function getHitstopRemaining() {
+    return mouseAttackState?.hitstopTimer || 0;
+}
+
 function updateCombat(deltaTime) {
+    // GLOBAL HITSTOP: Skip enemy AI updates during hitstop
+    // This "sells the hit" by freezing enemies in place during impact frames
+    // Player VFX and UI continue updating (handled in updateMouseAttackSystem)
+    const hitstopActive = isGlobalHitstopActive();
+
     if (game.player?.combat?.isInCombat) {
         updateEntityCombat(game.player, deltaTime);
     }
@@ -1506,6 +1667,21 @@ function updateCombat(deltaTime) {
     if (game.enemies) {
         for (const enemy of game.enemies) {
             if (enemy.hp <= 0) continue;
+
+            // GLOBAL HITSTOP: Freeze enemy combat during hitstop
+            if (hitstopActive) {
+                // Freeze enemy position (store original for visual)
+                if (!enemy._hitstopFrozen) {
+                    enemy._hitstopFrozen = true;
+                    enemy._frozenX = enemy.gridX;
+                    enemy._frozenY = enemy.gridY;
+                }
+                continue; // Skip all enemy updates during hitstop
+            } else if (enemy._hitstopFrozen) {
+                // Hitstop ended, unfreeze
+                enemy._hitstopFrozen = false;
+            }
+
             if (enemy.combat?.isInCombat) {
                 updateEntityCombat(enemy, deltaTime);
             }
@@ -2043,6 +2219,31 @@ function performDash(player, mouseX, mouseY) {
     if (!COMBAT_ENHANCEMENTS_CONFIG.dash.enabled || !player) return false;
     if (dashState.cooldown > 0 || dashState.isDashing) return false;
 
+    // ANIMATION CANCELING: Allow dash to interrupt attack swings
+    // This raises skill ceiling by letting players "dash out" of over-committed attacks
+    if (mouseAttackState.isSwinging) {
+        // Cancel the current swing
+        mouseAttackState.isSwinging = false;
+        mouseAttackState.swingProgress = 0;
+        mouseAttackState.hitEnemies.clear();
+        mouseAttackState.pendingDamage = null;
+        // Reset combo counter (penalty for canceling)
+        mouseAttackState.comboCount = 1;
+        mouseAttackState.comboResetTimer = 0;
+        // Clear any input buffer
+        mouseAttackState.bufferedAttack = false;
+        mouseAttackState.inputBufferTime = 0;
+        // Release lunge lock if active
+        mouseAttackState.isLunging = false;
+        mouseAttackState.lungeInputLock = false;
+    }
+
+    // Also cancel GCD to allow immediate action after dash
+    if (player.gcd) {
+        player.gcd.active = false;
+        player.gcd.remaining = 0;
+    }
+
     const trackerWidth = typeof TRACKER_WIDTH !== 'undefined' ? TRACKER_WIDTH : 250;
     const tileSize = (typeof TILE_SIZE !== 'undefined' ? TILE_SIZE : 32) * (window.currentZoom || 2);
     const camX = game.camera ? game.camera.x : 0;
@@ -2092,17 +2293,23 @@ function performDash(player, mouseX, mouseY) {
 }
 
 function createDashGhosts(player) {
+    // OBJECT POOLING: Release any existing ghosts back to pool
+    for (const ghost of dashState.ghosts) {
+        ObjectPool.ghosts.release(ghost);
+    }
     dashState.ghosts = [];
+
     const ghostCount = COMBAT_ENHANCEMENTS_CONFIG.dash.ghostCount;
     for (let i = 0; i < ghostCount; i++) {
         const t = i / ghostCount;
-        dashState.ghosts.push({
-            x: dashState.dashStartX + (dashState.dashTargetX - dashState.dashStartX) * t,
-            y: dashState.dashStartY + (dashState.dashTargetY - dashState.dashStartY) * t,
-            facing: player.facing,
-            alpha: 0.6 - (t * 0.4),
-            timer: COMBAT_ENHANCEMENTS_CONFIG.dash.ghostFadeDuration
-        });
+        // OBJECT POOLING: Acquire from pool
+        const ghost = ObjectPool.ghosts.acquire();
+        ghost.x = dashState.dashStartX + (dashState.dashTargetX - dashState.dashStartX) * t;
+        ghost.y = dashState.dashStartY + (dashState.dashTargetY - dashState.dashStartY) * t;
+        ghost.facing = player.facing;
+        ghost.alpha = 0.6 - (t * 0.4);
+        ghost.timer = COMBAT_ENHANCEMENTS_CONFIG.dash.ghostFadeDuration;
+        dashState.ghosts.push(ghost);
     }
 }
 
@@ -2141,7 +2348,11 @@ function updateDash(deltaTime) {
         const ghost = dashState.ghosts[i];
         ghost.timer -= dt;
         ghost.alpha = Math.max(0, ghost.alpha * (ghost.timer / COMBAT_ENHANCEMENTS_CONFIG.dash.ghostFadeDuration));
-        if (ghost.timer <= 0) dashState.ghosts.splice(i, 1);
+        if (ghost.timer <= 0) {
+            // OBJECT POOLING: Release back to pool
+            ObjectPool.ghosts.release(ghost);
+            dashState.ghosts.splice(i, 1);
+        }
     }
 }
 
@@ -3252,11 +3463,18 @@ const mouseAttackState = {
     activeWindowStart: 0.15, activeWindowEnd: 0.85, pendingDamage: null
 };
 
-// Weapon lunge distances
+// Weapon lunge distances (tiles) - "Coyote Time" sticky targeting
+// Tripled values to auto-snap player into striking range, preventing pixel-perfect frustration
 const WEAPON_LUNGE_CONFIG = {
-    knife: 0, unarmed: 0.05, wand: 0,
-    sword: 0.15, polearm: 0.2, staff: 0.1,
-    axe: 0.25, mace: 0.3, shield: 0.15
+    knife: 0.3,      // Quick stab lunge (was 0)
+    unarmed: 0.15,   // Short jab step (was 0.05)
+    wand: 0.1,       // Minimal for casters (was 0)
+    sword: 0.5,      // Good forward momentum (was 0.15)
+    polearm: 0.6,    // Long thrust lunge (was 0.2)
+    staff: 0.3,      // Medium step (was 0.1)
+    axe: 0.75,       // Heavy overhead step (was 0.25)
+    mace: 0.9,       // Big wind-up step (was 0.3)
+    shield: 0.45     // Shield bash rush (was 0.15)
 };
 
 // Track mouse position
@@ -3299,8 +3517,17 @@ function isWeaponRanged(player) {
 
 function getAttackCooldown(player) {
     const weapon = player?.equipped?.MAIN;
-    const baseSpeed = weapon?.stats?.speed || 1.0;
-    return 0.7 / baseSpeed;
+    const weaponType = weapon?.weaponType || 'unarmed';
+
+    // Use weapon-specific attack time if available
+    const weaponAttackTime = COMBAT_CONFIG.weaponAttackTimes?.[weaponType];
+    const baseTime = weaponAttackTime || COMBAT_CONFIG.baseAttackTime;
+
+    // Speed stat modifies attack time (higher speed = faster attacks)
+    const speedMod = weapon?.stats?.speed || 1.0;
+
+    // Convert ms to seconds and apply speed modifier
+    return (baseTime / 1000) / speedMod;
 }
 
 function performMouseAttack(player, fromBuffer = false) {
@@ -3850,6 +4077,13 @@ if (typeof window !== 'undefined') {
     window.updateMouseAttackSystem = updateMouseAttackSystem;
     window.isPlayerMovementLocked = isPlayerMovementLocked;
     window.drawRangeIndicator = drawRangeIndicator;
+
+    // Object Pooling exports (Optimization)
+    window.ObjectPool = ObjectPool;
+
+    // Global Hitstop exports
+    window.isGlobalHitstopActive = isGlobalHitstopActive;
+    window.getHitstopRemaining = getHitstopRemaining;
 }
 
 // Initialize Status Effect System
@@ -3857,4 +4091,4 @@ if (typeof StatusEffectSystem !== 'undefined') {
     StatusEffectSystem.init();
 }
 
-console.log('Combat Master loaded (All 10 sections consolidated)');
+console.log('Combat Master loaded - Combat Engineering v2: Deterministic hits, fast attacks, sticky targeting, dash cancel, global hitstop, object pooling');
