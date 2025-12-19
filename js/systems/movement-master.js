@@ -17,15 +17,15 @@
 
 const MOVEMENT_CONFIG = {
     // Player movement
-    playerMoveSpeed: 4,           // Tiles per second
+    playerMoveSpeed: 4,           // Tiles per second (used as max speed now)
 
     // Sub-tile precision
     tileIncrement: 0.125,         // .125 tile precision for player
-    wallMargin: 0.125,            // Margin from walls
+    wallMargin: 0.05,             // TIGHTENED: Margin from walls (was 0.125, now ~1-2px at 32px tiles)
 
     // Entity collision
-    playerRadius: 0.2,            // Player bounding radius for collision
-    enemyCollisionRadius: 0.3,    // Radius for player-enemy collision
+    playerRadius: 0.15,           // TIGHTENED: Player bounding radius (was 0.2)
+    enemyCollisionRadius: 0.25,   // TIGHTENED: Radius for player-enemy collision (was 0.3)
 
     // Enemy movement
     enemyBaseMoveSpeed: 0.06,     // Base enemy move speed
@@ -38,7 +38,18 @@ const MOVEMENT_CONFIG = {
     maxPathIterations: 1000,      // A* iteration limit
 
     // Diagonal movement
-    diagonalFactor: 0.707         // sqrt(2) / 2 for normalized diagonal speed
+    diagonalFactor: 0.707,        // sqrt(2) / 2 for normalized diagonal speed
+
+    // === VELOCITY-BASED MOVEMENT (Inertia) ===
+    acceleration: 25,             // Tiles per second squared (snappy acceleration)
+    friction: 12,                 // Friction coefficient (higher = more responsive stops)
+    maxVelocity: 5,               // Maximum velocity cap (tiles/sec)
+    velocityDeadzone: 0.01,       // Below this velocity, snap to zero
+
+    // === CORNER NUDGE SYSTEM ===
+    nudgeDistance: 0.15,          // How far to check for nudge opportunities (tiles)
+    nudgeStrength: 0.08,          // Perpendicular correction impulse per frame
+    nudgeEnabled: true            // Toggle corner sliding
 };
 
 // ############################################################################
@@ -725,11 +736,122 @@ function getAdjacentWalkableTile(x, y, ignoreEnemies = false, ignoreNPCs = false
 }
 
 // ############################################################################
-// SECTION 6: PLAYER MOVEMENT
+// SECTION 6: PLAYER MOVEMENT (Velocity-Based with Wall Sliding)
 // ############################################################################
 
+// Player velocity state (persistent across frames)
+const playerVelocity = { x: 0, y: 0 };
+
 /**
- * Move player incrementally based on held direction
+ * Get input vector from direction string
+ */
+function getInputVector(direction) {
+    let ix = 0, iy = 0;
+
+    switch (direction) {
+        case 'up': iy = -1; break;
+        case 'down': iy = 1; break;
+        case 'left': ix = -1; break;
+        case 'right': ix = 1; break;
+        case 'up-left': ix = -1; iy = -1; break;
+        case 'up-right': ix = 1; iy = -1; break;
+        case 'down-left': ix = -1; iy = 1; break;
+        case 'down-right': ix = 1; iy = 1; break;
+    }
+
+    // Normalize diagonal input
+    if (ix !== 0 && iy !== 0) {
+        const factor = MOVEMENT_CONFIG.diagonalFactor;
+        ix *= factor;
+        iy *= factor;
+    }
+
+    return { x: ix, y: iy };
+}
+
+/**
+ * Check if position is valid for single-axis movement
+ * Used for wall sliding collision resolution
+ */
+function canMoveToAxis(x, y, checkEnemies = true) {
+    const margin = MOVEMENT_CONFIG.wallMargin;
+
+    // Boundary check
+    if (x - margin < 0 || x + margin >= GRID_WIDTH ||
+        y - margin < 0 || y + margin >= GRID_HEIGHT) {
+        return false;
+    }
+
+    // Check tile at position
+    const tileX = Math.floor(x);
+    const tileY = Math.floor(y);
+
+    if (!isTileWalkable(tileX, tileY)) {
+        return false;
+    }
+
+    // Check fractional edge collisions
+    const fracX = x - tileX;
+    const fracY = y - tileY;
+
+    if (fracX < margin && !isTileWalkable(tileX - 1, tileY)) return false;
+    if (fracX > (1 - margin) && !isTileWalkable(tileX + 1, tileY)) return false;
+    if (fracY < margin && !isTileWalkable(tileX, tileY - 1)) return false;
+    if (fracY > (1 - margin) && !isTileWalkable(tileX, tileY + 1)) return false;
+
+    // Enemy collision (optional)
+    if (checkEnemies && game.enemies) {
+        const radius = MOVEMENT_CONFIG.enemyCollisionRadius;
+        for (const enemy of game.enemies) {
+            if (enemy.hp <= 0) continue;
+            const dx = x - enemy.gridX;
+            const dy = y - enemy.gridY;
+            if (dx * dx + dy * dy < radius * radius) return false;
+        }
+    }
+
+    return true;
+}
+
+/**
+ * Try to nudge player around a corner obstruction
+ * Returns adjusted position if nudge succeeds, null otherwise
+ */
+function tryCornerNudge(currentX, currentY, targetX, targetY, velocityX, velocityY) {
+    if (!MOVEMENT_CONFIG.nudgeEnabled) return null;
+
+    const nudgeDist = MOVEMENT_CONFIG.nudgeDistance;
+
+    // Determine primary movement direction
+    const movingX = Math.abs(velocityX) > Math.abs(velocityY);
+
+    if (movingX) {
+        // Moving primarily horizontally, try vertical nudges
+        // Check if nudging up helps
+        if (canMoveToAxis(targetX, currentY - nudgeDist, true)) {
+            return { x: targetX, y: currentY - nudgeDist, nudgeY: -MOVEMENT_CONFIG.nudgeStrength };
+        }
+        // Check if nudging down helps
+        if (canMoveToAxis(targetX, currentY + nudgeDist, true)) {
+            return { x: targetX, y: currentY + nudgeDist, nudgeY: MOVEMENT_CONFIG.nudgeStrength };
+        }
+    } else {
+        // Moving primarily vertically, try horizontal nudges
+        // Check if nudging left helps
+        if (canMoveToAxis(currentX - nudgeDist, targetY, true)) {
+            return { x: currentX - nudgeDist, y: targetY, nudgeX: -MOVEMENT_CONFIG.nudgeStrength };
+        }
+        // Check if nudging right helps
+        if (canMoveToAxis(currentX + nudgeDist, targetY, true)) {
+            return { x: currentX + nudgeDist, y: targetY, nudgeX: MOVEMENT_CONFIG.nudgeStrength };
+        }
+    }
+
+    return null;
+}
+
+/**
+ * Move player with velocity-based physics and wall sliding
  * @param {string} direction - Direction to move (up, down, left, right, up-left, etc.)
  * @param {number} deltaTime - Time since last frame in milliseconds
  */
@@ -737,55 +859,181 @@ function movePlayerContinuous(direction, deltaTime) {
     const player = game.player;
     if (!player) return;
 
-    const moveSpeed = player.moveSpeed || MOVEMENT_CONFIG.playerMoveSpeed;
-    const moveDelta = (moveSpeed * deltaTime) / 1000;
+    const dt = deltaTime / 1000; // Convert to seconds
 
-    let dx = 0, dy = 0;
+    // Get input vector
+    const input = getInputVector(direction);
+    const hasInput = input.x !== 0 || input.y !== 0;
 
-    switch (direction) {
-        case 'up': dy = -moveDelta; break;
-        case 'down': dy = moveDelta; break;
-        case 'left': dx = -moveDelta; break;
-        case 'right': dx = moveDelta; break;
-        case 'up-left': dx = -moveDelta * MOVEMENT_CONFIG.diagonalFactor; dy = -moveDelta * MOVEMENT_CONFIG.diagonalFactor; break;
-        case 'up-right': dx = moveDelta * MOVEMENT_CONFIG.diagonalFactor; dy = -moveDelta * MOVEMENT_CONFIG.diagonalFactor; break;
-        case 'down-left': dx = -moveDelta * MOVEMENT_CONFIG.diagonalFactor; dy = moveDelta * MOVEMENT_CONFIG.diagonalFactor; break;
-        case 'down-right': dx = moveDelta * MOVEMENT_CONFIG.diagonalFactor; dy = moveDelta * MOVEMENT_CONFIG.diagonalFactor; break;
+    // === VELOCITY ACCUMULATION (Inertia) ===
+    if (hasInput) {
+        // Accelerate toward input direction
+        const accel = MOVEMENT_CONFIG.acceleration;
+        playerVelocity.x += input.x * accel * dt;
+        playerVelocity.y += input.y * accel * dt;
     }
 
-    const newX = player.gridX + dx;
-    const newY = player.gridY + dy;
+    // Apply friction/damping (always, creates natural deceleration)
+    const friction = MOVEMENT_CONFIG.friction;
+    playerVelocity.x *= Math.max(0, 1.0 - friction * dt);
+    playerVelocity.y *= Math.max(0, 1.0 - friction * dt);
 
-    if (canMoveToPosition(newX, newY, player.gridX, player.gridY)) {
-        player.gridX = newX;
-        player.gridY = newY;
-        player.displayX = newX;
-        player.displayY = newY;
-        player.x = newX;
-        player.y = newY;
+    // Clamp to max velocity
+    const maxVel = MOVEMENT_CONFIG.maxVelocity;
+    const velMag = Math.sqrt(playerVelocity.x * playerVelocity.x + playerVelocity.y * playerVelocity.y);
+    if (velMag > maxVel) {
+        const scale = maxVel / velMag;
+        playerVelocity.x *= scale;
+        playerVelocity.y *= scale;
+    }
 
+    // Deadzone - snap tiny velocities to zero
+    const deadzone = MOVEMENT_CONFIG.velocityDeadzone;
+    if (Math.abs(playerVelocity.x) < deadzone) playerVelocity.x = 0;
+    if (Math.abs(playerVelocity.y) < deadzone) playerVelocity.y = 0;
+
+    // Calculate movement delta
+    const deltaX = playerVelocity.x * dt;
+    const deltaY = playerVelocity.y * dt;
+
+    if (deltaX === 0 && deltaY === 0) {
+        player.isMoving = false;
+        return;
+    }
+
+    // Store previous position for tile interaction checks
+    const prevTileX = Math.floor(player.gridX);
+    const prevTileY = Math.floor(player.gridY);
+
+    // === AXIS-DECOUPLED COLLISION (Wall Sliding) ===
+    let newX = player.gridX;
+    let newY = player.gridY;
+    let collidedX = false;
+    let collidedY = false;
+
+    // Step 1: Integrate X axis
+    const testX = player.gridX + deltaX;
+    if (canMoveToAxis(testX, player.gridY, true)) {
+        newX = testX;
+    } else {
+        // X blocked - try corner nudge
+        const nudge = tryCornerNudge(player.gridX, player.gridY, testX, player.gridY, playerVelocity.x, playerVelocity.y);
+        if (nudge && nudge.nudgeY) {
+            // Apply perpendicular nudge
+            const nudgeTestY = player.gridY + nudge.nudgeY;
+            if (canMoveToAxis(testX, nudgeTestY, true)) {
+                newX = testX;
+                newY = nudgeTestY;
+            } else {
+                collidedX = true;
+                playerVelocity.x = 0; // Project velocity onto collision normal
+            }
+        } else {
+            collidedX = true;
+            playerVelocity.x = 0;
+        }
+    }
+
+    // Step 2: Integrate Y axis
+    const testY = newY + deltaY;
+    if (canMoveToAxis(newX, testY, true)) {
+        newY = testY;
+    } else {
+        // Y blocked - try corner nudge
+        const nudge = tryCornerNudge(newX, player.gridY, newX, testY, playerVelocity.x, playerVelocity.y);
+        if (nudge && nudge.nudgeX) {
+            // Apply perpendicular nudge
+            const nudgeTestX = newX + nudge.nudgeX;
+            if (canMoveToAxis(nudgeTestX, testY, true)) {
+                newX = nudgeTestX;
+                newY = testY;
+            } else {
+                collidedY = true;
+                playerVelocity.y = 0;
+            }
+        } else {
+            collidedY = true;
+            playerVelocity.y = 0;
+        }
+    }
+
+    // === POSITION UPDATE ===
+    player.gridX = newX;
+    player.gridY = newY;
+    player.displayX = newX;
+    player.displayY = newY;
+    player.x = newX;
+    player.y = newY;
+
+    // Update facing direction based on velocity (not input)
+    if (Math.abs(playerVelocity.x) > deadzone || Math.abs(playerVelocity.y) > deadzone) {
         player.facing = getCardinalFacing(direction);
         player.isMoving = true;
+    } else {
+        player.isMoving = false;
+    }
 
-        const tileX = Math.floor(newX);
-        const tileY = Math.floor(newY);
-        const prevTileX = Math.floor(player.gridX - dx);
-        const prevTileY = Math.floor(player.gridY - dy);
-
-        if (tileX !== prevTileX || tileY !== prevTileY) {
-            if (typeof checkTileInteractions === 'function') {
-                checkTileInteractions(player);
-            }
+    // Check for tile interactions on tile boundary crossings
+    const newTileX = Math.floor(newX);
+    const newTileY = Math.floor(newY);
+    if (newTileX !== prevTileX || newTileY !== prevTileY) {
+        if (typeof checkTileInteractions === 'function') {
+            checkTileInteractions(player);
         }
     }
 }
 
 /**
- * Cancel current movement and snap player to nearest tile increment
+ * Update player physics without input (for momentum decay)
+ * Call this when no movement keys are pressed
+ */
+function updatePlayerPhysics(deltaTime) {
+    const player = game.player;
+    if (!player) return;
+
+    // Only update if player has velocity
+    if (playerVelocity.x === 0 && playerVelocity.y === 0) {
+        player.isMoving = false;
+        return;
+    }
+
+    // Call movement with no direction to apply friction and integrate position
+    movePlayerContinuous(null, deltaTime);
+}
+
+/**
+ * Get current player velocity (for external systems)
+ */
+function getPlayerVelocity() {
+    return { x: playerVelocity.x, y: playerVelocity.y };
+}
+
+/**
+ * Set player velocity directly (for knockback, dashes, etc.)
+ */
+function setPlayerVelocity(vx, vy) {
+    playerVelocity.x = vx;
+    playerVelocity.y = vy;
+}
+
+/**
+ * Add impulse to player velocity (for bumps, bounces)
+ */
+function addPlayerImpulse(ix, iy) {
+    playerVelocity.x += ix;
+    playerVelocity.y += iy;
+}
+
+/**
+ * Cancel current movement, reset velocity, and snap player to nearest tile increment
  */
 function cancelPlayerMove() {
     const player = game.player;
-    if (!player || !player.isMoving) return;
+    if (!player) return;
+
+    // Reset velocity (kill all momentum)
+    playerVelocity.x = 0;
+    playerVelocity.y = 0;
 
     const snapIncrement = MOVEMENT_CONFIG.tileIncrement;
     const snappedX = Math.round(player.displayX / snapIncrement) * snapIncrement;
@@ -1019,6 +1267,7 @@ if (typeof window !== 'undefined') {
     window.canMoveToSafe = canMoveToSafe;
     window.canMoveToPosition = canMoveToPosition;
     window.canMoveToTile = canMoveToTile;
+    window.canMoveToAxis = canMoveToAxis;
     window.checkCircleCollision = checkCircleCollision;
     window.getEnemiesInRange = getEnemiesInRange;
     window.getClosestEnemy = getClosestEnemy;
@@ -1034,9 +1283,16 @@ if (typeof window !== 'undefined') {
     window.findPath = findPath;
     window.getAdjacentWalkableTile = getAdjacentWalkableTile;
 
-    // Player movement
+    // Player movement (velocity-based with wall sliding)
+    window.playerVelocity = playerVelocity;
     window.movePlayerContinuous = movePlayerContinuous;
+    window.updatePlayerPhysics = updatePlayerPhysics;
     window.cancelPlayerMove = cancelPlayerMove;
+    window.getPlayerVelocity = getPlayerVelocity;
+    window.setPlayerVelocity = setPlayerVelocity;
+    window.addPlayerImpulse = addPlayerImpulse;
+    window.getInputVector = getInputVector;
+    window.tryCornerNudge = tryCornerNudge;
 
     // Entity movement updates
     window.updateEntityMovement = updateEntityMovement;
@@ -1051,4 +1307,4 @@ if (typeof window !== 'undefined') {
     window.getDirectionFromDelta = getDirectionFromDelta;
 }
 
-console.log('Movement Master loaded (9 sections: math, collision, LOS, pathfinding, player, entity, directions)');
+console.log('Movement Master v2 loaded - Wall sliding, velocity inertia, corner nudge, tight AABB margins');
