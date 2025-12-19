@@ -681,6 +681,11 @@ function applyDamage(entity, damage, source, damageResult) {
             removeStatusEffect(entity, 'invisible');
         }
     }
+
+    // === BOON ON-DAMAGE-TAKEN EFFECTS ===
+    if (typeof BoonCombatIntegration !== 'undefined' && entity === game.player) {
+        BoonCombatIntegration.applyOnDamageTakenEffects(entity, damage, source);
+    }
 }
 
 /**
@@ -747,6 +752,12 @@ function applyWeaponEffects(attacker, defender, damageResult) {
     if (weapon.special?.onHit && typeof weapon.special.onHit === 'function') {
         weapon.special.onHit(attacker, defender, damageResult);
     }
+
+    // === BOON ON-HIT EFFECTS ===
+    if (typeof BoonCombatIntegration !== 'undefined') {
+        BoonCombatIntegration.applyOnHitEffects(attacker, defender, damageResult);
+        BoonCombatIntegration.applyOnCritEffects(attacker, defender, damageResult);
+    }
 }
 
 // ============================================================================
@@ -786,6 +797,11 @@ function handleDeath(entity, killer) {
     // Clear status effects
     if (typeof clearStatusEffects === 'function') {
         clearStatusEffects(entity);
+    }
+
+    // === BOON ON-KILL EFFECTS ===
+    if (typeof BoonCombatIntegration !== 'undefined' && killer === game.player) {
+        BoonCombatIntegration.applyOnKillEffects(killer, entity);
     }
 
     // Spawn loot

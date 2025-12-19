@@ -9,11 +9,11 @@
 // ============================================================================
 
 const SPAWNER_CONFIG = {
-    baseEnemiesPerRoom: 1,        // Reduced from 3 - fewer but more meaningful encounters
-    enemiesPerRoomVariance: 1,    // Reduced from 2 - tighter variance (0-2 enemies)
-    enemyDensity: 0.02,           // Reduced from 4% to 2% of floor tiles
-    minEnemiesPerRoom: 0,         // Allow empty rooms for pacing
-    maxEnemiesPerRoom: 3,         // Reduced from 8 - max 3 enemies per room
+    baseEnemiesPerRoom: 3,        // Tripled from 1 for more action
+    enemiesPerRoomVariance: 3,    // Tripled from 1 - variance (0-6 enemies)
+    enemyDensity: 0.06,           // Tripled from 2% to 6% of floor tiles
+    minEnemiesPerRoom: 1,         // At least 1 enemy per room
+    maxEnemiesPerRoom: 9,         // Tripled from 3 - max 9 enemies per room
     elementMatchBonus: 3.0,       // 3x weight for matching element
     elementPenalty: 0.3,          // 0.3x weight for opposed element
     // Distance-based tier weights

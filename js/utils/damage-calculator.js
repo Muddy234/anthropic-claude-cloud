@@ -321,14 +321,14 @@ const DamageCalculator = {
 
     getDefense(defender, damageType) {
         let defense = 0;
-        
+
         // Physical vs magical defense
         if (damageType === 'blade' || damageType === 'blunt' || damageType === 'pierce') {
             defense = defender.pDef || defender.stats?.pDef || 0;
         } else {
             defense = defender.mDef || defender.stats?.mDef || 0;
         }
-        
+
         // Add armor defense
         const slots = ['HEAD', 'CHEST', 'LEGS', 'FEET'];
         for (const slot of slots) {
@@ -337,8 +337,22 @@ const DamageCalculator = {
                 defense += armor.stats.defense;
             }
         }
-        
-        return defense;
+
+        // Apply Rot armor reduction (from boon status effects)
+        if (typeof BoonCombatIntegration !== 'undefined') {
+            const armorMod = BoonCombatIntegration.getArmorModifier(defender);
+            defense = Math.floor(defense * armorMod);
+        }
+
+        // Apply armor stat modifier from status effects (generic)
+        if (typeof StatusEffectSystem !== 'undefined') {
+            const armorMod = StatusEffectSystem.getStatModifier(defender, 'armor');
+            if (armorMod !== 0) {
+                defense = Math.floor(defense * (1 + armorMod));
+            }
+        }
+
+        return Math.max(0, defense);
     },
 
     calculateDefenseReduction(defense) {

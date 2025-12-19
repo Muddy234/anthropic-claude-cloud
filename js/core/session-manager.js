@@ -80,20 +80,37 @@ const SessionManager = {
         }
 
         const floor = sessionState.currentFloor;
-        const itemCount = sessionState.inventory.length;
-        const goldAmount = sessionState.gold;
+
+        // Use game.player.inventory as the source of truth (items are added there during gameplay)
+        const playerInventory = game.player?.inventory || [];
+        const itemCount = playerInventory.length;
+        const goldAmount = game.player?.gold || sessionState.gold || 0;
 
         console.log(`[SessionManager] Extraction from floor ${floor}!`);
         console.log(`[SessionManager] Extracting ${itemCount} items and ${goldAmount} gold`);
 
-        // Transfer inventory to bank
-        sessionState.inventory.forEach(item => {
+        // Transfer player inventory to bank (this is where items actually are)
+        playerInventory.forEach(item => {
             if (typeof BankingSystem !== 'undefined') {
                 BankingSystem.deposit(item);
             } else {
                 // Fallback if BankingSystem not loaded yet
                 persistentState.bank.items.push(item);
                 persistentState.bank.usedSlots++;
+            }
+        });
+
+        // Also transfer any items in sessionState.inventory (for backwards compatibility)
+        sessionState.inventory.forEach(item => {
+            // Avoid duplicates - only add if not already in player inventory
+            const isDuplicate = playerInventory.some(pi => pi.id === item.id && pi.name === item.name);
+            if (!isDuplicate) {
+                if (typeof BankingSystem !== 'undefined') {
+                    BankingSystem.deposit(item);
+                } else {
+                    persistentState.bank.items.push(item);
+                    persistentState.bank.usedSlots++;
+                }
             }
         });
 

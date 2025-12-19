@@ -171,6 +171,9 @@ function drawDungeonMap(areaX, areaY, areaWidth, areaHeight) {
     // Draw path down / descent location
     drawPathDown(offsetX, offsetY, tileSize);
 
+    // Draw shrines (only if explored)
+    drawMapShrines(offsetX, offsetY, tileSize);
+
     // Draw enemies and loot (only at zoom > 2x)
     if (mapOverlayState.zoom > 2) {
         drawMapEnemies(offsetX, offsetY, tileSize, areaX, areaY, areaWidth, areaHeight);
@@ -343,6 +346,59 @@ function drawPathDown(offsetX, offsetY, tileSize) {
         // Dim indicator when not yet revealed
         ctx.fillStyle = 'rgba(128, 0, 128, 0.3)';
         ctx.fillRect(screenX, screenY, tileSize, tileSize);
+    }
+}
+
+/**
+ * Draw shrine markers on the map (only if explored)
+ */
+function drawMapShrines(offsetX, offsetY, tileSize) {
+    if (!game.decorations) return;
+
+    const pulse = Math.sin(Date.now() / 500) * 0.3 + 0.7;
+
+    for (const decoration of game.decorations) {
+        if (decoration.type !== 'shrine') continue;
+        if (decoration.used) continue; // Skip used shrines
+
+        const shrineX = Math.floor(decoration.x);
+        const shrineY = Math.floor(decoration.y);
+
+        // Check if tile is explored
+        const tile = game.map[shrineY]?.[shrineX];
+        if (!tile || !tile.explored) continue;
+
+        const screenX = offsetX + shrineX * tileSize;
+        const screenY = offsetY + shrineY * tileSize;
+
+        // Draw shrine marker - cyan/teal torii gate style
+        ctx.save();
+
+        // Glow effect
+        ctx.shadowColor = '#00ffaa';
+        ctx.shadowBlur = 8;
+
+        // Background circle
+        ctx.fillStyle = '#00ffaa';
+        ctx.globalAlpha = pulse * 0.3;
+        ctx.beginPath();
+        ctx.arc(screenX + tileSize / 2, screenY + tileSize / 2, tileSize * 0.8, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Torii gate icon
+        ctx.globalAlpha = pulse;
+        ctx.fillStyle = '#00ffaa';
+        const s = tileSize * 0.4;
+        const cx = screenX + tileSize / 2;
+        const cy = screenY + tileSize / 2;
+
+        // Top bar
+        ctx.fillRect(cx - s, cy - s * 0.6, s * 2, s * 0.3);
+        // Two pillars
+        ctx.fillRect(cx - s * 0.8, cy - s * 0.4, s * 0.3, s * 1.2);
+        ctx.fillRect(cx + s * 0.5, cy - s * 0.4, s * 0.3, s * 1.2);
+
+        ctx.restore();
     }
 }
 
@@ -628,9 +684,89 @@ if (typeof window !== 'undefined') {
     window.addEventListener('load', initMapOverlay);
 }
 
+// ============================================================================
+// DEBUG FUNCTIONS
+// ============================================================================
+
+/**
+ * Reveal the entire map - marks all tiles as explored
+ * Use this for debugging/testing purposes
+ * Call from console: revealMap()
+ */
+function revealMap() {
+    if (!game.map) {
+        console.warn('[Debug] No map to reveal');
+        return;
+    }
+
+    let revealedCount = 0;
+    for (let y = 0; y < game.map.length; y++) {
+        for (let x = 0; x < game.map[y].length; x++) {
+            const tile = game.map[y][x];
+            if (tile && !tile.explored) {
+                tile.explored = true;
+                revealedCount++;
+            }
+        }
+    }
+
+    // Also reveal path down if it exists
+    if (typeof sessionState !== 'undefined' && sessionState.pathDown) {
+        sessionState.pathDown.revealed = true;
+        sessionState.pathDown.discovered = true;
+    }
+
+    console.log(`[Debug] Revealed ${revealedCount} tiles`);
+    console.log('[Debug] Map fully explored - shrines, exit, and all areas now visible');
+
+    return revealedCount;
+}
+
+/**
+ * Hide the entire map - marks all tiles as unexplored (except player location)
+ * Use this to reset exploration state for testing
+ * Call from console: hideMap()
+ */
+function hideMap() {
+    if (!game.map || !game.player) {
+        console.warn('[Debug] No map to hide');
+        return;
+    }
+
+    let hiddenCount = 0;
+    const playerX = Math.floor(game.player.gridX);
+    const playerY = Math.floor(game.player.gridY);
+
+    for (let y = 0; y < game.map.length; y++) {
+        for (let x = 0; x < game.map[y].length; x++) {
+            const tile = game.map[y][x];
+            if (tile && tile.explored) {
+                // Keep a small area around player visible
+                const dist = Math.abs(x - playerX) + Math.abs(y - playerY);
+                if (dist > 3) {
+                    tile.explored = false;
+                    hiddenCount++;
+                }
+            }
+        }
+    }
+
+    // Hide path down
+    if (typeof sessionState !== 'undefined' && sessionState.pathDown) {
+        sessionState.pathDown.revealed = false;
+        sessionState.pathDown.discovered = false;
+    }
+
+    console.log(`[Debug] Hidden ${hiddenCount} tiles`);
+    return hiddenCount;
+}
+
 // Export
 window.drawMapOverlay = drawMapOverlay;
 window.mapOverlayState = mapOverlayState;
 window.resetMapOverlayState = resetMapOverlayState;
+window.revealMap = revealMap;
+window.hideMap = hideMap;
 
 console.log('Map overlay loaded');
+console.log('  Debug: revealMap() / hideMap() available in console');

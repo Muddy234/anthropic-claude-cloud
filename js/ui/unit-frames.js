@@ -43,10 +43,15 @@ function renderUnitFrames(ctx) {
     // Draw player frame
     renderPlayerFrame(ctx);
 
+    // Draw player status effects
+    renderPlayerStatusEffects(ctx);
+
     // Draw enemy frame (only if target exists)
     const target = game.player.combat?.currentTarget;
     if (target && target.hp > 0) {
         renderEnemyFrame(ctx, target);
+        // Draw enemy status effects
+        renderEnemyStatusEffects(ctx, target);
     }
 }
 
@@ -644,6 +649,169 @@ function initUnitFrameHandlers() {
 
 }
 
+// ============================================================================
+// STATUS EFFECT RENDERING
+// ============================================================================
+
+/**
+ * Render status effect icons for an entity
+ * @param {CanvasRenderingContext2D} ctx
+ * @param {Object} entity - Player or enemy
+ * @param {number} x - Start X position
+ * @param {number} y - Start Y position
+ * @param {number} maxWidth - Maximum width for status row
+ */
+function renderStatusEffects(ctx, entity, x, y, maxWidth) {
+    if (!entity || typeof StatusEffectSystem === 'undefined') return;
+
+    const effects = StatusEffectSystem.getEffects(entity);
+    if (!effects || effects.length === 0) return;
+
+    const cfg = UNIT_FRAME_CONFIG;
+    const iconSize = cfg.statusIconSize;
+    const spacing = cfg.statusIconSpacing;
+    const maxCols = cfg.statusCols;
+    const maxRows = cfg.statusRows;
+    const maxIcons = cfg.statusMaxIcons;
+
+    ctx.save();
+
+    // Render each effect (up to max)
+    const toRender = effects.slice(0, maxIcons);
+
+    toRender.forEach((effect, index) => {
+        const col = index % maxCols;
+        const row = Math.floor(index / maxCols);
+
+        if (row >= maxRows) return; // Don't exceed max rows
+
+        const iconX = x + col * (iconSize + spacing);
+        const iconY = y + row * (iconSize + spacing);
+
+        renderStatusIcon(ctx, effect, iconX, iconY, iconSize);
+    });
+
+    ctx.restore();
+}
+
+/**
+ * Render a single status effect icon
+ */
+function renderStatusIcon(ctx, effect, x, y, size) {
+    const def = effect.definition;
+    if (!def) return;
+
+    ctx.save();
+
+    // Background based on effect type
+    let bgColor;
+    switch (def.type) {
+        case 'buff':
+            bgColor = 'rgba(46, 204, 113, 0.7)'; // Green
+            break;
+        case 'debuff':
+            bgColor = 'rgba(231, 76, 60, 0.7)'; // Red
+            break;
+        case 'dot':
+            bgColor = 'rgba(230, 126, 34, 0.7)'; // Orange
+            break;
+        case 'cc':
+            bgColor = 'rgba(155, 89, 182, 0.7)'; // Purple
+            break;
+        default:
+            bgColor = 'rgba(100, 100, 100, 0.7)';
+    }
+
+    // Icon background (rounded square)
+    ctx.fillStyle = bgColor;
+    const radius = 3;
+    ctx.beginPath();
+    ctx.moveTo(x + radius, y);
+    ctx.lineTo(x + size - radius, y);
+    ctx.quadraticCurveTo(x + size, y, x + size, y + radius);
+    ctx.lineTo(x + size, y + size - radius);
+    ctx.quadraticCurveTo(x + size, y + size, x + size - radius, y + size);
+    ctx.lineTo(x + radius, y + size);
+    ctx.quadraticCurveTo(x, y + size, x, y + size - radius);
+    ctx.lineTo(x, y + radius);
+    ctx.quadraticCurveTo(x, y, x + radius, y);
+    ctx.closePath();
+    ctx.fill();
+
+    // Border (effect color)
+    ctx.strokeStyle = def.color || '#ffffff';
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+
+    // Icon (emoji or symbol)
+    ctx.font = `${size - 4}px Arial`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillStyle = '#ffffff';
+    ctx.fillText(def.icon || '?', x + size / 2, y + size / 2 + 1);
+
+    // Stack count (if > 1)
+    if (effect.stacks > 1) {
+        ctx.font = 'bold 9px Arial';
+        ctx.textAlign = 'right';
+        ctx.textBaseline = 'bottom';
+        ctx.fillStyle = '#ffffff';
+        ctx.shadowColor = 'rgba(0, 0, 0, 0.9)';
+        ctx.shadowBlur = 2;
+        ctx.fillText(`${effect.stacks}`, x + size - 1, y + size - 1);
+        ctx.shadowBlur = 0;
+    }
+
+    // Duration indicator (pie timer)
+    if (def.duration && effect.remainingDuration) {
+        const pct = effect.remainingDuration / def.duration;
+        if (pct < 1) {
+            // Draw duration arc at bottom
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.8)';
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.arc(x + size / 2, y + size / 2, size / 2 - 1, -Math.PI / 2, -Math.PI / 2 + (pct * Math.PI * 2));
+            ctx.stroke();
+        }
+    }
+
+    ctx.restore();
+}
+
+/**
+ * Render status effects below player frame
+ */
+function renderPlayerStatusEffects(ctx) {
+    if (!game.player) return;
+
+    const cfg = UNIT_FRAME_CONFIG;
+    const frame = cfg.player;
+
+    // Position below the player frame
+    const statusX = frame.x + cfg.portraitPadding;
+    const statusY = frame.y + frame.height + 4;
+    const maxWidth = frame.width - cfg.portraitPadding * 2;
+
+    renderStatusEffects(ctx, game.player, statusX, statusY, maxWidth);
+}
+
+/**
+ * Render status effects below enemy frame
+ */
+function renderEnemyStatusEffects(ctx, enemy) {
+    if (!enemy) return;
+
+    const cfg = UNIT_FRAME_CONFIG;
+    const frame = cfg.enemy;
+
+    // Position below the enemy frame
+    const statusX = frame.x + cfg.portraitPadding;
+    const statusY = frame.y + frame.height + 4;
+    const maxWidth = frame.width - cfg.portraitPadding * 2;
+
+    renderStatusEffects(ctx, enemy, statusX, statusY, maxWidth);
+}
+
 // Initialize on load
 if (typeof window !== 'undefined') {
     window.addEventListener('load', initUnitFrameHandlers);
@@ -652,5 +820,8 @@ if (typeof window !== 'undefined') {
 // Export
 window.renderUnitFrames = renderUnitFrames;
 window.UNIT_FRAME_CONFIG = UNIT_FRAME_CONFIG;
+window.renderStatusEffects = renderStatusEffects;
+window.renderPlayerStatusEffects = renderPlayerStatusEffects;
+window.renderEnemyStatusEffects = renderEnemyStatusEffects;
 
 // Unit frames loaded

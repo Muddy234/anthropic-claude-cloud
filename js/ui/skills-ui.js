@@ -495,7 +495,7 @@ function drawSkillsOverlay() {
     yOffset = radarCenterY + SKILLS_UI_CONFIG.radar.radius + 60;
 
     // === SELECTED PROFICIENCY DETAILS ===
-    const selectedProf = window.skillsUIState.selectedProficiency || 'blade';
+    const selectedProf = window.skillsUIState.selectedProficiency || 'melee';
 
     // Draw proficiency tabs
     yOffset = drawProficiencyTabs(ctx, panelX + 30, yOffset, panelWidth - 60, selectedProf, player.skills.proficiencies, colors);
@@ -518,7 +518,7 @@ function drawPentagonRadar(ctx, centerX, centerY, proficiencies, colors) {
     const cfg = SKILLS_UI_CONFIG.radar;
     const profConfig = SKILLS_UI_CONFIG.proficiencies;
     const radius = cfg.radius;
-    const profIds = ['blade', 'blunt', 'magic', 'ranged', 'expertise'];
+    const profIds = ['melee', 'ranged', 'magic', 'defense', 'vitality'];
 
     ctx.save();
 
@@ -671,7 +671,7 @@ function drawRuneBackground(ctx, centerX, centerY, radius, colors) {
  */
 function drawRadarGrid(ctx, centerX, centerY, radius, vertices, colors) {
     const rings = SKILLS_UI_CONFIG.radar.rings;
-    const profIds = ['blade', 'blunt', 'magic', 'ranged', 'expertise'];
+    const profIds = ['melee', 'ranged', 'magic', 'defense', 'vitality'];
     const profConfig = SKILLS_UI_CONFIG.proficiencies;
 
     // Use chalky line drawing if available
@@ -923,7 +923,7 @@ function drawVertexGemSockets(ctx, centerX, centerY, radius, profConfig, profIds
  * Active tab visually merges with content pane below (no bottom border)
  */
 function drawProficiencyTabs(ctx, x, y, width, selectedProf, proficiencies, colors) {
-    const profIds = ['blade', 'blunt', 'magic', 'ranged', 'expertise'];
+    const profIds = ['melee', 'ranged', 'magic', 'defense', 'vitality'];
     const tabWidth = width / 5;
     const tabHeight = 32;
     const fontFamily = typeof UI_FONT_FAMILY !== 'undefined' ? UI_FONT_FAMILY.display : 'Georgia, serif';
@@ -1241,11 +1241,11 @@ function handleSkillsOverlayClick(mouseX, mouseY) {
 
 function getSpecialtiesForProficiency(profId) {
     const mapping = {
-        blade: ['sword', 'knife', 'axe', 'polearm'],
-        blunt: ['mace', 'staff', 'unarmed', 'shield'],
-        magic: ['fire', 'ice', 'lightning', 'necromancy'],
+        melee: ['sword', 'knife', 'axe', 'polearm'],
         ranged: ['bow', 'crossbow', 'throwing'],
-        expertise: ['traps', 'potions', 'lockpicking', 'tinkering']
+        magic: ['fire', 'ice', 'lightning', 'necromancy'],
+        defense: ['mace', 'staff', 'unarmed', 'shield'],
+        vitality: ['traps', 'potions', 'lockpicking', 'tinkering']
     };
     return mapping[profId] || [];
 }

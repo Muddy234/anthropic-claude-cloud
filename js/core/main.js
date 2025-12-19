@@ -117,8 +117,9 @@ function updateDungeon(dt) {
         ? `Floor: ${sessionState.currentFloor}`
         : '';
 
+    const enemyCount = game.enemies ? game.enemies.length : 0;
     document.getElementById('debug').innerText =
-        `${extractionInfo} | Enemies: ${game.enemies.length} | ${aiStatus} | Systems: ${systemCount} | DT: ${dt.toFixed(1)}ms | FX: ${effectCount}`;
+        `${extractionInfo} | Enemies: ${enemyCount} | ${aiStatus} | Systems: ${systemCount} | DT: ${dt.toFixed(1)}ms | FX: ${effectCount}`;
 
     // === Run all registered systems in priority order ===
     if (typeof SystemManager !== 'undefined') {

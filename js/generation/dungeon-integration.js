@@ -295,9 +295,9 @@ function spawnEnemiesInDungeon() {
         const room = game.rooms.find(r => r.blob === blob);
         if (!room) continue;
 
-        // Enemy count based on blob size
+        // Enemy count based on blob size - tripled for more action
         const blobSize = blob.tiles.size;
-        const baseCount = Math.max(1, Math.floor(blobSize / 200)); // 1 enemy per 200 tiles
+        const baseCount = Math.max(3, Math.floor(blobSize / 70)); // 1 enemy per 70 tiles (was 200)
         const enemyCount = baseCount + Math.floor(Math.random() * baseCount);
 
         // Spawn enemies using existing spawner if available
@@ -306,7 +306,8 @@ function spawnEnemiesInDungeon() {
             const originalType = room.type;
             room.type = blob.blobType === 'treasure' ? 'treasure' : 'combat';
 
-            spawnEnemiesInRoom(room);
+            // Pass the calculated enemy count to override spawner's calculation
+            spawnEnemiesInRoom(room, null, enemyCount);
 
             room.type = originalType;
         } else {
@@ -323,6 +324,143 @@ function spawnEnemiesInDungeon() {
             }
         }
     }
+}
+
+/**
+ * Spawn shrine decorations in shrine rooms
+ * Places an interactable shrine object in each shrine-type room
+ */
+function spawnShrineDecorations() {
+    if (!DUNGEON_STATE.blobs) return;
+
+    let shrineCount = 0;
+
+    for (const blob of DUNGEON_STATE.blobs) {
+        if (blob.blobType !== 'shrine') continue;
+
+        const room = game.rooms.find(r => r.blob === blob);
+        if (!room) continue;
+
+        // Find center position for shrine
+        const shrinePos = findShrinePosition(blob, room);
+        if (!shrinePos) {
+            console.warn('[DungeonIntegration] Could not find position for shrine');
+            continue;
+        }
+
+        // Create shrine decoration
+        const shrine = {
+            x: shrinePos.x,
+            y: shrinePos.y,
+            type: 'shrine',
+            room: room,
+            element: 'holy',
+            blocking: false,
+            interactable: true,
+            used: false,
+            sprite: null,
+            color: '#FFD700',
+            name: 'Ancient Shrine',
+            description: 'A shrine pulsing with divine energy. It may grant a blessing.',
+            data: {
+                color: '#FFD700',
+                symbol: String.fromCodePoint(0x26E9), // Shinto shrine symbol
+                glow: true,
+                glowColor: '#FFD700',
+                glowRadius: 1.5,
+                size: 'large'
+            }
+        };
+
+        // Add to game decorations
+        if (!game.decorations) game.decorations = [];
+        game.decorations.push(shrine);
+
+        // Add to room decorations
+        if (!room.decorations) room.decorations = [];
+        room.decorations.push(shrine);
+
+        // Mark tile as having a decoration
+        const tile = game.map?.[shrinePos.y]?.[shrinePos.x];
+        if (tile) {
+            tile.decoration = shrine;
+        }
+
+        shrineCount++;
+    }
+
+    console.log(`[DungeonIntegration] Spawned ${shrineCount} shrine decorations`);
+}
+
+/**
+ * Find a suitable position for a shrine within a blob
+ * Prefers center of room, away from walls
+ */
+function findShrinePosition(blob, room) {
+    // Try connection point first (center-ish)
+    const centerX = blob.connectionPoint.x;
+    const centerY = blob.connectionPoint.y;
+
+    // Verify it's a valid floor tile
+    if (isValidShrinePosition(centerX, centerY)) {
+        return { x: centerX, y: centerY };
+    }
+
+    // Try offsets from center
+    const offsets = [
+        { dx: 0, dy: 1 }, { dx: 0, dy: -1 },
+        { dx: 1, dy: 0 }, { dx: -1, dy: 0 },
+        { dx: 1, dy: 1 }, { dx: -1, dy: -1 },
+        { dx: 1, dy: -1 }, { dx: -1, dy: 1 }
+    ];
+
+    for (const offset of offsets) {
+        const x = centerX + offset.dx;
+        const y = centerY + offset.dy;
+        if (isValidShrinePosition(x, y)) {
+            return { x, y };
+        }
+    }
+
+    // Fallback: search the blob tiles for a valid position
+    const tiles = Array.from(blob.tiles);
+    for (const tileKey of tiles) {
+        const [x, y] = tileKey.split(',').map(Number);
+        if (isValidShrinePosition(x, y)) {
+            return { x, y };
+        }
+    }
+
+    return null;
+}
+
+/**
+ * Check if a position is valid for shrine placement
+ */
+function isValidShrinePosition(x, y) {
+    if (!game.map || !game.map[y] || !game.map[y][x]) {
+        return false;
+    }
+
+    const tile = game.map[y][x];
+
+    // Must be floor
+    if (tile.type !== 'floor') return false;
+
+    // Must not be blocked
+    if (tile.blocked) return false;
+
+    // Must not have existing decoration
+    if (tile.decoration) return false;
+
+    // Must not have enemy
+    if (game.enemies && game.enemies.some(e =>
+        Math.floor(e.gridX) === x && Math.floor(e.gridY) === y
+    )) {
+        return false;
+    }
+
+    return true;
 }
 
 /**
@@ -343,6 +481,9 @@ function generateBlobDungeon() {
 
     // Spawn enemies
     spawnEnemiesInDungeon();
+
+    // Spawn shrine decorations in shrine rooms
+    spawnShrineDecorations();
 
     // Note: Player spawning is handled by game-init.js::initializePlayer()
 

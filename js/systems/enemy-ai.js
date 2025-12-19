@@ -100,6 +100,14 @@ class EnemyAI {
     update(dt, game) {
         if (this.enemy.hp <= 0) return;
 
+        // === FEAR STATUS CHECK ===
+        // If enemy is feared, force panicked state
+        if (this.enemy.isFeared || (typeof BoonCombatIntegration !== 'undefined' && BoonCombatIntegration.shouldFlee(this.enemy))) {
+            if (this.currentState !== AI_STATES.PANICKED) {
+                this._changeState(AI_STATES.PANICKED);
+            }
+        }
+
         this.stateTimer += dt;
         this.thinkTimer += dt;
         this.attackCooldown = Math.max(0, this.attackCooldown - dt);

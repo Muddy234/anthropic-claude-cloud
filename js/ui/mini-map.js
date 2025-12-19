@@ -290,17 +290,22 @@ function drawMinimapEntities(ctx, cx, cy, cfg, playerGridX, playerGridY, colors)
     }
 
     if (descentX !== null && descentY !== null) {
-        const dx = descentX - playerGridX;
-        const dy = descentY - playerGridY;
-        const dist = Math.sqrt(dx * dx + dy * dy) * cfg.tileSize;
+        // Check if tile is explored - only show if player has discovered it
+        const descentTile = game.map[descentY]?.[descentX];
+        const tileExplored = descentTile?.explored || false;
 
-        if (dist <= radius - 5) {
-            const minimapX = cx + (dx * cfg.tileSize);
-            const minimapY = cy + (dy * cfg.tileSize);
+        // Only show descent if tile is explored OR explicitly revealed
+        if (tileExplored || descentRevealed) {
+            const dx = descentX - playerGridX;
+            const dy = descentY - playerGridY;
+            const dist = Math.sqrt(dx * dx + dy * dy) * cfg.tileSize;
 
-            ctx.save();
+            if (dist <= radius - 5) {
+                const minimapX = cx + (dx * cfg.tileSize);
+                const minimapY = cy + (dy * cfg.tileSize);
 
-            if (descentRevealed) {
+                ctx.save();
+
                 // Bright magenta for descent
                 ctx.shadowColor = '#ff00ff';
                 ctx.shadowBlur = 10;
@@ -320,16 +325,9 @@ function drawMinimapEntities(ctx, cx, cy, cfg, playerGridX, playerGridY, colors)
                 ctx.lineTo(minimapX + cfg.tileSize * 0.6, minimapY + cfg.tileSize * 1.5);
                 ctx.closePath();
                 ctx.fill();
-            } else {
-                // Dim purple when not revealed
-                ctx.fillStyle = 'rgba(128, 0, 128, 0.4)';
-                ctx.globalAlpha = 0.5;
-                ctx.beginPath();
-                ctx.arc(minimapX, minimapY, cfg.tileSize * 1.2, 0, Math.PI * 2);
-                ctx.fill();
-            }
 
-            ctx.restore();
+                ctx.restore();
+            }
         }
     }
 
@@ -449,6 +447,53 @@ function drawMinimapEntities(ctx, cx, cy, cfg, playerGridX, playerGridY, colors)
             ctx.lineWidth = 1;
             ctx.strokeRect(minimapX - cfg.tileSize * 0.6, minimapY - cfg.tileSize * 0.6,
                           cfg.tileSize * 1.2, cfg.tileSize * 1.2);
+            ctx.globalAlpha = 1;
+        }
+    }
+
+    // Draw shrines (only if explored)
+    if (game.decorations) {
+        for (const decoration of game.decorations) {
+            if (decoration.type !== 'shrine') continue;
+            if (decoration.used) continue; // Skip used shrines
+
+            const shrineX = Math.floor(decoration.x);
+            const shrineY = Math.floor(decoration.y);
+
+            const dx = shrineX - playerGridX;
+            const dy = shrineY - playerGridY;
+            const dist = Math.sqrt(dx * dx + dy * dy) * cfg.tileSize;
+
+            if (dist > radius - 5) continue;
+
+            const tile = game.map[shrineY]?.[shrineX];
+            if (!tile) continue;
+
+            // Only show if tile is explored
+            if (!tile.explored) continue;
+
+            const minimapX = cx + (dx * cfg.tileSize);
+            const minimapY = cy + (dy * cfg.tileSize);
+
+            // Get brightness based on visibility
+            const brightness = tile.visible ? 1.0 : 0.6;
+            ctx.globalAlpha = brightness;
+
+            // Shrine marker - cyan/teal torii gate style
+            ctx.save();
+            ctx.shadowColor = '#00ffaa';
+            ctx.shadowBlur = 6;
+            ctx.fillStyle = '#00ffaa';
+
+            // Draw torii gate shape (simplified)
+            const s = cfg.tileSize;
+            // Top bar
+            ctx.fillRect(minimapX - s * 0.8, minimapY - s * 0.6, s * 1.6, s * 0.3);
+            // Two pillars
+            ctx.fillRect(minimapX - s * 0.6, minimapY - s * 0.4, s * 0.25, s * 1.0);
+            ctx.fillRect(minimapX + s * 0.35, minimapY - s * 0.4, s * 0.25, s * 1.0);
+
+            ctx.restore();
             ctx.globalAlpha = 1;
         }
     }

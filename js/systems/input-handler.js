@@ -43,6 +43,7 @@ window.addEventListener('keydown', e => {
     // Close skills menu on ESC (hotkey 'K' handled by icon-sidebar)
     if (e.key === 'Escape' && game.state === 'skills') {
         game.state = 'playing';
+        if (window.sidebarState) window.sidebarState.activeOverlay = null;
         return;
     }
 
@@ -58,6 +59,13 @@ window.addEventListener('keydown', e => {
     // Chest UI input handling
     if (game.state === 'chest') {
         if (typeof handleChestKey === 'function' && handleChestKey(e.key)) {
+            return;
+        }
+    }
+
+    // Shrine UI input handling
+    if (game.state === 'shrine') {
+        if (typeof handleShrineInput === 'function' && handleShrineInput(e)) {
             return;
         }
     }
@@ -414,7 +422,11 @@ function getDirectionFromDelta(dx, dy) {
  */
 function handleMovementInput(deltaTime) {
     if (!game.player) return;
-    if (game.state !== 'playing') return;
+
+    // Only allow movement when actively playing (dungeon)
+    // Use both string and GAME_STATES comparison for safety
+    const isPlaying = game.state === 'playing' || game.state === GAME_STATES?.PLAYING;
+    if (!isPlaying) return;
 
     // Check which directional keys are held
     const up = keys['w'] || keys['W'] || keys['ArrowUp'];
@@ -544,6 +556,15 @@ const setupCanvasHandlers = () => {
             const clickX = e.clientX - rect.left;
             const clickY = e.clientY - rect.top;
             handleChestClick(clickX, clickY);
+            return;
+        }
+
+        // Handle shrine UI clicks
+        if (game.state === 'shrine' && typeof handleShrineClick === 'function') {
+            const rect = canvas.getBoundingClientRect();
+            const clickX = e.clientX - rect.left;
+            const clickY = e.clientY - rect.top;
+            handleShrineClick(clickX, clickY);
             return;
         }
 

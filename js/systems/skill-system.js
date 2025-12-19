@@ -1020,7 +1020,7 @@ function getProficiencyForSpecialty(specialtyId) {
  */
 function getSpecialtiesForProficiency(proficiencyId) {
     const prof = PROFICIENCIES[proficiencyId];
-    return prof ? prof.specialties : [];
+    return prof ? (prof.specializations || []) : [];
 }
 
 // ============================================================================
@@ -1391,6 +1391,11 @@ function initializePlayerSkills(player) {
         // Create fresh skills (new save)
         player.skills = createFreshSkills();
         console.log('✓ Player skills initialized (fresh)');
+    }
+
+    // Ensure actionCooldowns exists (might be missing from old saves)
+    if (!player.skills.actionCooldowns) {
+        player.skills.actionCooldowns = {};
     }
 
     // Always reset action cooldowns (session-specific)
