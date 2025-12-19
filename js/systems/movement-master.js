@@ -36,6 +36,15 @@ const MOVEMENT_CONFIG = {
 
     // Pathfinding
     maxPathIterations: 1000,      // A* iteration limit
+    repathThrottleMin: 500,       // Min ms between repathing (0.5s)
+    repathThrottleMax: 1000,      // Max ms between repathing (1.0s)
+    stuckThreshold: 1.0,          // Seconds before enemy is considered stuck
+    stuckDistanceThreshold: 0.5,  // If enemy moves less than this in stuckThreshold, it's stuck
+
+    // Enemy separation (soft collision)
+    separationRadius: 1.2,        // Radius to check for nearby enemies
+    separationStrength: 2.5,      // Force multiplier for separation
+    separationEnabled: true,      // Toggle soft collision
 
     // Diagonal movement
     diagonalFactor: 0.707,        // sqrt(2) / 2 for normalized diagonal speed
@@ -588,10 +597,16 @@ class PriorityQueue {
 }
 
 /**
- * Manhattan distance heuristic (admissible for 4-directional movement)
+ * Manhattan distance heuristic with Euclidean tie-breaking
+ * Tie-breaking produces straighter paths by preferring nodes closer to the goal
+ * h = Manhattan + 0.001 * Euclidean
  */
 function heuristic(x1, y1, x2, y2) {
-    return Math.abs(x1 - x2) + Math.abs(y1 - y2);
+    const manhattan = Math.abs(x1 - x2) + Math.abs(y1 - y2);
+    const dx = x1 - x2;
+    const dy = y1 - y2;
+    const euclidean = Math.sqrt(dx * dx + dy * dy);
+    return manhattan + (0.001 * euclidean);
 }
 
 /**
@@ -601,13 +616,14 @@ function heuristic(x1, y1, x2, y2) {
  * @param {number} goalX - Target grid X
  * @param {number} goalY - Target grid Y
  * @param {Object} options - Pathfinding options
- * @returns {Array} Array of {x, y, direction} steps, or empty array if no path
+ * @returns {Array} Array of {x, y, direction} steps, or partial path to closest node if no full path
  */
 function findPath(startX, startY, goalX, goalY, options = {}) {
     const {
         ignoreEnemies = false,
         ignoreNPCs = false,
-        maxIterations = MOVEMENT_CONFIG.maxPathIterations
+        maxIterations = MOVEMENT_CONFIG.maxPathIterations,
+        returnClosestOnFail = true  // Return path to closest explored node if goal unreachable
     } = options;
 
     startX = Math.floor(startX);
@@ -624,9 +640,10 @@ function findPath(startX, startY, goalX, goalY, options = {}) {
         if (adjacent) {
             goalX = adjacent.x;
             goalY = adjacent.y;
-        } else {
+        } else if (!returnClosestOnFail) {
             return [];
         }
+        // If returnClosestOnFail is true, continue anyway to find closest reachable node
     }
 
     const openSet = new PriorityQueue();
@@ -651,11 +668,22 @@ function findPath(startX, startY, goalX, goalY, options = {}) {
 
     let iterations = 0;
 
+    // Track closest node to goal (for fallback path)
+    let closestNode = { x: startX, y: startY };
+    let closestDistance = heuristic(startX, startY, goalX, goalY);
+
     while (!openSet.isEmpty() && iterations < maxIterations) {
         iterations++;
 
         const current = openSet.dequeue();
         const currentKey = posKey(current.x, current.y);
+
+        // Track closest node to goal
+        const currentDist = heuristic(current.x, current.y, goalX, goalY);
+        if (currentDist < closestDistance) {
+            closestDistance = currentDist;
+            closestNode = { x: current.x, y: current.y };
+        }
 
         if (current.x === goalX && current.y === goalY) {
             return reconstructPath(cameFrom, current, startX, startY);
@@ -685,6 +713,11 @@ function findPath(startX, startY, goalX, goalY, options = {}) {
                 }
             }
         }
+    }
+
+    // No full path found - return path to closest explored node if enabled
+    if (returnClosestOnFail && (closestNode.x !== startX || closestNode.y !== startY)) {
+        return reconstructPath(cameFrom, closestNode, startX, startY);
     }
 
     return [];
@@ -733,6 +766,245 @@ function getAdjacentWalkableTile(x, y, ignoreEnemies = false, ignoreNPCs = false
     }
 
     return null;
+}
+
+/**
+ * Path smoothing using string-pulling algorithm
+ * Removes unnecessary waypoints by checking direct line of sight
+ * @param {Array} path - Original A* path [{x, y, direction}, ...]
+ * @returns {Array} Smoothed path with fewer waypoints
+ */
+function smoothPath(path) {
+    if (!path || path.length <= 2) {
+        return path;
+    }
+
+    const smoothed = [path[0]];
+    let currentIndex = 0;
+
+    while (currentIndex < path.length - 1) {
+        // Look ahead as far as possible with clear line of sight
+        let furthestVisible = currentIndex + 1;
+
+        for (let i = currentIndex + 2; i < path.length; i++) {
+            const from = path[currentIndex];
+            const to = path[i];
+
+            // Use raycast to check if direct line of sight exists
+            if (raycast(from.x, from.y, to.x, to.y)) {
+                furthestVisible = i;
+            } else {
+                // Can't see past this point, stop looking
+                break;
+            }
+        }
+
+        // Add the furthest visible waypoint
+        smoothed.push(path[furthestVisible]);
+        currentIndex = furthestVisible;
+    }
+
+    return smoothed;
+}
+
+/**
+ * Find path with automatic smoothing
+ * Combines A* pathfinding with string-pulling optimization
+ * @param {number} startX - Starting grid X
+ * @param {number} startY - Starting grid Y
+ * @param {number} goalX - Target grid X
+ * @param {number} goalY - Target grid Y
+ * @param {Object} options - Pathfinding options (same as findPath, plus smoothing)
+ * @returns {Array} Smoothed path
+ */
+function findPathSmooth(startX, startY, goalX, goalY, options = {}) {
+    const { smooth = true, ...pathOptions } = options;
+
+    const path = findPath(startX, startY, goalX, goalY, pathOptions);
+
+    if (smooth && path.length > 2) {
+        return smoothPath(path);
+    }
+
+    return path;
+}
+
+// ############################################################################
+// SECTION 5B: ENEMY AI MOVEMENT UTILITIES
+// ############################################################################
+
+/**
+ * Check if an enemy is stuck (hasn't moved significantly in stuckThreshold time)
+ * Call this from enemy AI update loop
+ * @param {Object} enemy - Enemy entity
+ * @param {number} deltaTime - Time since last frame in milliseconds
+ * @returns {boolean} True if enemy is stuck
+ */
+function checkEnemyStuck(enemy, deltaTime) {
+    if (!enemy) return false;
+
+    // Initialize stuck tracking state
+    if (enemy._stuckTimer === undefined) {
+        enemy._stuckTimer = 0;
+        enemy._lastStuckCheckX = enemy.gridX;
+        enemy._lastStuckCheckY = enemy.gridY;
+    }
+
+    // Accumulate time
+    enemy._stuckTimer += deltaTime / 1000;
+
+    // Check if enough time has passed
+    if (enemy._stuckTimer >= MOVEMENT_CONFIG.stuckThreshold) {
+        const dx = enemy.gridX - enemy._lastStuckCheckX;
+        const dy = enemy.gridY - enemy._lastStuckCheckY;
+        const distMoved = Math.sqrt(dx * dx + dy * dy);
+
+        // Reset tracking
+        enemy._stuckTimer = 0;
+        enemy._lastStuckCheckX = enemy.gridX;
+        enemy._lastStuckCheckY = enemy.gridY;
+
+        // Stuck if moved less than threshold distance
+        if (distMoved < MOVEMENT_CONFIG.stuckDistanceThreshold) {
+            enemy._isStuck = true;
+            return true;
+        }
+    }
+
+    enemy._isStuck = false;
+    return false;
+}
+
+/**
+ * Check if enemy can request a new path (throttled)
+ * Prevents pathfinding spam when stuck or frequently repathing
+ * @param {Object} enemy - Enemy entity
+ * @returns {boolean} True if enough time has passed since last path request
+ */
+function canRequestRepath(enemy) {
+    if (!enemy) return true;
+
+    const now = performance.now();
+
+    // Initialize repath tracking
+    if (enemy._lastRepathTime === undefined) {
+        enemy._lastRepathTime = 0;
+        enemy._repathThrottle = MOVEMENT_CONFIG.repathThrottleMin;
+    }
+
+    // Check throttle
+    if (now - enemy._lastRepathTime < enemy._repathThrottle) {
+        return false;
+    }
+
+    return true;
+}
+
+/**
+ * Mark that enemy has requested a new path
+ * Adjusts throttle based on stuck state (longer throttle if stuck)
+ * @param {Object} enemy - Enemy entity
+ */
+function markRepathRequested(enemy) {
+    if (!enemy) return;
+
+    enemy._lastRepathTime = performance.now();
+
+    // Increase throttle if stuck (prevents rapid repathing when truly blocked)
+    if (enemy._isStuck) {
+        enemy._repathThrottle = Math.min(
+            enemy._repathThrottle * 1.5,
+            MOVEMENT_CONFIG.repathThrottleMax
+        );
+    } else {
+        // Decay throttle back to minimum when moving normally
+        enemy._repathThrottle = Math.max(
+            enemy._repathThrottle * 0.8,
+            MOVEMENT_CONFIG.repathThrottleMin
+        );
+    }
+}
+
+/**
+ * Calculate separation force from nearby enemies (soft collision)
+ * Apply this steering force to prevent enemy clumping
+ * @param {Object} enemy - Enemy to calculate separation for
+ * @param {Array} allEnemies - Array of all enemies
+ * @returns {Object} { fx, fy } separation force vector
+ */
+function calculateSeparationForce(enemy, allEnemies) {
+    if (!MOVEMENT_CONFIG.separationEnabled || !enemy || !allEnemies) {
+        return { fx: 0, fy: 0 };
+    }
+
+    let fx = 0;
+    let fy = 0;
+    let neighborCount = 0;
+
+    const radius = MOVEMENT_CONFIG.separationRadius;
+    const radiusSq = radius * radius;
+
+    for (const other of allEnemies) {
+        // Skip self and dead enemies
+        if (other === enemy || other.hp <= 0) continue;
+
+        const dx = enemy.gridX - other.gridX;
+        const dy = enemy.gridY - other.gridY;
+        const distSq = dx * dx + dy * dy;
+
+        // Skip if outside separation radius
+        if (distSq >= radiusSq || distSq < 0.0001) continue;
+
+        // Calculate repulsion force (inverse distance weighted)
+        const dist = Math.sqrt(distSq);
+        const strength = (radius - dist) / radius; // 1.0 at center, 0.0 at edge
+
+        // Normalize direction and scale by strength
+        fx += (dx / dist) * strength;
+        fy += (dy / dist) * strength;
+        neighborCount++;
+    }
+
+    // Average and scale the force
+    if (neighborCount > 0) {
+        fx = (fx / neighborCount) * MOVEMENT_CONFIG.separationStrength;
+        fy = (fy / neighborCount) * MOVEMENT_CONFIG.separationStrength;
+    }
+
+    return { fx, fy };
+}
+
+/**
+ * Apply separation force to enemy movement
+ * Call this after calculating intended movement but before collision check
+ * @param {Object} enemy - Enemy entity
+ * @param {number} intendedX - X position enemy wants to move to
+ * @param {number} intendedY - Y position enemy wants to move to
+ * @param {number} deltaTime - Time since last frame in milliseconds
+ * @returns {Object} { x, y } adjusted target position
+ */
+function applySeparationToMovement(enemy, intendedX, intendedY, deltaTime) {
+    if (!game.enemies) {
+        return { x: intendedX, y: intendedY };
+    }
+
+    const separation = calculateSeparationForce(enemy, game.enemies);
+    const dt = deltaTime / 1000;
+
+    // Apply separation as offset to intended position
+    const adjustedX = intendedX + separation.fx * dt;
+    const adjustedY = intendedY + separation.fy * dt;
+
+    // Validate adjusted position is walkable
+    const tileX = Math.floor(adjustedX);
+    const tileY = Math.floor(adjustedY);
+
+    if (isTileWalkable(tileX, tileY)) {
+        return { x: adjustedX, y: adjustedY };
+    }
+
+    // Fallback to original position if separation pushes into wall
+    return { x: intendedX, y: intendedY };
 }
 
 // ############################################################################
@@ -1281,7 +1553,16 @@ if (typeof window !== 'undefined') {
     window.PriorityQueue = PriorityQueue;
     window.heuristic = heuristic;
     window.findPath = findPath;
+    window.findPathSmooth = findPathSmooth;
+    window.smoothPath = smoothPath;
     window.getAdjacentWalkableTile = getAdjacentWalkableTile;
+
+    // Enemy AI movement utilities
+    window.checkEnemyStuck = checkEnemyStuck;
+    window.canRequestRepath = canRequestRepath;
+    window.markRepathRequested = markRepathRequested;
+    window.calculateSeparationForce = calculateSeparationForce;
+    window.applySeparationToMovement = applySeparationToMovement;
 
     // Player movement (velocity-based with wall sliding)
     window.playerVelocity = playerVelocity;
@@ -1307,4 +1588,4 @@ if (typeof window !== 'undefined') {
     window.getDirectionFromDelta = getDirectionFromDelta;
 }
 
-console.log('Movement Master v2 loaded - Wall sliding, velocity inertia, corner nudge, tight AABB margins');
+console.log('Movement Master v3 loaded - Pathfinding: tie-break heuristic, path smoothing, stuck detection, separation forces, closest-node fallback');
