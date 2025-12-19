@@ -3972,10 +3972,11 @@ const CombatEnhancementsSystem = {
     },
 
     update(deltaTime) {
-        const dt = deltaTime / 1000;
-        updateDash(dt);
-        updateScreenShake(dt);
-        updateStagger(dt);
+        // Pass raw deltaTime - each function handles its own /1000 conversion
+        updateDash(deltaTime);
+        updateScreenShake(deltaTime);
+        updateStagger(deltaTime);
+        updateMouseAttackSystem(deltaTime);
     },
 
     render(ctx, camera) {
