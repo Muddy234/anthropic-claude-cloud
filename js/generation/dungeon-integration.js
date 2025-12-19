@@ -295,9 +295,9 @@ function spawnEnemiesInDungeon() {
         const room = game.rooms.find(r => r.blob === blob);
         if (!room) continue;
 
-        // Enemy count based on blob size
+        // Enemy count based on blob size - tripled for more action
         const blobSize = blob.tiles.size;
-        const baseCount = Math.max(1, Math.floor(blobSize / 200)); // 1 enemy per 200 tiles
+        const baseCount = Math.max(3, Math.floor(blobSize / 70)); // 1 enemy per 70 tiles (was 200)
         const enemyCount = baseCount + Math.floor(Math.random() * baseCount);
 
         // Spawn enemies using existing spawner if available
@@ -306,7 +306,8 @@ function spawnEnemiesInDungeon() {
             const originalType = room.type;
             room.type = blob.blobType === 'treasure' ? 'treasure' : 'combat';
 
-            spawnEnemiesInRoom(room);
+            // Pass the calculated enemy count to override spawner's calculation
+            spawnEnemiesInRoom(room, null, enemyCount);
 
             room.type = originalType;
         } else {
