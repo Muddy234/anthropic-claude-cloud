@@ -16,7 +16,8 @@ console.log('[MovementMaster] File starting to load...');
 // SECTION 1: CONFIGURATION
 // ############################################################################
 
-const MOVEMENT_CONFIG = {
+// Extend the MOVEMENT_CONFIG from constants.js with movement-master specific settings
+Object.assign(MOVEMENT_CONFIG, {
     // Player movement
     playerMoveSpeed: 4,           // Tiles per second (used as max speed now)
 
@@ -60,7 +61,7 @@ const MOVEMENT_CONFIG = {
     nudgeDistance: 0.15,          // How far to check for nudge opportunities (tiles)
     nudgeStrength: 0.08,          // Perpendicular correction impulse per frame
     nudgeEnabled: true            // Toggle corner sliding
-};
+});
 
 console.log('[MovementMaster] MOVEMENT_CONFIG defined');
 
