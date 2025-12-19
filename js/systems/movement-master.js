@@ -26,7 +26,7 @@ Object.assign(MOVEMENT_CONFIG, {
     wallMargin: 0.05,             // TIGHTENED: Margin from walls (was 0.125, now ~1-2px at 32px tiles)
 
     // Entity collision
-    playerRadius: 0.15,           // TIGHTENED: Player bounding radius (was 0.2)
+    playerRadius: 0.2,            // Player bounding radius - prevents wall clipping
     enemyCollisionRadius: 0.25,   // TIGHTENED: Radius for player-enemy collision (was 0.3)
 
     // Enemy movement
@@ -1051,18 +1051,19 @@ function getInputVector(direction) {
 
 /**
  * Check if position is valid for single-axis movement
- * Used for wall sliding collision resolution
+ * Uses player radius for proper collision bounds
  */
 function canMoveToAxis(x, y, checkEnemies = true) {
-    const margin = MOVEMENT_CONFIG.wallMargin;
+    // Use playerRadius for collision - this ensures visual sprite doesn't overlap walls
+    const radius = MOVEMENT_CONFIG.playerRadius;
 
-    // Boundary check
-    if (x - margin < 0 || x + margin >= GRID_WIDTH ||
-        y - margin < 0 || y + margin >= GRID_HEIGHT) {
+    // Boundary check with radius
+    if (x - radius < 0 || x + radius >= GRID_WIDTH ||
+        y - radius < 0 || y + radius >= GRID_HEIGHT) {
         return false;
     }
 
-    // Check tile at position
+    // Check tile at center position
     const tileX = Math.floor(x);
     const tileY = Math.floor(y);
 
@@ -1070,23 +1071,33 @@ function canMoveToAxis(x, y, checkEnemies = true) {
         return false;
     }
 
-    // Check fractional edge collisions
+    // Check all tiles the player's bounding box touches
     const fracX = x - tileX;
     const fracY = y - tileY;
 
-    if (fracX < margin && !isTileWalkable(tileX - 1, tileY)) return false;
-    if (fracX > (1 - margin) && !isTileWalkable(tileX + 1, tileY)) return false;
-    if (fracY < margin && !isTileWalkable(tileX, tileY - 1)) return false;
-    if (fracY > (1 - margin) && !isTileWalkable(tileX, tileY + 1)) return false;
+    // Left edge collision
+    if (fracX < radius && !isTileWalkable(tileX - 1, tileY)) return false;
+    // Right edge collision
+    if (fracX > (1 - radius) && !isTileWalkable(tileX + 1, tileY)) return false;
+    // Top edge collision
+    if (fracY < radius && !isTileWalkable(tileX, tileY - 1)) return false;
+    // Bottom edge collision
+    if (fracY > (1 - radius) && !isTileWalkable(tileX, tileY + 1)) return false;
+
+    // Diagonal corner checks - critical for preventing corner clipping
+    if (fracX < radius && fracY < radius && !isTileWalkable(tileX - 1, tileY - 1)) return false;
+    if (fracX > (1 - radius) && fracY < radius && !isTileWalkable(tileX + 1, tileY - 1)) return false;
+    if (fracX < radius && fracY > (1 - radius) && !isTileWalkable(tileX - 1, tileY + 1)) return false;
+    if (fracX > (1 - radius) && fracY > (1 - radius) && !isTileWalkable(tileX + 1, tileY + 1)) return false;
 
     // Enemy collision (optional)
     if (checkEnemies && game.enemies) {
-        const radius = MOVEMENT_CONFIG.enemyCollisionRadius;
+        const enemyRadius = MOVEMENT_CONFIG.enemyCollisionRadius;
         for (const enemy of game.enemies) {
             if (enemy.hp <= 0) continue;
             const dx = x - enemy.gridX;
             const dy = y - enemy.gridY;
-            if (dx * dx + dy * dy < radius * radius) return false;
+            if (dx * dx + dy * dy < enemyRadius * enemyRadius) return false;
         }
     }
 
@@ -1235,6 +1246,17 @@ function movePlayerContinuous(direction, deltaTime) {
             collidedY = true;
             playerVelocity.y = 0;
         }
+    }
+
+    // === FINAL SAFETY VALIDATION ===
+    // Absolutely prevent player from ending up in a wall
+    if (!canMoveToAxis(newX, newY, false)) {
+        // Position is invalid - revert to previous position
+        console.warn('[Movement] Safety check triggered - invalid position blocked');
+        newX = player.gridX;
+        newY = player.gridY;
+        playerVelocity.x = 0;
+        playerVelocity.y = 0;
     }
 
     // === POSITION UPDATE ===

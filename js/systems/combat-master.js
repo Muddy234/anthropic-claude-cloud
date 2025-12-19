@@ -2261,13 +2261,18 @@ function performDash(player, mouseX, mouseY) {
     const dirY = dy / dist;
     const dashDist = COMBAT_ENHANCEMENTS_CONFIG.dash.distance;
 
-    const steps = Math.ceil(dashDist / 0.25);
+    const steps = Math.ceil(dashDist / 0.125); // Finer steps for precision
     let validX = player.gridX, validY = player.gridY;
 
     for (let i = 1; i <= steps; i++) {
         const checkX = player.gridX + (dirX * dashDist * i / steps);
         const checkY = player.gridY + (dirY * dashDist * i / steps);
-        if (typeof isTileWalkable === 'function' && isTileWalkable(Math.floor(checkX), Math.floor(checkY))) {
+        // Use canMoveToAxis for proper bounding box collision (if available)
+        // Falls back to isTileWalkable for basic check
+        const isValid = typeof canMoveToAxis === 'function'
+            ? canMoveToAxis(checkX, checkY, false)
+            : (typeof isTileWalkable === 'function' && isTileWalkable(Math.floor(checkX), Math.floor(checkY)));
+        if (isValid) {
             validX = checkX; validY = checkY;
         } else break;
     }
