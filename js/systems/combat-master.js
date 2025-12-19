@@ -3977,6 +3977,7 @@ const CombatEnhancementsSystem = {
         updateScreenShake(deltaTime);
         updateStagger(deltaTime);
         updateMouseAttackSystem(deltaTime);
+        updateDamageNumbers(deltaTime);
     },
 
     render(ctx, camera) {
