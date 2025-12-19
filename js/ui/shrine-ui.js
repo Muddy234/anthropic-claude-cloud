@@ -42,12 +42,24 @@ function openShrineUI(shrine) {
         return false;
     }
 
-    const boonIds = BoonSystem.getShrineBoons(3);
-    if (!boonIds || boonIds.length === 0) {
-        if (typeof addMessage === 'function') {
-            addMessage('The shrine has no more blessings to offer.');
+    // Check if shrine already has stored boons (from previous open)
+    // This prevents re-randomizing when player closes and reopens
+    let boonIds;
+    if (shrine.storedBoons && shrine.storedBoons.length > 0) {
+        boonIds = shrine.storedBoons;
+        console.log('[ShrineUI] Using stored boons from shrine:', boonIds);
+    } else {
+        // First time opening - generate and store boons on the shrine
+        boonIds = BoonSystem.getShrineBoons(3);
+        if (!boonIds || boonIds.length === 0) {
+            if (typeof addMessage === 'function') {
+                addMessage('The shrine has no more blessings to offer.');
+            }
+            return false;
         }
-        return false;
+        // Store boons on the shrine object so they persist
+        shrine.storedBoons = [...boonIds];
+        console.log('[ShrineUI] Generated and stored new boons:', boonIds);
     }
 
     ShrineUI.isOpen = true;
