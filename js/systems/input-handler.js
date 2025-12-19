@@ -422,7 +422,11 @@ function getDirectionFromDelta(dx, dy) {
  */
 function handleMovementInput(deltaTime) {
     if (!game.player) return;
-    if (game.state !== 'playing') return;
+
+    // Only allow movement when actively playing (dungeon)
+    // Use both string and GAME_STATES comparison for safety
+    const isPlaying = game.state === 'playing' || game.state === GAME_STATES?.PLAYING;
+    if (!isPlaying) return;
 
     // Check which directional keys are held
     const up = keys['w'] || keys['W'] || keys['ArrowUp'];
