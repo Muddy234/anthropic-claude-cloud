@@ -62,9 +62,11 @@
     <!-- UTILS: Helper functions (no registration) -->
     <!-- ==================== -->
     <script src="js/utils/message-log.js"></script>
-    <script src="js/utils/Collision.js"></script>
-    <script src="js/utils/movement-utils.js"></script>
-    <script src="js/utils/pathfinding.js"></script>
+    <script src="js/systems/movement-master.js"></script>            <!-- Consolidated movement system -->
+    <!-- Consolidated into movement-master.js -->
+    <!-- <script src="js/utils/Collision.js"></script> -->
+    <!-- <script src="js/utils/movement-utils.js"></script> -->
+    <!-- <script src="js/utils/pathfinding.js"></script> -->
     <script src="js/systems/combat-master.js"></script>           <!-- Consolidated combat system -->
     <script src="js/utils/damage-calculator.js"></script>
     <script src="js/utils/stat-system.js"></script>
@@ -112,7 +114,7 @@
     <script src="js/ui/monster-animations.js"></script>
     <script src="js/ui/sprite-loader.js"></script>
     <script src="js/ui/enemy-renderer.js"></script>
-    <script src="js/ui/enemy-movement-updater.js"></script>
+    <!-- <script src="js/ui/enemy-movement-updater.js"></script> --> <!-- Consolidated into movement-master.js -->
     <script src="js/ui/renderer.js"></script>
     <script src="js/ui/ui-renderer.js"></script>
     <script src="js/ui/skills-ui.js"></script>
@@ -155,7 +157,7 @@
 
     <script src="js/systems/vision-system.js"></script>             <!-- Priority 5 (Fog of War) -->
     <script src="js/systems/input-handler.js"></script>             <!-- Priority 10 -->
-    <script src="js/systems/pokemon-movement.js"></script>          <!-- Priority 20 -->
+    <!-- <script src="js/systems/pokemon-movement.js"></script> --> <!-- Consolidated into movement-master.js -->
     <script src="js/systems/player-animation.js"></script>          <!-- Priority 25 -->
     <script src="js/systems/noise-system.js"></script>              <!-- Priority 30 -->
     <script src="js/systems/hazard-system.js"></script>             <!-- Priority 35 -->
