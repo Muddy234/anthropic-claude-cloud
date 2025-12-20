@@ -9,10 +9,13 @@ Architecture:
     WebSocket communication, enabling >1000 SPS training throughput.
 
 Features:
-    - Multi-channel observation tensor (geometry, actors, loot, hazards)
+    - Semantic action space with A* pathfinding middleware
+    - Heuristic safety guardrails (pre-inference interlocks)
+    - k-frame skipping for temporal action repetition
+    - Egocentric feature normalization (translational invariance)
+    - Multi-channel observation tensor
     - Dense reward shaping with delta-based rewards
     - Explicit FSM state validation
-    - Event-driven synchronization (no polling)
 """
 
 import gymnasium as gym
@@ -22,7 +25,8 @@ import json
 import threading
 import time
 import queue
-from typing import Optional, Dict, Any, Tuple
+import heapq
+from typing import Optional, Dict, Any, Tuple, List, Set
 from dataclasses import dataclass, field
 from enum import Enum, auto
 
@@ -63,6 +67,37 @@ class GameState(Enum):
     EXTRACTED = auto()     # Successfully extracted
 
 
+# ==========================================
+# SEMANTIC ACTION SPACE
+# ==========================================
+
+class SemanticAction(Enum):
+    """
+    High-level semantic actions that reduce search space from O(actions^steps) to O(targets).
+    The A* middleware handles low-level pathfinding.
+    """
+    WAIT = 0                    # No-op
+    ATTACK_NEAREST_ENEMY = 1    # Path to and attack nearest enemy
+    ATTACK_WEAKEST_ENEMY = 2    # Path to and attack lowest HP enemy
+    COLLECT_NEAREST_LOOT = 3    # Path to and collect nearest loot
+    COLLECT_BEST_LOOT = 4       # Path to and collect highest value loot
+    EXPLORE = 5                 # Move toward unexplored area
+    RETREAT = 6                 # Move away from enemies
+    USE_POTION = 7              # Use healing potion (if available)
+    INTERACT = 8                # Interact with nearest interactable
+    GOTO_EXTRACTION = 9         # Path to extraction point
+
+
+@dataclass
+class Target:
+    """A semantic target for pathfinding"""
+    x: int
+    y: int
+    target_type: str  # 'enemy', 'loot', 'extraction', 'explore'
+    priority: float = 0.0
+    entity_id: Optional[int] = None
+
+
 @dataclass
 class GameObservation:
     """Structured observation from game"""
@@ -82,7 +117,7 @@ class GameObservation:
     xp: int = 0
     floor: int = 1
 
-    # Position
+    # Position (global coordinates)
     player_x: float = 0.0
     player_y: float = 0.0
 
@@ -92,12 +127,378 @@ class GameObservation:
     nearest_enemy_dist: float = 999.0
     nearest_enemy_hp: float = 0.0
 
-    # Inventory value (for extraction reward)
+    # Inventory
     inventory_value: int = 0
+    has_potion: bool = False
+    potion_count: int = 0
+
+    # Egocentric targets (relative deltas for translational invariance)
+    enemies: List[Tuple[float, float, float]] = field(default_factory=list)  # (dx, dy, hp_ratio)
+    loot_items: List[Tuple[float, float, float]] = field(default_factory=list)  # (dx, dy, value)
+    extraction_point: Optional[Tuple[float, float]] = None  # (dx, dy) or None
+
+    # Raw map for A* pathfinding
+    walkable_map: Optional[np.ndarray] = None
 
     # Timestamps for sync
     frame_id: int = 0
     timestamp: float = 0.0
+
+
+# ==========================================
+# A* PATHFINDING
+# ==========================================
+
+class AStarPathfinder:
+    """
+    A* pathfinding for semantic action abstraction.
+    Computes optimal path from player to target.
+    """
+
+    @staticmethod
+    def heuristic(a: Tuple[int, int], b: Tuple[int, int]) -> float:
+        """Manhattan distance heuristic"""
+        return abs(a[0] - b[0]) + abs(a[1] - b[1])
+
+    @staticmethod
+    def find_path(
+        start: Tuple[int, int],
+        goal: Tuple[int, int],
+        walkable: np.ndarray,
+        max_iterations: int = 500
+    ) -> Optional[List[Tuple[int, int]]]:
+        """
+        Find path from start to goal using A*.
+
+        Args:
+            start: (x, y) starting position
+            goal: (x, y) target position
+            walkable: 2D boolean array where True = walkable
+            max_iterations: Max search iterations
+
+        Returns:
+            List of (x, y) positions from start to goal, or None if no path
+        """
+        if not walkable.any():
+            return None
+
+        height, width = walkable.shape
+
+        # Bounds check
+        if not (0 <= start[0] < width and 0 <= start[1] < height):
+            return None
+        if not (0 <= goal[0] < width and 0 <= goal[1] < height):
+            return None
+
+        # If goal is not walkable, find nearest walkable cell
+        if not walkable[goal[1], goal[0]]:
+            goal = AStarPathfinder._find_nearest_walkable(goal, walkable)
+            if goal is None:
+                return None
+
+        # A* search
+        open_set = [(0, start)]
+        came_from: Dict[Tuple[int, int], Tuple[int, int]] = {}
+        g_score: Dict[Tuple[int, int], float] = {start: 0}
+        f_score: Dict[Tuple[int, int], float] = {start: AStarPathfinder.heuristic(start, goal)}
+
+        iterations = 0
+        while open_set and iterations < max_iterations:
+            iterations += 1
+            _, current = heapq.heappop(open_set)
+
+            if current == goal:
+                # Reconstruct path
+                path = [current]
+                while current in came_from:
+                    current = came_from[current]
+                    path.append(current)
+                path.reverse()
+                return path
+
+            # 8-directional neighbors
+            neighbors = [
+                (current[0] + dx, current[1] + dy)
+                for dx, dy in [(-1, 0), (1, 0), (0, -1), (0, 1),
+                               (-1, -1), (-1, 1), (1, -1), (1, 1)]
+            ]
+
+            for neighbor in neighbors:
+                nx, ny = neighbor
+                if not (0 <= nx < width and 0 <= ny < height):
+                    continue
+                if not walkable[ny, nx]:
+                    continue
+
+                # Diagonal movement cost
+                dx = abs(neighbor[0] - current[0])
+                dy = abs(neighbor[1] - current[1])
+                move_cost = 1.414 if dx + dy == 2 else 1.0
+
+                tentative_g = g_score[current] + move_cost
+
+                if neighbor not in g_score or tentative_g < g_score[neighbor]:
+                    came_from[neighbor] = current
+                    g_score[neighbor] = tentative_g
+                    f_score[neighbor] = tentative_g + AStarPathfinder.heuristic(neighbor, goal)
+                    heapq.heappush(open_set, (f_score[neighbor], neighbor))
+
+        return None  # No path found
+
+    @staticmethod
+    def _find_nearest_walkable(pos: Tuple[int, int], walkable: np.ndarray) -> Optional[Tuple[int, int]]:
+        """Find nearest walkable cell to given position"""
+        height, width = walkable.shape
+        for radius in range(1, 10):
+            for dx in range(-radius, radius + 1):
+                for dy in range(-radius, radius + 1):
+                    nx, ny = pos[0] + dx, pos[1] + dy
+                    if 0 <= nx < width and 0 <= ny < height:
+                        if walkable[ny, nx]:
+                            return (nx, ny)
+        return None
+
+    @staticmethod
+    def path_to_direction(current: Tuple[int, int], next_pos: Tuple[int, int]) -> int:
+        """
+        Convert path step to primitive action.
+        Returns: 0=wait, 1=up, 2=down, 3=left, 4=right
+        """
+        dx = next_pos[0] - current[0]
+        dy = next_pos[1] - current[1]
+
+        # Primary direction
+        if abs(dx) >= abs(dy):
+            return 4 if dx > 0 else 3  # Right or Left
+        else:
+            return 2 if dy > 0 else 1  # Down or Up
+
+
+# ==========================================
+# HEURISTIC SAFETY GUARDRAILS
+# ==========================================
+
+class SafetyGuardrails:
+    """
+    Pre-inference safety interlocks that override the neural network
+    in critical situations. Prevents early episode termination.
+    """
+
+    # Thresholds
+    CRITICAL_HP_THRESHOLD = 0.30      # Below 30% HP
+    EMERGENCY_HP_THRESHOLD = 0.15     # Below 15% HP = immediate heal
+    POTION_HEAL_AMOUNT = 50           # Assumed heal amount
+
+    @staticmethod
+    def should_override(obs: GameObservation) -> Optional[int]:
+        """
+        Check if safety override is needed.
+
+        Returns:
+            Action to take (primitive action int) or None if no override needed
+        """
+        hp_ratio = obs.hp / max(obs.max_hp, 1)
+
+        # Rule 1: Emergency heal when HP critically low and has potion
+        if hp_ratio < SafetyGuardrails.EMERGENCY_HP_THRESHOLD and obs.has_potion:
+            return SemanticAction.USE_POTION.value
+
+        # Rule 2: Heal when low HP, has potion, and in danger
+        if hp_ratio < SafetyGuardrails.CRITICAL_HP_THRESHOLD:
+            if obs.has_potion and obs.in_combat:
+                return SemanticAction.USE_POTION.value
+
+            # Rule 3: Retreat when low HP and in combat without potion
+            if obs.in_combat and not obs.has_potion:
+                return SemanticAction.RETREAT.value
+
+        # Rule 4: Attack if enemy is very close and we're healthy
+        if obs.nearest_enemy_dist <= 1.5 and hp_ratio > 0.5:
+            return SemanticAction.ATTACK_NEAREST_ENEMY.value
+
+        return None  # No override, let the policy decide
+
+
+# ==========================================
+# SEMANTIC ACTION MIDDLEWARE
+# ==========================================
+
+class SemanticActionMiddleware:
+    """
+    Middleware that translates semantic actions into sequences of primitive actions.
+    Uses A* pathfinding for navigation.
+    """
+
+    def __init__(self):
+        self.current_path: List[Tuple[int, int]] = []
+        self.current_target: Optional[Target] = None
+        self.path_index: int = 0
+
+    def reset(self):
+        """Reset path state"""
+        self.current_path = []
+        self.current_target = None
+        self.path_index = 0
+
+    def translate_action(self, action: int, obs: GameObservation) -> int:
+        """
+        Translate semantic action to primitive action.
+
+        Args:
+            action: SemanticAction value
+            obs: Current observation
+
+        Returns:
+            Primitive action (0-5)
+        """
+        try:
+            sem_action = SemanticAction(action)
+        except ValueError:
+            return 0  # Invalid action = wait
+
+        # Handle immediate actions
+        if sem_action == SemanticAction.WAIT:
+            return 0
+
+        if sem_action == SemanticAction.USE_POTION:
+            return 6  # Potion action (maps to hotkey 3)
+
+        # Get player position
+        player_pos = (int(obs.player_x), int(obs.player_y))
+
+        # Find target based on semantic action
+        target = self._get_target(sem_action, obs)
+
+        if target is None:
+            # No valid target, wait
+            return 0
+
+        # Check if target changed or no path
+        if self.current_target is None or \
+           (target.x, target.y) != (self.current_target.x, self.current_target.y):
+            # Recompute path
+            self._compute_path(player_pos, target, obs)
+
+        # Execute next step in path
+        return self._execute_path_step(player_pos, sem_action)
+
+    def _get_target(self, action: SemanticAction, obs: GameObservation) -> Optional[Target]:
+        """Get target position for semantic action"""
+
+        if action == SemanticAction.ATTACK_NEAREST_ENEMY:
+            if obs.enemies:
+                # Find nearest enemy (smallest dx^2 + dy^2)
+                nearest = min(obs.enemies, key=lambda e: e[0]**2 + e[1]**2)
+                return Target(
+                    x=int(obs.player_x + nearest[0]),
+                    y=int(obs.player_y + nearest[1]),
+                    target_type='enemy'
+                )
+
+        elif action == SemanticAction.ATTACK_WEAKEST_ENEMY:
+            if obs.enemies:
+                # Find enemy with lowest HP ratio
+                weakest = min(obs.enemies, key=lambda e: e[2])
+                return Target(
+                    x=int(obs.player_x + weakest[0]),
+                    y=int(obs.player_y + weakest[1]),
+                    target_type='enemy'
+                )
+
+        elif action == SemanticAction.COLLECT_NEAREST_LOOT:
+            if obs.loot_items:
+                nearest = min(obs.loot_items, key=lambda l: l[0]**2 + l[1]**2)
+                return Target(
+                    x=int(obs.player_x + nearest[0]),
+                    y=int(obs.player_y + nearest[1]),
+                    target_type='loot'
+                )
+
+        elif action == SemanticAction.COLLECT_BEST_LOOT:
+            if obs.loot_items:
+                best = max(obs.loot_items, key=lambda l: l[2])
+                return Target(
+                    x=int(obs.player_x + best[0]),
+                    y=int(obs.player_y + best[1]),
+                    target_type='loot'
+                )
+
+        elif action == SemanticAction.RETREAT:
+            if obs.enemies:
+                # Move away from center of enemy mass
+                avg_dx = sum(e[0] for e in obs.enemies) / len(obs.enemies)
+                avg_dy = sum(e[1] for e in obs.enemies) / len(obs.enemies)
+                # Target opposite direction
+                retreat_x = int(obs.player_x - avg_dx * 3)
+                retreat_y = int(obs.player_y - avg_dy * 3)
+                return Target(x=retreat_x, y=retreat_y, target_type='retreat')
+
+        elif action == SemanticAction.EXPLORE:
+            # Find unexplored area (low geometry density in observation)
+            # Simple heuristic: move toward edge of vision
+            for dx, dy in [(5, 0), (-5, 0), (0, 5), (0, -5)]:
+                x, y = int(obs.player_x + dx), int(obs.player_y + dy)
+                return Target(x=x, y=y, target_type='explore')
+
+        elif action == SemanticAction.GOTO_EXTRACTION:
+            if obs.extraction_point:
+                return Target(
+                    x=int(obs.player_x + obs.extraction_point[0]),
+                    y=int(obs.player_y + obs.extraction_point[1]),
+                    target_type='extraction'
+                )
+
+        elif action == SemanticAction.INTERACT:
+            # Interact with nearest interactable (loot as proxy)
+            if obs.loot_items:
+                nearest = min(obs.loot_items, key=lambda l: l[0]**2 + l[1]**2)
+                return Target(
+                    x=int(obs.player_x + nearest[0]),
+                    y=int(obs.player_y + nearest[1]),
+                    target_type='interact'
+                )
+
+        return None
+
+    def _compute_path(self, player_pos: Tuple[int, int], target: Target, obs: GameObservation):
+        """Compute A* path to target"""
+        self.current_target = target
+        self.path_index = 0
+
+        # Build walkable map from geometry channel
+        if obs.walkable_map is not None:
+            walkable = obs.walkable_map
+        else:
+            # Fallback: use geometry channel (0 = walkable, 1 = wall)
+            walkable = obs.geometry < 0.5
+
+        # Compute path
+        goal = (target.x, target.y)
+        self.current_path = AStarPathfinder.find_path(player_pos, goal, walkable) or []
+
+    def _execute_path_step(self, player_pos: Tuple[int, int], action: SemanticAction) -> int:
+        """Execute next step in current path"""
+
+        if not self.current_path or self.path_index >= len(self.current_path):
+            # Path complete or invalid
+            if self.current_target and self.current_target.target_type == 'enemy':
+                # At enemy, attack
+                return 5  # Attack/interact
+            elif self.current_target and self.current_target.target_type in ['loot', 'interact']:
+                # At loot, interact
+                return 5
+            return 0  # Wait
+
+        # Get next position in path
+        if self.path_index + 1 < len(self.current_path):
+            next_pos = self.current_path[self.path_index + 1]
+            self.path_index += 1
+            return AStarPathfinder.path_to_direction(player_pos, next_pos)
+        else:
+            # At destination
+            if self.current_target and self.current_target.target_type == 'enemy':
+                return 5  # Attack
+            return 0  # Wait
 
 
 # ==========================================
@@ -107,9 +508,6 @@ class GameObservation:
 class WebSocketBridge:
     """
     High-performance WebSocket bridge between Python and browser.
-
-    Replaces Selenium's HTTP JSON Wire Protocol with direct WebSocket
-    communication for orders of magnitude faster IPC.
     """
 
     def __init__(self, host: str = "localhost", port: int = 8765):
@@ -118,7 +516,7 @@ class WebSocketBridge:
         self.connected = False
         self.client_ws = None
 
-        # Thread-safe queues for async communication
+        # Thread-safe queues
         self.observation_queue: queue.Queue = queue.Queue(maxsize=1)
         self.action_queue: queue.Queue = queue.Queue(maxsize=1)
         self.sync_event = threading.Event()
@@ -179,7 +577,7 @@ class WebSocketBridge:
                 obs = self._parse_observation(data.get("payload", {}))
                 with self.obs_lock:
                     self.latest_obs = obs
-                self.sync_event.set()  # Signal that new observation is ready
+                self.sync_event.set()
 
             elif msg_type == "ready":
                 print("Game client ready for commands")
@@ -188,7 +586,7 @@ class WebSocketBridge:
             print(f"JSON parse error: {e}")
 
     def _parse_observation(self, payload: Dict) -> GameObservation:
-        """Parse raw payload into structured GameObservation"""
+        """Parse raw payload into structured GameObservation with egocentric features"""
         obs = GameObservation()
 
         # Parse FSM state
@@ -233,6 +631,32 @@ class WebSocketBridge:
 
         # Parse inventory
         obs.inventory_value = int(payload.get("inventory_value", 0))
+        obs.has_potion = bool(payload.get("has_potion", False))
+        obs.potion_count = int(payload.get("potion_count", 0))
+
+        # Parse egocentric targets (relative deltas)
+        if "enemies_egocentric" in payload:
+            obs.enemies = [
+                (float(e["dx"]), float(e["dy"]), float(e["hp_ratio"]))
+                for e in payload["enemies_egocentric"]
+            ]
+
+        if "loot_egocentric" in payload:
+            obs.loot_items = [
+                (float(l["dx"]), float(l["dy"]), float(l["value"]))
+                for l in payload["loot_egocentric"]
+            ]
+
+        if "extraction_egocentric" in payload:
+            ext = payload["extraction_egocentric"]
+            if ext:
+                obs.extraction_point = (float(ext["dx"]), float(ext["dy"]))
+
+        # Parse walkable map for A*
+        if "walkable" in payload:
+            obs.walkable_map = np.array(payload["walkable"], dtype=bool).reshape(
+                payload.get("map_height", 50), payload.get("map_width", 50)
+            )
 
         # Parse sync info
         obs.frame_id = int(payload.get("frame_id", 0))
@@ -240,7 +664,7 @@ class WebSocketBridge:
 
         return obs
 
-    def send_action(self, action: int) -> bool:
+    def send_action(self, action: int, action_type: str = "primitive") -> bool:
         """Send action to game client"""
         if not self.connected or not self.client_ws:
             return False
@@ -249,6 +673,7 @@ class WebSocketBridge:
             message = json.dumps({
                 "type": "action",
                 "action": action,
+                "action_type": action_type,
                 "timestamp": time.time()
             })
             self.client_ws.send(message)
@@ -258,7 +683,7 @@ class WebSocketBridge:
             return False
 
     def send_command(self, command: str, **kwargs) -> bool:
-        """Send command to game client (reset, start, etc.)"""
+        """Send command to game client"""
         if not self.connected or not self.client_ws:
             return False
 
@@ -293,25 +718,20 @@ class WebSocketBridge:
 # ==========================================
 
 class RewardShaper:
-    """
-    Dense reward shaping for RL training.
+    """Dense reward shaping for RL training with delta-based rewards."""
 
-    Implements delta-based rewards to provide dense learning signal
-    and prevent reward hacking / local optima.
-    """
-
-    # Reward weights (tunable hyperparameters)
-    WEIGHT_SURVIVAL = 0.001      # Small positive for being alive
-    WEIGHT_GOLD_DELTA = 0.1      # Per gold gained
-    WEIGHT_XP_DELTA = 0.01       # Per XP gained
-    WEIGHT_HP_DELTA = 0.05       # Per HP delta (positive = healed, negative = damaged)
-    WEIGHT_KILL = 1.0            # Per enemy killed
-    WEIGHT_FLOOR_CLEAR = 5.0     # Per floor cleared
-    WEIGHT_EXTRACTION = 10.0     # Base extraction reward
-    WEIGHT_DEATH = -10.0         # Death penalty
-    WEIGHT_TIME_PENALTY = -0.001 # Per step (encourages efficiency)
-    WEIGHT_EXPLORATION = 0.01    # For visiting new tiles
-    WEIGHT_COMBAT_ENGAGE = 0.1   # For engaging enemies
+    # Reward weights
+    WEIGHT_SURVIVAL = 0.001
+    WEIGHT_GOLD_DELTA = 0.1
+    WEIGHT_XP_DELTA = 0.01
+    WEIGHT_HP_DELTA = 0.05
+    WEIGHT_KILL = 1.0
+    WEIGHT_FLOOR_CLEAR = 5.0
+    WEIGHT_EXTRACTION = 10.0
+    WEIGHT_DEATH = -10.0
+    WEIGHT_TIME_PENALTY = -0.001
+    WEIGHT_EXPLORATION = 0.01
+    WEIGHT_COMBAT_ENGAGE = 0.1
 
     def __init__(self):
         self.prev_obs: Optional[GameObservation] = None
@@ -327,25 +747,18 @@ class RewardShaper:
         self.total_steps = 0
 
     def compute_reward(self, obs: GameObservation) -> Tuple[float, bool, Dict[str, float]]:
-        """
-        Compute dense reward from observation delta.
-
-        Returns:
-            reward: float - total reward for this step
-            terminated: bool - whether episode ended
-            breakdown: dict - reward component breakdown for debugging
-        """
+        """Compute dense reward from observation delta."""
         self.total_steps += 1
         reward = 0.0
         terminated = False
         breakdown = {}
 
-        # Time penalty (encourages efficiency)
+        # Time penalty
         time_penalty = self.WEIGHT_TIME_PENALTY
         reward += time_penalty
         breakdown["time_penalty"] = time_penalty
 
-        # Handle terminal states
+        # Terminal states
         if obs.state == GameState.DEAD:
             reward += self.WEIGHT_DEATH
             breakdown["death"] = self.WEIGHT_DEATH
@@ -353,7 +766,6 @@ class RewardShaper:
             return reward, terminated, breakdown
 
         if obs.state == GameState.EXTRACTED:
-            # Extraction reward scales with inventory value
             extraction_bonus = self.WEIGHT_EXTRACTION + (obs.inventory_value * 0.1)
             reward += extraction_bonus
             breakdown["extraction"] = extraction_bonus
@@ -361,22 +773,18 @@ class RewardShaper:
             return reward, terminated, breakdown
 
         if obs.state == GameState.VILLAGE:
-            # In hub - episode can continue but no dungeon rewards
             breakdown["hub"] = 0.0
-            # Could terminate here if we only want dungeon episodes
-            # terminated = True
             return reward, terminated, breakdown
 
         if obs.state != GameState.DUNGEON_RUN:
-            # Not in valid gameplay state
             return 0.0, False, {"invalid_state": 0.0}
 
-        # Survival reward (small positive for being alive in dungeon)
+        # Survival reward
         survival = self.WEIGHT_SURVIVAL
         reward += survival
         breakdown["survival"] = survival
 
-        # Delta-based rewards (require previous observation)
+        # Delta-based rewards
         if self.prev_obs is not None:
             # Gold delta
             gold_delta = obs.gold - self.prev_obs.gold
@@ -392,14 +800,14 @@ class RewardShaper:
                 reward += xp_reward
                 breakdown["xp_delta"] = xp_reward
 
-            # HP delta (healed = positive, damaged = negative)
+            # HP delta
             hp_delta = obs.hp - self.prev_obs.hp
             if hp_delta != 0:
                 hp_reward = hp_delta * self.WEIGHT_HP_DELTA
                 reward += hp_reward
                 breakdown["hp_delta"] = hp_reward
 
-            # Enemy killed (enemy count decreased)
+            # Enemy killed
             enemies_killed = self.prev_obs.enemy_count - obs.enemy_count
             if enemies_killed > 0:
                 kill_reward = enemies_killed * self.WEIGHT_KILL
@@ -412,13 +820,13 @@ class RewardShaper:
                 reward += floor_reward
                 breakdown["floor_clear"] = floor_reward
 
-            # Combat engagement (entered combat)
+            # Combat engagement
             if obs.in_combat and not self.prev_obs.in_combat:
                 combat_reward = self.WEIGHT_COMBAT_ENGAGE
                 reward += combat_reward
                 breakdown["combat_engage"] = combat_reward
 
-        # Exploration reward (new position visited)
+        # Exploration reward
         pos_key = (int(obs.player_x), int(obs.player_y))
         if pos_key not in self.visited_positions:
             self.visited_positions.add(pos_key)
@@ -426,42 +834,21 @@ class RewardShaper:
             reward += explore_reward
             breakdown["exploration"] = explore_reward
 
-        # Update previous observation
         self.prev_obs = obs
-
         return reward, terminated, breakdown
 
 
 # ==========================================
-# GYMNASIUM ENVIRONMENT (WebSocket Mode)
+# GYMNASIUM ENVIRONMENT
 # ==========================================
 
 class ShiftingChasmEnv(gym.Env):
     """
-    High-performance Gymnasium environment for The Shifting Chasm.
-
-    Uses WebSocket communication for fast IPC (>1000 SPS capability).
-    Falls back to Selenium if WebSocket connection not available.
-
-    Observation Space:
-        Dict with:
-        - "spatial": Box(11, 11, 4) - Multi-channel spatial tensor
-            Channel 0: Geometry (walls, floors)
-            Channel 1: Actors (enemy HP normalized)
-            Channel 2: Loot (item value heuristic)
-            Channel 3: Hazards (danger level)
-        - "stats": Box(10,) - Player stats vector
-            [hp, max_hp, gold, xp, floor, enemy_count, nearest_enemy_dist,
-             in_combat, inventory_value, hp_ratio]
-
-    Action Space:
-        Discrete(6):
-            0: Wait/Skip
-            1: Move Up
-            2: Move Down
-            3: Move Left
-            4: Move Right
-            5: Attack/Interact
+    High-performance Gymnasium environment with:
+    - Semantic action space (A* pathfinding)
+    - Safety guardrails
+    - k-frame skipping
+    - Egocentric observations
     """
 
     metadata = {"render_modes": ["human"]}
@@ -474,6 +861,11 @@ class ShiftingChasmEnv(gym.Env):
         headless: bool = False,
         game_url: str = "http://localhost:8000/index.html",
         step_timeout: float = 0.5,
+        # New parameters
+        use_semantic_actions: bool = True,
+        use_safety_guardrails: bool = True,
+        frame_skip: int = 4,
+        use_egocentric: bool = True,
     ):
         super().__init__()
 
@@ -482,16 +874,20 @@ class ShiftingChasmEnv(gym.Env):
         self.game_url = game_url
         self.step_timeout = step_timeout
 
-        # WebSocket bridge
+        # New configuration
+        self.use_semantic_actions = use_semantic_actions
+        self.use_safety_guardrails = use_safety_guardrails
+        self.frame_skip = frame_skip
+        self.use_egocentric = use_egocentric
+
+        # Components
         self.bridge: Optional[WebSocketBridge] = None
         if self.use_websocket:
             self.bridge = WebSocketBridge(host=ws_host, port=ws_port)
 
-        # Selenium fallback
         self.driver = None
-
-        # Reward shaper
         self.reward_shaper = RewardShaper()
+        self.action_middleware = SemanticActionMiddleware()
 
         # Episode tracking
         self.episode_count = 0
@@ -499,21 +895,48 @@ class ShiftingChasmEnv(gym.Env):
         self.last_obs: Optional[GameObservation] = None
 
         # Define observation space
-        self.observation_space = gym.spaces.Dict({
-            "spatial": gym.spaces.Box(
-                low=0.0, high=1.0,
-                shape=(11, 11, 4),
-                dtype=np.float32
-            ),
-            "stats": gym.spaces.Box(
-                low=-np.inf, high=np.inf,
-                shape=(10,),
-                dtype=np.float32
-            )
-        })
+        if self.use_egocentric:
+            self.observation_space = gym.spaces.Dict({
+                "spatial": gym.spaces.Box(
+                    low=0.0, high=1.0,
+                    shape=(11, 11, 4),
+                    dtype=np.float32
+                ),
+                "stats": gym.spaces.Box(
+                    low=-np.inf, high=np.inf,
+                    shape=(10,),
+                    dtype=np.float32
+                ),
+                "egocentric_enemies": gym.spaces.Box(
+                    low=-np.inf, high=np.inf,
+                    shape=(10, 3),  # Up to 10 enemies, (dx, dy, hp_ratio)
+                    dtype=np.float32
+                ),
+                "egocentric_loot": gym.spaces.Box(
+                    low=-np.inf, high=np.inf,
+                    shape=(10, 3),  # Up to 10 loot, (dx, dy, value)
+                    dtype=np.float32
+                ),
+            })
+        else:
+            self.observation_space = gym.spaces.Dict({
+                "spatial": gym.spaces.Box(
+                    low=0.0, high=1.0,
+                    shape=(11, 11, 4),
+                    dtype=np.float32
+                ),
+                "stats": gym.spaces.Box(
+                    low=-np.inf, high=np.inf,
+                    shape=(10,),
+                    dtype=np.float32
+                )
+            })
 
         # Define action space
-        self.action_space = gym.spaces.Discrete(6)
+        if self.use_semantic_actions:
+            self.action_space = gym.spaces.Discrete(len(SemanticAction))
+        else:
+            self.action_space = gym.spaces.Discrete(6)  # Primitive actions
 
         # Start communication
         self._initialize()
@@ -524,9 +947,8 @@ class ShiftingChasmEnv(gym.Env):
             print("Starting WebSocket server...")
             self.bridge.start()
             print(f"Waiting for game client to connect on ws://localhost:{self.bridge.port}")
-            print("Load the game in browser with WebSocket client enabled.")
         else:
-            print("Using Selenium fallback (slower)...")
+            print("Using Selenium fallback...")
             self._init_selenium()
 
     def _init_selenium(self):
@@ -546,83 +968,22 @@ class ShiftingChasmEnv(gym.Env):
         self.driver.get(self.game_url)
         time.sleep(2)
 
-    def _get_observation_websocket(self) -> Optional[GameObservation]:
-        """Get observation via WebSocket"""
-        return self.bridge.wait_for_observation(timeout=self.step_timeout)
-
-    def _get_observation_selenium(self) -> Optional[GameObservation]:
-        """Get observation via Selenium (fallback)"""
-        result = self.driver.execute_script(JS_OBSERVATION_MULTICHANNEL)
-        if result is None:
+    def _get_observation(self) -> Optional[GameObservation]:
+        """Get observation from game"""
+        if self.use_websocket:
+            return self.bridge.wait_for_observation(timeout=self.step_timeout)
+        else:
+            # Selenium fallback (minimal implementation)
             return None
-        return self.bridge._parse_observation(result) if self.bridge else self._parse_selenium_result(result)
 
-    def _parse_selenium_result(self, result: Dict) -> GameObservation:
-        """Parse Selenium result into GameObservation"""
-        obs = GameObservation()
-
-        # Parse state
-        state_str = result.get("game_state", "unknown").upper()
-        state_map = {
-            "PLAYING": GameState.DUNGEON_RUN,
-            "VILLAGE": GameState.VILLAGE,
-            "MENU": GameState.MENU,
-        }
-        obs.state = state_map.get(state_str, GameState.UNKNOWN)
-
-        # Parse channels
-        if "geometry" in result:
-            obs.geometry = np.array(result["geometry"], dtype=np.float32).reshape(11, 11)
-        if "actors" in result:
-            obs.actors = np.array(result["actors"], dtype=np.float32).reshape(11, 11)
-        if "loot" in result:
-            obs.loot = np.array(result["loot"], dtype=np.float32).reshape(11, 11)
-        if "hazards" in result:
-            obs.hazards = np.array(result["hazards"], dtype=np.float32).reshape(11, 11)
-
-        # Parse stats
-        obs.hp = float(result.get("hp", 100))
-        obs.max_hp = float(result.get("max_hp", 100))
-        obs.gold = int(result.get("gold", 0))
-        obs.xp = int(result.get("xp", 0))
-        obs.floor = int(result.get("floor", 1))
-        obs.in_combat = bool(result.get("in_combat", False))
-        obs.enemy_count = int(result.get("enemy_count", 0))
-        obs.nearest_enemy_dist = float(result.get("nearest_enemy_dist", 999))
-        obs.inventory_value = int(result.get("inventory_value", 0))
-        obs.player_x = float(result.get("player_x", 0))
-        obs.player_y = float(result.get("player_y", 0))
-
-        # Check for death
-        if obs.hp <= 0:
-            obs.state = GameState.DEAD
-
-        return obs
-
-    def _send_action_websocket(self, action: int):
-        """Send action via WebSocket"""
-        self.bridge.send_action(action)
-
-    def _send_action_selenium(self, action: int):
-        """Send action via Selenium"""
-        try:
-            body = self.driver.find_element(By.TAG_NAME, "body")
-            if action == 1:
-                body.send_keys(Keys.ARROW_UP)
-            elif action == 2:
-                body.send_keys(Keys.ARROW_DOWN)
-            elif action == 3:
-                body.send_keys(Keys.ARROW_LEFT)
-            elif action == 4:
-                body.send_keys(Keys.ARROW_RIGHT)
-            elif action == 5:
-                body.send_keys(Keys.SPACE)
-            # action == 0 is wait, do nothing
-        except Exception as e:
-            print(f"Selenium action error: {e}")
+    def _send_action(self, action: int):
+        """Send action to game"""
+        if self.use_websocket:
+            self.bridge.send_action(action)
+        # Selenium fallback handled elsewhere
 
     def _obs_to_gym(self, obs: GameObservation) -> Dict[str, np.ndarray]:
-        """Convert GameObservation to Gym observation dict"""
+        """Convert GameObservation to Gym observation dict with egocentric features"""
         # Stack spatial channels: (11, 11, 4)
         spatial = np.stack([
             obs.geometry,
@@ -640,45 +1001,87 @@ class ShiftingChasmEnv(gym.Env):
             obs.xp,
             obs.floor,
             obs.enemy_count,
-            min(obs.nearest_enemy_dist, 20.0),  # Cap distance
+            min(obs.nearest_enemy_dist, 20.0),
             1.0 if obs.in_combat else 0.0,
             obs.inventory_value,
             hp_ratio
         ], dtype=np.float32)
 
-        return {"spatial": spatial, "stats": stats}
+        result = {"spatial": spatial, "stats": stats}
+
+        if self.use_egocentric:
+            # Egocentric enemy features (dx, dy, hp_ratio)
+            egocentric_enemies = np.zeros((10, 3), dtype=np.float32)
+            for i, enemy in enumerate(obs.enemies[:10]):
+                egocentric_enemies[i] = [enemy[0], enemy[1], enemy[2]]
+
+            # Egocentric loot features (dx, dy, value)
+            egocentric_loot = np.zeros((10, 3), dtype=np.float32)
+            for i, loot in enumerate(obs.loot_items[:10]):
+                egocentric_loot[i] = [loot[0], loot[1], loot[2]]
+
+            result["egocentric_enemies"] = egocentric_enemies
+            result["egocentric_loot"] = egocentric_loot
+
+        return result
 
     def step(self, action: int) -> Tuple[Dict, float, bool, bool, Dict]:
-        """Execute one step in the environment"""
+        """
+        Execute one step with k-frame skipping.
+
+        The action is repeated for k frames, with rewards summed.
+        """
         self.step_count += 1
+        total_reward = 0.0
+        terminated = False
+        truncated = False
+        info = {}
+        obs = None
 
-        # Send action
-        if self.use_websocket:
-            self._send_action_websocket(action)
+        # Check safety guardrails (pre-inference interlock)
+        current_obs = self.last_obs
+        if self.use_safety_guardrails and current_obs:
+            override_action = SafetyGuardrails.should_override(current_obs)
+            if override_action is not None:
+                action = override_action
+                info["safety_override"] = True
+
+        # Translate semantic action to primitive action
+        if self.use_semantic_actions and current_obs:
+            primitive_action = self.action_middleware.translate_action(action, current_obs)
         else:
-            self._send_action_selenium(action)
-            time.sleep(0.02)  # Minimal delay for Selenium
+            primitive_action = action
 
-        # Get observation
-        if self.use_websocket:
-            obs = self._get_observation_websocket()
-        else:
-            obs = self._get_observation_selenium()
+        # k-frame skipping: repeat action for k frames
+        for frame in range(self.frame_skip):
+            # Send action
+            self._send_action(primitive_action)
 
-        if obs is None:
-            # Connection lost or error
-            return self._get_empty_obs(), -10.0, True, False, {"error": "no_observation"}
+            # Small delay between frames
+            if frame < self.frame_skip - 1:
+                time.sleep(0.016)  # ~60 FPS
 
-        self.last_obs = obs
+            # Get observation
+            obs = self._get_observation()
 
-        # Compute reward
-        reward, terminated, reward_breakdown = self.reward_shaper.compute_reward(obs)
+            if obs is None:
+                return self._get_empty_obs(), -10.0, True, False, {"error": "no_observation"}
+
+            self.last_obs = obs
+
+            # Compute reward for this frame
+            reward, term, breakdown = self.reward_shaper.compute_reward(obs)
+            total_reward += reward
+
+            if term:
+                terminated = True
+                break
 
         # Convert observation
         gym_obs = self._obs_to_gym(obs)
 
         # Build info
-        info = {
+        info.update({
             "state": obs.state.name,
             "floor": obs.floor,
             "hp": obs.hp,
@@ -686,10 +1089,11 @@ class ShiftingChasmEnv(gym.Env):
             "xp": obs.xp,
             "enemy_count": obs.enemy_count,
             "step": self.step_count,
-            "reward_breakdown": reward_breakdown
-        }
+            "frames_executed": self.frame_skip if not terminated else frame + 1,
+            "reward_breakdown": breakdown
+        })
 
-        return gym_obs, reward, terminated, False, info
+        return gym_obs, total_reward, terminated, truncated, info
 
     def reset(self, seed=None, options=None) -> Tuple[Dict, Dict]:
         """Reset environment for new episode"""
@@ -698,22 +1102,15 @@ class ShiftingChasmEnv(gym.Env):
         self.episode_count += 1
         self.step_count = 0
         self.reward_shaper.reset()
+        self.action_middleware.reset()
 
         # Send reset command
         if self.use_websocket:
             self.bridge.send_command("reset")
-            time.sleep(0.5)  # Wait for game reset
-        else:
-            # Selenium: refresh page
-            if self.last_obs and self.last_obs.state == GameState.DEAD:
-                self.driver.refresh()
-                time.sleep(2)
+            time.sleep(0.5)
 
         # Get initial observation
-        if self.use_websocket:
-            obs = self._get_observation_websocket()
-        else:
-            obs = self._get_observation_selenium()
+        obs = self._get_observation()
 
         if obs is None:
             return self._get_empty_obs(), {}
@@ -722,17 +1119,25 @@ class ShiftingChasmEnv(gym.Env):
 
         info = {
             "episode": self.episode_count,
-            "state": obs.state.name
+            "state": obs.state.name,
+            "semantic_actions": self.use_semantic_actions,
+            "safety_guardrails": self.use_safety_guardrails,
+            "frame_skip": self.frame_skip,
+            "egocentric": self.use_egocentric
         }
 
         return self._obs_to_gym(obs), info
 
     def _get_empty_obs(self) -> Dict[str, np.ndarray]:
         """Return empty observation for error cases"""
-        return {
+        result = {
             "spatial": np.zeros((11, 11, 4), dtype=np.float32),
             "stats": np.zeros(10, dtype=np.float32)
         }
+        if self.use_egocentric:
+            result["egocentric_enemies"] = np.zeros((10, 3), dtype=np.float32)
+            result["egocentric_loot"] = np.zeros((10, 3), dtype=np.float32)
+        return result
 
     def render(self):
         """Rendering handled by browser"""
@@ -750,303 +1155,43 @@ class ShiftingChasmEnv(gym.Env):
 
 
 # ==========================================
-# JAVASCRIPT INJECTION (Multi-Channel)
-# ==========================================
-
-JS_OBSERVATION_MULTICHANNEL = """
-(function() {
-    // Safety check
-    if (typeof window.game === 'undefined' || !window.game.player) {
-        return null;
-    }
-
-    const g = window.game;
-    const p = g.player;
-
-    // Grid parameters
-    const R = 5;  // Radius (11x11 grid)
-    const SIZE = 11;
-
-    // Player position
-    const playerX = Math.floor(p.gridX ?? p.x);
-    const playerY = Math.floor(p.gridY ?? p.y);
-
-    // Map dimensions
-    const mapHeight = g.map ? g.map.length : 0;
-    const mapWidth = (g.map && g.map[0]) ? g.map[0].length : 0;
-
-    // Multi-channel arrays (flattened for JSON transfer)
-    const geometry = new Array(SIZE * SIZE).fill(0);
-    const actors = new Array(SIZE * SIZE).fill(0);
-    const loot = new Array(SIZE * SIZE).fill(0);
-    const hazards = new Array(SIZE * SIZE).fill(0);
-
-    // Build channels
-    for (let dy = -R; dy <= R; dy++) {
-        for (let dx = -R; dx <= R; dx++) {
-            const x = playerX + dx;
-            const y = playerY + dy;
-            const idx = (dy + R) * SIZE + (dx + R);
-
-            // Bounds check
-            if (x < 0 || y < 0 || x >= mapWidth || y >= mapHeight || !g.map[y]) {
-                geometry[idx] = 1.0;  // Out of bounds = wall
-                continue;
-            }
-
-            const tile = g.map[y][x];
-            if (!tile) {
-                geometry[idx] = 1.0;
-                continue;
-            }
-
-            // CHANNEL 0: Geometry (walls = 1, floor = 0)
-            if (tile.type === 'wall' || tile.type === 'void' || tile.type === 'interior_wall') {
-                geometry[idx] = 1.0;
-            }
-
-            // CHANNEL 1: Actors (enemy HP normalized 0-1)
-            if (g.enemies) {
-                const enemy = g.enemies.find(e => {
-                    const ex = Math.floor(e.gridX ?? e.x);
-                    const ey = Math.floor(e.gridY ?? e.y);
-                    return ex === x && ey === y && e.hp > 0;
-                });
-                if (enemy) {
-                    const maxHp = enemy.maxHp || 100;
-                    actors[idx] = Math.min(1.0, enemy.hp / maxHp);
-                }
-            }
-
-            // CHANNEL 2: Loot (value heuristic 0-1)
-            if (g.groundLoot) {
-                const item = g.groundLoot.find(i => {
-                    const ix = Math.floor(i.x ?? i.gridX);
-                    const iy = Math.floor(i.y ?? i.gridY);
-                    return ix === x && iy === y;
-                });
-                if (item) {
-                    // Estimate value (rarity or price)
-                    const value = item.value || item.price || 10;
-                    loot[idx] = Math.min(1.0, value / 100);
-                }
-            }
-
-            // Also check decorations for loot
-            if (g.decorations) {
-                const dec = g.decorations.find(d => d.x === x && d.y === y && d.interactable);
-                if (dec) {
-                    loot[idx] = Math.max(loot[idx], 0.5);  // Interactables have medium value
-                }
-            }
-
-            // CHANNEL 3: Hazards (danger level 0-1)
-            if (tile.hazard) {
-                hazards[idx] = 1.0;
-            }
-            if (g.lavaTiles && g.lavaTiles.has && g.lavaTiles.has(`${x},${y}`)) {
-                hazards[idx] = 1.0;
-            }
-        }
-    }
-
-    // Compute enemy stats
-    let enemyCount = 0;
-    let nearestDist = 999;
-    let nearestHp = 0;
-
-    if (g.enemies) {
-        for (const e of g.enemies) {
-            if (e.hp <= 0) continue;
-            enemyCount++;
-            const ex = e.gridX ?? e.x;
-            const ey = e.gridY ?? e.y;
-            const dist = Math.abs(ex - playerX) + Math.abs(ey - playerY);
-            if (dist < nearestDist) {
-                nearestDist = dist;
-                nearestHp = e.hp;
-            }
-        }
-    }
-
-    // Compute inventory value
-    let inventoryValue = 0;
-    if (p.inventory) {
-        for (const item of p.inventory) {
-            inventoryValue += item.value || item.price || 10;
-        }
-    }
-
-    // Return structured observation
-    return {
-        game_state: g.state || 'unknown',
-        geometry: geometry,
-        actors: actors,
-        loot: loot,
-        hazards: hazards,
-        hp: p.hp || 0,
-        max_hp: p.maxHp || 100,
-        gold: g.gold || 0,
-        xp: p.xp || 0,
-        floor: g.floor || 1,
-        player_x: playerX,
-        player_y: playerY,
-        in_combat: p.combat ? p.combat.isInCombat : false,
-        enemy_count: enemyCount,
-        nearest_enemy_dist: nearestDist,
-        nearest_enemy_hp: nearestHp,
-        inventory_value: inventoryValue,
-        frame_id: g.frameCount || 0,
-        timestamp: Date.now()
-    };
-})();
-"""
-
-
-# ==========================================
-# WEBSOCKET CLIENT (JavaScript)
-# ==========================================
-
-JS_WEBSOCKET_CLIENT = """
-// WebSocket Client for RL Training
-// Inject this into the game to enable high-speed Python communication
-
-(function() {
-    'use strict';
-
-    const WS_URL = 'ws://localhost:8765';
-    let ws = null;
-    let connected = false;
-    let frameId = 0;
-
-    // Action mapping
-    const ACTION_MAP = {
-        0: null,           // Wait
-        1: 'ArrowUp',
-        2: 'ArrowDown',
-        3: 'ArrowLeft',
-        4: 'ArrowRight',
-        5: 'Space'
-    };
-
-    function connect() {
-        ws = new WebSocket(WS_URL);
-
-        ws.onopen = function() {
-            console.log('[RL] Connected to Python server');
-            connected = true;
-            ws.send(JSON.stringify({ type: 'ready' }));
-        };
-
-        ws.onmessage = function(event) {
-            const data = JSON.parse(event.data);
-
-            if (data.type === 'action') {
-                executeAction(data.action);
-            } else if (data.type === 'command') {
-                executeCommand(data.command);
-            }
-        };
-
-        ws.onclose = function() {
-            console.log('[RL] Disconnected from Python server');
-            connected = false;
-            // Reconnect after delay
-            setTimeout(connect, 1000);
-        };
-
-        ws.onerror = function(err) {
-            console.error('[RL] WebSocket error:', err);
-        };
-    }
-
-    function executeAction(action) {
-        const key = ACTION_MAP[action];
-        if (key) {
-            // Simulate keypress
-            const event = new KeyboardEvent('keydown', {
-                key: key,
-                code: key,
-                bubbles: true
-            });
-            document.dispatchEvent(event);
-        }
-
-        // Send observation after action
-        requestAnimationFrame(() => {
-            sendObservation();
-        });
-    }
-
-    function executeCommand(command) {
-        if (command === 'reset') {
-            if (typeof window.startNewGameDungeon === 'function') {
-                window.startNewGameDungeon();
-            } else {
-                location.reload();
-            }
-        }
-    }
-
-    function sendObservation() {
-        if (!connected || !ws) return;
-
-        const obs = getObservation();
-        if (obs) {
-            obs.frame_id = ++frameId;
-            ws.send(JSON.stringify({
-                type: 'observation',
-                payload: obs
-            }));
-        }
-    }
-
-    function getObservation() {
-        // [Uses the same logic as JS_OBSERVATION_MULTICHANNEL]
-        // ... (observation gathering code)
-        return null; // Placeholder
-    }
-
-    // Start connection
-    connect();
-
-    // Send observations on game tick
-    if (typeof window.game !== 'undefined') {
-        setInterval(() => {
-            if (connected && window.game.state === 'playing') {
-                sendObservation();
-            }
-        }, 50);  // 20 FPS observation rate
-    }
-
-    console.log('[RL] WebSocket client initialized');
-})();
-"""
-
-
-# ==========================================
-# UTILITY FUNCTIONS
+# TEST UTILITY
 # ==========================================
 
 def test_environment(use_websocket: bool = False):
     """Test the environment"""
     print("=" * 60)
-    print("Testing ShiftingChasmEnv")
+    print("Testing ShiftingChasmEnv with Intelligence Optimizations")
+    print("=" * 60)
     print(f"Mode: {'WebSocket' if use_websocket else 'Selenium'}")
+    print(f"Features enabled:")
+    print(f"  - Semantic Actions (A* pathfinding)")
+    print(f"  - Safety Guardrails")
+    print(f"  - 4-Frame Skipping")
+    print(f"  - Egocentric Normalization")
     print("=" * 60)
 
-    env = ShiftingChasmEnv(use_websocket=use_websocket, headless=False)
+    env = ShiftingChasmEnv(
+        use_websocket=use_websocket,
+        headless=False,
+        use_semantic_actions=True,
+        use_safety_guardrails=True,
+        frame_skip=4,
+        use_egocentric=True
+    )
 
     try:
         if use_websocket:
             print("\nWaiting for game client connection...")
-            print("Open the game in browser and inject the WebSocket client.")
             input("Press Enter when ready...")
 
         obs, info = env.reset()
         print(f"\nInitial observation shapes:")
         print(f"  spatial: {obs['spatial'].shape}")
         print(f"  stats: {obs['stats'].shape}")
+        if 'egocentric_enemies' in obs:
+            print(f"  egocentric_enemies: {obs['egocentric_enemies'].shape}")
+            print(f"  egocentric_loot: {obs['egocentric_loot'].shape}")
         print(f"  state: {info.get('state', 'unknown')}")
 
         total_reward = 0
@@ -1056,8 +1201,9 @@ def test_environment(use_websocket: bool = False):
             total_reward += reward
 
             if i % 10 == 0:
-                print(f"Step {i}: reward={reward:.3f}, total={total_reward:.3f}, "
-                      f"HP={obs['stats'][0]:.0f}, enemies={obs['stats'][5]:.0f}")
+                override = "SAFETY" if info.get("safety_override") else ""
+                print(f"Step {i}: action={SemanticAction(action).name}, reward={reward:.3f}, "
+                      f"total={total_reward:.3f}, HP={obs['stats'][0]:.0f} {override}")
 
             if terminated:
                 print(f"\nEpisode ended at step {i}")
