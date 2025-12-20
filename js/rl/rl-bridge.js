@@ -30,7 +30,10 @@
         // Egocentric observation settings
         MAX_ENEMIES_TRACKED: 10,
         MAX_LOOT_TRACKED: 10,
-        OBSERVATION_RADIUS: 5  // 11x11 grid
+        OBSERVATION_RADIUS: 5,  // 11x11 grid
+        // Bot save system
+        BOT_SAVE_SLOT: 2,       // Dedicated slot for bot (0-2, slot 2 = bot)
+        USE_PERSISTENT_SAVE: true  // Enable game save integration
     };
 
     // ========================================
@@ -213,24 +216,225 @@
             case 'resume':
                 resumeGame();
                 break;
+            case 'save':
+                saveGame();
+                break;
+            case 'load':
+                loadGame();
+                break;
+            case 'get_save_info':
+                sendSaveInfo();
+                break;
             default:
                 log('Unknown command:', command);
         }
     }
 
-    function resetGame() {
-        if (typeof window.startNewGameDungeon === 'function') {
-            window.startNewGameDungeon();
-        } else if (typeof window.resetGame === 'function') {
-            window.resetGame();
-        } else if (window.game && window.game.state === 'dead') {
-            location.reload();
+    // ========================================
+    // GAME SAVE INTEGRATION
+    // ========================================
+
+    function ensureBotSaveExists() {
+        /**
+         * Ensure the bot has a save file. Creates one if needed.
+         */
+        if (typeof SaveManager === 'undefined') {
+            log('SaveManager not available');
+            return false;
         }
+
+        const slot = CONFIG.BOT_SAVE_SLOT;
+        if (!SaveManager.slotExists(slot)) {
+            log('Creating new bot save in slot', slot);
+            SaveManager.createNewGame(slot);
+        }
+        return true;
+    }
+
+    function loadGame() {
+        /**
+         * Load the bot's save file and go to village.
+         */
+        if (!CONFIG.USE_PERSISTENT_SAVE) {
+            log('Persistent saves disabled');
+            return false;
+        }
+
+        if (typeof SaveManager === 'undefined') {
+            log('SaveManager not available');
+            return false;
+        }
+
+        ensureBotSaveExists();
+
+        const slot = CONFIG.BOT_SAVE_SLOT;
+        const result = SaveManager.applyLoad(slot);
+
+        if (result && result.success) {
+            log('Bot save loaded from slot', slot);
+            // Go to village after loading
+            if (typeof goToVillage === 'function') {
+                goToVillage();
+            } else if (window.game) {
+                window.game.state = 'village';
+            }
+            return true;
+        }
+
+        log('Failed to load bot save');
+        return false;
+    }
+
+    function saveGame() {
+        /**
+         * Save the bot's current progress.
+         */
+        if (!CONFIG.USE_PERSISTENT_SAVE) return false;
+
+        if (typeof SaveManager === 'undefined') {
+            log('SaveManager not available');
+            return false;
+        }
+
+        const slot = CONFIG.BOT_SAVE_SLOT;
+        const result = SaveManager.save(slot);
+        log('Bot save saved to slot', slot, result);
+        return result;
+    }
+
+    function sendSaveInfo() {
+        /**
+         * Send save file info to Python for progress tracking.
+         */
+        if (typeof SaveManager === 'undefined') {
+            send({ type: 'save_info', payload: null });
+            return;
+        }
+
+        const slot = CONFIG.BOT_SAVE_SLOT;
+        const slots = SaveManager.getSaveSlots();
+        const botSlot = slots.find(s => s.slot === slot);
+
+        // Get persistent state for detailed info
+        let persistentState = null;
+        if (SaveManager.slotExists(slot)) {
+            const saveData = SaveManager.load(slot);
+            if (saveData) {
+                persistentState = {
+                    bank_gold: saveData.persistent?.bank?.gold || 0,
+                    bank_items: saveData.persistent?.bank?.items?.length || 0,
+                    total_runs: saveData.persistent?.stats?.totalRuns || 0,
+                    extractions: saveData.persistent?.stats?.successfulExtractions || 0,
+                    deaths: saveData.persistent?.stats?.deaths || 0,
+                    deepest_floor: saveData.persistent?.stats?.deepestFloor || 1,
+                    playtime_minutes: (saveData.persistent?.stats?.playtime || 0) / 60000,
+                    skills: saveData.persistent?.skills || {},
+                    unlocked_floors: saveData.persistent?.shortcuts?.unlockedFloors || [1],
+                    world_state: saveData.persistent?.worldState || 1,
+                    has_death_drop: !!saveData.persistent?.deathDrop
+                };
+            }
+        }
+
+        send({
+            type: 'save_info',
+            payload: {
+                slot: slot,
+                exists: botSlot?.exists || false,
+                metadata: botSlot || null,
+                persistent: persistentState
+            }
+        });
+    }
+
+    function resetGame() {
+        /**
+         * Reset for a new episode:
+         * 1. Save current progress (if in dungeon and alive, extraction; if dead, death)
+         * 2. Load bot's save
+         * 3. Start a new dungeon run from village
+         */
+        const g = window.game;
+        const p = g?.player;
+
+        // Handle end of previous run
+        if (CONFIG.USE_PERSISTENT_SAVE && typeof SessionManager !== 'undefined') {
+            if (g && g.state === 'playing') {
+                // Still in dungeon - treat as extraction (bot is resetting, save progress)
+                if (p && p.hp > 0) {
+                    log('Bot extracting (reset during run)');
+                    SessionManager.extractionSuccess();
+                }
+            } else if (g && g.state === 'dead') {
+                // Already dead - SessionManager.playerDeath should have been called
+                log('Bot died, save should already be updated');
+            }
+
+            // Save the game
+            saveGame();
+        }
+
+        // Start new run
+        if (CONFIG.USE_PERSISTENT_SAVE) {
+            // Load save and start from village
+            loadGame();
+
+            // Wait for village to load, then start dungeon run
+            setTimeout(() => {
+                startDungeonRun();
+            }, 300);
+        } else {
+            // Legacy behavior - just start new game
+            if (typeof window.startNewGameDungeon === 'function') {
+                window.startNewGameDungeon();
+            } else if (typeof window.resetGame === 'function') {
+                window.resetGame();
+            } else if (g && g.state === 'dead') {
+                location.reload();
+            }
+        }
+
         setTimeout(() => sendObservation(), 500);
     }
 
+    function startDungeonRun() {
+        /**
+         * Start a new dungeon run from the village.
+         * Uses SessionManager if available.
+         */
+        if (typeof SessionManager !== 'undefined' && typeof SessionManager.startRun === 'function') {
+            // Get starting floor (use deepest unlocked shortcut)
+            let startFloor = 1;
+            if (typeof SaveManager !== 'undefined') {
+                const slot = CONFIG.BOT_SAVE_SLOT;
+                const saveData = SaveManager.load(slot);
+                if (saveData?.persistent?.shortcuts?.unlockedFloors) {
+                    const floors = saveData.persistent.shortcuts.unlockedFloors;
+                    startFloor = Math.max(...floors);
+                    log('Starting from floor', startFloor, '(unlocked:', floors, ')');
+                }
+            }
+
+            // Get bank gold for starting loadout
+            let startGold = 0;
+            if (window.game?.bank?.gold) {
+                // Use some gold from bank for the run
+                startGold = Math.min(window.game.bank.gold, 100);
+            }
+
+            // Start the run
+            SessionManager.startRun(startFloor, null, startGold);
+            log('Started dungeon run on floor', startFloor);
+        } else if (typeof window.startNewGameDungeon === 'function') {
+            window.startNewGameDungeon();
+        }
+    }
+
     function startGame() {
-        if (typeof window.startNewGameDungeon === 'function') {
+        if (CONFIG.USE_PERSISTENT_SAVE) {
+            loadGame();
+            setTimeout(() => startDungeonRun(), 300);
+        } else if (typeof window.startNewGameDungeon === 'function') {
             window.startNewGameDungeon();
         }
     }
@@ -533,6 +737,28 @@
         }
 
         // ========================================
+        // PERSISTENT SAVE INFO (for progression tracking)
+        // ========================================
+
+        let saveInfo = null;
+        if (CONFIG.USE_PERSISTENT_SAVE && typeof SaveManager !== 'undefined') {
+            const slot = CONFIG.BOT_SAVE_SLOT;
+            const saveData = SaveManager.load(slot);
+            if (saveData?.persistent) {
+                saveInfo = {
+                    bank_gold: saveData.persistent.bank?.gold || 0,
+                    bank_items: saveData.persistent.bank?.items?.length || 0,
+                    total_runs: saveData.persistent.stats?.totalRuns || 0,
+                    extractions: saveData.persistent.stats?.successfulExtractions || 0,
+                    deaths: saveData.persistent.stats?.deaths || 0,
+                    deepest_floor: saveData.persistent.stats?.deepestFloor || 1,
+                    unlocked_floors: saveData.persistent.shortcuts?.unlockedFloors || [1],
+                    skills: Object.keys(saveData.persistent.skills || {}).length
+                };
+            }
+        }
+
+        // ========================================
         // RETURN OBSERVATION
         // ========================================
 
@@ -570,6 +796,9 @@
             loot_egocentric: lootEgocentric,
             extraction_egocentric: extractionEgocentric,
 
+            // Persistent save info (progression tracking)
+            save_info: saveInfo,
+
             // Walkable map for A* (if small enough)
             walkable: walkable,
             map_width: mapWidth,
@@ -601,6 +830,7 @@
             enemies_egocentric: [],
             loot_egocentric: [],
             extraction_egocentric: null,
+            save_info: null,
             walkable: null,
             map_width: 0,
             map_height: 0

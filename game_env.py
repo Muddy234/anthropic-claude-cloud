@@ -99,6 +99,19 @@ class Target:
 
 
 @dataclass
+class SaveInfo:
+    """Persistent save state from the game (roguelite progression)"""
+    bank_gold: int = 0
+    bank_items: int = 0
+    total_runs: int = 0
+    extractions: int = 0
+    deaths: int = 0
+    deepest_floor: int = 1
+    unlocked_floors: List[int] = field(default_factory=lambda: [1])
+    skills: int = 0  # Number of unlocked skills
+
+
+@dataclass
 class GameObservation:
     """Structured observation from game"""
     # FSM State
@@ -139,6 +152,9 @@ class GameObservation:
 
     # Raw map for A* pathfinding
     walkable_map: Optional[np.ndarray] = None
+
+    # Persistent save info (roguelite progression)
+    save_info: Optional[SaveInfo] = None
 
     # Timestamps for sync
     frame_id: int = 0
@@ -658,6 +674,20 @@ class WebSocketBridge:
                 payload.get("map_height", 50), payload.get("map_width", 50)
             )
 
+        # Parse persistent save info (roguelite progression)
+        if "save_info" in payload and payload["save_info"]:
+            save_data = payload["save_info"]
+            obs.save_info = SaveInfo(
+                bank_gold=int(save_data.get("bank_gold", 0)),
+                bank_items=int(save_data.get("bank_items", 0)),
+                total_runs=int(save_data.get("total_runs", 0)),
+                extractions=int(save_data.get("extractions", 0)),
+                deaths=int(save_data.get("deaths", 0)),
+                deepest_floor=int(save_data.get("deepest_floor", 1)),
+                unlocked_floors=save_data.get("unlocked_floors", [1]),
+                skills=int(save_data.get("skills", 0))
+            )
+
         # Parse sync info
         obs.frame_id = int(payload.get("frame_id", 0))
         obs.timestamp = float(payload.get("timestamp", time.time()))
@@ -1093,6 +1123,19 @@ class ShiftingChasmEnv(gym.Env):
             "reward_breakdown": breakdown
         })
 
+        # Include save info for progression tracking
+        if obs.save_info:
+            info["save_info"] = {
+                "bank_gold": obs.save_info.bank_gold,
+                "bank_items": obs.save_info.bank_items,
+                "total_runs": obs.save_info.total_runs,
+                "extractions": obs.save_info.extractions,
+                "deaths": obs.save_info.deaths,
+                "deepest_floor": obs.save_info.deepest_floor,
+                "unlocked_floors": obs.save_info.unlocked_floors,
+                "skills": obs.save_info.skills
+            }
+
         return gym_obs, total_reward, terminated, truncated, info
 
     def reset(self, seed=None, options=None) -> Tuple[Dict, Dict]:
@@ -1125,6 +1168,19 @@ class ShiftingChasmEnv(gym.Env):
             "frame_skip": self.frame_skip,
             "egocentric": self.use_egocentric
         }
+
+        # Include save info for progression tracking
+        if obs.save_info:
+            info["save_info"] = {
+                "bank_gold": obs.save_info.bank_gold,
+                "bank_items": obs.save_info.bank_items,
+                "total_runs": obs.save_info.total_runs,
+                "extractions": obs.save_info.extractions,
+                "deaths": obs.save_info.deaths,
+                "deepest_floor": obs.save_info.deepest_floor,
+                "unlocked_floors": obs.save_info.unlocked_floors,
+                "skills": obs.save_info.skills
+            }
 
         return self._obs_to_gym(obs), info
 

@@ -112,7 +112,18 @@ class ProgressTracker:
             "training_sessions": 0,
             "created_at": datetime.now().isoformat(),
             "last_trained": None,
-            "model_version": 1
+            "model_version": 1,
+            # In-game save progression (roguelite)
+            "game_save": {
+                "bank_gold": 0,
+                "bank_items": 0,
+                "total_runs": 0,
+                "extractions": 0,
+                "deaths": 0,
+                "deepest_floor": 1,
+                "unlocked_floors": [1],
+                "skills": 0
+            }
         }
 
     def _load_history(self) -> List[Dict]:
@@ -130,7 +141,8 @@ class ProgressTracker:
         with open(self.history_file, 'w') as f:
             json.dump(self.history[-1000:], f, indent=2)  # Keep last 1000 episodes
 
-    def record_episode(self, reward: float, length: int, floor: int, state: str, actions: Dict[str, int] = None):
+    def record_episode(self, reward: float, length: int, floor: int, state: str,
+                       actions: Dict[str, int] = None, save_info: Dict = None):
         """Record an episode result."""
         self.progress["total_episodes"] += 1
 
@@ -145,6 +157,10 @@ class ProgressTracker:
         elif state == "EXTRACTED":
             self.progress["total_extractions"] += 1
 
+        # Update game save progression if provided
+        if save_info:
+            self.update_game_save(save_info)
+
         # Add to history
         episode_data = {
             "episode": self.progress["total_episodes"],
@@ -157,7 +173,30 @@ class ProgressTracker:
         }
         if actions:
             episode_data["actions"] = actions
+        if save_info:
+            episode_data["save_info"] = save_info
         self.history.append(episode_data)
+
+    def update_game_save(self, save_info: Dict):
+        """Update in-game save progression tracking."""
+        if "game_save" not in self.progress:
+            self.progress["game_save"] = {}
+
+        gs = self.progress["game_save"]
+
+        # Update with latest values from game
+        gs["bank_gold"] = max(gs.get("bank_gold", 0), save_info.get("bank_gold", 0))
+        gs["bank_items"] = max(gs.get("bank_items", 0), save_info.get("bank_items", 0))
+        gs["total_runs"] = save_info.get("total_runs", gs.get("total_runs", 0))
+        gs["extractions"] = save_info.get("extractions", gs.get("extractions", 0))
+        gs["deaths"] = save_info.get("deaths", gs.get("deaths", 0))
+        gs["deepest_floor"] = max(gs.get("deepest_floor", 1), save_info.get("deepest_floor", 1))
+        gs["skills"] = max(gs.get("skills", 0), save_info.get("skills", 0))
+
+        # Merge unlocked floors
+        existing_floors = set(gs.get("unlocked_floors", [1]))
+        new_floors = set(save_info.get("unlocked_floors", [1]))
+        gs["unlocked_floors"] = sorted(existing_floors | new_floors)
 
     def record_timesteps(self, n: int):
         """Record timesteps."""
@@ -193,6 +232,13 @@ class ProgressTracker:
         else:
             trend_str = "N/A (need more data)"
 
+        # Get game save info
+        gs = p.get("game_save", {})
+        unlocked_floors = gs.get("unlocked_floors", [1])
+        unlocked_str = ", ".join(str(f) for f in unlocked_floors[:5])
+        if len(unlocked_floors) > 5:
+            unlocked_str += f"... ({len(unlocked_floors)} total)"
+
         summary = f"""
 ╔══════════════════════════════════════════════════════════════════════╗
 ║                    🤖 AI AGENT PROGRESS REPORT                       ║
@@ -215,6 +261,15 @@ class ProgressTracker:
 ║  Extractions:       {p['total_extractions']}
 ║  Deaths:            {p['total_deaths']}
 ║  Survival Rate:     {survival_rate:.1f}%
+╠══════════════════════════════════════════════════════════════════════╣
+║  💾 IN-GAME SAVE (Roguelite Progression)
+║  ─────────────────────────────────────────────────────────────────────
+║  Bank Gold:         {gs.get('bank_gold', 0):,}
+║  Bank Items:        {gs.get('bank_items', 0)}
+║  Skills Unlocked:   {gs.get('skills', 0)}
+║  Deepest Floor:     {gs.get('deepest_floor', 1)}
+║  Unlocked Floors:   {unlocked_str}
+║  Game Runs:         {gs.get('total_runs', 0)} ({gs.get('extractions', 0)} extractions, {gs.get('deaths', 0)} deaths)
 ╠══════════════════════════════════════════════════════════════════════╣
 ║  📈 PERFORMANCE (Last 100 Episodes)
 ║  ─────────────────────────────────────────────────────────────────────
@@ -340,6 +395,7 @@ class ProgressTrackingCallback(BaseCallback):
         super().__init__(verbose)
         self.tracker = tracker
         self.episode_action_counts = {}
+        self.latest_save_info = None
 
     def _on_step(self) -> bool:
         # Track actions
@@ -347,6 +403,11 @@ class ProgressTrackingCallback(BaseCallback):
             action = self.locals['actions'][0]
             action_name = SemanticAction(action).name if action < len(SemanticAction) else str(action)
             self.episode_action_counts[action_name] = self.episode_action_counts.get(action_name, 0) + 1
+
+        # Track latest save info from infos
+        infos = self.locals.get('infos', [{}])
+        if infos and 'save_info' in infos[0]:
+            self.latest_save_info = infos[0]['save_info']
 
         # Check for episode end
         for idx, done in enumerate(self.locals.get('dones', [])):
@@ -358,7 +419,8 @@ class ProgressTrackingCallback(BaseCallback):
                         length=info['episode']['l'],
                         floor=info.get('floor', 1),
                         state=info.get('state', 'unknown'),
-                        actions=self.episode_action_counts.copy()
+                        actions=self.episode_action_counts.copy(),
+                        save_info=self.latest_save_info
                     )
                     self.episode_action_counts = {}
 
@@ -658,6 +720,14 @@ def spectate(args):
             print(f"     Result: {info.get('state', 'unknown')}")
             print(f"     Actions: {action_counts}")
             print(f"     Session Avg: {np.mean(session_rewards):.2f}")
+
+            # Show save info if available
+            if 'save_info' in info:
+                si = info['save_info']
+                print(f"\n  💾 Save Progression:")
+                print(f"     Bank: {si.get('bank_gold', 0):,}g, {si.get('bank_items', 0)} items")
+                print(f"     Deepest: Floor {si.get('deepest_floor', 1)}")
+                print(f"     Runs: {si.get('total_runs', 0)} total ({si.get('extractions', 0)} extractions)")
 
             time.sleep(1)
 
