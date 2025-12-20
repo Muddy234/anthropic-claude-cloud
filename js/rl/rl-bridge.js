@@ -5,15 +5,12 @@
 // This module provides high-speed communication between the game and a Python
 // RL training environment via WebSocket, replacing slow Selenium IPC.
 //
-// Architecture:
-//   Game (JS) ←WebSocket→ Python (RL Agent)
-//
-// Performance: >1000 SPS vs ~10-20 SPS with Selenium
-//
-// Usage:
-//   1. Start Python training server: python train.py --websocket
-//   2. Load game in browser (this script auto-connects)
-//   3. Training begins automatically when connected
+// Features:
+//   - High-speed WebSocket communication (>1000 SPS)
+//   - Multi-channel spatial observations
+//   - Egocentric feature normalization (translational invariance)
+//   - Potion/inventory state tracking
+//   - Walkable map for A* pathfinding support
 //
 // ============================================================================
 
@@ -26,10 +23,14 @@
 
     const CONFIG = {
         WS_URL: 'ws://localhost:8765',
-        RECONNECT_DELAY: 1000,      // ms between reconnection attempts
-        OBSERVATION_RATE: 50,        // ms between observation pushes (20 FPS)
-        SYNC_MODE: 'event',          // 'event' (after action) or 'poll' (interval)
-        DEBUG: false                 // Enable debug logging
+        RECONNECT_DELAY: 1000,
+        OBSERVATION_RATE: 50,
+        SYNC_MODE: 'event',
+        DEBUG: false,
+        // Egocentric observation settings
+        MAX_ENEMIES_TRACKED: 10,
+        MAX_LOOT_TRACKED: 10,
+        OBSERVATION_RADIUS: 5  // 11x11 grid
     };
 
     // ========================================
@@ -42,14 +43,15 @@
     let lastActionTime = 0;
     let enabled = true;
 
-    // Action mapping
-    const ACTION_MAP = {
+    // Action mapping (extended for semantic actions)
+    const PRIMITIVE_ACTION_MAP = {
         0: null,           // Wait/No-op
         1: 'ArrowUp',
         2: 'ArrowDown',
         3: 'ArrowLeft',
         4: 'ArrowRight',
-        5: ' '             // Space - Attack/Interact
+        5: ' ',            // Space - Attack/Interact
+        6: '3'             // Hotkey 3 - Use Potion
     };
 
     // ========================================
@@ -70,11 +72,7 @@
         ws.onopen = function() {
             log('Connected to Python RL server');
             connected = true;
-
-            // Send ready signal
             send({ type: 'ready', timestamp: Date.now() });
-
-            // Send initial observation
             setTimeout(() => sendObservation(), 100);
         };
 
@@ -126,7 +124,7 @@
     function handleMessage(data) {
         switch (data.type) {
             case 'action':
-                executeAction(data.action);
+                executeAction(data.action, data.action_type);
                 break;
             case 'command':
                 executeCommand(data.command, data);
@@ -139,19 +137,18 @@
         }
     }
 
-    function executeAction(action) {
+    function executeAction(action, actionType = 'primitive') {
         lastActionTime = Date.now();
 
-        const key = ACTION_MAP[action];
+        // Handle primitive actions
+        const key = PRIMITIVE_ACTION_MAP[action];
         if (key !== null && key !== undefined) {
             simulateKeypress(key);
         }
 
         // Send observation after action is processed
-        // Use requestAnimationFrame to sync with game render loop
         if (CONFIG.SYNC_MODE === 'event') {
             requestAnimationFrame(() => {
-                // Wait one more frame for game state to update
                 requestAnimationFrame(() => {
                     sendObservation();
                 });
@@ -160,10 +157,9 @@
     }
 
     function simulateKeypress(key) {
-        // Create and dispatch keydown event
         const keydownEvent = new KeyboardEvent('keydown', {
             key: key,
-            code: key === ' ' ? 'Space' : key,
+            code: key === ' ' ? 'Space' : (key.startsWith('Arrow') ? key : `Digit${key}`),
             keyCode: getKeyCode(key),
             which: getKeyCode(key),
             bubbles: true,
@@ -171,17 +167,13 @@
         });
         document.dispatchEvent(keydownEvent);
 
-        // Also trigger on canvas if it exists
         const canvas = document.getElementById('gameCanvas');
         if (canvas) {
             canvas.dispatchEvent(keydownEvent);
         }
 
-        // For movement, also update game.keys state directly if available
         if (typeof window.game !== 'undefined' && window.game.keys) {
             window.game.keys[key] = true;
-
-            // Clear key after short delay (simulate keyup)
             setTimeout(() => {
                 if (window.game.keys) {
                     window.game.keys[key] = false;
@@ -196,7 +188,11 @@
             'ArrowDown': 40,
             'ArrowLeft': 37,
             'ArrowRight': 39,
-            ' ': 32
+            ' ': 32,
+            '1': 49,
+            '2': 50,
+            '3': 51,
+            '4': 52
         };
         return codes[key] || 0;
     }
@@ -223,17 +219,13 @@
     }
 
     function resetGame() {
-        // Try different reset methods
         if (typeof window.startNewGameDungeon === 'function') {
             window.startNewGameDungeon();
         } else if (typeof window.resetGame === 'function') {
             window.resetGame();
         } else if (window.game && window.game.state === 'dead') {
-            // Refresh page as fallback
             location.reload();
         }
-
-        // Send observation after reset delay
         setTimeout(() => sendObservation(), 500);
     }
 
@@ -256,19 +248,13 @@
     }
 
     function updateConfig(data) {
-        if (data.observation_rate) {
-            CONFIG.OBSERVATION_RATE = data.observation_rate;
-        }
-        if (data.sync_mode) {
-            CONFIG.SYNC_MODE = data.sync_mode;
-        }
-        if (data.debug !== undefined) {
-            CONFIG.DEBUG = data.debug;
-        }
+        if (data.observation_rate) CONFIG.OBSERVATION_RATE = data.observation_rate;
+        if (data.sync_mode) CONFIG.SYNC_MODE = data.sync_mode;
+        if (data.debug !== undefined) CONFIG.DEBUG = data.debug;
     }
 
     // ========================================
-    // OBSERVATION BUILDING
+    // OBSERVATION BUILDING (with Egocentric Features)
     // ========================================
 
     function sendObservation() {
@@ -283,7 +269,6 @@
     }
 
     function buildObservation() {
-        // Safety check
         if (typeof window.game === 'undefined') {
             return null;
         }
@@ -292,30 +277,12 @@
         const p = g.player;
 
         if (!p) {
-            return {
-                game_state: g.state || 'menu',
-                geometry: new Array(121).fill(1),
-                actors: new Array(121).fill(0),
-                loot: new Array(121).fill(0),
-                hazards: new Array(121).fill(0),
-                hp: 0,
-                max_hp: 100,
-                gold: 0,
-                xp: 0,
-                floor: 1,
-                player_x: 0,
-                player_y: 0,
-                in_combat: false,
-                enemy_count: 0,
-                nearest_enemy_dist: 999,
-                nearest_enemy_hp: 0,
-                inventory_value: 0
-            };
+            return buildEmptyObservation(g);
         }
 
         // Grid parameters
-        const R = 5;  // Radius (11x11 grid)
-        const SIZE = 11;
+        const R = CONFIG.OBSERVATION_RADIUS;
+        const SIZE = R * 2 + 1;  // 11x11
 
         // Player position
         const playerX = Math.floor(p.gridX ?? p.x ?? 0);
@@ -331,16 +298,15 @@
         const loot = new Array(SIZE * SIZE).fill(0);
         const hazards = new Array(SIZE * SIZE).fill(0);
 
-        // Build channels
+        // Build spatial channels
         for (let dy = -R; dy <= R; dy++) {
             for (let dx = -R; dx <= R; dx++) {
                 const x = playerX + dx;
                 const y = playerY + dy;
                 const idx = (dy + R) * SIZE + (dx + R);
 
-                // Bounds check
                 if (x < 0 || y < 0 || x >= mapWidth || y >= mapHeight || !g.map[y]) {
-                    geometry[idx] = 1.0;  // Out of bounds = wall
+                    geometry[idx] = 1.0;
                     continue;
                 }
 
@@ -350,12 +316,12 @@
                     continue;
                 }
 
-                // CHANNEL 0: Geometry (walls = 1, floor = 0)
+                // CHANNEL 0: Geometry
                 if (tile.type === 'wall' || tile.type === 'void' || tile.type === 'interior_wall') {
                     geometry[idx] = 1.0;
                 }
 
-                // CHANNEL 1: Actors (enemy HP normalized 0-1)
+                // CHANNEL 1: Actors
                 if (g.enemies) {
                     const enemy = g.enemies.find(e => {
                         const ex = Math.floor(e.gridX ?? e.x);
@@ -368,7 +334,7 @@
                     }
                 }
 
-                // CHANNEL 2: Loot (value heuristic 0-1)
+                // CHANNEL 2: Loot
                 if (g.groundLoot) {
                     const item = g.groundLoot.find(i => {
                         const ix = Math.floor(i.x ?? i.gridX);
@@ -381,41 +347,130 @@
                     }
                 }
 
-                // Decorations (chests, shrines)
                 if (g.decorations) {
                     const dec = g.decorations.find(d => d.x === x && d.y === y && d.interactable);
-                    if (dec) {
-                        loot[idx] = Math.max(loot[idx], 0.5);
-                    }
+                    if (dec) loot[idx] = Math.max(loot[idx], 0.5);
                 }
 
-                // Extraction points
                 if (g.extractionPoints) {
                     const ext = g.extractionPoints.find(e => e.x === x && e.y === y);
-                    if (ext) {
-                        loot[idx] = 1.0;  // High value for extraction
-                    }
+                    if (ext) loot[idx] = 1.0;
                 }
 
-                // CHANNEL 3: Hazards (danger level 0-1)
-                if (tile.hazard) {
-                    hazards[idx] = 1.0;
-                }
-                if (g.lavaTiles && g.lavaTiles.has) {
-                    if (g.lavaTiles.has(`${x},${y}`)) {
-                        hazards[idx] = 1.0;
-                    }
-                }
+                // CHANNEL 3: Hazards
+                if (tile.hazard) hazards[idx] = 1.0;
+                if (g.lavaTiles && g.lavaTiles.has && g.lavaTiles.has(`${x},${y}`)) hazards[idx] = 1.0;
                 if (g.lavaVents) {
                     const vent = g.lavaVents.find(v => v.x === x && v.y === y);
-                    if (vent) {
-                        hazards[idx] = 0.75;
+                    if (vent) hazards[idx] = 0.75;
+                }
+            }
+        }
+
+        // ========================================
+        // EGOCENTRIC FEATURES (Translational Invariance)
+        // ========================================
+
+        // Enemies as relative deltas (dx, dy, hp_ratio)
+        const enemiesEgocentric = [];
+        if (g.enemies) {
+            const sortedEnemies = g.enemies
+                .filter(e => e.hp > 0)
+                .map(e => {
+                    const ex = (e.gridX ?? e.x) - playerX;
+                    const ey = (e.gridY ?? e.y) - playerY;
+                    const maxHp = e.maxHp || e.stats?.maxHp || 100;
+                    return {
+                        dx: ex,
+                        dy: ey,
+                        hp_ratio: e.hp / maxHp,
+                        dist: Math.abs(ex) + Math.abs(ey)
+                    };
+                })
+                .sort((a, b) => a.dist - b.dist)
+                .slice(0, CONFIG.MAX_ENEMIES_TRACKED);
+
+            for (const e of sortedEnemies) {
+                enemiesEgocentric.push({
+                    dx: e.dx,
+                    dy: e.dy,
+                    hp_ratio: e.hp_ratio
+                });
+            }
+        }
+
+        // Loot as relative deltas (dx, dy, value)
+        const lootEgocentric = [];
+        if (g.groundLoot) {
+            const sortedLoot = g.groundLoot
+                .map(i => {
+                    const ix = (i.x ?? i.gridX) - playerX;
+                    const iy = (i.y ?? i.gridY) - playerY;
+                    const value = i.value || i.price || i.sellPrice || 10;
+                    return {
+                        dx: ix,
+                        dy: iy,
+                        value: Math.min(1.0, value / 100),
+                        dist: Math.abs(ix) + Math.abs(iy)
+                    };
+                })
+                .sort((a, b) => a.dist - b.dist)
+                .slice(0, CONFIG.MAX_LOOT_TRACKED);
+
+            for (const l of sortedLoot) {
+                lootEgocentric.push({
+                    dx: l.dx,
+                    dy: l.dy,
+                    value: l.value
+                });
+            }
+        }
+
+        // Extraction point as relative delta
+        let extractionEgocentric = null;
+        if (g.extractionPoints && g.extractionPoints.length > 0) {
+            const ext = g.extractionPoints[0];
+            extractionEgocentric = {
+                dx: ext.x - playerX,
+                dy: ext.y - playerY
+            };
+        }
+
+        // ========================================
+        // INVENTORY / POTION STATE
+        // ========================================
+
+        let hasPotion = false;
+        let potionCount = 0;
+        let inventoryValue = 0;
+
+        if (p.inventory && Array.isArray(p.inventory)) {
+            for (const item of p.inventory) {
+                if (!item) continue;
+
+                inventoryValue += item.value || item.price || item.sellPrice || 10;
+
+                // Check for healing potions
+                if (item.type === 'potion' || item.type === 'consumable') {
+                    if (item.effect === 'heal' || item.name?.toLowerCase().includes('heal') ||
+                        item.name?.toLowerCase().includes('health') ||
+                        item.name?.toLowerCase().includes('potion')) {
+                        hasPotion = true;
+                        potionCount += item.count || 1;
                     }
                 }
             }
         }
 
-        // Compute enemy stats
+        // Check assigned consumables (hotkey 3)
+        if (p.assignedConsumables && p.assignedConsumables.slot3) {
+            hasPotion = true;
+        }
+
+        // ========================================
+        // COMBAT & ENEMY STATS
+        // ========================================
+
         let enemyCount = 0;
         let nearestDist = 999;
         let nearestHp = 0;
@@ -430,16 +485,6 @@
                 if (dist < nearestDist) {
                     nearestDist = dist;
                     nearestHp = e.hp;
-                }
-            }
-        }
-
-        // Compute inventory value
-        let inventoryValue = 0;
-        if (p.inventory && Array.isArray(p.inventory)) {
-            for (const item of p.inventory) {
-                if (item) {
-                    inventoryValue += item.value || item.price || item.sellPrice || 10;
                 }
             }
         }
@@ -460,18 +505,47 @@
             xp = p.stats.xp;
         }
 
-        // Determine game state for FSM
+        // Determine game state
         let gameState = g.state || 'unknown';
         if (p.hp <= 0) {
             gameState = 'dead';
         }
 
+        // ========================================
+        // BUILD WALKABLE MAP FOR A* (optional, sent on request)
+        // ========================================
+
+        // For efficiency, only send walkable map if map is small
+        // or if specifically requested. Here we send a simplified version.
+        let walkable = null;
+        if (mapHeight <= 100 && mapWidth <= 100) {
+            walkable = [];
+            for (let y = 0; y < mapHeight; y++) {
+                for (let x = 0; x < mapWidth; x++) {
+                    const tile = g.map[y]?.[x];
+                    if (!tile || tile.type === 'wall' || tile.type === 'void' || tile.type === 'interior_wall') {
+                        walkable.push(false);
+                    } else {
+                        walkable.push(true);
+                    }
+                }
+            }
+        }
+
+        // ========================================
+        // RETURN OBSERVATION
+        // ========================================
+
         return {
             game_state: gameState,
+
+            // Spatial channels
             geometry: geometry,
             actors: actors,
             loot: loot,
             hazards: hazards,
+
+            // Player stats
             hp: p.hp || 0,
             max_hp: p.maxHp || 100,
             gold: g.gold || 0,
@@ -479,16 +553,62 @@
             floor: g.floor || 1,
             player_x: playerX,
             player_y: playerY,
+
+            // Combat info
             in_combat: inCombat,
             enemy_count: enemyCount,
             nearest_enemy_dist: nearestDist,
             nearest_enemy_hp: nearestHp,
-            inventory_value: inventoryValue
+
+            // Inventory
+            inventory_value: inventoryValue,
+            has_potion: hasPotion,
+            potion_count: potionCount,
+
+            // Egocentric features (translational invariance)
+            enemies_egocentric: enemiesEgocentric,
+            loot_egocentric: lootEgocentric,
+            extraction_egocentric: extractionEgocentric,
+
+            // Walkable map for A* (if small enough)
+            walkable: walkable,
+            map_width: mapWidth,
+            map_height: mapHeight
+        };
+    }
+
+    function buildEmptyObservation(g) {
+        return {
+            game_state: g?.state || 'menu',
+            geometry: new Array(121).fill(1),
+            actors: new Array(121).fill(0),
+            loot: new Array(121).fill(0),
+            hazards: new Array(121).fill(0),
+            hp: 0,
+            max_hp: 100,
+            gold: 0,
+            xp: 0,
+            floor: 1,
+            player_x: 0,
+            player_y: 0,
+            in_combat: false,
+            enemy_count: 0,
+            nearest_enemy_dist: 999,
+            nearest_enemy_hp: 0,
+            inventory_value: 0,
+            has_potion: false,
+            potion_count: 0,
+            enemies_egocentric: [],
+            loot_egocentric: [],
+            extraction_egocentric: null,
+            walkable: null,
+            map_width: 0,
+            map_height: 0
         };
     }
 
     // ========================================
-    // POLLING MODE (optional)
+    // POLLING MODE
     // ========================================
 
     function startPolling() {
@@ -506,17 +626,15 @@
     // ========================================
 
     function init() {
-        log('Initializing RL Bridge...');
+        log('Initializing RL Bridge with Egocentric Features...');
 
-        // Start WebSocket connection
         connect();
 
-        // Start polling if configured
         if (CONFIG.SYNC_MODE === 'poll') {
             startPolling();
         }
 
-        // Expose API for debugging
+        // Expose API
         window.RLBridge = {
             connect: connect,
             disconnect: () => { enabled = false; if (ws) ws.close(); },
@@ -524,13 +642,15 @@
             isConnected: () => connected,
             setDebug: (val) => { CONFIG.DEBUG = val; },
             getConfig: () => ({ ...CONFIG }),
-            getFrameId: () => frameId
+            getFrameId: () => frameId,
+            // New methods
+            getEgocentricEnemies: () => buildObservation()?.enemies_egocentric || [],
+            getEgocentricLoot: () => buildObservation()?.loot_egocentric || []
         };
 
-        log('RL Bridge initialized. Waiting for Python server...');
+        log('RL Bridge initialized with egocentric features.');
     }
 
-    // Wait for DOM ready
     if (document.readyState === 'loading') {
         document.addEventListener('DOMContentLoaded', init);
     } else {
@@ -539,4 +659,4 @@
 
 })();
 
-console.log('[RL] rl-bridge.js loaded');
+console.log('[RL] rl-bridge.js loaded (egocentric features enabled)');
