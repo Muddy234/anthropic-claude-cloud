@@ -1149,6 +1149,18 @@ class EnemyAI {
             this.assignedCircleAngle = null;
         }
 
+        // Check if this enemy was threatening the player and is now disengaging
+        // This allows immediate combat disengage for the player
+        const threatStates = [AI_STATES.CHASING, AI_STATES.COMBAT, AI_STATES.CIRCLING, AI_STATES.SKIRMISHING];
+        const nonThreatStates = [AI_STATES.WANDERING, AI_STATES.RETURNING, AI_STATES.IDLE, AI_STATES.SEARCHING];
+        if (threatStates.includes(this.currentState) && nonThreatStates.includes(newState)) {
+            // This enemy is no longer a threat - check if player should disengage
+            if (typeof checkAndDisengagePlayerCombat === 'function') {
+                // Delay slightly to let state fully transition
+                setTimeout(() => checkAndDisengagePlayerCombat(), 50);
+            }
+        }
+
         this.previousState = this.currentState;
         this.currentState = newState;
         this.stateTimer = 0;

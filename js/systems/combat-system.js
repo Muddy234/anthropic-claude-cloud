@@ -21,7 +21,7 @@ const COMBAT_CONFIG = {
     enemyWhiteFlashStart: 0.85,   // White flash starts at 85% of windup (last 15%)
     playerWindupPercent: 0.15,    // Player windup is 15% for comparison
     // Combat disengage settings
-    combatDisengageTime: 30000    // Time (ms) without combat before auto-disengage (30 seconds)
+    combatDisengageTime: 2000     // Time (ms) without combat before auto-disengage (2 seconds)
 };
 
 // Ambush/Stealth attack configuration
@@ -367,6 +367,53 @@ function disengageCombat(entity) {
     // Clear active combat flag
     if (entity === game.player) {
         entity.inCombat = false;
+    }
+}
+
+/**
+ * Check if player should be disengaged from combat
+ * Called after enemy death or when enemies stop chasing
+ * This provides immediate feedback instead of waiting for the timer
+ */
+function checkAndDisengagePlayerCombat() {
+    const player = game.player;
+    if (!player) return;
+
+    // Only check if player is in combat
+    if (!player.inCombat && !player.combat?.isInCombat) return;
+
+    // Check if any enemies are actively threatening the player
+    let hasActiveThreats = false;
+
+    if (game.enemies) {
+        for (const enemy of game.enemies) {
+            if (enemy.hp <= 0) continue;
+
+            // Enemy is actively targeting the player
+            if (enemy.combat?.currentTarget === player && enemy.combat?.isInCombat) {
+                hasActiveThreats = true;
+                break;
+            }
+
+            // Enemy is chasing and targeting the player
+            if (enemy.state === 'chasing' || enemy.ai?.currentState === 'chasing' ||
+                enemy.ai?.currentState === 'combat' || enemy.ai?.currentState === 'circling') {
+                if (enemy.ai?.target === player || enemy.combat?.currentTarget === player) {
+                    hasActiveThreats = true;
+                    break;
+                }
+            }
+        }
+    }
+
+    // No active threats - disengage immediately
+    if (!hasActiveThreats) {
+        disengageCombat(player);
+        player.combatDisengageTimer = 0;
+
+        if (COMBAT_CONFIG.debugLogging) {
+            console.log('[Combat] Player disengaged - no active threats remaining');
+        }
     }
 }
 
@@ -880,6 +927,10 @@ function handleDeath(entity, killer) {
             disengageCombat(enemy);
         }
     }
+
+    // Check if player should be disengaged from combat
+    // (handles case where dead enemy was attacking player but player wasn't targeting them)
+    checkAndDisengagePlayerCombat();
 }
 
 function calculateXPReward(entity) {
@@ -1387,6 +1438,7 @@ if (typeof window !== 'undefined') {
     window.updateCombat = updateCombat;
     window.engageCombat = engageCombat;
     window.disengageCombat = disengageCombat;
+    window.checkAndDisengagePlayerCombat = checkAndDisengagePlayerCombat;
     window.performAttack = performAttack;
     window.applyDamage = applyDamage;
     window.handleDeath = handleDeath;
