@@ -17,26 +17,80 @@ const ShopUI = {
     PANEL_HEIGHT: 550,
 
     // Shop inventories for different NPCs
+    // ECONOMY UPDATE: Vendors sell raw materials, utilities, and basic supplies
+    // Weapons/armor are NOT sold - they must be found in the dungeon
     INVENTORIES: {
+        // ========================================================================
+        // BLACKSMITH (Tormund) - Raw metals, smithing supplies
+        // ========================================================================
         blacksmith_stock: [
-            { name: 'Iron Sword', price: 50, type: 'weapon', damage: 8, description: 'A sturdy iron blade.' },
-            { name: 'Steel Axe', price: 75, type: 'weapon', damage: 10, description: 'A heavy chopping axe.' },
-            { name: 'Iron Helm', price: 40, type: 'armor', slot: 'HEAD', pDef: 3, description: 'Basic head protection.' },
-            { name: 'Chainmail', price: 80, type: 'armor', slot: 'CHEST', pDef: 5, description: 'Linked metal rings.' },
-            { name: 'Iron Boots', price: 35, type: 'armor', slot: 'FEET', pDef: 2, description: 'Sturdy footwear.' },
-            { name: 'Repair Kit', price: 25, type: 'consumable', description: 'Repairs equipment durability.' }
+            // Raw Materials
+            { id: 'iron_ore', name: 'Iron Ore', price: 15, type: 'raw_material', category: 'metal',
+              description: 'Raw iron ore for metal crafting and upgrades.' },
+            // Utility Materials
+            { id: 'coal', name: 'Coal', price: 5, type: 'utility_material',
+              description: 'Fuel for metalworking. Essential for smithing.' },
+            // Basic Supplies
+            { id: 'whetstone', name: 'Whetstone', price: 10, type: 'basic_supply',
+              description: 'Keeps blades sharp. Minor damage boost for one run.' },
+            { id: 'repair_kit', name: 'Repair Kit', price: 20, type: 'basic_supply',
+              description: 'Repairs minor equipment damage.' }
         ],
+
+        // ========================================================================
+        // ALCHEMIST (Zephyr) - Herbs, vials, alchemical supplies
+        // ========================================================================
         alchemist_stock: [
-            { name: 'Health Potion', price: 30, type: 'consumable', description: 'Restores 50 HP.' },
-            { name: 'Mana Potion', price: 25, type: 'consumable', description: 'Restores 30 MP.' },
-            { name: 'Antidote', price: 20, type: 'consumable', description: 'Cures poison.' },
-            { name: 'Fire Bomb', price: 45, type: 'consumable', description: 'Deals fire damage in an area.' },
-            { name: 'Smoke Bomb', price: 35, type: 'consumable', description: 'Creates a smoke screen for escape.' }
+            // Raw Materials
+            { id: 'herb_bundle', name: 'Herb Bundle', price: 12, type: 'raw_material', category: 'herb',
+              description: 'Mixed healing herbs. Base ingredient for potions.' },
+            { id: 'oil_flask', name: 'Oil Flask', price: 8, type: 'raw_material', category: 'alchemical',
+              description: 'Flammable oil for fire-based creations.' },
+            // Utility Materials
+            { id: 'empty_vial', name: 'Empty Vial', price: 3, type: 'utility_material',
+              description: 'Glass container for potions and compounds.' },
+            // Basic Supplies
+            { id: 'bandage', name: 'Bandage', price: 5, type: 'basic_supply',
+              description: 'Stops bleeding. Heals 15 HP slowly.' },
+            { id: 'antidote', name: 'Basic Antidote', price: 8, type: 'basic_supply',
+              description: 'Cures poison.' }
         ],
+
+        // ========================================================================
+        // GENERAL STORE (Helena) - Leather, cloth, wood, utility items
+        // ========================================================================
+        general_store_stock: [
+            // Raw Materials
+            { id: 'leather_scraps', name: 'Leather Scraps', price: 12, type: 'raw_material', category: 'leather',
+              description: 'Raw leather for light armor crafting.' },
+            { id: 'cloth_bolts', name: 'Cloth Bolts', price: 10, type: 'raw_material', category: 'cloth',
+              description: 'Basic fabric for robes and magical equipment.' },
+            { id: 'timber', name: 'Timber', price: 10, type: 'raw_material', category: 'wood',
+              description: 'Quality wood for bows and crossbows.' },
+            // Utility Materials
+            { id: 'binding_thread', name: 'Binding Thread', price: 6, type: 'utility_material',
+              description: 'Strong thread for leather and cloth crafting.' },
+            { id: 'wax', name: 'Wax', price: 4, type: 'utility_material',
+              description: 'Sealing wax for wood treatment.' },
+            // Basic Supplies
+            { id: 'torch', name: 'Torch', price: 3, type: 'basic_supply',
+              description: 'Lights dark areas. Burns for the whole run.' },
+            { id: 'rope', name: 'Rope', price: 8, type: 'basic_supply',
+              description: 'Useful for climbing and traps.' }
+        ],
+
+        // ========================================================================
+        // INNKEEPER (Rosie) - Food only
+        // ========================================================================
         innkeeper_stock: [
-            { name: 'Bread', price: 5, type: 'consumable', description: 'Restores 10 HP.' },
-            { name: 'Ale', price: 8, type: 'consumable', description: 'Increases courage (and blur).' },
-            { name: 'Trail Rations', price: 15, type: 'consumable', description: 'Restores 25 HP over time.' }
+            { id: 'bread', name: 'Bread', price: 3, type: 'basic_supply',
+              description: 'Restores 10 HP. Simple but reliable.', healAmount: 10 },
+            { id: 'stew', name: 'Stew', price: 8, type: 'basic_supply',
+              description: 'Restores 25 HP. Hearty and filling.', healAmount: 25 },
+            { id: 'ale', name: 'Ale', price: 5, type: 'basic_supply',
+              description: '+5 Courage for the run. Slightly blurs vision.' },
+            { id: 'trail_rations', name: 'Trail Rations', price: 10, type: 'basic_supply',
+              description: 'Restores 15 HP over time. Good for long runs.', healOverTime: 15 }
         ]
     },
 
@@ -171,11 +225,24 @@ const ShopUI = {
         if (this.selectedIndex >= inventory.length) return;
 
         const item = inventory[this.selectedIndex];
-        const sellPrice = Math.floor((item.price || 10) * 0.5);  // 50% of buy price
+
+        // Use sellPrice if defined, otherwise 50% of buy price
+        let sellPrice;
+        if (item.sellPrice !== undefined) {
+            sellPrice = item.sellPrice;
+        } else if (item.price !== undefined) {
+            sellPrice = Math.floor(item.price * 0.5);
+        } else {
+            sellPrice = 5;  // Minimum value for unknown items
+        }
+
+        // For stackable items, multiply by count
+        const count = item.count || 1;
+        const totalPrice = sellPrice * count;
 
         // Add gold to bank
         if (persistentState?.bank) {
-            persistentState.bank.gold += sellPrice;
+            persistentState.bank.gold += totalPrice;
         }
 
         // Remove from inventory
@@ -186,8 +253,9 @@ const ShopUI = {
             this.selectedIndex = Math.max(0, inventory.length - 1);
         }
 
-        this.message = `Sold for ${sellPrice}g!`;
-        console.log(`[ShopUI] Sold ${item.name} for ${sellPrice}g`);
+        const itemName = count > 1 ? `${item.name} x${count}` : item.name;
+        this.message = `Sold ${itemName} for ${totalPrice}g!`;
+        console.log(`[ShopUI] Sold ${itemName} for ${totalPrice}g`);
     },
 
     // ========================================================================
@@ -375,7 +443,19 @@ const ShopUI = {
             const realIndex = startIdx + idx;
             const itemY = listY + 5 + idx * itemHeight;
             const isSelected = realIndex === this.selectedIndex;
-            const sellPrice = Math.floor((item.price || 10) * 0.5);
+
+            // Calculate sell price properly
+            let sellPrice;
+            if (item.sellPrice !== undefined) {
+                sellPrice = item.sellPrice;
+            } else if (item.price !== undefined) {
+                sellPrice = Math.floor(item.price * 0.5);
+            } else {
+                sellPrice = 5;
+            }
+
+            const count = item.count || 1;
+            const totalPrice = sellPrice * count;
 
             // Selection highlight
             if (isSelected) {
@@ -383,22 +463,24 @@ const ShopUI = {
                 ctx.fillRect(listX + 5, itemY, listWidth - 10, itemHeight - 5);
             }
 
-            // Item name
+            // Item name (with count if stackable)
             ctx.font = isSelected ? 'bold 16px Arial' : '16px Arial';
             ctx.textAlign = 'left';
             ctx.fillStyle = this._getItemColor(item.type);
-            ctx.fillText(item.name, listX + 15, itemY + 22);
+            const displayName = count > 1 ? `${item.name} x${count}` : item.name;
+            ctx.fillText(displayName, listX + 15, itemY + 22);
 
             // Type
             ctx.font = '12px Arial';
             ctx.fillStyle = '#888';
-            ctx.fillText(item.type || 'misc', listX + 15, itemY + 40);
+            const typeLabel = item.type?.replace('_', ' ') || 'misc';
+            ctx.fillText(typeLabel, listX + 15, itemY + 40);
 
             // Sell price
             ctx.font = 'bold 14px Arial';
             ctx.textAlign = 'right';
             ctx.fillStyle = '#FFD700';
-            ctx.fillText(`${sellPrice}g`, listX + listWidth - 15, itemY + 25);
+            ctx.fillText(`${totalPrice}g`, listX + listWidth - 15, itemY + 25);
         });
     },
 
@@ -411,6 +493,11 @@ const ShopUI = {
             case 'weapon': return '#e74c3c';
             case 'armor': return '#3498db';
             case 'consumable': return '#2ecc71';
+            case 'raw_material': return '#CD853F';      // Peru/tan for raw materials
+            case 'utility_material': return '#A0A0A0';  // Gray for utilities
+            case 'basic_supply': return '#87CEEB';      // Sky blue for supplies
+            case 'dungeon_craft_drop': return '#9932CC'; // Purple for dungeon drops
+            case 'sellable_loot': return '#FFD700';     // Gold for sellables
             default: return '#FFFFFF';
         }
     },

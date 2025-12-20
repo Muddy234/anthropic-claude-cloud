@@ -121,7 +121,8 @@ const NPC_DATA = {
         building: 'tavern',
         role: 'innkeeper',
         dialogueTree: 'innkeeper_main',
-        services: ['rest', 'rumors', 'quests'],
+        services: ['rest', 'rumors', 'quests', 'shop'],
+        inventory: 'innkeeper_stock',
         initialDialogue: 'innkeeper_intro'
     },
 
@@ -199,22 +200,35 @@ const NPC_DATA = {
         }
     },
 
+    // ECONOMY UPDATE: Helena now runs the General Store
+    general_store: {
+        id: 'general_store',
+        name: 'Helena',
+        title: 'General Store Owner',
+        color: '#DDA0DD',
+        description: 'A practical woman who runs the general store. Sells leather, cloth, wood, and supplies.',
+        building: 'general_store',
+        role: 'merchant',
+        dialogueTree: 'general_store_main',
+        services: ['shop'],
+        inventory: 'general_store_stock',
+        initialDialogue: 'general_store_intro'
+    },
+
+    // Legacy alias for backward compatibility
     merchant_wife: {
         id: 'merchant_wife',
         name: 'Helena',
-        title: 'Merchant\'s Wife',
+        title: 'General Store Owner',
         color: '#DDA0DD',
-        description: 'A worried mother of three. She helps her husband run the general store.',
-        building: 'tavern',  // Often at tavern
-        role: 'ambient',
-        dialogueTree: 'merchant_wife_main',
-        services: [],
-        initialDialogue: 'merchant_wife_intro',
-        worldStatePresence: {
-            presentUntil: 2,  // ASH
-            fleeState: 2,
-            fleeDialogue: 'merchant_wife_farewell'
-        }
+        description: 'A practical woman who runs the general store. Sells leather, cloth, wood, and supplies.',
+        building: 'general_store',
+        role: 'merchant',
+        dialogueTree: 'general_store_main',
+        services: ['shop'],
+        inventory: 'general_store_stock',
+        initialDialogue: 'general_store_intro',
+        aliasOf: 'general_store'
     },
 
     // Ambient villagers (flee early)
@@ -455,49 +469,93 @@ const DIALOGUE_TREES = {
 
     smith_intro: {
         speaker: 'blacksmith',
-        text: '*wipes sweat from brow* Fresh meat for the Chasm, eh? I\'m Tormund. I forge the weapons that keep delvers alive. Need something sharp?',
+        text: '*wipes sweat from brow* Fresh meat for the Chasm, eh? I\'m Tormund. I don\'t sell weapons - find those in the dungeon. But I CAN make what you find stronger.',
         responses: [
-            { text: 'Show me what you have.', action: 'open_shop' },
-            { text: 'Can you repair my equipment?', next: 'smith_repair' },
+            { text: 'Buy smithing materials.', action: 'open_shop' },
+            { text: 'Tell me about upgrades.', next: 'smith_upgrade_info' },
             { text: 'Just looking.', action: 'close' }
         ]
     },
 
     smith_main: {
         speaker: 'blacksmith',
-        text: '*hammers cooling* What can I forge for you today?',
+        text: '*hammers cooling* What can I do for you today?',
         responses: [
-            { text: 'Browse your wares.', action: 'open_shop' },
-            { text: 'Repair my gear.', next: 'smith_repair' },
-            { text: 'Can you craft something special?', next: 'smith_craft' },
+            { text: 'Buy materials.', action: 'open_shop' },
+            { text: 'Upgrade my equipment.', next: 'smith_upgrade_info' },
+            { text: 'What do I need for upgrades?', next: 'smith_materials' },
             { text: 'Nothing today.', action: 'close' }
         ]
     },
 
-    smith_repair: {
+    smith_upgrade_info: {
         speaker: 'blacksmith',
-        text: 'Repair? Ha! My weapons don\'t break easily. But bring me materials from the Chasm, and I can improve what you have.',
+        text: 'I can upgrade any weapon or armor you find. Three levels: +1, +2, +3. Each upgrade makes it stronger. But you need materials from BOTH the village AND the Chasm.',
         responses: [
-            { text: 'What materials do you need?', next: 'smith_materials' },
-            { text: 'I\'ll find some.', next: 'smith_main' }
+            { text: 'What materials exactly?', next: 'smith_materials' },
+            { text: 'Upgrade my gear.', action: 'open_upgrade' },
+            { text: 'Let me get materials first.', action: 'open_shop' }
         ]
     },
 
     smith_materials: {
         speaker: 'blacksmith',
-        text: 'Chasm Iron for basic work. Emberstone for fire enchantments. Shadow Ore for... darker purposes. Find them deep.',
+        text: 'For +1: Iron ore and coal from me, plus basic monster drops. For +2: You need steel ingots - craft those from iron and coal. Plus mid-tier dungeon drops. For +3: Mithril bars and elite boss drops. Hard to get, but worth it.',
         responses: [
-            { text: 'I\'ll look for them.', next: 'smith_main' },
-            { text: 'Show me your shop.', action: 'open_shop' }
+            { text: 'I understand.', next: 'smith_main' },
+            { text: 'Buy materials now.', action: 'open_shop' }
         ]
     },
 
     smith_craft: {
         speaker: 'blacksmith',
-        text: 'Special orders require special materials. Bring me what you find in the Chasm, and we\'ll talk.',
-        action: 'open_crafting',
+        text: 'Ready to upgrade? Bring your equipment and the required materials. I\'ll make it stronger.',
+        action: 'open_upgrade',
         responses: [
-            { text: 'I\'ll see what I can find.', next: 'smith_main' }
+            { text: 'Not yet.', next: 'smith_main' }
+        ]
+    },
+
+    // ========================================================================
+    // GENERAL STORE HELENA
+    // ========================================================================
+
+    general_store_intro: {
+        speaker: 'general_store',
+        text: '*arranges goods on shelves* Welcome! I\'m Helena. I run the general store. Need leather, cloth, or wood for your equipment? I\'ve got you covered.',
+        responses: [
+            { text: 'Show me what you have.', action: 'open_shop' },
+            { text: 'What do you sell?', next: 'general_store_explain' },
+            { text: 'Just browsing.', action: 'close' }
+        ]
+    },
+
+    general_store_main: {
+        speaker: 'general_store',
+        text: '*dusts off a bolt of cloth* What can I help you with today?',
+        responses: [
+            { text: 'Browse your wares.', action: 'open_shop' },
+            { text: 'What materials do you have?', next: 'general_store_explain' },
+            { text: 'Nothing for now.', action: 'close' }
+        ]
+    },
+
+    general_store_explain: {
+        speaker: 'general_store',
+        text: 'I sell raw materials for crafting - leather scraps, cloth bolts, timber. Also binding thread and wax for refining materials. Plus basic supplies like torches and rope.',
+        responses: [
+            { text: 'How do I use these materials?', next: 'general_store_crafting' },
+            { text: 'Let me see your stock.', action: 'open_shop' },
+            { text: 'I\'ll think about it.', action: 'close' }
+        ]
+    },
+
+    general_store_crafting: {
+        speaker: 'general_store',
+        text: 'Take raw materials to the right craftsman. Tormund handles metal and upgrades. Zephyr does potions. You\'ll also need drops from the Chasm - the monsters carry rare components.',
+        responses: [
+            { text: 'Makes sense.', next: 'general_store_main' },
+            { text: 'Show me your stock.', action: 'open_shop' }
         ]
     },
 
@@ -509,6 +567,7 @@ const DIALOGUE_TREES = {
         speaker: 'innkeeper',
         text: '*smiles warmly* Welcome to The Weary Delver! I\'m Rosie. You look like you could use a drink and some news.',
         responses: [
+            { text: 'I\'d like some food for the road.', action: 'open_shop' },
             { text: 'What\'s the latest news?', next: 'innkeeper_rumors' },
             { text: 'I need to rest.', next: 'innkeeper_rest' },
             { text: 'Just passing through.', action: 'close' }
@@ -519,6 +578,7 @@ const DIALOGUE_TREES = {
         speaker: 'innkeeper',
         text: '*polishes a glass* Good to see you back! What can I get you?',
         responses: [
+            { text: 'What food do you have?', action: 'open_shop' },
             { text: 'Any new rumors?', next: 'innkeeper_rumors' },
             { text: 'I need rest.', next: 'innkeeper_rest' },
             { text: 'Nothing for now.', action: 'close' }

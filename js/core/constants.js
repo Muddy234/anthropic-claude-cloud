@@ -435,6 +435,7 @@ const GAME_STATES = {
     SHOP: 'shop',
     BANK: 'bank',
     LOADOUT: 'loadout',
+    UPGRADE: 'upgrade',  // Equipment upgrade UI
 
     // Dungeon overlays
     CHEST: 'chest',

@@ -8,9 +8,18 @@
 const LOOT_CONFIG = {
     despawnTime: 60000,         // 60 seconds in ms
     pileSize: 0.66,             // 2/3 of tile size
+
+    // ECONOMY UPDATE: New drop chances
+    // Monsters drop LOOT, not gold. Loot is sold for gold.
+    craftDropChance: 0.30,      // 30% chance for crafting materials (T1/T2/Elite)
+    sellableDropChance: 0.50,   // 50% chance for sellable loot (treasure, coins, etc.)
+    equipmentDropChance: 0.08,  // 8% base chance to roll for equipment (on top of loot)
+
+    // Legacy compatibility
     monsterItemChance: 0.25,    // 25% chance for monster-specific item (already has dropChance)
-    equipmentDropChance: 0.08,  // 8% base chance to roll for equipment
-    stackableTypes: ['material', 'consumable']
+
+    stackableTypes: ['material', 'consumable', 'raw_material', 'utility_material',
+                     'dungeon_craft_drop', 'sellable_loot']
 };
 
 // ============================================================================
@@ -79,21 +88,50 @@ let lootIdCounter = 0;
  */
 function spawnLootPile(x, y, enemy) {
     const items = [];
-    const monsterData = MONSTER_DATA[enemy.name] || enemy;
+    const monsterData = MONSTER_DATA ? MONSTER_DATA[enemy.name] : null;
+    const isBoss = enemy.isBoss || (monsterData && monsterData.isBoss);
 
-    // Roll for monster-specific item
-    if (Math.random() < LOOT_CONFIG.monsterItemChance) {
-        const monsterItem = rollMonsterLoot(enemy.name);
-        if (monsterItem) {
-            items.push(monsterItem);
+    // Determine current floor for tier-appropriate drops
+    const currentFloor = game.currentFloor || 1;
+
+    // ECONOMY UPDATE: Use new loot system if available
+    if (typeof rollDungeonLoot === 'function') {
+        const dungeonLoot = rollDungeonLoot(currentFloor, isBoss);
+        if (dungeonLoot && dungeonLoot.length > 0) {
+            items.push(...dungeonLoot);
+        }
+    } else {
+        // Fallback to old monster-specific loot
+        if (Math.random() < LOOT_CONFIG.monsterItemChance) {
+            const monsterItem = rollMonsterLoot ? rollMonsterLoot(enemy.name) : null;
+            if (monsterItem) {
+                items.push(monsterItem);
+            }
         }
     }
 
-    // Roll for equipment drop
+    // Roll for equipment drop (on top of regular loot)
     if (Math.random() < LOOT_CONFIG.equipmentDropChance) {
         const equipment = rollEquipmentDrop();
         if (equipment) {
             items.push(equipment);
+        }
+    }
+
+    // Boss guaranteed elite drops (in addition to rollDungeonLoot which already handles this)
+    if (isBoss && typeof DUNGEON_CRAFT_DROPS !== 'undefined') {
+        // Check if we already got an elite drop from rollDungeonLoot
+        const hasEliteDrop = items.some(item =>
+            item.type === 'dungeon_craft_drop' && item.tier === 3
+        );
+
+        if (!hasEliteDrop) {
+            // Add guaranteed elite drop for bosses
+            const eliteDrops = Object.values(DUNGEON_CRAFT_DROPS).filter(d => d.bossOnly);
+            if (eliteDrops.length > 0) {
+                const eliteDrop = eliteDrops[Math.floor(Math.random() * eliteDrops.length)];
+                items.push({ ...eliteDrop, count: 1 });
+            }
         }
     }
 
@@ -111,7 +149,7 @@ function spawnLootPile(x, y, enemy) {
 
         // Log what dropped
         const itemNames = items.map(i => i.name).join(', ');
-        console.log(`Loot dropped at (${x}, ${y}): ${itemNames}`);
+        console.log(`[Loot] Dropped at (${x}, ${y}): ${itemNames}`);
     }
 }
 
