@@ -7,6 +7,7 @@ import time
 
 # ==========================================
 # PART 1: THE "MIND READER" SCRIPT
+# Now with Nan-Protection!
 # ==========================================
 JS_OBSERVATION_SCRIPT = """
     // 1. Safety Check: Is the game ready?
@@ -16,6 +17,9 @@ JS_OBSERVATION_SCRIPT = """
 
     const p = window.gameState.player;
     
+    // Check HP directly (prevent crash if function missing)
+    if (p.hp <= 0) return null; 
+
     // 2. Define View Radius (5 tiles = 11x11 grid)
     const R = 5; 
     let grid = [];
@@ -34,13 +38,13 @@ JS_OBSERVATION_SCRIPT = """
                 const tile = window.gameState.map.tiles[y][x];
                 if (tile && tile.type === 'wall') tileValue = 1;
 
-                if (window.gameState.monsters) {
-                    const monster = window.gameState.monsters.find(m => m.x === x && m.y === y && !m.isDead());
-                    if (monster) tileValue = 2;
+                if (window.gameState.enemies) { 
+                    const enemy = window.gameState.enemies.find(m => m.x === x && m.y === y && m.hp > 0);
+                    if (enemy) tileValue = 2;
                 }
                 
-                if (window.gameState.items) {
-                    const item = window.gameState.items.find(i => i.x === x && i.y === y);
+                if (window.gameState.groundLoot) { 
+                    const item = window.gameState.groundLoot.find(i => i.x === x && i.y === y);
                     if (item) tileValue = 3;
                 }
                 grid.push(tileValue);
@@ -50,13 +54,21 @@ JS_OBSERVATION_SCRIPT = """
         for(let i=0; i<121; i++) grid.push(0);
     }
 
+    // 4. Safe Data Extraction
+    // We look for gold in multiple likely places to avoid 'undefined'
+    let currentGold = 0;
+    if (p.stats && typeof p.stats.gold === 'number') currentGold = p.stats.gold;
+    else if (p.gold && typeof p.gold === 'number') currentGold = p.gold;
+    else if (window.sessionState && typeof window.sessionState.gold === 'number') currentGold = window.sessionState.gold;
+
+    // Force everything to be a Number type
     return {
         "grid": grid,
-        "hp": p.hp,
-        "max_hp": p.maxHp,
-        "level": p.stats ? p.stats.level : 1,
-        "gold": p.stats ? p.stats.gold : 0,
-        "is_alive": !p.isDead()
+        "hp": Number(p.hp) || 0,
+        "max_hp": Number(p.maxHp) || 100,
+        "level": (p.stats && p.stats.level) ? Number(p.stats.level) : 1,
+        "gold": Number(currentGold) || 0,
+        "is_alive": p.hp > 0
     };
 """
 
@@ -69,45 +81,42 @@ class ShiftingChasmEnv(gym.Env):
         
         # 1. Start the Browser
         options = webdriver.ChromeOptions()
-        # options.add_argument("--headless") # Keep commented out to see what happens
+        # options.add_argument("--headless") 
         self.driver = webdriver.Chrome(options=options)
         
         print("Connecting to game...")
         self.driver.get("http://localhost:8000/index.html")
         
-        # WAITING LOOP: Attempts to Start the Game
+        # WAITING LOOP
         self.wait_for_game_start()
 
-        # 2. Define Actions and Observation
+        # 2. Define Actions
         self.action_space = gym.spaces.Discrete(5)
+
+        # 3. Define what the AI sees
         self.observation_space = gym.spaces.Dict({
             "grid": gym.spaces.Box(low=0, high=9, shape=(121,), dtype=np.int32),
-            "stats": gym.spaces.Box(low=0, high=9999, shape=(4,), dtype=np.float32)
+            "stats": gym.spaces.Box(low=0, high=99999, shape=(4,), dtype=np.float32)
         })
 
     def wait_for_game_start(self):
-        """Presses Spacebar until gameState is found"""
         print("Attempting to start game...")
-        
-        for i in range(20): # Try for 20 seconds
-            # A. Check if game is already running
+        for i in range(20): 
             ready = self.driver.execute_script("return (typeof window.gameState !== 'undefined' && window.gameState.player) ? true : false;")
             if ready:
                 print("Game successfully loaded and running!")
                 return
 
-            # B. If not, try to press SPACE to start
             try:
                 body = self.driver.find_element(By.TAG_NAME, "body")
-                body.click() # Focus window
-                body.send_keys(Keys.SPACE) # Press Start
+                body.click() 
+                body.send_keys(Keys.SPACE)
                 print(f"Sent SPACE key... ({i+1}/20)")
             except:
                 pass
-
             time.sleep(1)
             
-        print("Warning: Game start timed out. Make sure the window is active.")
+        print("Warning: Game start timed out.")
 
     def step(self, action):
         # A. Send Action
@@ -117,7 +126,7 @@ class ShiftingChasmEnv(gym.Env):
             elif action == 2: body.send_keys(Keys.ARROW_DOWN)
             elif action == 3: body.send_keys(Keys.ARROW_LEFT)
             elif action == 4: body.send_keys(Keys.ARROW_RIGHT)
-            else: body.send_keys(Keys.SPACE) # Wait/Skip
+            else: body.send_keys(Keys.SPACE) 
         except:
             pass 
 
@@ -125,13 +134,23 @@ class ShiftingChasmEnv(gym.Env):
         data = self.driver.execute_script(JS_OBSERVATION_SCRIPT)
         
         if data is None:
-            # If data is missing mid-game, assume game over or restart needed
             return self._get_empty_obs(), -10, True, False, {}
 
-        # C. Process Observation
+        # C. Process Observation (Double Safety Check)
+        # We ensure np.nan never gets into the array
+        stats_array = np.array([
+            data.get("hp", 0), 
+            data.get("max_hp", 100), 
+            data.get("level", 1), 
+            data.get("gold", 0)
+        ], dtype=np.float32)
+
+        # Final sanitization: Replace any lingering NaNs with 0
+        stats_array = np.nan_to_num(stats_array)
+
         obs = {
             "grid": np.array(data["grid"], dtype=np.int32),
-            "stats": np.array([data["hp"], data["max_hp"], data["level"], data["gold"]], dtype=np.float32)
+            "stats": stats_array
         }
 
         # D. Calculate Reward
@@ -142,20 +161,27 @@ class ShiftingChasmEnv(gym.Env):
         return obs, reward, terminated, False, {}
 
     def reset(self, seed=None, options=None):
-        # On reset, we might need to refresh or press space again if player died
-        current_health = self.driver.execute_script("return window.gameState ? window.gameState.player.hp : 0;")
+        current_health = self.driver.execute_script("return (window.gameState && window.gameState.player) ? window.gameState.player.hp : 0;")
         
         if current_health <= 0:
             self.driver.refresh()
             self.wait_for_game_start()
         
-        # Get initial state
         data = self.driver.execute_script(JS_OBSERVATION_SCRIPT)
         if data is None: return self._get_empty_obs(), {}
 
+        stats_array = np.array([
+            data.get("hp", 100), 
+            data.get("max_hp", 100), 
+            data.get("level", 1), 
+            data.get("gold", 0)
+        ], dtype=np.float32)
+        
+        stats_array = np.nan_to_num(stats_array)
+
         obs = {
             "grid": np.array(data["grid"], dtype=np.int32),
-            "stats": np.array([data["hp"], data["max_hp"], data["level"], data["gold"]], dtype=np.float32)
+            "stats": stats_array
         }
         return obs, {}
 
