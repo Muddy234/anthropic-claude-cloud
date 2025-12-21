@@ -351,30 +351,115 @@ function getNPCReplacement(npcId) {
 const DIALOGUE_TREES = {
 
     // ========================================================================
-    // ELDER MIRA
+    // ELDER MIRA (Quest Hub)
     // ========================================================================
 
+    // Initial greeting - routes based on quest status
     elder_intro: {
         speaker: 'elder',
-        text: 'Welcome, delver. I am Elder Mira. The village survives because brave souls like you venture into the Chasm.',
+        text: 'Welcome, delver. I am Elder Mira. The village survives because brave souls like you venture into the Chasm. I have a task for you, if you are willing.',
         responses: [
-            { text: 'What is the Chasm?', next: 'elder_chasm_lore' },
-            { text: 'What do you need from me?', next: 'elder_quests' },
+            { text: 'I\'m ready for a task.', action: 'elder_check_quest' },
+            { text: 'Tell me about the Chasm first.', next: 'elder_chasm_lore' },
             { text: 'I should go.', action: 'close' }
         ]
     },
 
+    // Main dialogue - quest hub
     elder_main: {
         speaker: 'elder',
-        text: 'The Chasm grows more restless. What brings you to me?',
+        text: 'What brings you to me, delver?',
         responses: [
+            { text: 'About my current task...', action: 'elder_check_quest' },
             { text: 'Tell me about the Chasm.', next: 'elder_chasm_lore' },
-            { text: 'Do you have any tasks for me?', next: 'elder_quests' },
             { text: 'How is the village?', next: 'elder_village_status' },
             { text: 'Farewell.', action: 'close' }
         ]
     },
 
+    // Quest: Ready to turn in
+    elder_quest_ready: {
+        speaker: 'elder',
+        dynamic: 'quest_complete_text',
+        responses: [
+            { text: 'I have completed the task.', action: 'complete_quest' },
+            { text: 'Not yet.', next: 'elder_main' }
+        ]
+    },
+
+    // Quest: In progress
+    elder_quest_progress: {
+        speaker: 'elder',
+        dynamic: 'quest_progress_text',
+        responses: [
+            { text: 'I will continue.', action: 'close' },
+            { text: 'Remind me of my objective.', next: 'elder_quest_reminder' },
+            { text: 'I must abandon this quest.', next: 'elder_abandon_confirm' }
+        ]
+    },
+
+    // Quest: Reminder of objectives
+    elder_quest_reminder: {
+        speaker: 'elder',
+        dynamic: 'quest_objectives_text',
+        responses: [
+            { text: 'I understand.', action: 'close' },
+            { text: 'Tell me more.', next: 'elder_main' }
+        ]
+    },
+
+    // Quest: Confirm abandon
+    elder_abandon_confirm: {
+        speaker: 'elder',
+        text: 'Are you certain? Abandoning a task means starting over. The village needs you to persevere.',
+        responses: [
+            { text: 'Yes, I must abandon it.', action: 'abandon_quest' },
+            { text: 'No, I will continue.', next: 'elder_quest_progress' }
+        ]
+    },
+
+    // Quest: New quest available
+    elder_quest_available: {
+        speaker: 'elder',
+        dynamic: 'quest_offer_text',
+        responses: [
+            { text: 'I accept this task.', action: 'accept_quest' },
+            { text: 'Tell me more about it.', next: 'elder_quest_details' },
+            { text: 'Not right now.', next: 'elder_main' }
+        ]
+    },
+
+    // Quest: Details about offered quest
+    elder_quest_details: {
+        speaker: 'elder',
+        dynamic: 'quest_details_text',
+        responses: [
+            { text: 'I accept this task.', action: 'accept_quest' },
+            { text: 'I need to prepare first.', next: 'elder_main' }
+        ]
+    },
+
+    // Quest: All complete
+    elder_quest_complete_all: {
+        speaker: 'elder',
+        text: 'You have done everything I asked of you, delver. The village owes you a great debt. The Core awaits... if you dare to descend.',
+        responses: [
+            { text: 'I will face the Core.', action: 'close' },
+            { text: 'Tell me about the Core.', next: 'elder_core_lore' }
+        ]
+    },
+
+    // Quest: After completing one
+    elder_quest_completed: {
+        speaker: 'elder',
+        dynamic: 'quest_reward_text',
+        responses: [
+            { text: 'What is my next task?', action: 'elder_check_quest' },
+            { text: 'I need to rest first.', action: 'close' }
+        ]
+    },
+
+    // Lore dialogues
     elder_chasm_lore: {
         speaker: 'elder',
         text: 'The Shifting Chasm appeared decades ago. It consumes everything - land, resources, lives. But it also gives. Strange materials, ancient artifacts. We survive by taking what we can before it shifts.',
@@ -402,19 +487,8 @@ const DIALOGUE_TREES = {
         ]
     },
 
-    elder_quests: {
-        speaker: 'elder',
-        text: 'The village always needs resources from the Chasm. Speak with me when you\'re ready to take on a task.',
-        action: 'show_quests',
-        responses: [
-            { text: 'What else can you tell me?', next: 'elder_main' },
-            { text: 'I\'ll return when ready.', action: 'close' }
-        ]
-    },
-
     elder_village_status: {
         speaker: 'elder',
-        text: 'The village endures, as it always has. Your contributions help keep us safe.',
         dynamic: 'village_status',
         responses: [
             { text: 'Good to hear.', next: 'elder_main' }
@@ -861,8 +935,131 @@ const DYNAMIC_DIALOGUE = {
         'My partner Rolf went too deep once. Said he saw something in the Core. Something watching. He never delved again.',
         'The old maps are useless, you know. The Chasm reshapes itself. Only fools trust paper.',
         'I was the one who discovered the first shortcut. Nearly died doing it, but it was worth it.'
-    ]
+    ],
+
+    // Quest dynamic content (generated by getDynamicQuestContent)
+    quest_complete_text: null,    // Generated dynamically
+    quest_progress_text: null,    // Generated dynamically
+    quest_objectives_text: null,  // Generated dynamically
+    quest_offer_text: null,       // Generated dynamically
+    quest_details_text: null,     // Generated dynamically
+    quest_reward_text: null       // Generated dynamically
 };
+
+// ============================================================================
+// QUEST DIALOGUE HELPERS
+// ============================================================================
+
+/**
+ * Get dynamic quest dialogue content
+ * @param {string} type - Type of dynamic content
+ * @returns {string}
+ */
+function getDynamicQuestContent(type) {
+    if (typeof QuestSystem === 'undefined') {
+        return 'The quest system is not available.';
+    }
+
+    const status = QuestSystem.getElderQuestStatus();
+
+    switch (type) {
+        case 'quest_complete_text':
+            if (status.quest) {
+                return `You have completed "${status.quest.name}". ${status.quest.dialogue?.complete || 'Well done, delver.'}`;
+            }
+            return 'You have done well.';
+
+        case 'quest_progress_text':
+            if (status.quest) {
+                return status.quest.dialogue?.progress || 'Continue your task, delver. The village depends on you.';
+            }
+            return 'Continue your work.';
+
+        case 'quest_objectives_text':
+            if (status.quest && status.quest.progress) {
+                const objectives = status.quest.progress.objectives;
+                const lines = objectives.map(obj => {
+                    const done = isObjectiveComplete(obj);
+                    return `${done ? '✓' : '○'} ${obj.description} (${obj.current}/${obj.count || obj.amount || obj.percentage})`;
+                });
+                return `Your current objectives:\n${lines.join('\n')}`;
+            }
+            return 'Complete the task I have given you.';
+
+        case 'quest_offer_text':
+            if (status.quest) {
+                return `${status.quest.dialogue?.start || status.quest.description}\n\nWill you accept this task?`;
+            }
+            return 'I have no tasks for you at this time.';
+
+        case 'quest_details_text':
+            if (status.quest) {
+                const objectives = status.quest.objectives.map(obj => `• ${obj.description}`).join('\n');
+                const rewardGold = status.quest.rewards?.gold || 0;
+                return `Task: ${status.quest.name}\n\n${status.quest.description}\n\nObjectives:\n${objectives}\n\nReward: ${rewardGold} gold`;
+            }
+            return 'There is nothing more to tell.';
+
+        case 'quest_reward_text':
+            return 'Your reward has been deposited. The village thanks you for your service.';
+
+        case 'village_status':
+            const progress = QuestSystem.getStoryProgress();
+            return `The village endures. You have completed ${progress.completed} of ${progress.total} major tasks. ${progress.percentage}% of the journey is complete.`;
+
+        default:
+            return '';
+    }
+}
+
+/**
+ * Handle Elder quest actions
+ * @param {string} action - Action to perform
+ * @returns {string|null} Next dialogue node or null
+ */
+function handleElderQuestAction(action) {
+    if (typeof QuestSystem === 'undefined') return null;
+
+    const status = QuestSystem.getElderQuestStatus();
+
+    switch (action) {
+        case 'elder_check_quest':
+            // Route to appropriate dialogue based on quest status
+            switch (status.status) {
+                case 'ready_to_complete':
+                    return 'elder_quest_ready';
+                case 'in_progress':
+                    return 'elder_quest_progress';
+                case 'quest_available':
+                    return 'elder_quest_available';
+                case 'all_complete':
+                    return 'elder_quest_complete_all';
+                default:
+                    return 'elder_main';
+            }
+
+        case 'accept_quest':
+            if (status.quest) {
+                QuestSystem.acceptQuest(status.quest.id);
+            }
+            return null;  // Close dialogue
+
+        case 'complete_quest':
+            QuestSystem.completeQuest();
+            return 'elder_quest_completed';
+
+        case 'abandon_quest':
+            QuestSystem.abandonQuest();
+            return 'elder_main';
+
+        default:
+            return null;
+    }
+}
+
+// Export quest dialogue helpers
+window.getDynamicQuestContent = getDynamicQuestContent;
+window.handleElderQuestAction = handleElderQuestAction;
 
 // ============================================================================
 // NPC FACTORY
@@ -908,8 +1105,14 @@ function getDialogueNode(nodeId) {
  * @returns {string}
  */
 function getDynamicContent(type) {
+    // Check for quest-related dynamic content first
+    if (type.startsWith('quest_') || type === 'village_status') {
+        return getDynamicQuestContent(type);
+    }
+
+    // Check for array-based random content
     const options = DYNAMIC_DIALOGUE[type];
-    if (options && options.length > 0) {
+    if (options && Array.isArray(options) && options.length > 0) {
         return options[Math.floor(Math.random() * options.length)];
     }
     return '';

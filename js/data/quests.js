@@ -1,5 +1,6 @@
 // === js/data/quests.js ===
 // SURVIVAL EXTRACTION UPDATE: Quest definitions
+// SIMPLIFIED: All quests from Elder Mira, main story only, 1 active at a time
 
 // ============================================================================
 // QUEST DATA
@@ -8,7 +9,7 @@
 const QUEST_DATA = {
 
     // ========================================================================
-    // MAIN STORY QUESTS
+    // MAIN STORY QUESTS (All from Elder Mira in Town Square)
     // ========================================================================
 
     intro_first_dive: {
@@ -22,13 +23,12 @@ const QUEST_DATA = {
         ],
         rewards: {
             gold: 50,
-            items: [{ id: 'health_potion', count: 3 }],
-            unlocks: ['intro_deeper']
+            items: [{ id: 'health_potion', count: 3 }]
         },
         dialogue: {
             start: 'The Chasm awaits, young delver. Enter, gather what you can, and return alive. That is all I ask for now.',
-            progress: 'You have not yet returned from the depths. The extraction shafts are your lifeline.',
-            complete: 'You survived! The Chasm has claimed many who did not return. You show promise.'
+            progress: 'You have not yet returned from the depths. The extraction shafts are your lifeline - use them.',
+            complete: 'You survived! The Chasm has claimed many who did not return. You show promise, delver.'
         },
         prerequisite: null,
         repeatable: false
@@ -39,20 +39,19 @@ const QUEST_DATA = {
         name: 'Deeper Into the Abyss',
         type: 'main',
         giver: 'elder',
-        description: 'Reach Floor 3 of the Chasm and extract successfully.',
+        description: 'Venture deeper into the Chasm. Reach Floor 3 and extract successfully.',
         objectives: [
             { type: 'reach_floor', floor: 3, current: 0, description: 'Reach Floor 3' },
             { type: 'extract', minFloor: 3, count: 1, current: 0, description: 'Extract from Floor 3 or deeper' }
         ],
         rewards: {
             gold: 150,
-            items: [{ id: 'emberstone', count: 5 }],
-            unlocks: ['guardian_hunt']
+            items: [{ id: 'emberstone', count: 5 }]
         },
         dialogue: {
-            start: 'The upper floors are but a taste. True riches lie deeper. Reach the third floor and return.',
-            progress: 'The third floor holds secrets. Do not give up.',
-            complete: 'Impressive. You have ventured further than many ever dare.'
+            start: 'The upper floors are but a taste of what lies below. True riches - and true danger - await deeper. Reach the third floor and return to me.',
+            progress: 'The third floor holds secrets that few have seen. Do not give up now.',
+            complete: 'Impressive. You have ventured further than many ever dare. The Chasm respects your courage.'
         },
         prerequisite: 'intro_first_dive',
         repeatable: false
@@ -62,10 +61,10 @@ const QUEST_DATA = {
         id: 'guardian_hunt',
         name: 'The First Guardian',
         type: 'main',
-        giver: 'expedition_master',
-        description: 'Defeat the Floor 1 Guardian to unlock the first shortcut.',
+        giver: 'elder',
+        description: 'A powerful Guardian blocks the path to deeper floors. Defeat the Floor 1 Guardian.',
         objectives: [
-            { type: 'defeat_guardian', floor: 1, count: 1, current: 0, description: 'Defeat Floor 1 Guardian' }
+            { type: 'defeat_guardian', floor: 1, count: 1, current: 0, description: 'Defeat the Floor 1 Guardian' }
         ],
         rewards: {
             gold: 200,
@@ -73,9 +72,9 @@ const QUEST_DATA = {
             unlocks: ['shortcut_floor_2']
         },
         dialogue: {
-            start: 'Each floor has a Guardian - a powerful creature that protects the way down. Defeat the first, and I can establish a shortcut.',
-            progress: 'The Guardian still lives. It will appear when you delve deep enough.',
-            complete: 'The Guardian has fallen! I\'ll prepare the shortcut immediately.'
+            start: 'Each floor of the Chasm is protected by a Guardian - ancient creatures of terrible power. The first Guardian bars the way. Defeat it, and Captain Valdris can establish a shortcut for future expeditions.',
+            progress: 'The Guardian still lives. It emerges when you venture deep enough into the first floor. Be prepared.',
+            complete: 'The Guardian has fallen! You have done what many could not. Valdris will prepare the shortcut. You grow stronger, delver.'
         },
         prerequisite: 'intro_deeper',
         repeatable: false
@@ -86,11 +85,11 @@ const QUEST_DATA = {
         name: 'Preparing for the Core',
         type: 'main',
         giver: 'elder',
-        description: 'Gather the materials needed to survive the journey to the Core.',
+        description: 'The Core awaits. Gather the materials and strength needed to survive the journey.',
         objectives: [
             { type: 'collect', itemId: 'void_metal', count: 10, current: 0, description: 'Collect Void Metal x10' },
             { type: 'collect', itemId: 'soul_fragment', count: 5, current: 0, description: 'Collect Soul Fragments x5' },
-            { type: 'defeat_guardian', floor: 5, count: 1, current: 0, description: 'Defeat Floor 5 Guardian' }
+            { type: 'defeat_guardian', floor: 5, count: 1, current: 0, description: 'Defeat the Floor 5 Guardian' }
         ],
         rewards: {
             gold: 1000,
@@ -98,187 +97,11 @@ const QUEST_DATA = {
             unlocks: ['the_core']
         },
         dialogue: {
-            start: 'The Core beckons, but you are not ready. Gather these materials, defeat the final guardian, and I will give you the key.',
-            progress: 'The Core demands sacrifice. Continue your preparations.',
-            complete: 'At last. The Core Key is yours. What awaits below... none truly know.'
+            start: 'You have proven yourself worthy. But the Core... the Core is something else entirely. Gather these materials, defeat the guardian of the fifth floor, and I will give you the key to what lies below.',
+            progress: 'The Core demands sacrifice. Continue your preparations - you are not yet ready.',
+            complete: 'At last. You have done everything I asked and more. The Core Key is yours. What awaits below... none truly know. May the Light guide you, delver.'
         },
         prerequisite: 'guardian_hunt',
-        repeatable: false
-    },
-
-    // ========================================================================
-    // SIDE QUESTS - COLLECTION
-    // ========================================================================
-
-    smith_iron_order: {
-        id: 'smith_iron_order',
-        name: 'Iron for the Forge',
-        type: 'side',
-        giver: 'blacksmith',
-        description: 'Tormund needs Chasm Iron to fulfill his orders.',
-        objectives: [
-            { type: 'collect', itemId: 'chasm_iron', count: 20, current: 0, description: 'Collect Chasm Iron x20' }
-        ],
-        rewards: {
-            gold: 100,
-            items: [{ id: 'iron_sword', count: 1 }]
-        },
-        dialogue: {
-            start: 'My forge runs cold without materials! Bring me 20 Chasm Iron and I\'ll make it worth your while.',
-            progress: 'Still need that iron, delver. The forge waits for no one.',
-            complete: 'Ha! Fine iron indeed. Here - take this blade as thanks.'
-        },
-        prerequisite: 'intro_first_dive',
-        repeatable: true,
-        cooldown: 3  // Runs before available again
-    },
-
-    smith_ember_request: {
-        id: 'smith_ember_request',
-        name: 'Flames of the Deep',
-        type: 'side',
-        giver: 'blacksmith',
-        description: 'Tormund wants Emberstone to forge fire-enchanted weapons.',
-        objectives: [
-            { type: 'collect', itemId: 'emberstone', count: 10, current: 0, description: 'Collect Emberstone x10' }
-        ],
-        rewards: {
-            gold: 200,
-            items: [{ id: 'flame_sword', count: 1 }]
-        },
-        dialogue: {
-            start: 'I\'ve had a vision of a blade wreathed in eternal flame. Bring me Emberstone!',
-            progress: 'The flame calls to me. Find that Emberstone!',
-            complete: 'Yes! Feel the heat! This blade will serve you well.'
-        },
-        prerequisite: 'smith_iron_order',
-        repeatable: true,
-        cooldown: 5
-    },
-
-    // ========================================================================
-    // SIDE QUESTS - HUNTING
-    // ========================================================================
-
-    innkeeper_pest_control: {
-        id: 'innkeeper_pest_control',
-        name: 'Pest Control',
-        type: 'side',
-        giver: 'innkeeper',
-        description: 'Clear out the creatures on Floor 1 that have been scaring off travelers.',
-        objectives: [
-            { type: 'kill', monsterType: 'any', floor: 1, count: 15, current: 0, description: 'Defeat 15 enemies on Floor 1' }
-        ],
-        rewards: {
-            gold: 75,
-            items: [{ id: 'health_potion', count: 2 }]
-        },
-        dialogue: {
-            start: 'The creatures on the first floor are getting bold! Thin their numbers for me, would you?',
-            progress: 'Keep at it! Every beast you slay is one less to worry about.',
-            complete: 'Much better! Here\'s your payment, hero.'
-        },
-        prerequisite: null,
-        repeatable: true,
-        cooldown: 2
-    },
-
-    patron_revenge: {
-        id: 'patron_revenge',
-        name: 'Old Debts',
-        type: 'side',
-        giver: 'patron',
-        description: 'Old Garrett wants revenge on the shadow beasts that took his leg.',
-        objectives: [
-            { type: 'kill', monsterType: 'shadow', count: 10, current: 0, description: 'Defeat 10 shadow creatures' }
-        ],
-        rewards: {
-            gold: 150,
-            items: [{ id: 'shadow_thread', count: 3 }]
-        },
-        dialogue: {
-            start: '*slams mug* Those shadow things took my leg! Kill ten of them for me. I\'ll pay well.',
-            progress: 'More! Kill more of those cursed shadows!',
-            complete: '*nods slowly* That\'ll do. Won\'t bring back my leg, but... thanks.'
-        },
-        prerequisite: 'intro_deeper',
-        repeatable: true,
-        cooldown: 4
-    },
-
-    // ========================================================================
-    // SIDE QUESTS - EXPLORATION
-    // ========================================================================
-
-    scout_mapping: {
-        id: 'scout_mapping',
-        name: 'Cartographer\'s Request',
-        type: 'side',
-        giver: 'scout',
-        description: 'Explore all rooms on Floor 2 in a single run.',
-        objectives: [
-            { type: 'explore_floor', floor: 2, percentage: 100, current: 0, description: 'Explore 100% of Floor 2' }
-        ],
-        rewards: {
-            gold: 125,
-            items: [{ id: 'map_fragment', count: 1 }]
-        },
-        dialogue: {
-            start: 'My maps are incomplete. Explore every corner of Floor 2 and I\'ll reward you.',
-            progress: 'Keep exploring. Leave no room unseen.',
-            complete: 'Excellent! This data is invaluable. Here\'s your reward.'
-        },
-        prerequisite: 'intro_deeper',
-        repeatable: true,
-        cooldown: 3
-    },
-
-    // ========================================================================
-    // SIDE QUESTS - SPECIAL
-    // ========================================================================
-
-    priestess_cleansing: {
-        id: 'priestess_cleansing',
-        name: 'Purification Ritual',
-        type: 'side',
-        giver: 'priestess',
-        description: 'Collect holy crystals from the shrine rooms of the Chasm.',
-        objectives: [
-            { type: 'collect', itemId: 'holy_crystal', count: 5, current: 0, description: 'Collect Holy Crystals x5' }
-        ],
-        rewards: {
-            gold: 100,
-            blessing: 'protection'  // Special reward
-        },
-        dialogue: {
-            start: 'The Light fades in the depths. Find the holy crystals in shrine rooms - they will help me maintain the barrier.',
-            progress: 'The crystals... I can sense them calling to you. Find them.',
-            complete: 'The Light grows stronger! Accept this blessing as thanks.'
-        },
-        prerequisite: 'intro_first_dive',
-        repeatable: true,
-        cooldown: 5
-    },
-
-    banker_investment: {
-        id: 'banker_investment',
-        name: 'A Sound Investment',
-        type: 'side',
-        giver: 'banker',
-        description: 'Deposit a large sum of gold to prove your worth as a client.',
-        objectives: [
-            { type: 'deposit_gold', amount: 500, current: 0, description: 'Deposit 500 gold' }
-        ],
-        rewards: {
-            bankExpansion: 10,  // Extra bank slots
-            interestRate: 0.01  // 1% interest on deposits
-        },
-        dialogue: {
-            start: 'I offer premium services to serious clients. Deposit 500 gold and I\'ll expand your vault.',
-            progress: 'Gold talks, delver. Show me you\'re serious.',
-            complete: 'A wise investment. Your vault is now larger, and I\'ll pay interest on your balance.'
-        },
-        prerequisite: 'intro_first_dive',
         repeatable: false
     }
 };
@@ -320,7 +143,7 @@ function getQuestsByGiver(npcId) {
 }
 
 /**
- * Get available quests for player
+ * Get available quests for player (respects single-quest limit)
  * @param {Object} playerQuests - Player's quest progress
  * @returns {Array}
  */
@@ -328,19 +151,14 @@ function getAvailableQuests(playerQuests) {
     const completed = playerQuests.completed || [];
     const active = playerQuests.active || [];
 
+    // If player already has an active quest, no new quests available
+    if (active.length > 0) {
+        return [];
+    }
+
     return Object.values(QUEST_DATA).filter(quest => {
-        // Already active
-        if (active.some(a => a.id === quest.id)) return false;
-
-        // Already completed (unless repeatable)
-        if (completed.includes(quest.id) && !quest.repeatable) return false;
-
-        // Check cooldown for repeatable quests
-        if (quest.repeatable && completed.includes(quest.id)) {
-            const lastCompletion = playerQuests.lastCompletion?.[quest.id] || 0;
-            const runsSince = (persistentState?.stats?.totalRuns || 0) - lastCompletion;
-            if (runsSince < quest.cooldown) return false;
-        }
+        // Already completed (main quests are not repeatable)
+        if (completed.includes(quest.id)) return false;
 
         // Check prerequisite
         if (quest.prerequisite && !completed.includes(quest.prerequisite)) {
@@ -349,6 +167,26 @@ function getAvailableQuests(playerQuests) {
 
         return true;
     });
+}
+
+/**
+ * Get the next available quest in the story chain
+ * @param {Object} playerQuests - Player's quest progress
+ * @returns {Object|null}
+ */
+function getNextStoryQuest(playerQuests) {
+    const available = getAvailableQuests(playerQuests);
+    return available.length > 0 ? available[0] : null;
+}
+
+/**
+ * Check if player can accept a new quest
+ * @param {Object} playerQuests - Player's quest progress
+ * @returns {boolean}
+ */
+function canAcceptQuest(playerQuests) {
+    const active = playerQuests.active || [];
+    return active.length === 0;
 }
 
 /**
@@ -378,6 +216,25 @@ function areAllObjectivesComplete(objectives) {
     return objectives.every(obj => isObjectiveComplete(obj));
 }
 
+/**
+ * Get total quest count
+ * @returns {number}
+ */
+function getTotalQuestCount() {
+    return Object.keys(QUEST_DATA).length;
+}
+
+/**
+ * Get story progress as percentage
+ * @param {Object} playerQuests - Player's quest progress
+ * @returns {number} 0-100
+ */
+function getStoryProgress(playerQuests) {
+    const completed = playerQuests.completed || [];
+    const total = getTotalQuestCount();
+    return Math.floor((completed.length / total) * 100);
+}
+
 // ============================================================================
 // EXPORTS
 // ============================================================================
@@ -387,7 +244,11 @@ window.QUEST_OBJECTIVE_TYPES = QUEST_OBJECTIVE_TYPES;
 window.getQuest = getQuest;
 window.getQuestsByGiver = getQuestsByGiver;
 window.getAvailableQuests = getAvailableQuests;
+window.getNextStoryQuest = getNextStoryQuest;
+window.canAcceptQuest = canAcceptQuest;
 window.isObjectiveComplete = isObjectiveComplete;
 window.areAllObjectivesComplete = areAllObjectivesComplete;
+window.getTotalQuestCount = getTotalQuestCount;
+window.getStoryProgress = getStoryProgress;
 
-console.log('[Quests] Quest data loaded');
+console.log('[Quests] Quest data loaded (4 main story quests, Elder Mira only)');

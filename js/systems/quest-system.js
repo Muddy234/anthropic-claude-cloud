@@ -1,5 +1,6 @@
 // === js/systems/quest-system.js ===
 // SURVIVAL EXTRACTION UPDATE: Quest tracking and progression
+// SIMPLIFIED: Single active quest, Elder Mira only, main story
 
 // ============================================================================
 // QUEST SYSTEM
@@ -21,12 +22,11 @@ const QuestSystem = {
         if (typeof persistentState !== 'undefined' && !persistentState.quests) {
             persistentState.quests = {
                 active: [],
-                completed: [],
-                lastCompletion: {}
+                completed: []
             };
         }
 
-        console.log('[QuestSystem] Initialized');
+        console.log('[QuestSystem] Initialized (single quest mode)');
     },
 
     // ========================================================================
@@ -34,7 +34,7 @@ const QuestSystem = {
     // ========================================================================
 
     /**
-     * Accept a quest
+     * Accept a quest (only 1 can be active at a time)
      * @param {string} questId
      * @returns {boolean} Success
      */
@@ -45,9 +45,18 @@ const QuestSystem = {
             return false;
         }
 
-        // Check if already active
-        if (this.isQuestActive(questId)) {
-            console.log(`[QuestSystem] Quest already active: ${questId}`);
+        // SINGLE QUEST RESTRICTION: Check if already have active quest
+        if (this.hasActiveQuest()) {
+            console.log(`[QuestSystem] Cannot accept - already have active quest`);
+            if (typeof addMessage === 'function') {
+                addMessage('You must complete your current quest first.', 'warning');
+            }
+            return false;
+        }
+
+        // Check if already completed
+        if (this.isQuestCompleted(questId)) {
+            console.log(`[QuestSystem] Quest already completed: ${questId}`);
             return false;
         }
 
@@ -68,11 +77,10 @@ const QuestSystem = {
             }))
         };
 
-        persistentState.quests.active.push(activeQuest);
+        persistentState.quests.active = [activeQuest];  // Replace, not push (single quest)
 
         console.log(`[QuestSystem] Accepted quest: ${quest.name}`);
 
-        // Add message
         if (typeof addMessage === 'function') {
             addMessage(`Quest accepted: ${quest.name}`, 'quest');
         }
@@ -81,48 +89,47 @@ const QuestSystem = {
     },
 
     /**
-     * Abandon a quest
-     * @param {string} questId
+     * Abandon the current quest
      * @returns {boolean} Success
      */
-    abandonQuest(questId) {
-        const index = persistentState.quests.active.findIndex(q => q.id === questId);
-        if (index === -1) return false;
+    abandonQuest() {
+        if (!this.hasActiveQuest()) return false;
 
-        persistentState.quests.active.splice(index, 1);
-        console.log(`[QuestSystem] Abandoned quest: ${questId}`);
+        const activeQuest = this.getCurrentQuest();
+        persistentState.quests.active = [];
+
+        console.log(`[QuestSystem] Abandoned quest: ${activeQuest.id}`);
+
+        if (typeof addMessage === 'function') {
+            addMessage('Quest abandoned.', 'warning');
+        }
 
         return true;
     },
 
     /**
-     * Complete a quest
-     * @param {string} questId
+     * Complete the current quest (must talk to Elder Mira)
      * @returns {Object|null} Rewards or null
      */
-    completeQuest(questId) {
-        const activeIndex = persistentState.quests.active.findIndex(q => q.id === questId);
-        if (activeIndex === -1) return null;
+    completeQuest() {
+        if (!this.hasActiveQuest()) return null;
 
-        const activeQuest = persistentState.quests.active[activeIndex];
-        const questData = getQuest(questId);
+        const activeQuest = this.getCurrentQuest();
+        const questData = getQuest(activeQuest.id);
 
         // Check if all objectives complete
         if (!areAllObjectivesComplete(activeQuest.objectives)) {
-            console.log(`[QuestSystem] Quest not complete: ${questId}`);
+            console.log(`[QuestSystem] Quest not complete: ${activeQuest.id}`);
             return null;
         }
 
-        // Remove from active
-        persistentState.quests.active.splice(activeIndex, 1);
+        // Clear active quest
+        persistentState.quests.active = [];
 
         // Add to completed
-        if (!persistentState.quests.completed.includes(questId)) {
-            persistentState.quests.completed.push(questId);
+        if (!persistentState.quests.completed.includes(activeQuest.id)) {
+            persistentState.quests.completed.push(activeQuest.id);
         }
-
-        // Track completion time for repeatable quests
-        persistentState.quests.lastCompletion[questId] = persistentState.stats?.totalRuns || 0;
 
         // Grant rewards
         const rewards = this._grantRewards(questData.rewards);
@@ -131,6 +138,9 @@ const QuestSystem = {
 
         if (typeof addMessage === 'function') {
             addMessage(`Quest complete: ${questData.name}!`, 'success');
+            if (rewards.gold > 0) {
+                addMessage(`Received ${rewards.gold} gold!`, 'loot');
+            }
         }
 
         return rewards;
@@ -293,16 +303,52 @@ const QuestSystem = {
     },
 
     // ========================================================================
-    // QUERIES
+    // QUERIES (Simplified for single quest)
     // ========================================================================
 
     /**
-     * Check if quest is active
-     * @param {string} questId
+     * Check if player has an active quest
      * @returns {boolean}
      */
-    isQuestActive(questId) {
-        return persistentState?.quests?.active?.some(q => q.id === questId) || false;
+    hasActiveQuest() {
+        return (persistentState?.quests?.active?.length || 0) > 0;
+    },
+
+    /**
+     * Get the current active quest (single quest mode)
+     * @returns {Object|null}
+     */
+    getCurrentQuest() {
+        if (!this.hasActiveQuest()) return null;
+        return persistentState.quests.active[0];
+    },
+
+    /**
+     * Get current quest with full data
+     * @returns {Object|null}
+     */
+    getCurrentQuestFull() {
+        const activeQuest = this.getCurrentQuest();
+        if (!activeQuest) return null;
+
+        const questData = getQuest(activeQuest.id);
+        if (!questData) return null;
+
+        return {
+            ...questData,
+            progress: activeQuest,
+            isReadyToTurnIn: areAllObjectivesComplete(activeQuest.objectives)
+        };
+    },
+
+    /**
+     * Check if current quest is ready to turn in
+     * @returns {boolean}
+     */
+    isQuestReadyToTurnIn() {
+        const activeQuest = this.getCurrentQuest();
+        if (!activeQuest) return false;
+        return areAllObjectivesComplete(activeQuest.objectives);
     },
 
     /**
@@ -315,69 +361,74 @@ const QuestSystem = {
     },
 
     /**
-     * Get active quest by ID
-     * @param {string} questId
+     * Get the next available quest
      * @returns {Object|null}
      */
-    getActiveQuest(questId) {
-        return persistentState?.quests?.active?.find(q => q.id === questId) || null;
+    getNextAvailableQuest() {
+        if (this.hasActiveQuest()) return null;
+        return getNextStoryQuest(persistentState?.quests || {});
     },
 
     /**
-     * Get all active quests
-     * @returns {Array}
+     * Get quest status for Elder Mira dialogue
+     * @returns {Object} { status, quest, nextQuest }
      */
-    getActiveQuests() {
-        return persistentState?.quests?.active || [];
-    },
+    getElderQuestStatus() {
+        // Check if current quest ready to turn in
+        if (this.isQuestReadyToTurnIn()) {
+            return {
+                status: 'ready_to_complete',
+                quest: this.getCurrentQuestFull()
+            };
+        }
 
-    /**
-     * Get quests available from an NPC
-     * @param {string} npcId
-     * @returns {Object} { available: [], active: [], completable: [] }
-     */
-    getQuestsForNPC(npcId) {
-        const result = {
-            available: [],
-            active: [],
-            completable: []
+        // Check if has active quest in progress
+        if (this.hasActiveQuest()) {
+            return {
+                status: 'in_progress',
+                quest: this.getCurrentQuestFull()
+            };
+        }
+
+        // Check if new quest available
+        const nextQuest = this.getNextAvailableQuest();
+        if (nextQuest) {
+            return {
+                status: 'quest_available',
+                quest: nextQuest
+            };
+        }
+
+        // All quests completed
+        return {
+            status: 'all_complete',
+            quest: null
         };
-
-        // Get all quests from this NPC
-        const npcQuests = getQuestsByGiver(npcId);
-
-        npcQuests.forEach(quest => {
-            const activeQuest = this.getActiveQuest(quest.id);
-
-            if (activeQuest) {
-                // Quest is active
-                if (areAllObjectivesComplete(activeQuest.objectives)) {
-                    result.completable.push({ quest, progress: activeQuest });
-                } else {
-                    result.active.push({ quest, progress: activeQuest });
-                }
-            } else {
-                // Check if available
-                const available = getAvailableQuests(persistentState?.quests || {});
-                if (available.some(q => q.id === quest.id)) {
-                    result.available.push(quest);
-                }
-            }
-        });
-
-        return result;
     },
 
     /**
-     * Get quest progress summary
-     * @param {string} questId
+     * Get story progress
+     * @returns {Object} { completed, total, percentage }
+     */
+    getStoryProgress() {
+        const completed = persistentState?.quests?.completed?.length || 0;
+        const total = getTotalQuestCount();
+        return {
+            completed,
+            total,
+            percentage: Math.floor((completed / total) * 100)
+        };
+    },
+
+    /**
+     * Get current quest progress summary
      * @returns {Object|null}
      */
-    getQuestProgress(questId) {
-        const activeQuest = this.getActiveQuest(questId);
+    getQuestProgress() {
+        const activeQuest = this.getCurrentQuest();
         if (!activeQuest) return null;
 
-        const questData = getQuest(questId);
+        const questData = getQuest(activeQuest.id);
         if (!questData) return null;
 
         const totalObjectives = activeQuest.objectives.length;
@@ -386,7 +437,7 @@ const QuestSystem = {
         ).length;
 
         return {
-            id: questId,
+            id: activeQuest.id,
             name: questData.name,
             objectives: activeQuest.objectives,
             progress: completedObjectives / totalObjectives,
