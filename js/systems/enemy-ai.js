@@ -1137,6 +1137,39 @@ class EnemyAI {
         this._changeState(AI_STATES.ALERT);
     }
 
+    /**
+     * Called when this enemy takes damage - immediately pursue attacker
+     * Bypasses vision requirements and reaction delays
+     */
+    onDamaged(attacker) {
+        // Already in combat/pursuit - just update target if needed
+        if (this.currentState === AI_STATES.COMBAT ||
+            this.currentState === AI_STATES.CHASING ||
+            this.currentState === AI_STATES.SKIRMISHING ||
+            this.currentState === AI_STATES.CIRCLING) {
+            // Update target to attacker if we don't have one
+            if (!this.target && attacker) {
+                this.target = attacker;
+                this.lastKnownTargetPos = { x: attacker.gridX, y: attacker.gridY };
+            }
+            return;
+        }
+
+        // Being attacked - immediate pursuit regardless of vision
+        if (attacker && attacker.gridX !== undefined) {
+            this.target = attacker;
+            this.lastKnownTargetPos = { x: attacker.gridX, y: attacker.gridY };
+
+            // Skip reaction delay - damage is unmistakable
+            // Go directly to chasing (or shouting if first contact)
+            if (this._shouldShout()) {
+                this._changeState(AI_STATES.SHOUTING);
+            } else {
+                this._changeState(AI_STATES.CHASING);
+            }
+        }
+    }
+
     // UTILITY
     _changeState(newState) {
         if (newState === this.currentState) return;

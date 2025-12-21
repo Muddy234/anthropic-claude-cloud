@@ -2004,6 +2004,11 @@ function applyDamage(entity, damage, source, damageResult) {
         EnemyAbilitySystem.checkMechanics(entity, 'on_damaged', { damage, source });
     }
 
+    // ENEMY AI REACTION: Being damaged triggers immediate pursuit
+    if (entity !== game.player && entity.ai && typeof entity.ai.onDamaged === 'function') {
+        entity.ai.onDamaged(source);
+    }
+
     if (entity.isInvisible) {
         entity.isInvisible = false;
         if (typeof removeStatusEffect === 'function') removeStatusEffect(entity, 'invisible');

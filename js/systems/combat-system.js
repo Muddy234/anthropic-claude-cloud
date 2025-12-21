@@ -721,6 +721,12 @@ function applyDamage(entity, damage, source, damageResult) {
         EnemyAbilitySystem.checkMechanics(entity, 'on_damaged', { damage, source });
     }
 
+    // ENEMY AI REACTION: Being damaged triggers immediate pursuit
+    // This bypasses vision requirements - you know when you're being hit!
+    if (entity !== game.player && entity.ai && typeof entity.ai.onDamaged === 'function') {
+        entity.ai.onDamaged(source);
+    }
+
     // Break invisibility on damage
     if (entity.isInvisible) {
         entity.isInvisible = false;
