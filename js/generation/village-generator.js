@@ -31,14 +31,15 @@ const VillageGenerator = {
             color: '#4A4A4A',
             npcs: ['banker']
         },
-        SMITHY: {
-            id: 'smithy',
-            name: 'Ironforge Smithy',
-            width: 7,
-            height: 5,
-            type: 'building',
-            color: '#8B4513',
-            npcs: ['blacksmith']
+        MARKET: {
+            id: 'market',
+            name: 'Village Market',
+            width: 14,
+            height: 8,
+            type: 'open',
+            color: '#A0522D',
+            npcs: ['blacksmith', 'general_store', 'alchemist'],
+            stalls: ['smithy_stall', 'general_stall', 'alchemist_stall']
         },
         TAVERN: {
             id: 'tavern',
@@ -178,11 +179,11 @@ const VillageGenerator = {
         const layout = [
             { def: this.BUILDINGS.TOWN_SQUARE, x: 21, y: 16 },
             { def: this.BUILDINGS.BANK, x: 5, y: 5 },
-            { def: this.BUILDINGS.SMITHY, x: 38, y: 5 },
+            { def: this.BUILDINGS.MARKET, x: 32, y: 4 },
             { def: this.BUILDINGS.TAVERN, x: 5, y: 25 },
-            { def: this.BUILDINGS.PLAYER_HOUSE, x: 38, y: 30 },
+            { def: this.BUILDINGS.PLAYER_HOUSE, x: 40, y: 30 },
             { def: this.BUILDINGS.EXPEDITION_HALL, x: 20, y: 5 },
-            { def: this.BUILDINGS.SHRINE, x: 40, y: 20 },
+            { def: this.BUILDINGS.SHRINE, x: 40, y: 18 },
             { def: this.BUILDINGS.CHASM_ENTRANCE, x: 22, y: 32 }
         ];
 
@@ -263,11 +264,56 @@ const VillageGenerator = {
                             building.interiorTiles.push({ x, y });
                         }
                     } else if (building.type === 'open') {
-                        // Open areas like town square
+                        // Open areas like town square and market
+                        let tileType = isEdge ? 'stone_border' : 'cobblestone';
+                        let isStall = false;
+                        let stallId = null;
+
+                        // Special handling for market stalls
+                        if (building.id === 'market' && !isEdge) {
+                            // Place 3 stalls across the market
+                            // Stall 1 (Blacksmith): left side
+                            // Stall 2 (General Store): center
+                            // Stall 3 (Alchemist): right side
+                            const stallWidth = 3;
+                            const stallHeight = 3;
+                            const stallY = 2; // 2 tiles from top
+
+                            // Stall positions (local coords)
+                            const stalls = [
+                                { id: 'smithy_stall', startX: 2, npcId: 'blacksmith' },
+                                { id: 'general_stall', startX: 6, npcId: 'general_store' },
+                                { id: 'alchemist_stall', startX: 10, npcId: 'alchemist' }
+                            ];
+
+                            for (const stall of stalls) {
+                                if (dx >= stall.startX && dx < stall.startX + stallWidth &&
+                                    dy >= stallY && dy < stallY + stallHeight) {
+                                    // This tile is part of a stall
+                                    const isStallBack = dy === stallY;
+                                    tileType = isStallBack ? 'stall_counter' : 'stall_floor';
+                                    isStall = true;
+                                    stallId = stall.id;
+
+                                    // Mark NPC position (center-front of stall)
+                                    if (dx === stall.startX + 1 && dy === stallY + 1) {
+                                        building.stallNPCs = building.stallNPCs || [];
+                                        building.stallNPCs.push({
+                                            npcId: stall.npcId,
+                                            x: x,
+                                            y: y,
+                                            stallId: stall.id
+                                        });
+                                    }
+                                }
+                            }
+                        }
+
                         map[y][x] = {
-                            type: isEdge ? 'stone_border' : 'cobblestone',
+                            type: tileType,
                             walkable: true,
-                            buildingId: building.id
+                            buildingId: building.id,
+                            stallId: stallId
                         };
                         building.interiorTiles.push({ x, y });
                     } else if (building.type === 'entrance') {
@@ -657,6 +703,20 @@ const VillageGenerator = {
         buildings.forEach(building => {
             if (!building.npcs || building.npcs.length === 0) return;
             if (building.damaged && !building.usable) return;
+
+            // Special handling for market - use stall positions
+            if (building.id === 'market' && building.stallNPCs) {
+                building.stallNPCs.forEach(stallNPC => {
+                    positions.push({
+                        npcId: stallNPC.npcId,
+                        x: stallNPC.x,
+                        y: stallNPC.y,
+                        buildingId: building.id,
+                        stallId: stallNPC.stallId
+                    });
+                });
+                return;
+            }
 
             building.npcs.forEach((npcId, index) => {
                 // Place NPC inside building or at entrance

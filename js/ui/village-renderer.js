@@ -21,7 +21,9 @@ const VillageRenderer = {
         cave_wall: '#2F2F2F',
         cave_floor: '#1A1A1A',
         cave_entrance: '#3D1F1F',  // Reddish dark - inviting entrance
-        rubble: '#555555'
+        rubble: '#555555',
+        stall_counter: '#6B4423',  // Dark wood counter
+        stall_floor: '#8B7355'     // Wooden floor behind counter
     },
 
     // Decoration colors
@@ -125,6 +127,10 @@ const VillageRenderer = {
                     this._renderCaveTexture(ctx, screenX, screenY);
                 } else if (tile.type === 'cave_entrance') {
                     this._renderCaveEntranceEffect(ctx, screenX, screenY);
+                } else if (tile.type === 'stall_counter') {
+                    this._renderStallCounter(ctx, screenX, screenY, tile.stallId);
+                } else if (tile.type === 'stall_floor') {
+                    this._renderStallFloor(ctx, screenX, screenY);
                 }
 
                 // Damage overlay
@@ -213,6 +219,61 @@ const VillageRenderer = {
         ctx.lineTo(screenX + this.tileSize / 2 + 6, screenY + this.tileSize - 12);
         ctx.closePath();
         ctx.fill();
+    },
+
+    /**
+     * Render market stall counter
+     * @private
+     */
+    _renderStallCounter(ctx, screenX, screenY, stallId) {
+        // Counter top
+        ctx.fillStyle = '#8B5A2B';
+        ctx.fillRect(screenX, screenY + this.tileSize - 10, this.tileSize, 10);
+
+        // Counter front panel
+        ctx.fillStyle = '#5D3A1A';
+        ctx.fillRect(screenX, screenY + this.tileSize - 8, this.tileSize, 6);
+
+        // Awning/canopy based on stall type
+        const awningColors = {
+            'smithy_stall': '#B22222',      // Red for blacksmith
+            'general_stall': '#4169E1',     // Blue for general store
+            'alchemist_stall': '#9932CC'    // Purple for alchemist
+        };
+        const awningColor = awningColors[stallId] || '#8B4513';
+
+        // Awning
+        ctx.fillStyle = awningColor;
+        ctx.fillRect(screenX - 2, screenY, this.tileSize + 4, 8);
+
+        // Awning stripes
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.3)';
+        for (let i = 0; i < 4; i++) {
+            ctx.fillRect(screenX + i * 8, screenY, 4, 8);
+        }
+
+        // Awning edge shadow
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.3)';
+        ctx.fillRect(screenX - 2, screenY + 6, this.tileSize + 4, 2);
+    },
+
+    /**
+     * Render stall floor behind counter
+     * @private
+     */
+    _renderStallFloor(ctx, screenX, screenY) {
+        // Wood plank texture
+        ctx.strokeStyle = 'rgba(0, 0, 0, 0.2)';
+        ctx.lineWidth = 1;
+
+        // Horizontal planks
+        for (let i = 0; i < 4; i++) {
+            const y = screenY + i * 8;
+            ctx.beginPath();
+            ctx.moveTo(screenX, y);
+            ctx.lineTo(screenX + this.tileSize, y);
+            ctx.stroke();
+        }
     },
 
     /**

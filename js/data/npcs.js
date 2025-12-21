@@ -104,7 +104,7 @@ const NPC_DATA = {
         title: 'Master Smith',
         color: '#FF6347',
         description: 'A burly man with arms like tree trunks. The best smith in the region.',
-        building: 'smithy',
+        building: 'market',
         role: 'merchant',
         dialogueTree: 'smith_main',
         services: ['shop', 'repair', 'craft'],
@@ -176,10 +176,10 @@ const NPC_DATA = {
     alchemist: {
         id: 'alchemist',
         name: 'Zephyr',
-        title: 'Wandering Alchemist',
+        title: 'Village Alchemist',
         color: '#00CED1',
         description: 'A mysterious figure who deals in potions and rare materials.',
-        building: 'smithy',  // Near the smithy
+        building: 'market',
         role: 'merchant',
         dialogueTree: 'alchemist_main',
         services: ['shop', 'craft'],
@@ -207,7 +207,7 @@ const NPC_DATA = {
         title: 'General Store Owner',
         color: '#DDA0DD',
         description: 'A practical woman who runs the general store. Sells leather, cloth, wood, and supplies.',
-        building: 'general_store',
+        building: 'market',
         role: 'merchant',
         dialogueTree: 'general_store_main',
         services: ['shop'],
@@ -222,7 +222,7 @@ const NPC_DATA = {
         title: 'General Store Owner',
         color: '#DDA0DD',
         description: 'A practical woman who runs the general store. Sells leather, cloth, wood, and supplies.',
-        building: 'general_store',
+        building: 'market',
         role: 'merchant',
         dialogueTree: 'general_store_main',
         services: ['shop'],
@@ -270,7 +270,7 @@ const NPC_DATA = {
         title: 'Apprentice',
         color: '#6495ED',
         description: 'A young man learning the smith trade.',
-        building: 'smithy',
+        building: 'market',
         role: 'ambient',
         dialogueTree: 'villager_generic',
         services: [],
@@ -556,6 +556,66 @@ const DIALOGUE_TREES = {
         responses: [
             { text: 'Makes sense.', next: 'general_store_main' },
             { text: 'Show me your stock.', action: 'open_shop' }
+        ]
+    },
+
+    // ========================================================================
+    // ALCHEMIST ZEPHYR
+    // ========================================================================
+
+    alchemist_intro: {
+        speaker: 'alchemist',
+        text: '*swirls a bubbling flask* Ah, a new face. I am Zephyr. I deal in potions, elixirs, and... other concoctions. The Chasm provides the rarest ingredients, if you know where to look.',
+        responses: [
+            { text: 'Show me your wares.', action: 'open_shop' },
+            { text: 'What potions do you sell?', next: 'alchemist_explain' },
+            { text: 'Just browsing.', action: 'close' }
+        ]
+    },
+
+    alchemist_main: {
+        speaker: 'alchemist',
+        text: '*adjusts goggles* Back for more? What do you need?',
+        responses: [
+            { text: 'Browse your potions.', action: 'open_shop' },
+            { text: 'What can you craft?', next: 'alchemist_crafting' },
+            { text: 'Nothing today.', action: 'close' }
+        ]
+    },
+
+    alchemist_explain: {
+        speaker: 'alchemist',
+        text: 'Healing draughts, stamina tonics, resistance elixirs... I can brew anything if you bring me the right ingredients. Herbs from Helena, monster essences from the Chasm.',
+        responses: [
+            { text: 'What ingredients do I need?', next: 'alchemist_ingredients' },
+            { text: 'Show me what you have.', action: 'open_shop' },
+            { text: 'I\'ll keep that in mind.', action: 'close' }
+        ]
+    },
+
+    alchemist_ingredients: {
+        speaker: 'alchemist',
+        text: 'Basic potions need common herbs. Better ones require rare Chasm drops - glowing spores, beast ichor, that sort of thing. The best elixirs? Boss essences. Dangerous to acquire, but worth it.',
+        responses: [
+            { text: 'I understand.', next: 'alchemist_main' },
+            { text: 'Let me see your stock.', action: 'open_shop' }
+        ]
+    },
+
+    alchemist_crafting: {
+        speaker: 'alchemist',
+        text: 'Bring me ingredients and I\'ll work my magic. Or buy pre-made potions if you\'re in a hurry. Just don\'t ask what\'s in the purple ones.',
+        responses: [
+            { text: 'Open the shop.', action: 'open_shop' },
+            { text: 'Maybe later.', action: 'close' }
+        ]
+    },
+
+    alchemist_farewell: {
+        speaker: 'alchemist',
+        text: '*packing frantically* The signs are clear - this place is doomed. I\'ve left some supplies in that crate. Take what you need. Farewell, delver.',
+        responses: [
+            { text: 'Good luck, Zephyr.', action: 'close' }
         ]
     },
 
