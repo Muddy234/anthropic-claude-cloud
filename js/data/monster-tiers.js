@@ -26,6 +26,7 @@ const MONSTER_TIERS = {
         },
 
         behavior: {
+            type: 'pack',           // Pack fighters - find courage in numbers
             fleeThreshold: 0.3,
             memoryDuration: 0,
             searchBehavior: 'none',
@@ -38,6 +39,7 @@ const MONSTER_TIERS = {
 
         social: {
             isSacrificial: true,
+            canBeCommanded: true,   // Can be commanded by higher tiers
             packCourage: true,
             packCourageThreshold: 4,
             retreatHierarchy: ['TIER_2', 'TIER_1', 'ELITE']
@@ -70,6 +72,7 @@ const MONSTER_TIERS = {
         },
 
         behavior: {
+            type: 'pack',           // Disciplined soldiers, fight in formation
             fleeThreshold: 0.2,
             memoryDuration: 0,
             searchBehavior: 'lastKnown',
@@ -81,6 +84,7 @@ const MONSTER_TIERS = {
         },
 
         social: {
+            canBeCommanded: true,   // Can be commanded by TIER_1 and ELITE
             retreatHierarchy: ['ELITE']
         },
 
@@ -111,6 +115,7 @@ const MONSTER_TIERS = {
         },
 
         behavior: {
+            type: 'tactical',       // Veterans who coordinate and flank
             fleeThreshold: 0,
             memoryDuration: 10,
             searchBehavior: 'tactical',
@@ -153,6 +158,7 @@ const MONSTER_TIERS = {
         },
 
         behavior: {
+            type: 'dominant',       // Commanders who lead and sacrifice minions
             fleeThreshold: 0,
             memoryDuration: 20,
             searchBehavior: 'aggressive',
@@ -199,6 +205,7 @@ const MONSTER_TIERS = {
         },
 
         behavior: {
+            type: 'dominant',       // Ancient horrors that command absolute fear
             fleeThreshold: 0,
             memoryDuration: 60,
             searchBehavior: 'aggressive',

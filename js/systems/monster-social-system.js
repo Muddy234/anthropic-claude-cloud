@@ -80,6 +80,97 @@ const MonsterSocialSystem = {
 
         // Merge orphaned pack members into nearby packs
         this.mergeLoneWolves();
+
+        // Dynamic command chain recruitment - Elites absorb nearby minions
+        this.recruitBodyguards();
+
+        // Leaders issue attack commands when they spot a target
+        this.updateLeaderCommands();
+    },
+
+    /**
+     * Elites/Leaders dynamically recruit nearby commandable enemies
+     */
+    recruitBodyguards() {
+        if (!game?.enemies) return;
+
+        for (const enemy of game.enemies) {
+            if (enemy.hp <= 0) continue;
+
+            // Check if this enemy can command others
+            const tierConfig = enemy.tierConfig || MONSTER_TIERS?.[enemy.tier];
+            const canCommand = tierConfig?.social?.canCommand;
+            if (!canCommand) continue;
+
+            const commandRange = tierConfig?.social?.commandRange || this.config.commandRadius;
+            const leaderId = this.getEntityId(enemy);
+
+            // Get or create command chain
+            let chain = this.commandChains.get(leaderId);
+            if (!chain) {
+                chain = { leader: enemy, followers: [], lastCommand: null };
+                this.commandChains.set(leaderId, chain);
+            }
+
+            // Look for nearby commandable enemies
+            for (const other of game.enemies) {
+                if (other === enemy || other.hp <= 0) continue;
+                if (other.commandedBy) continue; // Already commanded
+
+                // Check if commandable
+                const otherTier = other.tierConfig || MONSTER_TIERS?.[other.tier];
+                if (!otherTier?.social?.canBeCommanded) continue;
+                if (!this.canBeCommanded(other, enemy)) continue;
+
+                // Check distance
+                if (!this.isWithinRange(enemy, other, commandRange)) continue;
+
+                // Recruit this enemy
+                chain.followers.push(other);
+                other.commandedBy = leaderId;
+                other.ai.followTarget = enemy;
+
+                if (this.config.debugLogging) {
+                    console.log(`[MonsterSocial] ${enemy.name} recruited ${other.name} as bodyguard`);
+                }
+
+                // Show visual feedback
+                if (typeof showStatusText === 'function') {
+                    showStatusText(other, 'Following!', '#FFD700');
+                }
+            }
+        }
+    },
+
+    /**
+     * Leaders automatically issue attack commands when they spot the player
+     */
+    updateLeaderCommands() {
+        if (!game?.player) return;
+
+        for (const [leaderId, chain] of this.commandChains) {
+            const leader = chain.leader;
+            if (!leader || leader.hp <= 0) continue;
+            if (chain.followers.length === 0) continue;
+
+            // Check if leader has spotted the player and is in combat
+            const leaderAI = leader.ai;
+            if (!leaderAI) continue;
+
+            const inCombat = leaderAI.currentState === AI_STATES?.CHASING ||
+                             leaderAI.currentState === AI_STATES?.COMBAT ||
+                             leaderAI.currentState === AI_STATES?.CIRCLING;
+
+            if (inCombat && leaderAI.target === game.player) {
+                // Don't spam commands - check if we already issued attack recently
+                const now = performance.now();
+                if (chain.lastCommand?.type === 'attack' &&
+                    now - chain.lastCommand.time < 3000) continue;
+
+                // Issue attack command to all followers
+                this.issueCommand(leader, 'attack', game.player);
+            }
+        }
     },
 
     /**
@@ -525,36 +616,42 @@ const MonsterSocialSystem = {
     issueCommand(leader, commandType, target = null) {
         const leaderId = this.getEntityId(leader);
         const chain = this.commandChains.get(leaderId);
-        
+
         if (!chain) return [];
 
         const commanded = [];
 
         for (const follower of chain.followers) {
             if (follower.hp <= 0) continue;
+            if (!follower.ai) continue;
 
             // Apply command based on type
             switch (commandType) {
                 case 'attack':
-                    if (follower.ai) {
-                        follower.ai.target = target;
-                        follower.ai.setState('chasing');
+                    follower.ai.target = target;
+                    follower.ai.lastKnownTargetPos = target ? { x: target.gridX, y: target.gridY } : null;
+                    follower.ai.commandedTarget = target;
+                    // Use correct method - _changeState with AI_STATES constant
+                    if (typeof AI_STATES !== 'undefined') {
+                        follower.ai._changeState(AI_STATES.CHASING);
                     }
                     break;
                 case 'defend':
-                    if (follower.ai) {
-                        follower.ai.defendPosition = { x: leader.gridX, y: leader.gridY };
-                        follower.ai.setState('guarding');
+                    follower.ai.defendPosition = { x: leader.gridX, y: leader.gridY };
+                    // Follow leader instead of guarding (no guarding state exists)
+                    follower.ai.followTarget = leader;
+                    if (typeof AI_STATES !== 'undefined') {
+                        follower.ai._changeState(AI_STATES.FOLLOWING);
                     }
                     break;
                 case 'retreat':
-                    if (follower.ai) {
-                        follower.ai.setState('fleeing');
+                    if (typeof AI_STATES !== 'undefined') {
+                        follower.ai._changeState(AI_STATES.PANICKED);
                     }
                     break;
                 case 'hold':
-                    if (follower.ai) {
-                        follower.ai.setState('idle');
+                    if (typeof AI_STATES !== 'undefined') {
+                        follower.ai._changeState(AI_STATES.IDLE);
                     }
                     break;
             }
@@ -564,7 +661,7 @@ const MonsterSocialSystem = {
 
         chain.lastCommand = { type: commandType, target: target, time: performance.now() };
 
-        if (this.config.debugLogging) {
+        if (this.config.debugLogging && commanded.length > 0) {
             console.log(`[MonsterSocial] ${leader.name} issued ${commandType} command to ${commanded.length} followers`);
         }
 
@@ -637,8 +734,13 @@ const MonsterSocialSystem = {
     // ========================================================================
 
     canLead(enemy) {
+        // Check tier config for canCommand property
+        const tierConfig = enemy.tierConfig || MONSTER_TIERS?.[enemy.tier];
+        if (tierConfig?.social?.canCommand) return true;
+
+        // Fallback to tier check
         const tier = enemy.tier || 'TIER_3';
-        return tier === 'ELITE' || tier === 'TIER_1';
+        return tier === 'ELITE' || tier === 'TIER_1' || tier === 'BOSS';
     },
 
     canBeCommanded(follower, leader) {
@@ -660,13 +762,17 @@ const MonsterSocialSystem = {
     },
 
     isPackCompatible(enemy) {
-        const behavior = enemy.behavior?.type || enemy.behaviorType;
-        return behavior === 'pack' || behavior === 'tactical';
+        // Check tierConfig behavior type first
+        const tierConfig = enemy.tierConfig || MONSTER_TIERS?.[enemy.tier];
+        const behaviorType = tierConfig?.behavior?.type || enemy.behavior?.type || enemy.behaviorType;
+        return behaviorType === 'pack' || behaviorType === 'tactical';
     },
 
     isSwarmType(enemy) {
-        const behavior = enemy.behavior?.type || enemy.behaviorType;
-        return behavior === 'swarm';
+        // Check tierConfig behavior type first
+        const tierConfig = enemy.tierConfig || MONSTER_TIERS?.[enemy.tier];
+        const behaviorType = tierConfig?.behavior?.type || enemy.behavior?.type || enemy.behaviorType;
+        return behaviorType === 'swarm';
     },
 
     arePackCompatible(enemy1, enemy2) {
