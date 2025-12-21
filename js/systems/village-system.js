@@ -11,11 +11,14 @@ const VillageSystem = {
     initialized: false,
     villageData: null,
 
-    // Movement settings
-    moveSpeed: 0.15,
+    // Movement settings (continuous like dungeon)
+    moveSpeed: 4.5,           // Tiles per second
     inputBuffer: { x: 0, y: 0 },
-    lastMoveTime: 0,
-    moveCooldown: 100,  // ms between moves
+    keysHeld: { up: false, down: false, left: false, right: false },
+    lastUpdateTime: 0,
+
+    // Animation settings
+    walkAnimSpeed: 8,         // Frames per second
 
     // ========================================================================
     // INITIALIZATION
@@ -45,12 +48,21 @@ const VillageSystem = {
                 displayX: this.villageData.spawnPoint.x,
                 displayY: this.villageData.spawnPoint.y,
                 facingX: 0,
-                facingY: 1
+                facingY: 1,
+                // Animation properties (same as dungeon player)
+                isMoving: false,
+                currentFrame: 0,
+                animTimer: 0,
+                facing: 'down'
             };
 
             // Spawn NPCs
             this._spawnNPCs();
         }
+
+        // Reset key state
+        this.keysHeld = { up: false, down: false, left: false, right: false };
+        this.lastUpdateTime = performance.now();
 
         // Set up input handling
         this._setupInput();
@@ -78,13 +90,19 @@ const VillageSystem = {
      * @private
      */
     _setupInput() {
-        // Remove any existing village listener
-        if (this._keyHandler) {
-            window.removeEventListener('keydown', this._keyHandler);
+        // Remove any existing village listeners
+        if (this._keyDownHandler) {
+            window.removeEventListener('keydown', this._keyDownHandler);
+        }
+        if (this._keyUpHandler) {
+            window.removeEventListener('keyup', this._keyUpHandler);
         }
 
-        this._keyHandler = (e) => this._handleKeyDown(e);
-        window.addEventListener('keydown', this._keyHandler);
+        this._keyDownHandler = (e) => this._handleKeyDown(e);
+        this._keyUpHandler = (e) => this._handleKeyUp(e);
+
+        window.addEventListener('keydown', this._keyDownHandler);
+        window.addEventListener('keyup', this._keyUpHandler);
     },
 
     /**
@@ -108,30 +126,30 @@ const VillageSystem = {
             return;
         }
 
-        // Village movement and interaction
+        // Track held keys for continuous movement
         switch (e.key) {
             case 'w':
             case 'W':
             case 'ArrowUp':
-                this._tryMove(0, -1);
+                this.keysHeld.up = true;
                 break;
 
             case 's':
             case 'S':
             case 'ArrowDown':
-                this._tryMove(0, 1);
+                this.keysHeld.down = true;
                 break;
 
             case 'a':
             case 'A':
             case 'ArrowLeft':
-                this._tryMove(-1, 0);
+                this.keysHeld.left = true;
                 break;
 
             case 'd':
             case 'D':
             case 'ArrowRight':
-                this._tryMove(1, 0);
+                this.keysHeld.right = true;
                 break;
 
             case 'e':
@@ -150,45 +168,178 @@ const VillageSystem = {
     },
 
     /**
-     * Try to move the player
-     * @param {number} dx
-     * @param {number} dy
+     * Handle keyup events
+     * @param {KeyboardEvent} e
      * @private
      */
-    _tryMove(dx, dy) {
-        if (!villageState || !villageState.player) return;
+    _handleKeyUp(e) {
+        switch (e.key) {
+            case 'w':
+            case 'W':
+            case 'ArrowUp':
+                this.keysHeld.up = false;
+                break;
 
-        const now = Date.now();
-        if (now - this.lastMoveTime < this.moveCooldown) return;
+            case 's':
+            case 'S':
+            case 'ArrowDown':
+                this.keysHeld.down = false;
+                break;
+
+            case 'a':
+            case 'A':
+            case 'ArrowLeft':
+                this.keysHeld.left = false;
+                break;
+
+            case 'd':
+            case 'D':
+            case 'ArrowRight':
+                this.keysHeld.right = false;
+                break;
+        }
+    },
+
+    /**
+     * Update movement and animation (called each frame)
+     * @param {number} deltaTime - Time since last frame in ms
+     */
+    update(deltaTime) {
+        if (!this.initialized || !villageState || !villageState.player) return;
+        if (game.state !== 'village') return;
 
         const player = villageState.player;
-        const newX = player.x + dx;
-        const newY = player.y + dy;
+        const dt = deltaTime / 1000;  // Convert to seconds
+
+        // Calculate input direction
+        let dx = 0, dy = 0;
+        if (this.keysHeld.up) dy -= 1;
+        if (this.keysHeld.down) dy += 1;
+        if (this.keysHeld.left) dx -= 1;
+        if (this.keysHeld.right) dx += 1;
+
+        // Normalize diagonal movement
+        if (dx !== 0 && dy !== 0) {
+            const len = Math.sqrt(dx * dx + dy * dy);
+            dx /= len;
+            dy /= len;
+        }
+
+        const hasInput = dx !== 0 || dy !== 0;
 
         // Update facing direction
-        player.facingX = dx;
-        player.facingY = dy;
-
-        // Check bounds
-        if (newX < 0 || newX >= VillageGenerator.WIDTH ||
-            newY < 0 || newY >= VillageGenerator.HEIGHT) {
-            return;
+        if (hasInput) {
+            player.facingX = dx > 0 ? 1 : (dx < 0 ? -1 : 0);
+            player.facingY = dy > 0 ? 1 : (dy < 0 ? -1 : 0);
+            player.facing = this._getFacingFromInput(dx, dy);
         }
 
-        // Check walkable
-        const tile = villageState.map[newY]?.[newX];
-        if (!tile || !tile.walkable) {
-            return;
+        // Calculate movement
+        if (hasInput) {
+            const moveAmount = this.moveSpeed * dt;
+
+            // Try to move
+            const newX = player.displayX + dx * moveAmount;
+            const newY = player.displayY + dy * moveAmount;
+
+            // Check if new position is valid
+            if (this._canMoveTo(newX, newY)) {
+                player.displayX = newX;
+                player.displayY = newY;
+                player.isMoving = true;
+            } else {
+                // Try wall sliding - move on each axis separately
+                if (dx !== 0 && this._canMoveTo(player.displayX + dx * moveAmount, player.displayY)) {
+                    player.displayX += dx * moveAmount;
+                    player.isMoving = true;
+                } else if (dy !== 0 && this._canMoveTo(player.displayX, player.displayY + dy * moveAmount)) {
+                    player.displayY += dy * moveAmount;
+                    player.isMoving = true;
+                } else {
+                    player.isMoving = false;
+                }
+            }
+
+            // Update logical position (grid-based for collision)
+            player.x = Math.round(player.displayX);
+            player.y = Math.round(player.displayY);
+
+            // Check for chasm entrance
+            if (VillageGenerator.isChasmEntrance(villageState.map, player.x, player.y)) {
+                this._onChasmEntrance();
+            }
+        } else {
+            player.isMoving = false;
         }
 
-        // Move player
-        player.x = newX;
-        player.y = newY;
-        this.lastMoveTime = now;
+        // Update animation
+        this._updateAnimation(player, dt);
+    },
 
-        // Check for chasm entrance
-        if (VillageGenerator.isChasmEntrance(villageState.map, newX, newY)) {
-            this._onChasmEntrance();
+    /**
+     * Get facing direction string from input
+     * @private
+     */
+    _getFacingFromInput(dx, dy) {
+        // Prioritize vertical for diagonal movement
+        if (dy < 0) return 'up';
+        if (dy > 0) return 'down';
+        if (dx < 0) return 'left';
+        if (dx > 0) return 'right';
+        return 'down';
+    },
+
+    /**
+     * Check if position is valid for movement
+     * @private
+     */
+    _canMoveTo(x, y) {
+        if (!villageState || !villageState.map) return false;
+
+        // Check map bounds
+        if (x < 0.3 || x >= VillageGenerator.WIDTH - 0.3 ||
+            y < 0.3 || y >= VillageGenerator.HEIGHT - 0.3) {
+            return false;
+        }
+
+        // Check collision at corners of player hitbox
+        const hitboxSize = 0.35;
+        const checkPoints = [
+            { x: x - hitboxSize, y: y - hitboxSize },
+            { x: x + hitboxSize, y: y - hitboxSize },
+            { x: x - hitboxSize, y: y + hitboxSize },
+            { x: x + hitboxSize, y: y + hitboxSize }
+        ];
+
+        for (const point of checkPoints) {
+            const tileX = Math.floor(point.x);
+            const tileY = Math.floor(point.y);
+            const tile = villageState.map[tileY]?.[tileX];
+
+            if (!tile || !tile.walkable) {
+                return false;
+            }
+        }
+
+        return true;
+    },
+
+    /**
+     * Update player walking animation
+     * @private
+     */
+    _updateAnimation(player, dt) {
+        if (player.isMoving) {
+            player.animTimer = (player.animTimer || 0) + dt;
+
+            const frameDuration = 1 / this.walkAnimSpeed;
+            if (player.animTimer >= frameDuration) {
+                player.animTimer -= frameDuration;
+                player.currentFrame = ((player.currentFrame || 0) + 1) % 20;  // 20 frames
+            }
+        } else {
+            player.currentFrame = 0;
+            player.animTimer = 0;
         }
     },
 
@@ -284,12 +435,13 @@ const VillageSystem = {
     render(ctx) {
         if (!this.initialized || !villageState) return;
 
-        // Smooth player display position
-        if (villageState.player) {
-            const lerp = 0.2;
-            villageState.player.displayX += (villageState.player.x - villageState.player.displayX) * lerp;
-            villageState.player.displayY += (villageState.player.y - villageState.player.displayY) * lerp;
-        }
+        // Calculate delta time
+        const now = performance.now();
+        const deltaTime = now - (this.lastUpdateTime || now);
+        this.lastUpdateTime = now;
+
+        // Update movement and animation
+        this.update(deltaTime);
 
         // Render village map and entities
         if (typeof VillageRenderer !== 'undefined') {
@@ -359,10 +511,17 @@ const VillageSystem = {
      * Clean up village system
      */
     cleanup() {
-        if (this._keyHandler) {
-            window.removeEventListener('keydown', this._keyHandler);
-            this._keyHandler = null;
+        if (this._keyDownHandler) {
+            window.removeEventListener('keydown', this._keyDownHandler);
+            this._keyDownHandler = null;
         }
+        if (this._keyUpHandler) {
+            window.removeEventListener('keyup', this._keyUpHandler);
+            this._keyUpHandler = null;
+        }
+
+        // Reset key state
+        this.keysHeld = { up: false, down: false, left: false, right: false };
 
         this.villageData = null;
         this.initialized = false;

@@ -445,14 +445,18 @@ const VillageRenderer = {
     },
 
     /**
-     * Render player
+     * Render player using the same sprite as dungeon
      * @param {CanvasRenderingContext2D} ctx
      * @param {Object} player
      * @private
      */
     _renderPlayer(ctx, player) {
-        const screenX = player.x * this.tileSize + this.offsetX;
-        const screenY = player.y * this.tileSize + this.offsetY;
+        // Use displayX/displayY for smooth movement, fallback to x/y
+        const posX = player.displayX !== undefined ? player.displayX : player.x;
+        const posY = player.displayY !== undefined ? player.displayY : player.y;
+
+        const screenX = posX * this.tileSize + this.offsetX;
+        const screenY = posY * this.tileSize + this.offsetY;
 
         // Player shadow
         ctx.fillStyle = 'rgba(0, 0, 0, 0.3)';
@@ -464,32 +468,48 @@ const VillageRenderer = {
         );
         ctx.fill();
 
-        // Player body
-        ctx.fillStyle = '#4488FF';
-        ctx.beginPath();
-        ctx.arc(
-            screenX + this.tileSize / 2,
-            screenY + this.tileSize / 2,
-            12, 0, Math.PI * 2
-        );
-        ctx.fill();
+        // Use drawPlayerSprite if available and sprites are loaded
+        if (typeof drawPlayerSprite === 'function' &&
+            typeof PLAYER_SPRITE_CONFIG !== 'undefined' &&
+            PLAYER_SPRITE_CONFIG.loaded) {
 
-        // Player outline
-        ctx.strokeStyle = '#FFF';
-        ctx.lineWidth = 3;
-        ctx.stroke();
+            // Set up temporary game.player reference for the sprite function
+            const originalPlayer = game.player;
+            game.player = {
+                facing: this._getFacingDirection(player),
+                currentFrame: player.currentFrame || 0,
+                isMoving: player.isMoving || false
+            };
 
-        // Direction indicator
-        const dirX = player.facingX || 0;
-        const dirY = player.facingY || 1;
-        ctx.fillStyle = '#FFF';
-        ctx.beginPath();
-        ctx.arc(
-            screenX + this.tileSize / 2 + dirX * 8,
-            screenY + this.tileSize / 2 + dirY * 8,
-            4, 0, Math.PI * 2
-        );
-        ctx.fill();
+            drawPlayerSprite(ctx, screenX, screenY, this.tileSize);
+
+            // Restore original player
+            game.player = originalPlayer;
+        } else {
+            // Fallback: draw a rectangle (similar to dungeon fallback)
+            ctx.fillStyle = '#3498db';
+            ctx.fillRect(screenX + 8, screenY + 8, this.tileSize - 16, this.tileSize - 16);
+
+            // White outline
+            ctx.strokeStyle = '#FFF';
+            ctx.lineWidth = 2;
+            ctx.strokeRect(screenX + 8, screenY + 8, this.tileSize - 16, this.tileSize - 16);
+        }
+    },
+
+    /**
+     * Convert facingX/facingY to direction string
+     * @private
+     */
+    _getFacingDirection(player) {
+        const fx = player.facingX || 0;
+        const fy = player.facingY || 0;
+
+        if (fy < 0) return 'up';
+        if (fy > 0) return 'down';
+        if (fx < 0) return 'left';
+        if (fx > 0) return 'right';
+        return 'down'; // Default
     },
 
     // ========================================================================
