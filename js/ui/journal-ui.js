@@ -242,14 +242,88 @@ const JournalUI = {
     },
 
     _getQuestItems() {
-        // Get active and completed quests
-        const active = persistentState?.quests?.active || [];
-        const completed = persistentState?.quests?.completed || [];
+        const items = [];
 
-        return [
-            ...active.map(q => ({ ...q, status: 'active' })),
-            ...completed.map(q => ({ ...q, status: 'completed' }))
-        ];
+        // Story progress header
+        const storyProgress = typeof QuestSystem !== 'undefined' ?
+            QuestSystem.getStoryProgress() : { completed: 0, total: 4, percentage: 0 };
+
+        items.push({
+            id: 'story_header',
+            type: 'header',
+            title: 'THE DELVER\'S JOURNEY',
+            subtitle: `Chapter ${storyProgress.completed + 1} of ${storyProgress.total}`,
+            progress: storyProgress.percentage
+        });
+
+        // Current active quest (if any)
+        if (typeof QuestSystem !== 'undefined' && QuestSystem.hasActiveQuest()) {
+            const questFull = QuestSystem.getCurrentQuestFull();
+            if (questFull) {
+                items.push({
+                    id: questFull.id,
+                    type: 'active',
+                    title: questFull.name,
+                    name: questFull.name,
+                    description: questFull.description,
+                    objectives: questFull.progress?.objectives || questFull.objectives,
+                    rewards: questFull.rewards,
+                    dialogue: questFull.dialogue,
+                    isReadyToTurnIn: questFull.isReadyToTurnIn,
+                    questNumber: storyProgress.completed + 1
+                });
+            }
+        } else if (typeof QuestSystem !== 'undefined') {
+            // No active quest - show next available
+            const nextQuest = QuestSystem.getNextAvailableQuest();
+            if (nextQuest) {
+                items.push({
+                    id: nextQuest.id,
+                    type: 'available',
+                    title: nextQuest.name,
+                    name: nextQuest.name,
+                    description: 'Speak to Elder Mira to begin this quest.',
+                    teaser: nextQuest.dialogue?.start?.substring(0, 100) + '...',
+                    questNumber: storyProgress.completed + 1
+                });
+            } else if (storyProgress.completed >= storyProgress.total) {
+                items.push({
+                    id: 'story_complete',
+                    type: 'finale',
+                    title: 'THE CORE AWAITS',
+                    description: 'You have completed all of Elder Mira\'s tasks. The path to the Core is now open. What ancient secrets lie below?'
+                });
+            }
+        }
+
+        // Completed quests (story recap) - in reverse order (most recent first)
+        const completedIds = persistentState?.quests?.completed || [];
+        if (completedIds.length > 0) {
+            items.push({
+                id: 'completed_header',
+                type: 'section',
+                title: 'COMPLETED CHAPTERS'
+            });
+
+            // Add completed quests in order
+            completedIds.forEach((questId, index) => {
+                const questData = typeof getQuest === 'function' ? getQuest(questId) : null;
+                if (questData) {
+                    items.push({
+                        id: questId,
+                        type: 'completed',
+                        title: questData.name,
+                        name: questData.name,
+                        description: questData.description,
+                        rewards: questData.rewards,
+                        dialogue: questData.dialogue,
+                        questNumber: index + 1
+                    });
+                }
+            });
+        }
+
+        return items;
     },
 
     _getWorldStateItems() {
@@ -373,6 +447,12 @@ const JournalUI = {
             return;
         }
 
+        // Special rendering for quests tab
+        if (this.currentTab === 'quests') {
+            this._renderQuestList(ctx, x, y, items);
+            return;
+        }
+
         // Progress indicator for lore
         if (this.currentTab === 'lore' && typeof getLoreProgress === 'function') {
             const progress = getLoreProgress();
@@ -450,6 +530,186 @@ const JournalUI = {
         }
     },
 
+    /**
+     * Render the quest list with story-focused layout
+     * @private
+     */
+    _renderQuestList(ctx, x, y, items) {
+        const listX = x + this.padding;
+        let currentY = y + 5;
+        const contentWidth = this.width - this.padding * 2;
+
+        for (let i = 0; i < items.length; i++) {
+            const item = items[i];
+            const isSelected = i === this.selectedIndex;
+
+            switch (item.type) {
+                case 'header':
+                    // Story header with progress bar
+                    ctx.fillStyle = '#FFD700';
+                    ctx.font = 'bold 16px monospace';
+                    ctx.textAlign = 'center';
+                    ctx.fillText(item.title, x + this.width / 2, currentY + 15);
+
+                    ctx.fillStyle = '#888';
+                    ctx.font = '12px monospace';
+                    ctx.fillText(item.subtitle, x + this.width / 2, currentY + 32);
+
+                    // Progress bar
+                    const barWidth = 200;
+                    const barX = x + (this.width - barWidth) / 2;
+                    ctx.fillStyle = '#333';
+                    ctx.fillRect(barX, currentY + 40, barWidth, 8);
+                    ctx.fillStyle = '#FFD700';
+                    ctx.fillRect(barX, currentY + 40, barWidth * (item.progress / 100), 8);
+                    ctx.strokeStyle = '#555';
+                    ctx.strokeRect(barX, currentY + 40, barWidth, 8);
+
+                    currentY += 60;
+                    break;
+
+                case 'active':
+                    // Active quest - prominent display
+                    if (isSelected) {
+                        ctx.fillStyle = '#2a3a4a';
+                        ctx.fillRect(listX - 5, currentY, contentWidth + 10, 80);
+                    }
+
+                    // Status badge
+                    ctx.fillStyle = item.isReadyToTurnIn ? '#22c55e' : '#3b82f6';
+                    ctx.fillRect(listX, currentY + 5, 4, 70);
+
+                    // Quest number and title
+                    ctx.fillStyle = '#888';
+                    ctx.font = '11px monospace';
+                    ctx.textAlign = 'left';
+                    ctx.fillText(`CHAPTER ${item.questNumber}`, listX + 15, currentY + 18);
+
+                    ctx.fillStyle = isSelected ? '#FFD700' : '#FFF';
+                    ctx.font = 'bold 14px monospace';
+                    ctx.fillText(item.title, listX + 15, currentY + 35);
+
+                    // Status
+                    ctx.fillStyle = item.isReadyToTurnIn ? '#22c55e' : '#3b82f6';
+                    ctx.font = '11px monospace';
+                    const statusText = item.isReadyToTurnIn ? '✓ READY TO TURN IN' : '● IN PROGRESS';
+                    ctx.fillText(statusText, listX + 15, currentY + 52);
+
+                    // Objective preview
+                    if (item.objectives && item.objectives.length > 0) {
+                        const obj = item.objectives[0];
+                        const objComplete = obj.current >= (obj.count || obj.amount || obj.percentage || 1);
+                        ctx.fillStyle = objComplete ? '#666' : '#999';
+                        ctx.font = '10px monospace';
+                        const objText = `${obj.description}: ${obj.current}/${obj.count || obj.amount || obj.percentage}`;
+                        ctx.fillText(objText.substring(0, 50), listX + 15, currentY + 68);
+                    }
+
+                    // Selection indicator
+                    if (isSelected) {
+                        ctx.fillStyle = '#FFD700';
+                        ctx.font = '12px monospace';
+                        ctx.textAlign = 'right';
+                        ctx.fillText('[Enter] Details', listX + contentWidth, currentY + 68);
+                    }
+
+                    currentY += 90;
+                    break;
+
+                case 'available':
+                    // Available quest - muted but inviting
+                    if (isSelected) {
+                        ctx.fillStyle = '#2a2a3a';
+                        ctx.fillRect(listX - 5, currentY, contentWidth + 10, 60);
+                    }
+
+                    ctx.fillStyle = '#9932CC';
+                    ctx.fillRect(listX, currentY + 5, 4, 50);
+
+                    ctx.fillStyle = '#888';
+                    ctx.font = '11px monospace';
+                    ctx.textAlign = 'left';
+                    ctx.fillText(`CHAPTER ${item.questNumber} - AVAILABLE`, listX + 15, currentY + 18);
+
+                    ctx.fillStyle = isSelected ? '#FFD700' : '#AAA';
+                    ctx.font = 'bold 14px monospace';
+                    ctx.fillText(item.title, listX + 15, currentY + 35);
+
+                    ctx.fillStyle = '#666';
+                    ctx.font = 'italic 11px monospace';
+                    ctx.fillText(item.description, listX + 15, currentY + 50);
+
+                    currentY += 70;
+                    break;
+
+                case 'finale':
+                    // Story complete - epic display
+                    ctx.fillStyle = '#1a1a2e';
+                    ctx.fillRect(listX - 5, currentY, contentWidth + 10, 60);
+                    ctx.strokeStyle = '#FFD700';
+                    ctx.strokeRect(listX - 5, currentY, contentWidth + 10, 60);
+
+                    ctx.fillStyle = '#FFD700';
+                    ctx.font = 'bold 14px monospace';
+                    ctx.textAlign = 'center';
+                    ctx.fillText(item.title, x + this.width / 2, currentY + 25);
+
+                    ctx.fillStyle = '#888';
+                    ctx.font = '11px monospace';
+                    ctx.fillText('All chapters complete', x + this.width / 2, currentY + 45);
+
+                    currentY += 70;
+                    break;
+
+                case 'section':
+                    // Section divider
+                    currentY += 10;
+                    ctx.strokeStyle = '#4a4a6a';
+                    ctx.beginPath();
+                    ctx.moveTo(listX, currentY);
+                    ctx.lineTo(listX + contentWidth, currentY);
+                    ctx.stroke();
+
+                    ctx.fillStyle = '#888';
+                    ctx.font = 'bold 11px monospace';
+                    ctx.textAlign = 'left';
+                    ctx.fillText(item.title, listX, currentY + 18);
+
+                    currentY += 30;
+                    break;
+
+                case 'completed':
+                    // Completed quest - compact display
+                    if (isSelected) {
+                        ctx.fillStyle = '#252530';
+                        ctx.fillRect(listX - 5, currentY, contentWidth + 10, 40);
+                    }
+
+                    ctx.fillStyle = '#555';
+                    ctx.fillRect(listX, currentY + 5, 4, 30);
+
+                    ctx.fillStyle = '#666';
+                    ctx.font = '10px monospace';
+                    ctx.textAlign = 'left';
+                    ctx.fillText(`CHAPTER ${item.questNumber}`, listX + 15, currentY + 15);
+
+                    ctx.fillStyle = isSelected ? '#AAA' : '#777';
+                    ctx.font = '12px monospace';
+                    ctx.fillText(item.title, listX + 15, currentY + 30);
+
+                    ctx.fillStyle = '#4a4';
+                    ctx.font = '10px monospace';
+                    ctx.textAlign = 'right';
+                    ctx.fillText('✓', listX + contentWidth - 5, currentY + 23);
+
+                    currentY += 45;
+                    break;
+            }
+
+            ctx.textAlign = 'left';
+        }
+    },
+
     _renderEntry(ctx, x, y) {
         const entry = this.viewingEntry;
         if (!entry) return;
@@ -457,6 +717,12 @@ const JournalUI = {
         const contentX = x + this.padding;
         const contentY = y + 10;
         const contentWidth = this.width - this.padding * 2;
+
+        // Quest entries get special story display
+        if (entry.type === 'active' || entry.type === 'completed' || entry.type === 'available') {
+            this._renderQuestEntry(ctx, entry, contentX, contentY, contentWidth);
+            return;
+        }
 
         // Title
         ctx.fillStyle = '#FFD700';
@@ -496,6 +762,187 @@ const JournalUI = {
             ctx.fillStyle = '#888';
             ctx.font = 'italic 12px monospace';
             ctx.fillText(`"${entry.hint}"`, contentX, contentY + 320);
+        }
+    },
+
+    /**
+     * Render quest detail view
+     * @private
+     */
+    _renderQuestEntry(ctx, quest, x, y, width) {
+        let currentY = y;
+
+        // Chapter header
+        ctx.fillStyle = '#888';
+        ctx.font = '12px monospace';
+        ctx.textAlign = 'left';
+        ctx.fillText(`CHAPTER ${quest.questNumber}`, x, currentY + 15);
+
+        // Quest title
+        ctx.fillStyle = '#FFD700';
+        ctx.font = 'bold 20px monospace';
+        ctx.fillText(quest.title, x, currentY + 40);
+
+        // Status badge
+        if (quest.type === 'active') {
+            ctx.fillStyle = quest.isReadyToTurnIn ? '#22c55e' : '#3b82f6';
+            ctx.font = 'bold 11px monospace';
+            ctx.textAlign = 'right';
+            const badge = quest.isReadyToTurnIn ? '✓ COMPLETE' : '● ACTIVE';
+            ctx.fillText(badge, x + width, currentY + 40);
+        } else if (quest.type === 'completed') {
+            ctx.fillStyle = '#4a4';
+            ctx.font = 'bold 11px monospace';
+            ctx.textAlign = 'right';
+            ctx.fillText('✓ COMPLETED', x + width, currentY + 40);
+        } else if (quest.type === 'available') {
+            ctx.fillStyle = '#9932CC';
+            ctx.font = 'bold 11px monospace';
+            ctx.textAlign = 'right';
+            ctx.fillText('○ AVAILABLE', x + width, currentY + 40);
+        }
+        ctx.textAlign = 'left';
+
+        currentY += 50;
+
+        // Separator
+        ctx.strokeStyle = '#4a4a6a';
+        ctx.beginPath();
+        ctx.moveTo(x, currentY);
+        ctx.lineTo(x + width, currentY);
+        ctx.stroke();
+
+        currentY += 15;
+
+        // Elder's words (dialogue)
+        if (quest.dialogue) {
+            ctx.fillStyle = '#AAA';
+            ctx.font = 'bold 11px monospace';
+            ctx.fillText('ELDER MIRA SAYS:', x, currentY);
+            currentY += 15;
+
+            ctx.fillStyle = '#CCC';
+            ctx.font = 'italic 12px monospace';
+            let dialogueText = '';
+            if (quest.type === 'active' && quest.isReadyToTurnIn) {
+                dialogueText = quest.dialogue.complete || '';
+            } else if (quest.type === 'active') {
+                dialogueText = quest.dialogue.progress || '';
+            } else if (quest.type === 'completed') {
+                dialogueText = quest.dialogue.complete || '';
+            } else {
+                dialogueText = quest.dialogue.start || '';
+            }
+
+            if (dialogueText) {
+                ctx.fillStyle = '#9090a0';
+                this._renderWrappedText(ctx, `"${dialogueText}"`, x, currentY, width, 16);
+                currentY += Math.ceil(dialogueText.length / 50) * 16 + 20;
+            }
+        }
+
+        // Description
+        if (quest.description && quest.type !== 'available') {
+            ctx.fillStyle = '#AAA';
+            ctx.font = 'bold 11px monospace';
+            ctx.fillText('DESCRIPTION:', x, currentY);
+            currentY += 15;
+
+            ctx.fillStyle = '#CCC';
+            ctx.font = '12px monospace';
+            this._renderWrappedText(ctx, quest.description, x, currentY, width, 16);
+            currentY += Math.ceil(quest.description.length / 50) * 16 + 15;
+        }
+
+        // Objectives (for active quests)
+        if (quest.objectives && quest.objectives.length > 0 && quest.type === 'active') {
+            ctx.fillStyle = '#AAA';
+            ctx.font = 'bold 11px monospace';
+            ctx.fillText('OBJECTIVES:', x, currentY);
+            currentY += 18;
+
+            quest.objectives.forEach(obj => {
+                const target = obj.count || obj.amount || obj.percentage || 1;
+                const current = obj.current || 0;
+                const complete = current >= target;
+
+                // Checkbox
+                ctx.fillStyle = complete ? '#22c55e' : '#555';
+                ctx.font = '14px monospace';
+                ctx.fillText(complete ? '☑' : '☐', x + 5, currentY);
+
+                // Objective text
+                ctx.fillStyle = complete ? '#666' : '#CCC';
+                ctx.font = '12px monospace';
+                ctx.fillText(obj.description, x + 25, currentY);
+
+                // Progress
+                ctx.fillStyle = complete ? '#22c55e' : '#888';
+                ctx.font = '11px monospace';
+                ctx.textAlign = 'right';
+                ctx.fillText(`${current}/${target}`, x + width, currentY);
+                ctx.textAlign = 'left';
+
+                currentY += 22;
+            });
+
+            currentY += 10;
+        }
+
+        // Rewards
+        if (quest.rewards && (quest.type === 'active' || quest.type === 'available')) {
+            ctx.fillStyle = '#AAA';
+            ctx.font = 'bold 11px monospace';
+            ctx.fillText('REWARDS:', x, currentY);
+            currentY += 18;
+
+            // Gold
+            if (quest.rewards.gold) {
+                ctx.fillStyle = '#FFD700';
+                ctx.font = '12px monospace';
+                ctx.fillText(`● ${quest.rewards.gold} Gold`, x + 10, currentY);
+                currentY += 18;
+            }
+
+            // Items
+            if (quest.rewards.items && quest.rewards.items.length > 0) {
+                quest.rewards.items.forEach(item => {
+                    ctx.fillStyle = '#3b82f6';
+                    ctx.font = '12px monospace';
+                    ctx.fillText(`● ${item.count}x ${item.id}`, x + 10, currentY);
+                    currentY += 18;
+                });
+            }
+
+            // Unlocks
+            if (quest.rewards.unlocks && quest.rewards.unlocks.length > 0) {
+                quest.rewards.unlocks.forEach(unlock => {
+                    ctx.fillStyle = '#9932CC';
+                    ctx.font = '12px monospace';
+                    ctx.fillText(`● Unlocks: ${unlock}`, x + 10, currentY);
+                    currentY += 18;
+                });
+            }
+        }
+
+        // Turn-in reminder for ready quests
+        if (quest.type === 'active' && quest.isReadyToTurnIn) {
+            currentY += 10;
+            ctx.fillStyle = '#22c55e';
+            ctx.font = 'bold 12px monospace';
+            ctx.textAlign = 'center';
+            ctx.fillText('Return to Elder Mira in Town Square to claim your reward!', x + width / 2, currentY);
+            ctx.textAlign = 'left';
+        }
+
+        // Available quest hint
+        if (quest.type === 'available') {
+            currentY += 10;
+            ctx.fillStyle = '#9932CC';
+            ctx.font = 'bold 12px monospace';
+            ctx.textAlign = 'center';
+            ctx.fillText('Speak to Elder Mira in Town Square to begin this quest.', x + width / 2, currentY);
+            ctx.textAlign = 'left';
         }
     },
 
