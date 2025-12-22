@@ -856,32 +856,35 @@ const deadzoneTop = screenCenterY - CAMERA_DEADZONE_HEIGHT / 2;
 const deadzoneBottom = screenCenterY + CAMERA_DEADZONE_HEIGHT / 2;
 
 // Calculate target camera position (only if player outside deadzone)
-let targetCamX = game.camera.x;
-let targetCamY = game.camera.y;
+// Skip camera follow logic in observer mode - allow free panning
+if (!window._observerModeActive) {
+    let targetCamX = game.camera.x;
+    let targetCamY = game.camera.y;
 
-// Horizontal deadzone check
-if (playerScreenX < deadzoneLeft) {
-    // Player too far left - move camera left
-    targetCamX = game.player.displayX - (deadzoneLeft - TRACKER_WIDTH) / effectiveTileSize;
-} else if (playerScreenX > deadzoneRight) {
-    // Player too far right - move camera right
-    targetCamX = game.player.displayX - (deadzoneRight - TRACKER_WIDTH) / effectiveTileSize;
+    // Horizontal deadzone check
+    if (playerScreenX < deadzoneLeft) {
+        // Player too far left - move camera left
+        targetCamX = game.player.displayX - (deadzoneLeft - TRACKER_WIDTH) / effectiveTileSize;
+    } else if (playerScreenX > deadzoneRight) {
+        // Player too far right - move camera right
+        targetCamX = game.player.displayX - (deadzoneRight - TRACKER_WIDTH) / effectiveTileSize;
+    }
+
+    // Vertical deadzone check
+    if (playerScreenY < deadzoneTop) {
+        // Player too far up - move camera up
+        targetCamY = game.player.displayY - deadzoneTop / effectiveTileSize;
+    } else if (playerScreenY > deadzoneBottom) {
+        // Player too far down - move camera down
+        targetCamY = game.player.displayY - deadzoneBottom / effectiveTileSize;
+    }
+
+    // Smooth camera movement (lerp to target position)
+    game.camera.targetX = targetCamX;
+    game.camera.targetY = targetCamY;
+    game.camera.x += (game.camera.targetX - game.camera.x) * CAMERA_SMOOTHING;
+    game.camera.y += (game.camera.targetY - game.camera.y) * CAMERA_SMOOTHING;
 }
-
-// Vertical deadzone check
-if (playerScreenY < deadzoneTop) {
-    // Player too far up - move camera up
-    targetCamY = game.player.displayY - deadzoneTop / effectiveTileSize;
-} else if (playerScreenY > deadzoneBottom) {
-    // Player too far down - move camera down
-    targetCamY = game.player.displayY - deadzoneBottom / effectiveTileSize;
-}
-
-// Smooth camera movement (lerp to target position)
-game.camera.targetX = targetCamX;
-game.camera.targetY = targetCamY;
-game.camera.x += (game.camera.targetX - game.camera.x) * CAMERA_SMOOTHING;
-game.camera.y += (game.camera.targetY - game.camera.y) * CAMERA_SMOOTHING;
 
 // Apply screen shake offset
 const shakeOffset = typeof getScreenShakeOffset === 'function' ? getScreenShakeOffset() : { x: 0, y: 0 };

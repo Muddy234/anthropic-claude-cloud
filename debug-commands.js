@@ -22,6 +22,14 @@ const Debug = {
 ║   debug.clear()             - Remove all enemies             ║
 ║   debug.setFloor(n)         - Set floor (affects scaling)    ║
 ║                                                              ║
+║ OBSERVER MODE                                                ║
+║   debug.observer()          - Toggle observer mode           ║
+║   debug.revealMap()         - Reveal entire map              ║
+║   Arrow keys / WASD         - Pan camera (in observer mode)  ║
+║   +/- keys                  - Zoom in/out (in observer mode) ║
+║   debug.follow(enemyIdx)    - Camera follows enemy           ║
+║   debug.unfollow()          - Stop following                 ║
+║                                                              ║
 ║ MONSTERS                                                     ║
 ║   debug.spawn(id, x, y)     - Spawn monster at position      ║
 ║   debug.killAll()           - Kill all enemies               ║
@@ -874,6 +882,238 @@ const Debug = {
         if (typeof HazardSystem !== 'undefined') HazardSystem.config.debugLogging = enabled;
         if (typeof MonsterSocialSystem !== 'undefined') MonsterSocialSystem.config.debugLogging = enabled;
         console.log(`Debug logging: ${enabled ? 'ON' : 'OFF'}`);
+    },
+
+    // ========================================================================
+    // OBSERVER MODE
+    // ========================================================================
+    _observerMode: false,
+    _observerKeyHandler: null,
+    _observerCameraSpeed: 0.5,
+    _observerFollowTarget: null,
+    _observerOriginalZoom: null,
+
+    observer() {
+        this._observerMode = !this._observerMode;
+
+        if (this._observerMode) {
+            // Enable observer mode
+            this.revealMap();
+
+            // Store original zoom
+            this._observerOriginalZoom = window.currentZoom || 2;
+
+            // Pause player movement
+            window._observerModeActive = true;
+
+            // Add keyboard handler for camera control
+            this._observerKeyHandler = (e) => {
+                if (!this._observerMode || !game.camera) return;
+
+                const speed = this._observerCameraSpeed;
+                let handled = false;
+
+                switch (e.key) {
+                    case 'ArrowUp':
+                    case 'w':
+                    case 'W':
+                        game.camera.y -= speed;
+                        game.camera.targetY = game.camera.y;
+                        handled = true;
+                        break;
+                    case 'ArrowDown':
+                    case 's':
+                    case 'S':
+                        game.camera.y += speed;
+                        game.camera.targetY = game.camera.y;
+                        handled = true;
+                        break;
+                    case 'ArrowLeft':
+                    case 'a':
+                    case 'A':
+                        game.camera.x -= speed;
+                        game.camera.targetX = game.camera.x;
+                        handled = true;
+                        break;
+                    case 'ArrowRight':
+                    case 'd':
+                    case 'D':
+                        game.camera.x += speed;
+                        game.camera.targetX = game.camera.x;
+                        handled = true;
+                        break;
+                    case '+':
+                    case '=':
+                        window.currentZoom = Math.min((window.currentZoom || 2) + 0.25, 4);
+                        console.log(`Zoom: ${window.currentZoom}x`);
+                        handled = true;
+                        break;
+                    case '-':
+                    case '_':
+                        window.currentZoom = Math.max((window.currentZoom || 2) - 0.25, 0.5);
+                        console.log(`Zoom: ${window.currentZoom}x`);
+                        handled = true;
+                        break;
+                    case 'Escape':
+                        this.observer(); // Toggle off
+                        handled = true;
+                        break;
+                }
+
+                if (handled) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                }
+            };
+
+            window.addEventListener('keydown', this._observerKeyHandler, true);
+
+            // Start update loop for follow target
+            this._observerUpdateLoop();
+
+            console.log('🔭 Observer Mode: ON');
+            console.log('   Arrow keys / WASD: Pan camera');
+            console.log('   +/-: Zoom in/out');
+            console.log('   Escape: Exit observer mode');
+            console.log('   debug.follow(n): Follow enemy n');
+
+            if (typeof addMessage === 'function') {
+                addMessage('Observer Mode enabled - WASD to pan, ESC to exit', 'system');
+            }
+        } else {
+            // Disable observer mode
+            window._observerModeActive = false;
+            this._observerFollowTarget = null;
+
+            if (this._observerKeyHandler) {
+                window.removeEventListener('keydown', this._observerKeyHandler, true);
+                this._observerKeyHandler = null;
+            }
+
+            // Restore zoom
+            if (this._observerOriginalZoom) {
+                window.currentZoom = this._observerOriginalZoom;
+            }
+
+            // Snap camera back to player
+            if (game.camera && game.player) {
+                game.camera.x = game.player.gridX;
+                game.camera.y = game.player.gridY;
+                game.camera.targetX = game.player.gridX;
+                game.camera.targetY = game.player.gridY;
+            }
+
+            console.log('🔭 Observer Mode: OFF');
+
+            if (typeof addMessage === 'function') {
+                addMessage('Observer Mode disabled', 'system');
+            }
+        }
+    },
+
+    _observerUpdateLoop() {
+        if (!this._observerMode) return;
+
+        // If following a target, update camera to follow it
+        if (this._observerFollowTarget && game.camera) {
+            const target = this._observerFollowTarget;
+            if (target.hp > 0) {
+                game.camera.x = target.displayX || target.gridX || target.x;
+                game.camera.y = target.displayY || target.gridY || target.y;
+                game.camera.targetX = game.camera.x;
+                game.camera.targetY = game.camera.y;
+            } else {
+                console.log('Follow target died - stopping follow');
+                this._observerFollowTarget = null;
+            }
+        }
+
+        requestAnimationFrame(() => this._observerUpdateLoop());
+    },
+
+    revealMap() {
+        if (!game.map) {
+            console.error('No map to reveal');
+            return;
+        }
+
+        let revealed = 0;
+
+        for (let y = 0; y < game.map.length; y++) {
+            if (!game.map[y]) continue;
+            for (let x = 0; x < game.map[y].length; x++) {
+                if (!game.map[y][x]) continue;
+
+                game.map[y][x].visible = true;
+                game.map[y][x].explored = true;
+                revealed++;
+            }
+        }
+
+        // Also update visibility/explored arrays if they exist
+        if (game.visibility) {
+            for (let y = 0; y < game.visibility.length; y++) {
+                if (!game.visibility[y]) game.visibility[y] = [];
+                for (let x = 0; x < (game.map[y]?.length || 0); x++) {
+                    game.visibility[y][x] = 1;
+                }
+            }
+        }
+
+        if (game.explored) {
+            for (let y = 0; y < game.explored.length; y++) {
+                if (!game.explored[y]) game.explored[y] = [];
+                for (let x = 0; x < (game.map[y]?.length || 0); x++) {
+                    game.explored[y][x] = true;
+                }
+            }
+        }
+
+        // Disable fog of war
+        window._fogOfWarDisabled = true;
+
+        console.log(`✅ Revealed ${revealed} tiles - Fog of war disabled`);
+    },
+
+    follow(enemyIdx = 0) {
+        if (!this._observerMode) {
+            console.log('Enable observer mode first: debug.observer()');
+            return;
+        }
+
+        const enemy = game.enemies?.[enemyIdx];
+        if (!enemy) {
+            console.log(`No enemy at index ${enemyIdx}. Use debug.listEnemies() to see enemies.`);
+            return;
+        }
+
+        this._observerFollowTarget = enemy;
+        console.log(`📍 Following: ${enemy.name} (${enemy.tier || 'Unknown tier'})`);
+        console.log(`   HP: ${enemy.hp}/${enemy.maxHp}`);
+        console.log(`   Position: (${enemy.gridX}, ${enemy.gridY})`);
+        if (enemy.ai) {
+            console.log(`   AI State: ${enemy.ai.currentState}`);
+        }
+    },
+
+    unfollow() {
+        this._observerFollowTarget = null;
+        console.log('📍 Stopped following');
+    },
+
+    listEnemies() {
+        if (!game.enemies || game.enemies.length === 0) {
+            console.log('No enemies on the map');
+            return;
+        }
+
+        console.log(`\n👹 ENEMIES (${game.enemies.length}):`);
+        game.enemies.forEach((e, i) => {
+            const state = e.ai?.currentState || 'unknown';
+            const packInfo = e.packId ? ` [Pack: ${e.packId}]` : '';
+            const commandInfo = e.commandedBy ? ` [Commanded]` : '';
+            console.log(`  [${i}] ${e.name} (${e.tier || '?'}) - HP: ${e.hp}/${e.maxHp} - State: ${state}${packInfo}${commandInfo}`);
+        });
     },
 
     // ========================================================================
