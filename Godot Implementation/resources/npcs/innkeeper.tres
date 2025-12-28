@@ -1,0 +1,18 @@
+[gd_resource type="Resource" script_class="NPCData" load_steps=2 format=3 uid="uid://npc_innkeeper"]
+
+[ext_resource type="Script" path="res://scripts/data/npcs/npc_data.gd" id="1_script"]
+
+[resource]
+script = ExtResource("1_script")
+id = "innkeeper"
+display_name = "Bram"
+title = "Innkeeper"
+description = "The jovial keeper of The Weary Delver, always ready with a warm meal and local gossip."
+npc_type = "service"
+is_merchant = false
+has_quest = true
+quest_ids = ["tavern_rumors"]
+service_type = "rest"
+greeting_dialogue = "Welcome to The Weary Delver! Rest your bones and share your tales."
+dialogue_tree_id = "innkeeper_dialogue"
+default_building = "tavern"

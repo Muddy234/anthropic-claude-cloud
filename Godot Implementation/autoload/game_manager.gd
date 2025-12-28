@@ -21,7 +21,9 @@ var loot_piles: Array = []  # Array of LootPile
 
 # === WORLD REFERENCES ===
 var dungeon: Node  # Dungeon scene
+var village: Node  # Village hub scene
 var current_room: Dictionary = {}
+var world_state: int = 1  # 1=NORMAL, 2=ASH, 3=BURNING, 4=ENDGAME
 
 # === SYSTEM REFERENCES ===
 var combat_system: CombatSystem

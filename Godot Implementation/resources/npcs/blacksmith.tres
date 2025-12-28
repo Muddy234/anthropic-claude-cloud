@@ -1,0 +1,19 @@
+[gd_resource type="Resource" script_class="NPCData" load_steps=2 format=3 uid="uid://npc_blacksmith"]
+
+[ext_resource type="Script" path="res://scripts/data/npcs/npc_data.gd" id="1_script"]
+
+[resource]
+script = ExtResource("1_script")
+id = "blacksmith"
+display_name = "Korgan"
+title = "Blacksmith"
+description = "A burly smith who forges weapons and armor for those brave enough to enter the Chasm."
+npc_type = "merchant"
+is_merchant = true
+shop_inventory = ["iron_sword", "rusty_sword", "iron_helmet", "leather_armor"]
+buy_multiplier = 0.4
+has_quest = false
+service_type = ""
+greeting_dialogue = "Need steel? I've got the finest blades this side of the Chasm."
+dialogue_tree_id = "blacksmith_dialogue"
+default_building = "market"

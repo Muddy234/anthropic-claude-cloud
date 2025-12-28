@@ -110,10 +110,14 @@ enum Rarity {
 # Game states
 enum GameState {
 	MAIN_MENU,
+	VILLAGE,
+	LOADOUT,
 	PLAYING,
 	PAUSED,
 	INVENTORY,
 	DIALOG,
+	BANK,
+	SHOP,
 	GAME_OVER,
 	VICTORY
 }

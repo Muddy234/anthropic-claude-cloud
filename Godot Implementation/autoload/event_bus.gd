@@ -57,6 +57,17 @@ signal room_cleared(room: Dictionary)
 signal stairs_used(direction: String)  # "up" or "down"
 signal secret_found(position: Vector2i)
 
+# === VILLAGE EVENTS ===
+signal village_entered()
+signal village_exited()
+signal building_entered(building_id: String)
+signal building_exited(building_id: String)
+signal chasm_entered()  # Player entering dungeon from village
+signal bank_opened()
+signal bank_closed()
+signal loadout_opened()  # Pre-dungeon loadout selection
+signal loadout_confirmed(loadout: Dictionary)
+
 # === UI EVENTS ===
 signal show_dialog(dialog_data: Dictionary)
 signal hide_dialog()

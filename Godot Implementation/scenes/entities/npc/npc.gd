@@ -5,27 +5,41 @@ extends Entity
 
 @export var npc_id: String
 @export var display_name: String
+@export var title: String = ""  # e.g., "Blacksmith", "Village Elder"
 @export var portrait: Texture2D
 
 @export_group("Dialog")
 @export var dialog_lines: Array[String] = []
+@export var greeting_dialogue: String = ""
 @export var has_quest: bool = false
 @export var quest_id: String = ""
+@export var quest_ids: Array[String] = []
 
 @export_group("Shop")
 @export var is_merchant: bool = false
 @export var shop_inventory: Array[ItemData] = []
+@export var shop_inventory_ids: Array[String] = []  # Item IDs for dynamic loading
 @export var buy_price_modifier: float = 1.0  # 1.0 = normal prices
 @export var sell_price_modifier: float = 0.5  # 0.5 = half value when selling
+
+@export_group("Service")
+@export var service_type: String = ""  # "bank", "heal", "rest", "bounties"
 
 @export_group("Behavior")
 @export var is_stationary: bool = true
 @export var wander_radius: int = 3
 @export var home_position: Vector2i
 
+@export_group("Location")
+@export var building_id: String = ""
+@export var stall_id: String = ""
+
 # State
 var current_dialog_index: int = 0
 var has_been_talked_to: bool = false
+var npc_name: String:  # Alias for display_name
+	get: return display_name
+var current_quest: Resource = null
 
 # Signals
 signal dialog_started()
@@ -170,3 +184,27 @@ func update_npc(delta: float):
 		if GameManager.is_walkable(new_pos):
 			face_position(new_pos)
 			grid_pos = new_pos
+
+## Setup from NPCData resource
+func setup_from_resource(data: NPCData):
+	npc_id = data.id
+	display_name = data.display_name
+	title = data.title
+	portrait = data.portrait
+
+	greeting_dialogue = data.greeting_dialogue
+	has_quest = data.has_quest
+	quest_ids = data.quest_ids.duplicate()
+	if not quest_ids.is_empty():
+		quest_id = quest_ids[0]
+
+	is_merchant = data.is_merchant
+	shop_inventory_ids = data.shop_inventory.duplicate()
+	sell_price_modifier = data.buy_multiplier
+
+	service_type = data.service_type
+	building_id = data.default_building
+
+	# Set dialog lines from greeting
+	if greeting_dialogue != "":
+		dialog_lines = [greeting_dialogue]

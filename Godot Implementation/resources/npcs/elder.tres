@@ -1,0 +1,18 @@
+[gd_resource type="Resource" script_class="NPCData" load_steps=2 format=3 uid="uid://npc_elder"]
+
+[ext_resource type="Script" path="res://scripts/data/npcs/npc_data.gd" id="1_script"]
+
+[resource]
+script = ExtResource("1_script")
+id = "elder"
+display_name = "Theron"
+title = "Village Elder"
+description = "The wise elder who has guided the village through many dark times."
+npc_type = "story"
+is_merchant = false
+has_quest = true
+quest_ids = ["main_quest_1", "village_history"]
+service_type = ""
+greeting_dialogue = "Ah, young one. The Chasm calls to you, as it has called to many before. But you... you might be different."
+dialogue_tree_id = "elder_dialogue"
+default_building = "town_square"
