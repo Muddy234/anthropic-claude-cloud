@@ -1,0 +1,11 @@
+[gd_scene load_steps=2 format=3 uid="uid://melee_slash_scene"]
+
+[ext_resource type="Script" path="res://scenes/effects/melee_slash.gd" id="1_melee_slash"]
+
+[node name="MeleeSlash" type="Node2D"]
+z_index = 50
+script = ExtResource("1_melee_slash")
+
+[node name="AnimatedSprite2D" type="AnimatedSprite2D" parent="."]
+
+[node name="AudioStreamPlayer2D" type="AudioStreamPlayer2D" parent="."]

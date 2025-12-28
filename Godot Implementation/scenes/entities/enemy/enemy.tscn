@@ -1,0 +1,54 @@
+[gd_scene load_steps=3 format=3 uid="uid://enemy_scene"]
+
+[ext_resource type="Script" path="res://scenes/entities/enemy/enemy.gd" id="1_enemy"]
+[ext_resource type="Texture2D" uid="uid://enemy_sprite" path="res://assets/sprites/entities/enemy_default.png" id="2_sprite"]
+
+[node name="Enemy" type="CharacterBody2D" groups=["enemy"]]
+collision_layer = 4
+collision_mask = 3
+script = ExtResource("1_enemy")
+
+[node name="Sprite2D" type="Sprite2D" parent="."]
+texture = ExtResource("2_sprite")
+centered = true
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="."]
+
+[node name="AnimationPlayer" type="AnimationPlayer" parent="."]
+
+[node name="HealthBar" type="ProgressBar" parent="."]
+visible = false
+offset_left = -12.0
+offset_top = -20.0
+offset_right = 12.0
+offset_bottom = -16.0
+show_percentage = false
+value = 100.0
+
+[node name="StatusEffects" type="HBoxContainer" parent="."]
+offset_left = -16.0
+offset_top = 10.0
+offset_right = 16.0
+offset_bottom = 26.0
+alignment = 1
+
+[node name="StateLabel" type="Label" parent="."]
+visible = false
+offset_left = -30.0
+offset_top = -30.0
+offset_right = 30.0
+offset_bottom = -18.0
+horizontal_alignment = 1
+vertical_alignment = 1
+
+[node name="DetectionArea" type="Area2D" parent="."]
+collision_layer = 0
+collision_mask = 2
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="DetectionArea"]
+
+[node name="AlertTimer" type="Timer" parent="."]
+one_shot = true
+
+[node name="WanderTimer" type="Timer" parent="."]
+one_shot = true
