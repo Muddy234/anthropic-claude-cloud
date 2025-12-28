@@ -275,18 +275,22 @@ func convert_items():
 
 ### 2.3 Data Files to Migrate
 
-| JS File | Godot Resource Type | Priority |
-|---------|-------------------|----------|
-| `items.js` | ItemData | High |
-| `weapons.js` | ItemData (weapon subtype) | High |
-| `armor.js` | ItemData (armor subtype) | High |
-| `monster-types.js` | MonsterData | High |
-| `monster-tiers.js` | MonsterTierData | High |
-| `skills.js` | SkillData | High |
-| `skill-trees.js` | SkillTreeData | Medium |
-| `quests.js` | QuestData | Medium |
-| `npc-data.js` | NPCData | Medium |
-| `loot-tables.js` | LootTableData | Medium |
+This table maps your **current JavaScript source files** to the Godot resources you'll create:
+
+| Source File (Current JS) | → Godot Resource (.tres) | Priority |
+|--------------------------|--------------------------|----------|
+| `js/data/items.js` | `res://resources/items/*.tres` (ItemData) | High |
+| `js/data/weapons.js` | `res://resources/items/*.tres` (ItemData) | High |
+| `js/data/armor.js` | `res://resources/items/*.tres` (ItemData) | High |
+| `js/data/monster-types.js` | `res://resources/monsters/*.tres` (MonsterData) | High |
+| `js/data/monster-tiers.js` | `res://resources/monsters/tiers/*.tres` (MonsterTierData) | High |
+| `js/data/skills.js` | `res://resources/skills/*.tres` (SkillData) | High |
+| `js/data/skill-trees.js` | `res://resources/skill_trees/*.tres` (SkillTreeData) | Medium |
+| `js/data/quests.js` | `res://resources/quests/*.tres` (QuestData) | Medium |
+| `js/data/npc-data.js` | `res://resources/npcs/*.tres` (NPCData) | Medium |
+| `js/data/loot-tables.js` | `res://resources/loot/*.tres` (LootTableData) | Medium |
+
+**Note**: `.tres` is Godot's text-based resource format. Each item/monster/skill becomes its own resource file that can be edited in Godot's inspector.
 
 ---
 
