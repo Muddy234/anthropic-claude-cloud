@@ -1,0 +1,22 @@
+[gd_resource type="Resource" script_class="MonsterData" load_steps=2 format=3 uid="uid://monster_goblin"]
+
+[ext_resource type="Script" path="res://scripts/data/monsters/monster_data.gd" id="1_script"]
+
+[resource]
+script = ExtResource("1_script")
+id = "goblin"
+display_name = "Goblin"
+description = "A cunning creature that fights in packs and retreats when wounded."
+tier = 0
+base_hp = 25
+base_attack = 5
+base_defense = 2
+base_speed = 10
+vision_range = 6
+attack_range = 1
+xp_value = 20
+behaviors = ["pack", "coward"]
+loot_table_id = "goblin_loot"
+min_floor = 1
+max_floor = 8
+spawn_weight = 80

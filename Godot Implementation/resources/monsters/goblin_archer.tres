@@ -1,0 +1,22 @@
+[gd_resource type="Resource" script_class="MonsterData" load_steps=2 format=3 uid="uid://monster_goblin_archer"]
+
+[ext_resource type="Script" path="res://scripts/data/monsters/monster_data.gd" id="1_script"]
+
+[resource]
+script = ExtResource("1_script")
+id = "goblin_archer"
+display_name = "Goblin Archer"
+description = "A goblin that prefers to attack from a distance."
+tier = 0
+base_hp = 18
+base_attack = 6
+base_defense = 1
+base_speed = 9
+vision_range = 8
+attack_range = 6
+xp_value = 25
+behaviors = ["ranged", "kiting", "coward"]
+loot_table_id = "goblin_loot"
+min_floor = 2
+max_floor = 8
+spawn_weight = 50

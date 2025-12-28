@@ -1,0 +1,18 @@
+[gd_resource type="Resource" script_class="SkillData" load_steps=2 format=3 uid="uid://skill_whirlwind"]
+
+[ext_resource type="Script" path="res://scripts/data/skills/skill_data.gd" id="1_script"]
+
+[resource]
+script = ExtResource("1_script")
+id = "whirlwind"
+display_name = "Whirlwind"
+description = "Spin and strike all adjacent enemies for 80% weapon damage."
+skill_type = 0
+damage_multiplier = 0.8
+mana_cost = 12
+cooldown = 8.0
+range = 1
+target_type = 2
+aoe_radius = 1
+effects = []
+required_weapon = "melee"

@@ -1,0 +1,16 @@
+[gd_resource type="Resource" script_class="LootTableData" load_steps=2 format=3 uid="uid://loot_goblin"]
+
+[ext_resource type="Script" path="res://scripts/systems/loot/loot_table_data.gd" id="1_script"]
+
+[resource]
+script = ExtResource("1_script")
+id = "goblin_loot"
+gold_min = 5
+gold_max = 15
+drop_chance = 50.0
+entries = [
+	{"item_id": "rusty_sword", "weight": 30, "quantity_min": 1, "quantity_max": 1},
+	{"item_id": "health_potion", "weight": 60, "quantity_min": 1, "quantity_max": 2},
+	{"item_id": "mana_potion", "weight": 40, "quantity_min": 1, "quantity_max": 1},
+	{"item_id": "leather_armor", "weight": 15, "quantity_min": 1, "quantity_max": 1}
+]

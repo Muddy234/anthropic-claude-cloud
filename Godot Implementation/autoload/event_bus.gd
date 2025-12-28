@@ -8,9 +8,11 @@ signal player_attacked(target: Node)
 signal player_damaged(amount: int, source: Node)
 signal player_healed(amount: int, source: Node)
 signal player_died()
-signal player_level_up(new_level: int)
-signal player_xp_gained(amount: int)
-signal player_gold_changed(new_amount: int)
+signal player_leveled_up(new_level: int)
+signal player_xp_gained(amount: int, total: int, needed: int)
+signal player_hp_changed(current: int, maximum: int, change: int)
+signal player_mana_changed(current: int, maximum: int, change: int)
+signal gold_changed(new_amount: int, change: int)
 
 # === ENEMY EVENTS ===
 signal enemy_spawned(enemy: Node)
@@ -41,6 +43,10 @@ signal item_dropped(item: Resource, position: Vector2i)
 signal item_used(item: Resource)
 signal item_equipped(item: Resource, slot: int)
 signal item_unequipped(item: Resource, slot: int)
+signal item_hovered(item: Resource)
+signal item_unhovered()
+signal inventory_changed()
+signal equipment_changed()
 signal loot_pile_created(pile: Node, position: Vector2i)
 
 # === DUNGEON EVENTS ===
@@ -80,8 +86,17 @@ signal objective_completed(quest_id: String, objective_id: String)
 signal npc_interacted(npc: Node)
 signal dialog_started(npc: Node)
 signal dialog_ended(npc: Node)
+signal dialogue_action(action: String)
 signal shop_opened(npc: Node)
 signal shop_closed()
+
+# === HUD EVENTS ===
+signal message_logged(text: String, color: Color)
+signal skill_cooldown_changed(skill_index: int, current_cd: float, max_cd: float)
+
+# === QUEST SIGNALS (expanded) ===
+signal quest_accepted(quest: Resource)
+signal quest_completed(quest: Resource)
 
 # === GAME STATE EVENTS ===
 signal game_started()

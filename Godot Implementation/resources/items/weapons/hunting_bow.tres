@@ -1,0 +1,22 @@
+[gd_resource type="Resource" script_class="ItemData" load_steps=2 format=3 uid="uid://item_hunting_bow"]
+
+[ext_resource type="Script" path="res://scripts/data/items/item_data.gd" id="1_script"]
+
+[resource]
+script = ExtResource("1_script")
+id = "hunting_bow"
+display_name = "Hunting Bow"
+description = "A simple wooden bow suited for ranged combat."
+item_type = 0
+rarity = 0
+damage = 6
+damage_type = 1
+attack_speed = 0.8
+attack_range = 6
+stat_bonuses = {"dexterity": 1}
+value = 30
+weight = 2
+stackable = false
+max_stack = 1
+equip_slot = 0
+is_ranged = true

@@ -1,0 +1,16 @@
+[gd_resource type="Resource" script_class="LootTableData" load_steps=2 format=3 uid="uid://loot_skeleton"]
+
+[ext_resource type="Script" path="res://scripts/systems/loot/loot_table_data.gd" id="1_script"]
+
+[resource]
+script = ExtResource("1_script")
+id = "skeleton_loot"
+gold_min = 10
+gold_max = 30
+drop_chance = 60.0
+entries = [
+	{"item_id": "iron_sword", "weight": 25, "quantity_min": 1, "quantity_max": 1},
+	{"item_id": "iron_helmet", "weight": 20, "quantity_min": 1, "quantity_max": 1},
+	{"item_id": "health_potion", "weight": 50, "quantity_min": 1, "quantity_max": 2},
+	{"item_id": "mana_potion", "weight": 30, "quantity_min": 1, "quantity_max": 1}
+]

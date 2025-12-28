@@ -1,0 +1,18 @@
+[gd_resource type="Resource" script_class="ItemData" load_steps=2 format=3 uid="uid://item_iron_helmet"]
+
+[ext_resource type="Script" path="res://scripts/data/items/item_data.gd" id="1_script"]
+
+[resource]
+script = ExtResource("1_script")
+id = "iron_helmet"
+display_name = "Iron Helmet"
+description = "A sturdy iron helmet that protects the head."
+item_type = 1
+rarity = 1
+defense = 2
+stat_bonuses = {"vitality": 1}
+value = 40
+weight = 3
+stackable = false
+max_stack = 1
+equip_slot = 1

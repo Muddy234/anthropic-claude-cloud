@@ -1,0 +1,20 @@
+[gd_resource type="Resource" script_class="ItemData" load_steps=2 format=3 uid="uid://item_iron_sword"]
+
+[ext_resource type="Script" path="res://scripts/data/items/item_data.gd" id="1_script"]
+
+[resource]
+script = ExtResource("1_script")
+id = "iron_sword"
+display_name = "Iron Sword"
+description = "A reliable blade forged from quality iron."
+item_type = 0
+rarity = 1
+damage = 10
+damage_type = 0
+attack_speed = 1.0
+stat_bonuses = {"strength": 1}
+value = 50
+weight = 4
+stackable = false
+max_stack = 1
+equip_slot = 0
