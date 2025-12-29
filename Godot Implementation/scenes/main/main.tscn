@@ -1,9 +1,9 @@
-[gd_scene load_steps=7 format=3 uid="uid://main_scene"]
+[gd_scene load_steps=7 format=3 uid="uid://dod8qs3fq3dfb"]
 
-[ext_resource type="Script" path="res://scenes/main/main.gd" id="1_main"]
+[ext_resource type="Script" uid="uid://ruk150l4k4l8" path="res://scenes/main/main.gd" id="1_main"]
 [ext_resource type="PackedScene" path="res://scenes/world/dungeon.tscn" id="2_dungeon"]
 [ext_resource type="PackedScene" path="res://scenes/ui/hud/hud.tscn" id="3_hud"]
-[ext_resource type="Script" path="res://scenes/effects/visual_effects.gd" id="4_vfx"]
+[ext_resource type="Script" uid="uid://bfte8cf4ns1xp" path="res://scenes/effects/visual_effects.gd" id="4_vfx"]
 [ext_resource type="PackedScene" path="res://scenes/ui/menus/pause_menu.tscn" id="5_pause"]
 [ext_resource type="PackedScene" path="res://scenes/ui/menus/game_over_screen.tscn" id="6_gameover"]
 
