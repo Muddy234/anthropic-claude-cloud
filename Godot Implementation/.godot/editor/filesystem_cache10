@@ -1,7 +1,7 @@
 63f7b34db8d8cdea90c76aacccf841ec
-::res://::1767017871
+::res://::1767018112
 ::res://assets/::1767017752
-tileset.png::CompressedTexture2D::7607771835050365390::1767017166::1767017752::1::::<><><>0<>0<>c967a38effc75645c6444ce15b0995a3<>res://.godot/imported/tileset.png-c50288acd069fa293d7940a084811264.ctex::
+tileset.png::CompressedTexture2D::7607771835050365390::1767017166::1767018114::1::::<><><>0<>0<>c967a38effc75645c6444ce15b0995a3<>res://.godot/imported/tileset.png-c50288acd069fa293d7940a084811264.ctex::
 ::res://autoload/::1767016899
 audio_manager.gd::GDScript::2120412875386844413::1767015103::0::1::::<>Node<><>0<>0<><>::
 constants.gd::GDScript::7599990095023439504::1767015103::0::1::::<>Node<><>0<>0<><>::
@@ -57,10 +57,10 @@ projectile.gd::GDScript::912553345026651943::1767015103::0::1::::Projectile<>Nod
 projectile.tscn::PackedScene::-1::1767016681::0::1::::<><><>0<>0<><>::res://scenes/effects/projectile.gd
 visual_effects.gd::GDScript::2776889992486786501::1767015103::0::1::::VisualEffects<>Node<><>0<>0<><>::
 visual_effects.tscn::PackedScene::-1::1767015103::0::1::::<><><>0<>0<><>::res://scenes/effects/visual_effects.gd
-::res://scenes/entities/::1767017850
-entity.gd::GDScript::2690111483812727499::1767017841::0::1::::Entity<>Node2D<><>0<>0<><>::
-::res://scenes/entities/enemy/::1767017277
-enemy.gd::GDScript::5009251827633018753::1767017277::0::1::::Enemy<>Node2D<><>0<>0<><>::
+::res://scenes/entities/::1767018071
+entity.gd::GDScript::2690111483812727499::1767018071::0::1::::Entity<>Node2D<><>0<>0<><>::
+::res://scenes/entities/enemy/::1767018071
+enemy.gd::GDScript::5009251827633018753::1767018071::0::1::::Enemy<>Node2D<><>0<>0<><>::
 enemy.tscn::PackedScene::-1::1767015103::0::1::::<><><>0<>0<><>::res://scenes/entities/enemy/enemy.gd<>res://assets/sprites/entities/enemy_default.png
 ::res://scenes/entities/npc/::1767016899
 npc.gd::GDScript::5990577823550486105::1767015103::0::1::::NPC<>Entity<><>0<>0<><>::
