@@ -1,28 +1,28 @@
 class_name Enemy
-extends Entity
+extends "res://scenes/entities/entity.gd"
 
 ## Enemy entity with AI, social behaviors, and loot
 
 @export var monster_data: MonsterData
 
 # AI component
-var ai: EnemyAI
+var ai: Node  # EnemyAI
 
 # Social system references
-var commanded_by: Enemy = null  # Leader commanding this enemy
-var followers: Array[Enemy] = []  # Enemies we command
+var commanded_by: Node = null  # Leader commanding this enemy (Enemy)
+var followers: Array = []  # Enemies we command
 var pack_id: int = 0  # Pack we belong to
 var swarm_id: int = 0  # Swarm we belong to
 
 # Combat state
-var target: Entity = null
+var target: Node = null  # Entity
 var last_known_target_pos: Vector2i
 var has_attack_token: bool = false
 
 # Signals
 signal spotted_player()
 signal lost_player()
-signal commanded(command: String, target_entity: Entity)
+signal commanded(command: String, target_entity: Node)
 
 func _ready():
 	super._ready()
@@ -64,12 +64,12 @@ func take_turn(delta: float):
 	process_status_effects(delta)
 
 ## Called when this enemy takes damage
-func on_damaged(attacker: Entity):
+func on_damaged(attacker: Node):
 	if ai:
 		ai.on_damaged(attacker)
 
 ## Override take_damage to trigger AI response
-func take_damage(amount: int, source: Entity, damage_type: Constants.DamageType = Constants.DamageType.PHYSICAL) -> int:
+func take_damage(amount: int, source: Node, damage_type: Constants.DamageType = Constants.DamageType.PHYSICAL) -> int:
 	var final_damage := super.take_damage(amount, source, damage_type)
 
 	if final_damage > 0:
