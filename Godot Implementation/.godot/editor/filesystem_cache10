@@ -1,6 +1,6 @@
 63f7b34db8d8cdea90c76aacccf841ec
-::res://::1767017111
-::res://assets/::1767017180
+::res://::1767017319
+::res://assets/::1767017196
 tileset.png::CompressedTexture2D::7607771835050365390::1767017166::1767017196::1::::<><><>0<>0<>c967a38effc75645c6444ce15b0995a3<>res://.godot/imported/tileset.png-c50288acd069fa293d7940a084811264.ctex::
 ::res://autoload/::1767016899
 audio_manager.gd::GDScript::2120412875386844413::1767015103::0::1::::<>Node<><>0<>0<><>::
@@ -58,8 +58,8 @@ projectile.tscn::PackedScene::-1::1767016681::0::1::::<><><>0<>0<><>::res://scen
 visual_effects.gd::GDScript::2776889992486786501::1767015103::0::1::::VisualEffects<>Node<><>0<>0<><>::
 visual_effects.tscn::PackedScene::-1::1767015103::0::1::::<><><>0<>0<><>::res://scenes/effects/visual_effects.gd
 ::res://scenes/entities/::1767016653
-::res://scenes/entities/enemy/::1767016899
-enemy.gd::GDScript::5009251827633018753::1767015103::0::1::::Enemy<>Entity<><>0<>0<><>::
+::res://scenes/entities/enemy/::1767017277
+enemy.gd::GDScript::5009251827633018753::1767017277::0::1::::Enemy<><><>0<>0<><>::
 enemy.tscn::PackedScene::-1::1767015103::0::1::::<><><>0<>0<><>::res://scenes/entities/enemy/enemy.gd<>res://assets/sprites/entities/enemy_default.png
 ::res://scenes/entities/npc/::1767016899
 npc.gd::GDScript::5990577823550486105::1767015103::0::1::::NPC<>Entity<><>0<>0<><>::
@@ -67,9 +67,9 @@ npc.tscn::PackedScene::-1::1767016681::0::1::::<><><>0<>0<><>::res://scenes/enti
 ::res://scenes/entities/player/::1767016899
 player.gd::GDScript::2251231048198160776::1767015103::0::1::::Player<>Entity<><>0<>0<><>::
 player.tscn::PackedScene::-1::1767016681::0::1::::<><><>0<>0<><>::res://scenes/entities/player/player.gd
-::res://scenes/main/::1767016899
+::res://scenes/main/::1767017257
 main.gd::GDScript::1235153112356523083::1767015103::0::1::::<>Node2D<><>0<>0<><>::
-main.tscn::PackedScene::-1::1767015103::0::1::::<><><>0<>0<><>::res://scenes/main/main.gd<>res://scenes/world/dungeon.tscn<>res://scenes/ui/hud/hud.tscn<>res://scenes/effects/visual_effects.gd<>res://scenes/ui/menus/pause_menu.tscn<>res://scenes/ui/menus/game_over_screen.tscn
+main.tscn::PackedScene::8150132217662196407::1767017257::0::1::::<><><>0<>0<><>::uid://ruk150l4k4l8::::res://scenes/main/main.gd<>res://scenes/world/dungeon.tscn<>res://scenes/ui/hud/hud.tscn<>uid://bfte8cf4ns1xp::::res://scenes/effects/visual_effects.gd<>res://scenes/ui/menus/pause_menu.tscn<>res://scenes/ui/menus/game_over_screen.tscn
 ::res://scenes/ui/::1767015115
 ::res://scenes/ui/character/::1767016899
 character_sheet.gd::GDScript::9149026323736361254::1767015103::0::1::::CharacterSheet<>Control<><>0<>0<><>::
@@ -114,9 +114,9 @@ skill_data.gd::GDScript::3370927452806218872::1767015103::0::1::::SkillData<>Res
 ::res://scripts/generation/::1767016899
 village_generator.gd::GDScript::421284919733828129::1767015103::0::1::::VillageGenerator<>RefCounted<><>0<>0<><>::
 ::res://scripts/systems/::1767015115
-::res://scripts/systems/ai/::1767016899
+::res://scripts/systems/ai/::1767017277
 ai_manager.gd::GDScript::3395353837465885857::1767015103::0::1::::AIManager<>Node<><>0<>0<><>::
-enemy_ai.gd::GDScript::1278474833294029836::1767015103::0::1::::EnemyAI<>Node<><>0<>0<><>::
+enemy_ai.gd::GDScript::1278474833294029836::1767017277::0::1::::EnemyAI<>Node<><>0<>0<><>::
 ::res://scripts/systems/combat/::1767016899
 attack_token_system.gd::GDScript::8578556832498661630::1767015103::0::1::::AttackTokenSystem<>Node<><>0<>0<><>::
 combat_system.gd::GDScript::185949657963133659::1767015103::0::1::::CombatSystem<>Node<><>0<>0<><>::
