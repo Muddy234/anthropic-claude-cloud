@@ -83,7 +83,7 @@ func _process(delta: float):
 			modulate = Color.WHITE
 
 ## Take damage from a source
-func take_damage(amount: int, source: Node, damage_type: Constants.DamageType = Constants.DamageType.PHYSICAL) -> int:
+func take_damage(amount: int, source: Node, damage_type: int = 0) -> int:  # 0 = PHYSICAL
 	if is_invulnerable:
 		return 0
 
@@ -203,7 +203,7 @@ func face_position(target_pos: Vector2i):
 
 # === PRIVATE METHODS ===
 
-func _calculate_damage_reduction(amount: int, _damage_type: Constants.DamageType) -> int:
+func _calculate_damage_reduction(amount: int, _damage_type: int) -> int:
 	# Simple defense reduction
 	var effective_defense := get_stat("defense")
 	var reduction := effective_defense / (effective_defense + 100.0)

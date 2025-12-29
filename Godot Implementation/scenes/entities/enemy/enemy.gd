@@ -69,7 +69,7 @@ func on_damaged(attacker: Node):
 		ai.on_damaged(attacker)
 
 ## Override take_damage to trigger AI response
-func take_damage(amount: int, source: Node, damage_type: Constants.DamageType = Constants.DamageType.PHYSICAL) -> int:
+func take_damage(amount: int, source: Node, damage_type: int = 0) -> int:  # 0 = PHYSICAL
 	var final_damage := super.take_damage(amount, source, damage_type)
 
 	if final_damage > 0:
