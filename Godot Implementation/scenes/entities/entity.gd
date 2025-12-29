@@ -36,11 +36,11 @@ var current_hp: int:
 var stat_modifiers: Dictionary = {}  # {"attack": [5, 3], "defense": [-2]}
 
 # Status effects
-var status_effects: Array[StatusEffect] = []
+var status_effects: Array = []  # Array of StatusEffect
 
 # Combat state
 var is_in_combat: bool = false
-var combat_target: Entity = null
+var combat_target: Node = null  # Entity reference
 var attack_cooldown: float = 0.0
 
 # Status flags
@@ -58,8 +58,8 @@ var is_hit_flashing: bool = false
 signal hp_changed(current: int, maximum: int)
 signal died()
 signal position_changed(from: Vector2i, to: Vector2i)
-signal status_applied(effect: StatusEffect)
-signal status_removed(effect: StatusEffect)
+signal status_applied(effect: RefCounted)
+signal status_removed(effect: RefCounted)
 signal stat_changed(stat_name: String, new_value: int)
 
 func _ready():
@@ -83,7 +83,7 @@ func _process(delta: float):
 			modulate = Color.WHITE
 
 ## Take damage from a source
-func take_damage(amount: int, source: Entity, damage_type: Constants.DamageType = Constants.DamageType.PHYSICAL) -> int:
+func take_damage(amount: int, source: Node, damage_type: Constants.DamageType = Constants.DamageType.PHYSICAL) -> int:
 	if is_invulnerable:
 		return 0
 
@@ -108,7 +108,7 @@ func heal(amount: int) -> int:
 	return current_hp - old_hp
 
 ## Apply a status effect
-func apply_status(effect: StatusEffect):
+func apply_status(effect: RefCounted):  # StatusEffect
 	# Check for existing effect
 	for existing in status_effects:
 		if existing.id == effect.id:
@@ -170,7 +170,9 @@ func remove_stat_modifier(stat: String, value: int):
 
 ## Get effective stat value (base + modifiers)
 func get_stat(stat: String) -> int:
-	var base: int = get(stat) if has(stat) else 0
+	var base: int = 0
+	if stat in self:
+		base = get(stat)
 	var bonus := 0
 
 	if stat_modifiers.has(stat):
