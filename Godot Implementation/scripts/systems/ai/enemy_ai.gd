@@ -151,7 +151,7 @@ func _think():
 		commanded_target = null
 
 	# Calculate thresholds
-	var hp_pct := float(enemy.current_hp) / enemy.max_hp
+	var hp_pct: float = float(enemy.current_hp) / float(enemy.max_hp)
 	var flee_threshold: float = enemy.monster_data.flee_threshold if enemy.monster_data else 0.25
 	var is_low_hp := hp_pct <= flee_threshold
 	var can_flee: bool = enemy.monster_data.flees_behavior if enemy.monster_data else false
