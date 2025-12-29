@@ -4,7 +4,7 @@ extends Node
 ## Enemy AI state machine with tier-based behaviors
 
 # Reference to the enemy this AI controls
-var enemy: Enemy
+var enemy: Node  # Enemy
 
 # Current state
 var current_state: Constants.AIState = Constants.AIState.IDLE
@@ -13,7 +13,7 @@ var state_timer: float = 0.0
 var state_data: Dictionary = {}
 
 # Target tracking
-var target: Entity = null
+var target: Node = null  # Entity
 var last_known_target_pos: Vector2i
 var memory_duration: float = 0.0
 
@@ -41,8 +41,8 @@ var strafe_direction: int = 1
 var strafe_timer: float = 0.0
 
 # Social system
-var follow_target: Enemy = null
-var commanded_target: Entity = null
+var follow_target: Node = null  # Enemy
+var commanded_target: Node = null  # Entity
 var target_position: Vector2i  # Override from social system
 
 # Tier-based behavior
@@ -54,7 +54,7 @@ var pack_courage_threshold: int = 4
 var is_sacrificial: bool = false
 var can_sacrifice_minions: bool = false
 var sacrifice_threshold: float = 0.3
-var sacrifice_target: Enemy = null
+var sacrifice_target: Node = null  # Enemy
 
 # Shout state
 var shout_timer: float = 0.0
@@ -71,11 +71,11 @@ signal lost_player()
 signal shouting_started()
 signal shouting_completed()
 
-func _init(e: Enemy = null):
+func _init(e: Node = null):  # Enemy
 	if e:
 		setup(e)
 
-func setup(e: Enemy):
+func setup(e: Node):  # Enemy
 	enemy = e
 	spawn_position = enemy.grid_pos
 	think_timer = randf() * think_interval
@@ -505,7 +505,7 @@ func _change_state(new_state: Constants.AIState):
 
 	state_changed.emit(previous_state, new_state)
 
-func _can_see_target(target_entity: Entity) -> bool:
+func _can_see_target(target_entity: Node) -> bool:  # Entity
 	if not target_entity:
 		return false
 
@@ -652,7 +652,7 @@ func _count_nearby_allies(radius: int) -> int:
 			count += 1
 	return count
 
-func _find_sacrificial_victim() -> Enemy:
+func _find_sacrificial_victim() -> Node:  # Enemy
 	for other in GameManager.enemies:
 		if other == enemy or other.current_hp <= 0:
 			continue
@@ -683,7 +683,7 @@ func _dominant_logic():
 				follower.ai.commanded_target = target
 
 ## Called when this enemy takes damage - immediate reaction
-func on_damaged(attacker: Entity):
+func on_damaged(attacker: Node):  # Entity
 	# Already in combat states - just update target if needed
 	if current_state in [Constants.AIState.COMBAT, Constants.AIState.CHASING,
 						Constants.AIState.SKIRMISHING, Constants.AIState.CIRCLING]:
