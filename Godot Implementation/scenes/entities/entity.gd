@@ -123,7 +123,7 @@ func apply_status(effect: RefCounted):  # StatusEffect
 func remove_status(effect_id: String):
 	for i in range(status_effects.size() - 1, -1, -1):
 		if status_effects[i].id == effect_id:
-			var effect := status_effects[i]
+			var effect = status_effects[i]
 			effect.remove(self)
 			status_effects.remove_at(i)
 			status_removed.emit(effect)
