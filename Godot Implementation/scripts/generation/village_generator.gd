@@ -187,7 +187,7 @@ func _create_building(id: String, def: Dictionary) -> Dictionary:
 		"height": def.height,
 		"color": def.color,
 		"npcs": def.npcs.duplicate(),
-		"entrance_x": pos.x + def.width / 2,
+		"entrance_x": int(pos.x + def.width / 2),
 		"entrance_y": pos.y + def.height,
 		"interior_tiles": [],
 		"is_open": def.type == "open" or def.type == "entrance",
@@ -452,9 +452,9 @@ func _find_spawn_point() -> Vector2i:
 	# Fallback: town square center
 	for b in buildings:
 		if b.id == "town_square":
-			return Vector2i(b.x + b.width / 2, b.y + b.height / 2)
+			return Vector2i(int(b.x + b.width / 2), int(b.y + b.height / 2))
 
-	return Vector2i(WIDTH / 2, HEIGHT / 2)
+	return Vector2i(int(WIDTH / 2), int(HEIGHT / 2))
 
 ## Get NPC positions
 func _get_npc_positions() -> Array:

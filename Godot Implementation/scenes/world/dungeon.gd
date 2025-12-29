@@ -86,18 +86,18 @@ func _init_explored():
 func _render_tiles():
 	tile_map.clear()
 
-	for x in current_data.tiles.size():
-		for y in current_data.tiles[x].size():
+	for x: int in current_data.tiles.size():
+		for y: int in current_data.tiles[x].size():
 			var tile_type: Constants.TileType = current_data.tiles[x][y]
-			var atlas_coords := TILE_ATLAS.get(tile_type, Vector2i(0, 0))
+			var atlas_coords: Vector2i = TILE_ATLAS.get(tile_type, Vector2i(0, 0))
 			tile_map.set_cell(0, Vector2i(x, y), 0, atlas_coords)
 
 ## Initialize fog of war
 func _init_fog():
 	fog_of_war.clear()
 
-	for x in Constants.MAP_WIDTH:
-		for y in Constants.MAP_HEIGHT:
+	for x: int in Constants.MAP_WIDTH:
+		for y: int in Constants.MAP_HEIGHT:
 			# Start with all tiles hidden
 			fog_of_war.set_cell(0, Vector2i(x, y), 0, Vector2i(0, 0))
 
@@ -215,10 +215,10 @@ func find_path(from: Vector2i, to: Vector2i) -> Array[Vector2i]:
 
 	while not open_set.is_empty():
 		# Get node with lowest f_score
-		var current := open_set[0]
-		var current_f := f_score.get(current, INF)
+		var current: Vector2i = open_set[0]
+		var current_f: float = f_score.get(current, INF)
 		for node in open_set:
-			var node_f := f_score.get(node, INF)
+			var node_f: float = f_score.get(node, INF)
 			if node_f < current_f:
 				current = node
 				current_f = node_f
@@ -230,12 +230,12 @@ func find_path(from: Vector2i, to: Vector2i) -> Array[Vector2i]:
 
 		# Check neighbors
 		for dir in Constants.ALL_DIRECTIONS:
-			var neighbor := current + dir
+			var neighbor: Vector2i = current + dir
 
 			if not is_walkable(neighbor):
 				continue
 
-			var tentative_g := g_score.get(current, INF) + 1
+			var tentative_g: float = g_score.get(current, INF) + 1
 
 			if tentative_g < g_score.get(neighbor, INF):
 				came_from[neighbor] = current

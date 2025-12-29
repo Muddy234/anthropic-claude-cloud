@@ -24,6 +24,11 @@ GameManager="*res://autoload/game_manager.gd"
 AudioManager="*res://autoload/audio_manager.gd"
 SaveManager="*res://autoload/save_manager.gd"
 
+[debug]
+
+gdscript/warnings/unused_parameter=0
+gdscript/warnings/unused_signal=0
+
 [display]
 
 window/size/viewport_width=1280

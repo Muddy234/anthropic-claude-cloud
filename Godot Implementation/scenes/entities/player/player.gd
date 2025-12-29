@@ -154,7 +154,7 @@ func _attack_enemy(enemy: Enemy):
 
 ## Try to interact with adjacent tiles/entities
 func _try_interact():
-	var interact_pos := grid_pos + Constants.DIRECTIONS[facing]
+	var interact_pos: Vector2i = grid_pos + Constants.DIRECTIONS[facing]
 
 	# Check for NPC
 	var entity := GameManager.get_entity_at(interact_pos)
@@ -163,14 +163,14 @@ func _try_interact():
 		return
 
 	# Check for loot
-	var loot := GameManager.get_loot_at(grid_pos)
+	var loot: LootPile = GameManager.get_loot_at(grid_pos)
 	if loot:
 		_pickup_loot(loot)
 		return
 
 	# Check for stairs
 	if GameManager.dungeon:
-		var tile_type := GameManager.dungeon.get_tile_type(grid_pos)
+		var tile_type: Constants.TileType = GameManager.dungeon.get_tile_type(grid_pos)
 		if tile_type == Constants.TileType.STAIRS_DOWN:
 			GameManager.descend_floor()
 		elif tile_type == Constants.TileType.STAIRS_UP:
@@ -180,7 +180,7 @@ func _try_interact():
 func _check_tile_interactions():
 	# Auto-pickup gold
 	if GameManager.settings.auto_pickup_gold:
-		var loot := GameManager.get_loot_at(grid_pos)
+		var loot: LootPile = GameManager.get_loot_at(grid_pos)
 		if loot:
 			var gold_amount := loot.take_gold()
 			if gold_amount > 0:
@@ -242,7 +242,7 @@ func _interact_with_npc(npc):
 
 ## Pickup loot
 func _pickup_loot(loot):
-	var items := loot.take_all()
+	var items: Array[ItemData] = loot.take_all()
 
 	for item in items:
 		if item.type == "currency" and item.id == "gold":
@@ -331,7 +331,7 @@ func use_item(item: ItemData) -> bool:
 		mp = mini(max_mp, mp + item.mana_restore)
 		mp_changed.emit(mp, max_mp)
 	if item.buff_effect:
-		var effect := item.buff_effect.create_instance(self)
+		var effect: StatusEffect = item.buff_effect.create_instance(self)
 		apply_status(effect)
 
 	# Remove or reduce stack

@@ -83,7 +83,7 @@ func _process(delta: float):
 			modulate = Color.WHITE
 
 ## Take damage from a source
-func take_damage(amount: int, source: Node, damage_type: int = 0) -> int:  # 0 = PHYSICAL
+func take_damage(amount: int, _source: Node, damage_type: int = 0) -> int:  # 0 = PHYSICAL
 	if is_invulnerable:
 		return 0
 

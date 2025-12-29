@@ -111,8 +111,12 @@ func get_stat_text() -> String:
 	return "\n".join(lines)
 
 ## Get rarity color
+static func get_rarity_color_from_rarity(rarity_val: int) -> Color:
+	return Constants.get_rarity_color(rarity_val)
+
+## Get rarity color for this item
 func get_rarity_color() -> Color:
-	return Constants.get_rarity_color(rarity)
+	return ItemData.get_rarity_color_from_rarity(rarity)
 
 ## Create a duplicate for inventory
 func create_instance(count: int = 1) -> ItemData:

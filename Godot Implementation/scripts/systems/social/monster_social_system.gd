@@ -288,7 +288,7 @@ func _recruit_bodyguards():
 			if not enemy.monster_data or not enemy.monster_data.can_be_commanded:
 				continue
 
-			var dist := chain.leader.grid_pos.distance_to(Vector2(enemy.grid_pos))
+			var dist: float = chain.leader.grid_pos.distance_to(Vector2(enemy.grid_pos))
 			if dist <= 8:
 				chain.followers.append(enemy)
 				enemy.commanded_by = chain.leader
@@ -302,12 +302,12 @@ func _update_leader_commands():
 		if not is_instance_valid(chain.leader) or chain.leader.current_hp <= 0:
 			continue
 
-		var leader := chain.leader
+		var leader: Enemy = chain.leader
 		if not leader.ai:
 			continue
 
 		# Leader in combat with player
-		var in_combat := leader.ai.current_state in [
+		var in_combat: bool = leader.ai.current_state in [
 			Constants.AIState.COMBAT,
 			Constants.AIState.CHASING,
 			Constants.AIState.CIRCLING

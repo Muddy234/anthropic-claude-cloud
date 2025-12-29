@@ -213,8 +213,8 @@ func _get_attack_damage(entity: Entity) -> int:
 	return base
 
 func _get_distance(entity1: Entity, entity2: Entity) -> float:
-	var dx := abs(entity1.grid_pos.x - entity2.grid_pos.x)
-	var dy := abs(entity1.grid_pos.y - entity2.grid_pos.y)
+	var dx: int = abs(entity1.grid_pos.x - entity2.grid_pos.x)
+	var dy: int = abs(entity1.grid_pos.y - entity2.grid_pos.y)
 	return maxf(dx, dy)  # Chebyshev distance
 
 func _check_ambush(attacker: Entity, defender: Enemy) -> bool:
@@ -271,15 +271,15 @@ func _apply_weapon_effects(attacker: Entity, defender: Entity, result: Dictionar
 
 	# Blade weapons: chance to cause bleeding
 	if weapon.damage_type == "blade":
-		var bleed_chance := weapon.bleed_chance if weapon.bleed_chance else 0.15
+		var bleed_chance: float = weapon.bleed_chance if weapon.bleed_chance else 0.15
 		if randf() < bleed_chance:
-			_apply_effect(preload("res://resources/effects/bleeding.tres"), defender, attacker)
+			GameManager.status_effect_system.apply_effect(defender, "bleeding", attacker)
 
 	# Blunt weapons: chance to cause stun
 	elif weapon.damage_type == "blunt":
-		var stun_chance := weapon.stun_chance if weapon.stun_chance else 0.15
+		var stun_chance: float = weapon.stun_chance if weapon.stun_chance else 0.15
 		if randf() < stun_chance:
-			_apply_effect(preload("res://resources/effects/stunned.tres"), defender, attacker)
+			GameManager.status_effect_system.apply_effect(defender, "stunned", attacker)
 
 func _apply_effect(effect: EffectData, target: Entity, source: Entity):
 	var status := StatusEffect.new()

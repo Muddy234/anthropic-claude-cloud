@@ -60,7 +60,7 @@ func calculate_damage(attacker: Entity, defender: Entity, context: Dictionary = 
 
 	# Layer 2: Apply attacker stat bonuses
 	var stat_bonus := _calculate_stat_bonus(attacker, weapon_damage.type)
-	var damage := result.base_damage + stat_bonus
+	var damage: int = result.base_damage + stat_bonus
 
 	# Layer 3: Critical hit check
 	var crit_chance := _calculate_crit_chance(attacker)

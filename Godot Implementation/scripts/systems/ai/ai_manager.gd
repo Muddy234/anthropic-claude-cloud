@@ -74,13 +74,13 @@ func _process_next_enemy():
 	all_enemies_acted.emit()
 
 ## Get a cached path or calculate a new one
-func get_path(from: Vector2i, to: Vector2i) -> Array[Vector2i]:
+func get_ai_path(from: Vector2i, to: Vector2i) -> Array[Vector2i]:
 	var cache_key := "%d,%d->%d,%d" % [from.x, from.y, to.x, to.y]
 
 	if pathfinding_cache.has(cache_key):
 		return pathfinding_cache[cache_key]
 
-	var path := GameManager.dungeon.find_path(from, to)
+	var path: Array[Vector2i] = GameManager.dungeon.find_path(from, to)
 	pathfinding_cache[cache_key] = path
 
 	return path

@@ -138,7 +138,7 @@ func _connect_rooms():
 func _carve_h_corridor(x1: int, x2: int, y: int) -> Array[Vector2i]:
 	var carved: Array[Vector2i] = []
 	for x in range(mini(x1, x2), maxi(x1, x2) + 1):
-		for w in range(-CORRIDOR_WIDTH / 2, CORRIDOR_WIDTH / 2 + 1):
+		for w in range(int(-CORRIDOR_WIDTH / 2), int(CORRIDOR_WIDTH / 2) + 1):
 			var cy := y + w
 			if x >= 0 and x < width and cy >= 0 and cy < height:
 				if tiles[x][cy] == Constants.TileType.WALL:
@@ -150,7 +150,7 @@ func _carve_h_corridor(x1: int, x2: int, y: int) -> Array[Vector2i]:
 func _carve_v_corridor(y1: int, y2: int, x: int) -> Array[Vector2i]:
 	var carved: Array[Vector2i] = []
 	for y in range(mini(y1, y2), maxi(y1, y2) + 1):
-		for w in range(-CORRIDOR_WIDTH / 2, CORRIDOR_WIDTH / 2 + 1):
+		for w in range(int(-CORRIDOR_WIDTH / 2), int(CORRIDOR_WIDTH / 2) + 1):
 			var cx := x + w
 			if cx >= 0 and cx < width and y >= 0 and y < height:
 				if tiles[cx][y] == Constants.TileType.WALL:
@@ -184,9 +184,9 @@ func _place_doors():
 
 func _is_valid_door_position(x: int, y: int) -> bool:
 	# Door should have walls on opposite sides
-	var h_walls := (x > 0 and tiles[x - 1][y] == Constants.TileType.WALL) and \
+	var h_walls: bool = (x > 0 and tiles[x - 1][y] == Constants.TileType.WALL) and \
 				   (x < width - 1 and tiles[x + 1][y] == Constants.TileType.WALL)
-	var v_walls := (y > 0 and tiles[x][y - 1] == Constants.TileType.WALL) and \
+	var v_walls: bool = (y > 0 and tiles[x][y - 1] == Constants.TileType.WALL) and \
 				   (y < height - 1 and tiles[x][y + 1] == Constants.TileType.WALL)
 
 	return h_walls or v_walls
@@ -194,7 +194,7 @@ func _is_valid_door_position(x: int, y: int) -> bool:
 ## Place stairs
 func _place_stairs(stair_type: Constants.TileType) -> Vector2i:
 	if rooms.is_empty():
-		return Vector2i(width / 2, height / 2)
+		return Vector2i(int(width / 2), int(height / 2))
 
 	# Pick a random room
 	var room := rooms[randi() % rooms.size()]
@@ -224,7 +224,7 @@ func _get_room_at(pos: Vector2i) -> Rect2i:
 func _get_player_spawn(stairs_up: Vector2i) -> Vector2i:
 	# Spawn near stairs up
 	for dir in Constants.CARDINAL_DIRECTIONS:
-		var pos := stairs_up + dir
+		var pos: Vector2i = stairs_up + dir
 		if is_floor(pos):
 			return pos
 	return stairs_up
@@ -314,11 +314,11 @@ func is_walkable(pos: Vector2i) -> bool:
 ## Check line of sight between two points
 func has_line_of_sight(from: Vector2i, to: Vector2i) -> bool:
 	# Bresenham's line algorithm
-	var dx := abs(to.x - from.x)
-	var dy := abs(to.y - from.y)
+	var dx: int = abs(to.x - from.x)
+	var dy: int = abs(to.y - from.y)
 	var sx := 1 if from.x < to.x else -1
 	var sy := 1 if from.y < to.y else -1
-	var err := dx - dy
+	var err: int = dx - dy
 
 	var x := from.x
 	var y := from.y
@@ -330,7 +330,7 @@ func has_line_of_sight(from: Vector2i, to: Vector2i) -> bool:
 		if not is_walkable(Vector2i(x, y)) and Vector2i(x, y) != from:
 			return false
 
-		var e2 := 2 * err
+		var e2: int = 2 * err
 		if e2 > -dy:
 			err -= dy
 			x += sx

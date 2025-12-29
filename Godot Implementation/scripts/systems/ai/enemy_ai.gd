@@ -565,8 +565,8 @@ func _can_move_to(pos: Vector2i) -> bool:
 	return true
 
 func _face_target(pos: Vector2i):
-	var dx := pos.x - enemy.grid_pos.x
-	var dy := pos.y - enemy.grid_pos.y
+	var dx: int = pos.x - enemy.grid_pos.x
+	var dy: int = pos.y - enemy.grid_pos.y
 
 	if abs(dx) > abs(dy):
 		enemy.facing = "right" if dx > 0 else "left"

@@ -83,7 +83,7 @@ func apply_effect(entity: Entity, effect_id: String, source: Entity = null, over
 		push_warning("Unknown status effect: " + effect_id)
 		return null
 
-	var definition := EFFECT_DEFINITIONS[effect_id].duplicate()
+	var definition: Dictionary = EFFECT_DEFINITIONS[effect_id].duplicate()
 
 	# Apply overrides
 	for key in overrides:
@@ -185,8 +185,8 @@ func process_effects(entity: Entity, delta: float):
 			effect_removed.emit(entity, effect)
 
 func _apply_tick(entity: Entity, effect: StatusEffect):
-	var tick_damage := effect.damage_per_tick * effect.stacks
-	var tick_heal := effect.heal_per_tick * effect.stacks
+	var tick_damage: int = effect.damage_per_tick * effect.stacks
+	var tick_heal: int = effect.heal_per_tick * effect.stacks
 
 	if tick_damage > 0:
 		entity.current_hp -= tick_damage

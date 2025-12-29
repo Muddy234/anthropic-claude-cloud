@@ -25,7 +25,7 @@ extends Resource
 
 @export_group("Targeting")
 @export_enum("self", "single", "aoe", "line", "cone", "ground") var target_type: String = "single"
-@export var range: int = 1
+@export var cast_range: int = 1
 @export var aoe_radius: int = 0
 @export var requires_los: bool = true  # Line of sight
 @export var can_target_self: bool = false
@@ -57,7 +57,7 @@ func get_formatted_description() -> String:
 
 	# Replace placeholders with actual values
 	text = text.replace("{damage}", str(int(damage_multiplier * 100)) + "%")
-	text = text.replace("{range}", str(range))
+	text = text.replace("{range}", str(cast_range))
 	text = text.replace("{aoe}", str(aoe_radius))
 	text = text.replace("{cooldown}", str(cooldown))
 	text = text.replace("{mp}", str(mp_cost))
@@ -129,7 +129,7 @@ func _is_valid_target(caster, target) -> bool:
 
 	# Range check
 	var dist: float = caster.grid_pos.distance_to(target.grid_pos)
-	if dist > range:
+	if dist > cast_range:
 		return false
 
 	# LOS check
@@ -137,8 +137,8 @@ func _is_valid_target(caster, target) -> bool:
 		return false
 
 	# Target type check
-	var is_enemy := target.is_in_group("enemies")
-	var is_ally := target.is_in_group("allies") or target.is_in_group("player")
+	var is_enemy: bool = target.is_in_group("enemies")
+	var is_ally: bool = target.is_in_group("allies") or target.is_in_group("player")
 
 	if is_enemy and not can_target_enemies:
 		return false
