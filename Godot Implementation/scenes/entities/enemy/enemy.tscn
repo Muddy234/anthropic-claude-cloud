@@ -1,7 +1,9 @@
 [gd_scene load_steps=3 format=3 uid="uid://enemy_scene"]
 
 [ext_resource type="Script" path="res://scenes/entities/enemy/enemy.gd" id="1_enemy"]
-[ext_resource type="Texture2D" uid="uid://enemy_sprite" path="res://assets/sprites/entities/enemy_default.png" id="2_sprite"]
+
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_enemy"]
+size = Vector2(14, 14)
 
 [node name="Enemy" type="CharacterBody2D" groups=["enemy"]]
 collision_layer = 4
@@ -9,10 +11,11 @@ collision_mask = 3
 script = ExtResource("1_enemy")
 
 [node name="Sprite2D" type="Sprite2D" parent="."]
-texture = ExtResource("2_sprite")
+modulate = Color(1, 0.3, 0.3, 1)
 centered = true
 
 [node name="CollisionShape2D" type="CollisionShape2D" parent="."]
+shape = SubResource("RectangleShape2D_enemy")
 
 [node name="AnimationPlayer" type="AnimationPlayer" parent="."]
 

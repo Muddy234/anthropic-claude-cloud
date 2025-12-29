@@ -164,11 +164,57 @@ func _spawn_enemies(spawns: Array, floor_num: int):
 			var enemy := GameManager.spawn_enemy(monster_data, pos)
 			entities_container.add_child(enemy)
 
+## Cached monster data
+var _monster_cache: Array[MonsterData] = []
+
 ## Get a random monster appropriate for the floor
 func _get_monster_for_floor(floor_num: int) -> MonsterData:
-	# TODO: Load from resources and filter by floor
-	# For now, return null (caller should handle)
-	return null
+	# Load monsters on first call
+	if _monster_cache.is_empty():
+		_load_monster_data()
+
+	# Filter monsters that can spawn on this floor
+	var valid_monsters: Array[MonsterData] = []
+	var total_weight: float = 0.0
+
+	for monster in _monster_cache:
+		if monster.can_spawn_on_floor(floor_num):
+			valid_monsters.append(monster)
+			total_weight += monster.spawn_weight
+
+	if valid_monsters.is_empty():
+		return null
+
+	# Weighted random selection
+	var roll := randf() * total_weight
+	var cumulative: float = 0.0
+
+	for monster in valid_monsters:
+		cumulative += monster.spawn_weight
+		if roll <= cumulative:
+			return monster
+
+	return valid_monsters[0]
+
+## Load all monster data from resources
+func _load_monster_data():
+	var dir := DirAccess.open("res://resources/monsters/")
+	if not dir:
+		push_warning("Could not open monsters directory")
+		return
+
+	dir.list_dir_begin()
+	var file_name := dir.get_next()
+
+	while file_name != "":
+		if file_name.ends_with(".tres"):
+			var path := "res://resources/monsters/" + file_name
+			var monster := load(path) as MonsterData
+			if monster:
+				_monster_cache.append(monster)
+		file_name = dir.get_next()
+
+	dir.list_dir_end()
 
 ## Spawn items
 func _spawn_items(spawns: Array, floor_num: int):
