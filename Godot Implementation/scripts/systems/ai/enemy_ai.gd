@@ -523,22 +523,22 @@ func _get_distance_to(pos: Vector2i) -> float:
 
 func _move_toward(pos: Vector2i, speed_mult: float = 1.0):
 	# Simple pathfinding - get next step toward target
-	var direction := _get_direction_to(pos)
-	var next_pos := enemy.grid_pos + direction
+	var direction: Vector2i = _get_direction_to(pos)
+	var next_pos: Vector2i = enemy.grid_pos + direction
 
 	if _can_move_to(next_pos):
 		enemy.grid_pos = next_pos
 
 func _move_away_from(pos: Vector2i):
-	var direction := _get_direction_to(pos)
-	var away_pos := enemy.grid_pos - direction
+	var direction: Vector2i = _get_direction_to(pos)
+	var away_pos: Vector2i = enemy.grid_pos - direction
 
 	if _can_move_to(away_pos):
 		enemy.grid_pos = away_pos
 
 func _get_direction_to(pos: Vector2i) -> Vector2i:
-	var dx := pos.x - enemy.grid_pos.x
-	var dy := pos.y - enemy.grid_pos.y
+	var dx: int = pos.x - enemy.grid_pos.x
+	var dy: int = pos.y - enemy.grid_pos.y
 
 	var dir := Vector2i.ZERO
 	if abs(dx) > abs(dy):
