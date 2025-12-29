@@ -1,14 +1,12 @@
-[gd_scene load_steps=3 format=3 uid="uid://projectile_scene"]
+[gd_scene load_steps=2 format=3 uid="uid://projectile_scene"]
 
 [ext_resource type="Script" path="res://scenes/effects/projectile.gd" id="1_projectile"]
-[ext_resource type="Texture2D" uid="uid://projectile_sprite" path="res://assets/sprites/effects/projectile.png" id="2_sprite"]
 
 [node name="Projectile" type="Node2D"]
 z_index = 50
 script = ExtResource("1_projectile")
 
 [node name="Sprite2D" type="Sprite2D" parent="."]
-texture = ExtResource("2_sprite")
 
 [node name="Trail" type="GPUParticles2D" parent="."]
 emitting = true
