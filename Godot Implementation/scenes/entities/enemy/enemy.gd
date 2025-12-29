@@ -1,5 +1,5 @@
 class_name Enemy
-extends "res://scenes/entities/entity.gd"
+extends Entity
 
 ## Enemy entity with AI, social behaviors, and loot
 
