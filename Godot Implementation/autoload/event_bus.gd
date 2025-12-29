@@ -91,6 +91,7 @@ signal quest_started(quest_id: String)
 signal quest_updated(quest_id: String)
 signal quest_completed(quest_id: String)
 signal quest_failed(quest_id: String)
+signal quest_accepted(quest_id: String)
 signal objective_completed(quest_id: String, objective_id: String)
 
 # === NPC EVENTS ===
@@ -104,10 +105,6 @@ signal shop_closed()
 # === HUD EVENTS ===
 signal message_logged(text: String, color: Color)
 signal skill_cooldown_changed(skill_index: int, current_cd: float, max_cd: float)
-
-# === QUEST SIGNALS (expanded) ===
-signal quest_accepted(quest: Resource)
-signal quest_completed(quest: Resource)
 
 # === GAME STATE EVENTS ===
 signal game_started()
