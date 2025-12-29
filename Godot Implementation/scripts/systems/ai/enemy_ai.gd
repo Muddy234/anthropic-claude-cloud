@@ -85,7 +85,7 @@ func setup(e: Node):  # Enemy
 		_load_tier_config()
 
 func _load_tier_config():
-	var data := enemy.monster_data
+	var data = enemy.monster_data
 
 	# Senses
 	reaction_delay = data.reaction_delay if data.has("reaction_delay") else 0.0
