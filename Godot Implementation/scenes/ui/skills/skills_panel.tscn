@@ -1,0 +1,152 @@
+[gd_scene load_steps=2 format=3 uid="uid://skills_panel"]
+
+[ext_resource type="Script" path="res://scenes/ui/skills/skills_panel.gd" id="1_script"]
+
+[node name="SkillsPanel" type="Control"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+script = ExtResource("1_script")
+
+[node name="PanelContainer" type="PanelContainer" parent="."]
+layout_mode = 1
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -350.0
+offset_top = -300.0
+offset_right = 350.0
+offset_bottom = 300.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="MarginContainer" type="MarginContainer" parent="PanelContainer"]
+layout_mode = 2
+theme_override_constants/margin_left = 10
+theme_override_constants/margin_top = 10
+theme_override_constants/margin_right = 10
+theme_override_constants/margin_bottom = 10
+
+[node name="VBoxContainer" type="VBoxContainer" parent="PanelContainer/MarginContainer"]
+layout_mode = 2
+
+[node name="Header" type="HBoxContainer" parent="PanelContainer/MarginContainer/VBoxContainer"]
+layout_mode = 2
+
+[node name="TitleLabel" type="Label" parent="PanelContainer/MarginContainer/VBoxContainer/Header"]
+layout_mode = 2
+text = "Skills"
+theme_override_font_sizes/font_size = 18
+
+[node name="Spacer" type="Control" parent="PanelContainer/MarginContainer/VBoxContainer/Header"]
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="SkillPointsLabel" type="Label" parent="PanelContainer/MarginContainer/VBoxContainer/Header"]
+layout_mode = 2
+text = "Skill Points: 0"
+
+[node name="XPBar" type="ProgressBar" parent="PanelContainer/MarginContainer/VBoxContainer/Header"]
+custom_minimum_size = Vector2(150, 20)
+layout_mode = 2
+max_value = 100.0
+value = 50.0
+show_percentage = false
+
+[node name="Label" type="Label" parent="PanelContainer/MarginContainer/VBoxContainer/Header/XPBar"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+text = "0 / 100 XP"
+horizontal_alignment = 1
+vertical_alignment = 1
+
+[node name="CloseButton" type="Button" parent="PanelContainer/MarginContainer/VBoxContainer/Header"]
+layout_mode = 2
+text = "X"
+
+[node name="TabContainer" type="TabContainer" parent="PanelContainer/MarginContainer/VBoxContainer"]
+layout_mode = 2
+size_flags_vertical = 3
+
+[node name="LearnedSkills" type="Control" parent="PanelContainer/MarginContainer/VBoxContainer/TabContainer"]
+layout_mode = 2
+
+[node name="ScrollContainer" type="ScrollContainer" parent="PanelContainer/MarginContainer/VBoxContainer/TabContainer/LearnedSkills"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="SkillsList" type="VBoxContainer" parent="PanelContainer/MarginContainer/VBoxContainer/TabContainer/LearnedSkills/ScrollContainer"]
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="SkillTree" type="Control" parent="PanelContainer/MarginContainer/VBoxContainer/TabContainer"]
+visible = false
+layout_mode = 2
+
+[node name="ScrollContainer" type="ScrollContainer" parent="PanelContainer/MarginContainer/VBoxContainer/TabContainer/SkillTree"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="TreeContainer" type="VBoxContainer" parent="PanelContainer/MarginContainer/VBoxContainer/TabContainer/SkillTree/ScrollContainer"]
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="Passives" type="Control" parent="PanelContainer/MarginContainer/VBoxContainer/TabContainer"]
+visible = false
+layout_mode = 2
+
+[node name="ScrollContainer" type="ScrollContainer" parent="PanelContainer/MarginContainer/VBoxContainer/TabContainer/Passives"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="PassivesList" type="VBoxContainer" parent="PanelContainer/MarginContainer/VBoxContainer/TabContainer/Passives/ScrollContainer"]
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="HotbarSection" type="VBoxContainer" parent="PanelContainer/MarginContainer/VBoxContainer"]
+layout_mode = 2
+
+[node name="HotbarLabel" type="Label" parent="PanelContainer/MarginContainer/VBoxContainer/HotbarSection"]
+layout_mode = 2
+text = "Skill Hotbar (click slot to assign selected skill)"
+theme_override_font_sizes/font_size = 11
+
+[node name="HotbarSlots" type="HBoxContainer" parent="PanelContainer/MarginContainer/VBoxContainer/HotbarSection"]
+layout_mode = 2
+alignment = 1
+
+[node name="DetailsSection" type="VBoxContainer" parent="PanelContainer/MarginContainer/VBoxContainer"]
+layout_mode = 2
+custom_minimum_size = Vector2(0, 120)
+
+[node name="DetailsLabel" type="Label" parent="PanelContainer/MarginContainer/VBoxContainer/DetailsSection"]
+layout_mode = 2
+text = "Skill Details"
+theme_override_font_sizes/font_size = 12
+
+[node name="SkillDetails" type="RichTextLabel" parent="PanelContainer/MarginContainer/VBoxContainer/DetailsSection"]
+layout_mode = 2
+size_flags_vertical = 3
+bbcode_enabled = true
+text = "Select a skill to view details"

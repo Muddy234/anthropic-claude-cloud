@@ -8,7 +8,9 @@ extends Control
 @onready var mana_bar: ProgressBar = $MarginContainer/VBoxContainer/TopBar/ManaBar
 @onready var mana_label: Label = $MarginContainer/VBoxContainer/TopBar/ManaBar/Label
 @onready var xp_bar: ProgressBar = $MarginContainer/VBoxContainer/TopBar/XPBar
+@onready var xp_label: Label = $MarginContainer/VBoxContainer/TopBar/XPBar/Label
 @onready var level_label: Label = $MarginContainer/VBoxContainer/TopBar/LevelLabel
+@onready var skill_points_label: Label = $MarginContainer/VBoxContainer/TopBar/SkillPointsLabel
 @onready var floor_label: Label = $MarginContainer/VBoxContainer/TopBar/FloorLabel
 @onready var gold_label: Label = $MarginContainer/VBoxContainer/TopBar/GoldLabel
 
@@ -37,10 +39,12 @@ func _update_all():
 		return
 
 	var player := GameManager.player
-	_update_health(player.hp, player.max_hp)
-	_update_mana(player.mana, player.max_mana)
-	_update_xp(player.xp, player.xp_to_next_level)
+	_update_health(player.current_hp, player.max_hp)
+	_update_mana(player.mp, player.max_mp)
+	var xp_needed := player._xp_for_level(player.level + 1)
+	_update_xp(player.xp, xp_needed)
 	_update_level(player.level)
+	_update_skill_points(player.available_skill_points)
 	_update_gold(player.gold)
 
 func _update_health(current: int, maximum: int):
@@ -61,10 +65,22 @@ func _update_xp(current: int, needed: int):
 	if xp_bar:
 		xp_bar.max_value = needed
 		xp_bar.value = current
+	if xp_label:
+		var percent := int((float(current) / float(needed)) * 100) if needed > 0 else 0
+		xp_label.text = "%d / %d (%d%%)" % [current, needed, percent]
 
 func _update_level(level: int):
 	if level_label:
 		level_label.text = "Lv.%d" % level
+
+func _update_skill_points(points: int):
+	if skill_points_label:
+		if points > 0:
+			skill_points_label.text = "SP: %d" % points
+			skill_points_label.add_theme_color_override("font_color", Color.YELLOW)
+			skill_points_label.visible = true
+		else:
+			skill_points_label.visible = false
 
 func update_floor(floor_num: int):
 	if floor_label:
@@ -72,7 +88,7 @@ func update_floor(floor_num: int):
 
 func _update_gold(amount: int):
 	if gold_label:
-		gold_label.text = "%s G" % Helpers.format_number(amount)
+		gold_label.text = "%d G" % amount
 
 func add_message(text: String, color: Color = Color.WHITE):
 	messages.append(text)
@@ -108,7 +124,11 @@ func _on_player_xp_gained(amount: int, total: int, needed: int):
 
 func _on_player_leveled_up(new_level: int):
 	_update_level(new_level)
-	add_message("Level Up! Now level %d" % new_level, Constants.COLORS.gold)
+	if GameManager.player:
+		_update_skill_points(GameManager.player.available_skill_points)
+		add_message("Level Up! Now level %d (+1 Skill Point)" % new_level, Constants.COLORS.gold)
+	else:
+		add_message("Level Up! Now level %d" % new_level, Constants.COLORS.gold)
 
 func _on_floor_entered(floor_num: int):
 	update_floor(floor_num)

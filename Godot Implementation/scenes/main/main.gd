@@ -9,6 +9,7 @@ extends Node2D
 @onready var hud: Control = $UILayer/HUD
 @onready var pause_menu: Control = $UILayer/PauseMenu
 @onready var game_over_screen: Control = $UILayer/GameOverScreen
+@onready var skills_panel: Control = $UILayer/SkillsPanel
 
 # Camera follow settings
 const CAMERA_DEADZONE := Vector2(100, 75)
@@ -37,10 +38,29 @@ func _unhandled_input(event: InputEvent):
 	if event.is_action_pressed("pause"):
 		_toggle_pause()
 
+	if event.is_action_pressed("skills"):
+		_toggle_skills_panel()
+
 	# Debug keys
 	if OS.is_debug_build():
 		if event.is_action_pressed("ui_home"):
 			_debug_reveal_map()
+
+## Toggle skills panel
+func _toggle_skills_panel():
+	if not skills_panel:
+		return
+
+	if skills_panel.visible:
+		if skills_panel.has_method("close"):
+			skills_panel.close()
+		else:
+			skills_panel.hide()
+	else:
+		if skills_panel.has_method("open"):
+			skills_panel.open()
+		else:
+			skills_panel.show()
 
 ## Initialize the game
 func _initialize_game():
