@@ -1,0 +1,36 @@
+[gd_scene load_steps=3 format=3 uid="uid://village_scene"]
+
+[ext_resource type="Script" path="res://scenes/world/village.gd" id="1_village"]
+
+[sub_resource type="TileSet" id="TileSet_village"]
+tile_size = Vector2i(16, 16)
+
+[node name="Village" type="Node2D"]
+script = ExtResource("1_village")
+
+[node name="TileMap" type="TileMap" parent="."]
+tile_set = SubResource("TileSet_village")
+format = 2
+
+[node name="DecorationsLayer" type="TileMap" parent="."]
+z_index = 1
+tile_set = SubResource("TileSet_village")
+format = 2
+
+[node name="BuildingsLayer" type="Node2D" parent="."]
+z_index = 2
+
+[node name="NPCs" type="Node2D" parent="."]
+z_index = 5
+
+[node name="Player" type="CharacterBody2D" parent="."]
+z_index = 10
+collision_layer = 2
+collision_mask = 0
+
+[node name="Sprite2D" type="Sprite2D" parent="Player"]
+
+[node name="Camera2D" type="Camera2D" parent="Player"]
+zoom = Vector2(2, 2)
+position_smoothing_enabled = true
+position_smoothing_speed = 8.0

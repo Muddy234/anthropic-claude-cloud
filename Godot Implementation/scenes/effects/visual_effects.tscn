@@ -1,0 +1,6 @@
+[gd_scene load_steps=2 format=3 uid="uid://visual_effects_scene"]
+
+[ext_resource type="Script" path="res://scenes/effects/visual_effects.gd" id="1_visual_effects"]
+
+[node name="VisualEffects" type="Node"]
+script = ExtResource("1_visual_effects")
