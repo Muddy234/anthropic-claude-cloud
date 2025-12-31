@@ -1,0 +1,52 @@
+[gd_scene load_steps=11 format=3 uid="uid://dod8qs3fq3dfb"]
+
+[ext_resource type="Script" uid="uid://ruk150l4k4l8" path="res://scenes/main/main.gd" id="1_main"]
+[ext_resource type="PackedScene" uid="uid://ctub3gtqq5xah" path="res://scenes/world/dungeon.tscn" id="2_dungeon"]
+[ext_resource type="PackedScene" path="res://scenes/ui/hud/hud.tscn" id="3_hud"]
+[ext_resource type="Script" uid="uid://bfte8cf4ns1xp" path="res://scenes/effects/visual_effects.gd" id="4_vfx"]
+[ext_resource type="PackedScene" path="res://scenes/ui/menus/pause_menu.tscn" id="5_pause"]
+[ext_resource type="PackedScene" path="res://scenes/ui/menus/game_over_screen.tscn" id="6_gameover"]
+[ext_resource type="PackedScene" path="res://scenes/ui/inventory/inventory_panel.tscn" id="7_inventory"]
+[ext_resource type="PackedScene" path="res://scenes/ui/character/character_sheet.tscn" id="8_character"]
+[ext_resource type="Script" uid="uid://bivdlyi4h31cn" path="res://scripts/systems/combat/arena/combat_arena.gd" id="9_arena"]
+[ext_resource type="PackedScene" uid="uid://c8vxq2m5k1aro" path="res://scenes/ui/combat/combat_arena_overlay.tscn" id="10_arena_ui"]
+
+[node name="Main" type="Node2D"]
+script = ExtResource("1_main")
+
+[node name="Camera2D" type="Camera2D" parent="."]
+position = Vector2(640, 360)
+zoom = Vector2(2, 2)
+position_smoothing_enabled = true
+position_smoothing_speed = 8.0
+
+[node name="World" type="Node2D" parent="."]
+
+[node name="Dungeon" parent="World" instance=ExtResource("2_dungeon")]
+
+[node name="EffectsLayer" type="Node2D" parent="."]
+z_index = 10
+
+[node name="VisualEffects" type="Node" parent="EffectsLayer"]
+script = ExtResource("4_vfx")
+
+[node name="UILayer" type="CanvasLayer" parent="."]
+layer = 10
+
+[node name="HUD" parent="UILayer" instance=ExtResource("3_hud")]
+
+[node name="PauseMenu" parent="UILayer" instance=ExtResource("5_pause")]
+
+[node name="GameOverScreen" parent="UILayer" instance=ExtResource("6_gameover")]
+
+[node name="InventoryPanel" parent="UILayer" instance=ExtResource("7_inventory")]
+visible = false
+
+[node name="CharacterSheet" parent="UILayer" instance=ExtResource("8_character")]
+visible = false
+
+[node name="CombatArenaOverlay" parent="UILayer" instance=ExtResource("10_arena_ui")]
+visible = false
+
+[node name="CombatArena" type="Node" parent="."]
+script = ExtResource("9_arena")

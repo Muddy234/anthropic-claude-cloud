@@ -1,0 +1,18 @@
+[gd_resource type="Resource" script_class="NPCData" load_steps=2 format=3 uid="uid://npc_priestess"]
+
+[ext_resource type="Script" path="res://scripts/data/npcs/npc_data.gd" id="1_script"]
+
+[resource]
+script = ExtResource("1_script")
+id = "priestess"
+display_name = "Sister Lumina"
+title = "Shrine Priestess"
+description = "A devout priestess who tends the Shrine of Light and offers blessings to delvers."
+npc_type = "service"
+is_merchant = false
+has_quest = true
+quest_ids = ["cleanse_darkness", "sacred_relic"]
+service_type = "heal"
+greeting_dialogue = "May the Light guide your path through the darkness below."
+dialogue_tree_id = "priestess_dialogue"
+default_building = "shrine"

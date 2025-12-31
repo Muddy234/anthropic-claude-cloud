@@ -1,0 +1,17 @@
+[gd_resource type="Resource" script_class="NPCData" load_steps=2 format=3 uid="uid://npc_banker"]
+
+[ext_resource type="Script" path="res://scripts/data/npcs/npc_data.gd" id="1_script"]
+
+[resource]
+script = ExtResource("1_script")
+id = "banker"
+display_name = "Mira"
+title = "Vault Keeper"
+description = "The meticulous keeper of the village vault, where delvers store their treasures."
+npc_type = "service"
+is_merchant = false
+has_quest = false
+service_type = "bank"
+greeting_dialogue = "Welcome to The Vault. Your treasures are safe here... mostly."
+dialogue_tree_id = "banker_dialogue"
+default_building = "bank"

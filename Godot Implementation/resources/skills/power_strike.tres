@@ -1,0 +1,17 @@
+[gd_resource type="Resource" script_class="SkillData" load_steps=2 format=3 uid="uid://skill_power_strike"]
+
+[ext_resource type="Script" path="res://scripts/data/skills/skill_data.gd" id="1_script"]
+
+[resource]
+script = ExtResource("1_script")
+id = "power_strike"
+display_name = "Power Strike"
+description = "A powerful melee attack that deals 150% weapon damage."
+skill_type = 0
+damage_multiplier = 1.5
+mana_cost = 5
+cooldown = 3.0
+range = 1
+target_type = 0
+effects = []
+required_weapon = "melee"

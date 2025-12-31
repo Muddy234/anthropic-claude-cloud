@@ -1,0 +1,18 @@
+[gd_resource type="Resource" script_class="ItemData" load_steps=2 format=3 uid="uid://item_leather_armor"]
+
+[ext_resource type="Script" path="res://scripts/data/items/item_data.gd" id="1_script"]
+
+[resource]
+script = ExtResource("1_script")
+id = "leather_armor"
+display_name = "Leather Armor"
+description = "Light armor that offers basic protection without hindering movement."
+item_type = 1
+rarity = 0
+defense = 3
+stat_bonuses = {}
+value = 25
+weight = 5
+stackable = false
+max_stack = 1
+equip_slot = 2

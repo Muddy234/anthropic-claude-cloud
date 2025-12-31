@@ -1,0 +1,21 @@
+[gd_resource type="Resource" script_class="MonsterData" load_steps=2 format=3 uid="uid://monster_rat"]
+
+[ext_resource type="Script" path="res://scripts/data/monsters/monster_data.gd" id="1_script"]
+
+[resource]
+script = ExtResource("1_script")
+id = "rat"
+name = "Giant Rat"
+description = "A common dungeon pest, grown large on magical refuse."
+tier = 0
+hp = 15
+attack = 8
+defense = 1
+speed = 12
+vision_range = 5
+attack_range = 1
+xp_value = 10
+behavior_type = "pack"
+min_floor = 1
+max_floor = 5
+spawn_weight = 100.0

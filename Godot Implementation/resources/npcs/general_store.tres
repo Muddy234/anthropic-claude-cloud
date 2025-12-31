@@ -1,0 +1,19 @@
+[gd_resource type="Resource" script_class="NPCData" load_steps=2 format=3 uid="uid://npc_general_store"]
+
+[ext_resource type="Script" path="res://scripts/data/npcs/npc_data.gd" id="1_script"]
+
+[resource]
+script = ExtResource("1_script")
+id = "general_store"
+display_name = "Yenna"
+title = "General Merchant"
+description = "A cheerful merchant who sells all manner of useful supplies."
+npc_type = "merchant"
+is_merchant = true
+shop_inventory = ["health_potion", "mana_potion", "antidote", "torch", "rope"]
+buy_multiplier = 0.5
+has_quest = false
+service_type = ""
+greeting_dialogue = "Looking for supplies? I've got everything a delver needs!"
+dialogue_tree_id = "general_store_dialogue"
+default_building = "market"

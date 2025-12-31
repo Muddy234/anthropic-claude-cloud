@@ -1,0 +1,25 @@
+[gd_resource type="Resource" script_class="MonsterData" load_steps=2 format=3 uid="uid://monster_orc_warlord"]
+
+[ext_resource type="Script" path="res://scripts/data/monsters/monster_data.gd" id="1_script"]
+
+[resource]
+script = ExtResource("1_script")
+id = "orc_warlord"
+name = "Orc Warlord"
+description = "A fearsome orc chieftain who commands lesser creatures in battle."
+tier = 3
+is_boss = true
+hp = 150
+attack = 25
+defense = 10
+speed = 7
+vision_range = 8
+attack_range = 1
+xp_value = 200
+behavior_type = "dominant"
+can_command = true
+flees_behavior = false
+aggression = 0.8
+min_floor = 5
+max_floor = 10
+spawn_weight = 10.0

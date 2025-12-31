@@ -1,0 +1,18 @@
+[gd_resource type="Resource" script_class="SkillData" load_steps=2 format=3 uid="uid://skill_heal"]
+
+[ext_resource type="Script" path="res://scripts/data/skills/skill_data.gd" id="1_script"]
+
+[resource]
+script = ExtResource("1_script")
+id = "heal"
+display_name = "Heal"
+description = "Restores HP to yourself or an ally."
+skill_type = 2
+heal_amount = 25
+mana_cost = 8
+cooldown = 5.0
+range = 1
+target_type = 1
+effects = []
+scaling_stat = "intelligence"
+scaling_ratio = 0.4

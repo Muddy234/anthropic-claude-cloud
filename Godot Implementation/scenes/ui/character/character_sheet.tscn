@@ -1,0 +1,185 @@
+[gd_scene load_steps=2 format=3 uid="uid://character_sheet_scene"]
+
+[ext_resource type="Script" path="res://scenes/ui/character/character_sheet.gd" id="1_char"]
+
+[node name="CharacterSheet" type="Control"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+script = ExtResource("1_char")
+
+[node name="ColorRect" type="ColorRect" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+color = Color(0, 0, 0, 0.5)
+
+[node name="PanelContainer" type="PanelContainer" parent="."]
+layout_mode = 1
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -200.0
+offset_top = -250.0
+offset_right = 200.0
+offset_bottom = 250.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="MarginContainer" type="MarginContainer" parent="PanelContainer"]
+layout_mode = 2
+theme_override_constants/margin_left = 15
+theme_override_constants/margin_top = 15
+theme_override_constants/margin_right = 15
+theme_override_constants/margin_bottom = 15
+
+[node name="VBoxContainer" type="VBoxContainer" parent="PanelContainer/MarginContainer"]
+layout_mode = 2
+theme_override_constants/separation = 10
+
+[node name="Header" type="HBoxContainer" parent="PanelContainer/MarginContainer/VBoxContainer"]
+layout_mode = 2
+
+[node name="NameLabel" type="Label" parent="PanelContainer/MarginContainer/VBoxContainer/Header"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 20
+text = "Hero"
+
+[node name="Spacer" type="Control" parent="PanelContainer/MarginContainer/VBoxContainer/Header"]
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="LevelLabel" type="Label" parent="PanelContainer/MarginContainer/VBoxContainer/Header"]
+layout_mode = 2
+text = "Level 1"
+
+[node name="ClassLabel" type="Label" parent="PanelContainer/MarginContainer/VBoxContainer/Header"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.7, 0.7, 0.7, 1)
+text = "Adventurer"
+
+[node name="CloseButton" type="Button" parent="PanelContainer/MarginContainer/VBoxContainer/Header"]
+custom_minimum_size = Vector2(24, 24)
+layout_mode = 2
+text = "X"
+
+[node name="HSeparator" type="HSeparator" parent="PanelContainer/MarginContainer/VBoxContainer"]
+layout_mode = 2
+
+[node name="VitalsSection" type="VBoxContainer" parent="PanelContainer/MarginContainer/VBoxContainer"]
+layout_mode = 2
+theme_override_constants/separation = 5
+
+[node name="HPBar" type="ProgressBar" parent="PanelContainer/MarginContainer/VBoxContainer/VitalsSection"]
+custom_minimum_size = Vector2(0, 22)
+layout_mode = 2
+max_value = 100.0
+value = 100.0
+show_percentage = false
+
+[node name="Label" type="Label" parent="PanelContainer/MarginContainer/VBoxContainer/VitalsSection/HPBar"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+text = "100 / 100"
+horizontal_alignment = 1
+vertical_alignment = 1
+
+[node name="ManaBar" type="ProgressBar" parent="PanelContainer/MarginContainer/VBoxContainer/VitalsSection"]
+custom_minimum_size = Vector2(0, 22)
+layout_mode = 2
+max_value = 50.0
+value = 50.0
+show_percentage = false
+
+[node name="Label" type="Label" parent="PanelContainer/MarginContainer/VBoxContainer/VitalsSection/ManaBar"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+text = "50 / 50"
+horizontal_alignment = 1
+vertical_alignment = 1
+
+[node name="XPBar" type="ProgressBar" parent="PanelContainer/MarginContainer/VBoxContainer/VitalsSection"]
+custom_minimum_size = Vector2(0, 18)
+layout_mode = 2
+max_value = 100.0
+value = 0.0
+show_percentage = false
+
+[node name="Label" type="Label" parent="PanelContainer/MarginContainer/VBoxContainer/VitalsSection/XPBar"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_font_sizes/font_size = 11
+text = "0 / 100 XP"
+horizontal_alignment = 1
+vertical_alignment = 1
+
+[node name="HSeparator2" type="HSeparator" parent="PanelContainer/MarginContainer/VBoxContainer"]
+layout_mode = 2
+
+[node name="StatsSection" type="VBoxContainer" parent="PanelContainer/MarginContainer/VBoxContainer"]
+layout_mode = 2
+
+[node name="Label" type="Label" parent="PanelContainer/MarginContainer/VBoxContainer/StatsSection"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 14
+text = "Attributes"
+
+[node name="SkillPointsLabel" type="Label" parent="PanelContainer/MarginContainer/VBoxContainer/StatsSection"]
+layout_mode = 2
+theme_override_colors/font_color = Color(1, 0.85, 0, 1)
+text = "Skill Points: 0"
+
+[node name="StatsContainer" type="VBoxContainer" parent="PanelContainer/MarginContainer/VBoxContainer/StatsSection"]
+layout_mode = 2
+theme_override_constants/separation = 3
+
+[node name="HSeparator3" type="HSeparator" parent="PanelContainer/MarginContainer/VBoxContainer"]
+layout_mode = 2
+
+[node name="CombatSection" type="VBoxContainer" parent="PanelContainer/MarginContainer/VBoxContainer"]
+layout_mode = 2
+
+[node name="Label" type="Label" parent="PanelContainer/MarginContainer/VBoxContainer/CombatSection"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 14
+text = "Combat Stats"
+
+[node name="CombatStatsContainer" type="VBoxContainer" parent="PanelContainer/MarginContainer/VBoxContainer/CombatSection"]
+layout_mode = 2
+theme_override_constants/separation = 2
+
+[node name="HSeparator4" type="HSeparator" parent="PanelContainer/MarginContainer/VBoxContainer"]
+layout_mode = 2
+
+[node name="ResistancesSection" type="VBoxContainer" parent="PanelContainer/MarginContainer/VBoxContainer"]
+layout_mode = 2
+
+[node name="Label" type="Label" parent="PanelContainer/MarginContainer/VBoxContainer/ResistancesSection"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 14
+text = "Resistances"
+
+[node name="ResistancesContainer" type="HBoxContainer" parent="PanelContainer/MarginContainer/VBoxContainer/ResistancesSection"]
+layout_mode = 2
+theme_override_constants/separation = 20
+alignment = 1
