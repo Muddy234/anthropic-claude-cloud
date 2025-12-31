@@ -1,0 +1,145 @@
+extends Node
+
+## Central event bus for decoupled communication between systems
+
+# === PLAYER EVENTS ===
+signal player_moved(from: Vector2i, to: Vector2i)
+signal player_attacked(target: Node)
+signal player_damaged(amount: int, source: Node)
+signal player_healed(amount: int, source: Node)
+signal player_died()
+signal player_leveled_up(new_level: int)
+signal player_xp_gained(amount: int, total: int, needed: int)
+signal player_hp_changed(current: int, maximum: int, change: int)
+signal player_mana_changed(current: int, maximum: int, change: int)
+signal gold_changed(new_amount: int, change: int)
+
+# === ENEMY EVENTS ===
+signal enemy_spawned(enemy: Node)
+signal enemy_died(enemy: Node)
+signal enemy_damaged(enemy: Node, amount: int, source: Node)
+signal enemy_spotted_player(enemy: Node)
+signal enemy_lost_player(enemy: Node)
+
+# === COMBAT EVENTS ===
+signal combat_started()
+signal combat_ended()
+signal attack_performed(attacker: Node, defender: Node, result: Dictionary)
+signal skill_used(caster: Node, skill: Resource, targets: Array)
+signal status_applied(entity: Node, effect: Node)
+signal status_removed(entity: Node, effect: Node)
+
+# === ARENA COMBAT EVENTS ===
+signal arena_combat_triggered(player: Node, enemy: Node)
+signal arena_combat_started(player: Node, enemy: Node)
+signal arena_combat_started_multi(player: Node, enemies: Array)  # Multi-enemy variant
+signal arena_combat_ended(victor: Node)
+signal arena_enemy_defeated(enemy: Node)  # Single enemy died in multi-enemy combat
+signal arena_phase_changed(new_phase: int)  # Constants.CombatPhase
+signal arena_action_queued(combatant: Node, action: Dictionary)
+signal arena_action_dequeued(combatant: Node, action: Dictionary)
+signal arena_actions_cleared(combatant: Node)
+signal arena_action_executed(combatant: Node, action: Dictionary)
+signal arena_action_resolving(action_index: int, action: Dictionary)  # Before action executes
+signal arena_pips_changed(combatant: Node, current: int, maximum: int)
+signal arena_telegraph_shown(enemy: Node, actions: Array)
+signal arena_telegraphs_shown(telegraphs: Array)  # Array of {enemy: Node, actions: Array}
+signal arena_confirm_pressed()
+signal arena_combatant_moved(combatant: Node, from: Vector2i, to: Vector2i)
+signal arena_combatant_attacked(attacker: Node, target_pos: Vector2i, result: Dictionary)
+signal arena_combatant_healed(target: Node, target_pos: Vector2i, amount: int)
+signal arena_combatant_died(combatant: Node)
+
+# === TURN EVENTS ===
+signal turn_started()
+signal turn_ended()
+signal player_turn_started()
+signal player_turn_ended()
+signal enemy_turn_started(enemy: Node)
+signal enemy_turn_ended(enemy: Node)
+
+# === ITEM EVENTS ===
+signal item_picked_up(item: Resource)
+signal item_dropped(item: Resource, position: Vector2i)
+signal item_used(item: Resource)
+signal item_equipped(item: Resource, slot: int)
+signal item_unequipped(item: Resource, slot: int)
+signal item_hovered(item: Resource)
+signal item_unhovered()
+signal inventory_changed()
+signal equipment_changed()
+signal loot_pile_created(pile: Node, position: Vector2i)
+
+# === DUNGEON EVENTS ===
+signal floor_entered(floor_num: int)
+signal floor_exited(floor_num: int)
+signal room_entered(room: Dictionary)
+signal room_cleared(room: Dictionary)
+signal stairs_used(direction: String)  # "up" or "down"
+signal secret_found(position: Vector2i)
+
+# === VILLAGE EVENTS ===
+signal village_entered()
+signal village_exited()
+signal building_entered(building_id: String)
+signal building_exited(building_id: String)
+signal chasm_entered()  # Player entering dungeon from village
+signal bank_opened()
+signal bank_closed()
+signal loadout_opened()  # Pre-dungeon loadout selection
+signal loadout_confirmed(loadout: Dictionary)
+
+# === UI EVENTS ===
+signal show_dialog(dialog_data: Dictionary)
+signal hide_dialog()
+signal show_tooltip(text: String, position: Vector2)
+signal hide_tooltip()
+signal show_notification(text: String, type: String)
+signal update_hud()
+signal show_loot_popup(items: Array)
+signal hide_loot_popup()
+
+# === MENU EVENTS ===
+signal menu_opened(menu_name: String)
+signal menu_closed(menu_name: String)
+signal inventory_opened()
+signal inventory_closed()
+signal character_sheet_opened()
+signal character_sheet_closed()
+
+# === QUEST EVENTS ===
+signal quest_started(quest_id: String)
+signal quest_updated(quest_id: String)
+signal quest_completed(quest_id: String)
+signal quest_failed(quest_id: String)
+signal quest_accepted(quest_id: String)
+signal objective_completed(quest_id: String, objective_id: String)
+
+# === NPC EVENTS ===
+signal npc_interacted(npc: Node)
+signal dialog_started(npc: Node)
+signal dialog_ended(npc: Node)
+signal dialogue_action(action: String)
+signal shop_opened(npc: Node)
+signal shop_closed()
+
+# === HUD EVENTS ===
+signal message_logged(text: String, color: Color)
+signal skill_cooldown_changed(skill_index: int, current_cd: float, max_cd: float)
+
+# === GAME STATE EVENTS ===
+signal game_started()
+signal game_paused()
+signal game_resumed()
+signal game_over()
+signal game_saved()
+signal game_loaded()
+
+# === AUDIO EVENTS ===
+signal play_sfx(sfx_name: String)
+signal play_music(track_name: String)
+signal stop_music()
+
+# === DEBUG EVENTS ===
+signal debug_message(message: String)
+signal debug_command(command: String, args: Array)
