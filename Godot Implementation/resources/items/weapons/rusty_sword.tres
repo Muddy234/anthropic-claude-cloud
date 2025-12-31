@@ -1,0 +1,20 @@
+[gd_resource type="Resource" script_class="ItemData" load_steps=2 format=3 uid="uid://item_rusty_sword"]
+
+[ext_resource type="Script" path="res://scripts/data/items/item_data.gd" id="1_script"]
+
+[resource]
+script = ExtResource("1_script")
+id = "rusty_sword"
+display_name = "Rusty Sword"
+description = "A worn blade that has seen better days."
+item_type = 0
+rarity = 0
+damage = 5
+damage_type = 0
+attack_speed = 1.0
+stat_bonuses = {}
+value = 10
+weight = 3
+stackable = false
+max_stack = 1
+equip_slot = 0

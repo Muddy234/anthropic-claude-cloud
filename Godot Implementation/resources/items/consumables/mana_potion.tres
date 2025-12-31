@@ -1,0 +1,17 @@
+[gd_resource type="Resource" script_class="ItemData" load_steps=2 format=3 uid="uid://item_mana_potion"]
+
+[ext_resource type="Script" path="res://scripts/data/items/item_data.gd" id="1_script"]
+
+[resource]
+script = ExtResource("1_script")
+id = "mana_potion"
+display_name = "Mana Potion"
+description = "A blue potion that restores 20 MP when consumed."
+item_type = 2
+rarity = 0
+use_effect = "restore_mana"
+use_value = 20
+value = 25
+weight = 1
+stackable = true
+max_stack = 10

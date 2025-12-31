@@ -1,0 +1,18 @@
+[gd_resource type="Resource" script_class="SkillData" load_steps=2 format=3 uid="uid://skill_shield_bash"]
+
+[ext_resource type="Script" path="res://scripts/data/skills/skill_data.gd" id="1_script"]
+
+[resource]
+script = ExtResource("1_script")
+id = "shield_bash"
+display_name = "Shield Bash"
+description = "Bash an enemy with your shield, dealing damage and stunning them briefly."
+skill_type = 0
+damage_multiplier = 0.8
+mana_cost = 6
+cooldown = 6.0
+range = 1
+target_type = 0
+effects = ["stun"]
+effect_duration = 1.0
+required_weapon = "shield"

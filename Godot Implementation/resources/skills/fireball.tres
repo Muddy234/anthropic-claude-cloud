@@ -1,0 +1,20 @@
+[gd_resource type="Resource" script_class="SkillData" load_steps=2 format=3 uid="uid://skill_fireball"]
+
+[ext_resource type="Script" path="res://scripts/data/skills/skill_data.gd" id="1_script"]
+
+[resource]
+script = ExtResource("1_script")
+id = "fireball"
+display_name = "Fireball"
+description = "Launches a ball of fire that deals magic damage and may burn the target."
+skill_type = 1
+base_damage = 15
+damage_type = 2
+mana_cost = 10
+cooldown = 4.0
+range = 6
+target_type = 0
+effects = ["burn"]
+effect_chance = 30
+scaling_stat = "intelligence"
+scaling_ratio = 0.5

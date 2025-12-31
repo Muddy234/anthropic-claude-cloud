@@ -1,0 +1,20 @@
+[gd_resource type="Resource" script_class="NPCData" load_steps=2 format=3 uid="uid://npc_alchemist"]
+
+[ext_resource type="Script" path="res://scripts/data/npcs/npc_data.gd" id="1_script"]
+
+[resource]
+script = ExtResource("1_script")
+id = "alchemist"
+display_name = "Zephira"
+title = "Alchemist"
+description = "A mysterious alchemist who brews potions and studies the strange substances found in the Chasm."
+npc_type = "merchant"
+is_merchant = true
+shop_inventory = ["health_potion", "mana_potion", "antidote", "fire_resist_potion", "strength_elixir"]
+buy_multiplier = 0.6
+has_quest = true
+quest_ids = ["gather_ingredients"]
+service_type = ""
+greeting_dialogue = "Potions, elixirs, tinctures... what mysteries shall we unravel today?"
+dialogue_tree_id = "alchemist_dialogue"
+default_building = "market"

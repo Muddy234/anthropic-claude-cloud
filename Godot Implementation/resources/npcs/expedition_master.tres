@@ -1,0 +1,18 @@
+[gd_resource type="Resource" script_class="NPCData" load_steps=2 format=3 uid="uid://npc_expedition_master"]
+
+[ext_resource type="Script" path="res://scripts/data/npcs/npc_data.gd" id="1_script"]
+
+[resource]
+script = ExtResource("1_script")
+id = "expedition_master"
+display_name = "Captain Vex"
+title = "Expedition Master"
+description = "A veteran delver who now manages expeditions into the Chasm and tracks bounties."
+npc_type = "quest_giver"
+is_merchant = false
+has_quest = true
+quest_ids = ["bounty_rat", "bounty_goblin", "bounty_skeleton", "deep_expedition"]
+service_type = "bounties"
+greeting_dialogue = "Ready for another run? I've got bounties that need claiming."
+dialogue_tree_id = "expedition_master_dialogue"
+default_building = "expedition_hall"
