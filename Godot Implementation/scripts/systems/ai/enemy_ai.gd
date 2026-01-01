@@ -134,9 +134,6 @@ func _think():
 	if not player:
 		return
 
-	# Process behavior logic
-	_process_behavior_logic()
-
 	var can_see := _can_see_target(player)
 	var dist := _get_distance_to(player.grid_pos)
 
@@ -685,27 +682,6 @@ func _find_sacrificial_victim() -> Node:  # Enemy
 			if _get_distance_to(other.grid_pos) <= 3:
 				return other
 	return null
-
-func _process_behavior_logic():
-	var behavior_type: String = enemy.monster_data.behavior_type if enemy.monster_data else "pack"
-
-	match behavior_type:
-		"pack":
-			_pack_logic()
-		"dominant":
-			_dominant_logic()
-
-func _pack_logic():
-	# Follow pack leader if no target
-	if enemy.commanded_by and not target:
-		follow_target = enemy.commanded_by
-
-func _dominant_logic():
-	# Command followers to attack our target
-	if target and enemy.followers:
-		for follower in enemy.followers:
-			if is_instance_valid(follower) and follower.ai:
-				follower.ai.commanded_target = target
 
 ## Called when this enemy takes damage - immediate reaction
 func on_damaged(attacker: Node):  # Entity

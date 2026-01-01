@@ -105,6 +105,14 @@ enum MonsterTier {
 	BOSS     # Floor bosses
 }
 
+# Arena combat enemy behaviors
+# These define the AI's primary goal during tactical combat
+enum EnemyBehavior {
+	AGGRESSIVE,  # Goal: Kill the player - prioritizes damage and lethal hits
+	STRATEGIC,   # Goal: Bankrupt player pips - forces costly movement/escapes
+	TACTICAL     # Goal: Corner the player - minimizes escape options
+}
+
 # Damage types
 enum DamageType {
 	PHYSICAL,

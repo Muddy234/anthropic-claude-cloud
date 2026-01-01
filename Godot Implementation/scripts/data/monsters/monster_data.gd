@@ -23,8 +23,10 @@ extends Resource
 @export var vision_range: int = 6
 @export var attack_range: int = 1
 
-@export_group("Behavior")
-@export_enum("pack", "tactical", "dominant", "solitary", "swarm") var behavior_type: String = "pack"
+@export_group("Arena Behavior")
+@export var behavior: Constants.EnemyBehavior = Constants.EnemyBehavior.AGGRESSIVE
+
+@export_group("Exploration Behavior")
 @export var flee_threshold: float = 0.25  # HP% to start fleeing
 @export var flees_behavior: bool = true
 @export var aggression: float = 0.5  # 0-1, affects combat decisions

@@ -18,11 +18,15 @@ var ally_combatants: Array[ArenaCombatant] = []
 var _light_damage: int = 5
 var _heavy_damage: int = 7
 
+# Behavior weights for this enemy
+var _behavior_weights: TacticalAnalyzer.BehaviorWeights
+
 func _init(p_combatant: ArenaCombatant, p_grid: ArenaGrid, p_player: ArenaCombatant) -> void:
 	combatant = p_combatant
 	grid = p_grid
 	player_combatant = p_player
 	tactical_analyzer = TacticalAnalyzer.new(grid)
+	_load_behavior_weights()
 
 ## Set allied combatants for coordinated attacks
 func set_ally_combatants(allies: Array[ArenaCombatant]) -> void:
@@ -73,8 +77,8 @@ func generate_actions() -> void:
 		ally_covered_tiles  # Pass ally coverage for coordination
 	)
 
-	# Step 3: Find the best attack plan
-	var best_plan := tactical_analyzer.find_best_attack(attack_plans)
+	# Step 3: Find the best attack plan using behavior weights
+	var best_plan := tactical_analyzer.find_best_attack(attack_plans, _behavior_weights)
 
 	# Step 4: If no good attack, consider positioning
 	if best_plan == null or best_plan.tiles_covered == 0:
@@ -85,7 +89,7 @@ func generate_actions() -> void:
 			reachability
 		)
 		if not positioning_plans.is_empty():
-			best_plan = tactical_analyzer.find_best_attack(positioning_plans)
+			best_plan = tactical_analyzer.find_best_attack(positioning_plans, _behavior_weights)
 
 	# Step 5: Execute the best plan
 	if best_plan:
@@ -139,6 +143,22 @@ func _calculate_damage_values() -> void:
 	_light_damage = maxi(Constants.MIN_DAMAGE, base_attack - player_defense)
 	_heavy_damage = maxi(Constants.MIN_DAMAGE, int(base_attack * 1.5) - player_defense)
 
+## Load behavior weights from entity's monster data
+func _load_behavior_weights() -> void:
+	var behavior := Constants.EnemyBehavior.AGGRESSIVE  # Default
+
+	# Try to get behavior from monster data
+	if combatant.entity and combatant.entity.has_method("get_monster_data"):
+		var monster_data = combatant.entity.get_monster_data()
+		if monster_data and "behavior" in monster_data:
+			behavior = monster_data.behavior
+	elif combatant.entity and "monster_data" in combatant.entity:
+		var monster_data = combatant.entity.monster_data
+		if monster_data and "behavior" in monster_data:
+			behavior = monster_data.behavior
+
+	_behavior_weights = TacticalAnalyzer.get_weights(behavior)
+
 ## Execute a tactical plan by queueing the appropriate actions
 func _execute_plan(plan: TacticalAnalyzer.AttackPlan, _player_pos: Vector2i) -> void:
 	# Queue movement actions
@@ -183,12 +203,6 @@ func get_telegraph_tiles() -> Array[Vector2i]:
 
 	return tiles
 
-## Set AI personality from enemy data (kept for compatibility but not used in tactical AI)
-func set_personality_from_entity(_entity: Node) -> void:
-	# Tactical AI doesn't use personality weights - it always plays optimally
-	pass
-
-## Set a specific attack pattern (kept for compatibility but not used)
-func set_attack_pattern(_pattern: Constants.HeavyAttackPattern) -> void:
-	# Tactical AI chooses patterns based on coverage analysis
-	pass
+## Reload behavior weights (call if monster data changes mid-combat)
+func refresh_behavior_weights() -> void:
+	_load_behavior_weights()

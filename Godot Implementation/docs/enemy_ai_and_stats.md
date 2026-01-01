@@ -7,42 +7,70 @@ This document outlines the current enemy AI behavior, attack styles, and complet
 ## Table of Contents
 
 1. [Arena Combat AI Overview](#arena-combat-ai-overview)
-2. [Attack Styles](#attack-styles)
-3. [Pip Economy](#pip-economy)
-4. [Enemy List](#enemy-list)
-5. [Monster Tiers](#monster-tiers)
-6. [Behavior Types](#behavior-types)
+2. [Behavior Types](#behavior-types)
+3. [Attack Styles](#attack-styles)
+4. [Pip Economy](#pip-economy)
+5. [Enemy List](#enemy-list)
+6. [Monster Tiers](#monster-tiers)
 7. [Configuration Files](#configuration-files)
 
 ---
 
 ## Arena Combat AI Overview
 
-The arena combat uses a tactical AI system based on **"Option Restriction"** strategy. The AI analyzes the player's possible moves and selects attacks that maximize coverage while forcing expensive escapes.
+The arena combat uses a tactical AI system with **behavior-based scoring**. Each enemy has a behavior type that determines how it prioritizes different tactical goals.
 
 ### AI Decision Process
 
-1. **Build Reachability Map** - Calculate all tiles the player can reach given their current pips
-2. **Generate Attack Plans** - Evaluate all possible move + attack combinations
-3. **Score Each Plan** - Based on:
-   - Tiles covered (options removed from player)
-   - Guaranteed hit on player's current position
-   - Lethal damage potential
-   - Escape cost forced on player
-   - Corner/edge trapping
-4. **Coordinate with Allies** - In multi-enemy fights, avoid redundant coverage
-5. **Execute Best Plan** - Queue moves and attacks
+1. **Load Behavior Weights** - Each enemy has a behavior that defines scoring priorities
+2. **Build Reachability Map** - Calculate all tiles the player can reach given their current pips
+3. **Generate Attack Plans** - Evaluate all possible move + attack combinations
+4. **Score Each Plan** - Apply behavior-specific weights to scoring factors
+5. **Coordinate with Allies** - In multi-enemy fights, avoid redundant coverage
+6. **Execute Best Plan** - Queue moves and attacks
 
-### Scoring Factors
+---
 
-| Factor | Score Impact |
-|--------|--------------|
-| Tiles covered | +100 per tile |
-| Guaranteed hit | +50 |
-| Lethal damage | +200 |
-| Forces corner escape | +30 |
-| High escape cost | +25 per pip |
-| Zero coverage (no threat) | -1000 (rejected) |
+## Behavior Types
+
+Behaviors define the AI's **primary goal** during tactical combat. Each behavior applies different weights to the scoring system.
+
+| Behavior | Goal | Primary Focus |
+|----------|------|---------------|
+| **AGGRESSIVE** | Kill the player | Damage and lethal hits |
+| **STRATEGIC** | Bankrupt player pips | Force costly movement/escapes |
+| **TACTICAL** | Corner the player | Minimize escape options |
+
+### Scoring Weight Profiles
+
+| Factor | Aggressive | Strategic | Tactical |
+|--------|------------|-----------|----------|
+| Guaranteed hit | **150** | 25 | 50 |
+| Lethal damage | **1000** | 100 | 100 |
+| Tiles covered | 25 | 75 | **200** |
+| Escape cost | 5 | **60** | 30 |
+| Forces corner | 10 | 30 | **150** |
+| Pip cost penalty | 3 | 8 | 4 |
+
+### Behavior Descriptions
+
+**AGGRESSIVE**
+- Prioritizes damage above all else
+- Will spend pips freely to secure hits
+- Becomes extremely dangerous when player is low HP (lethal bonus)
+- Doesn't care about board control
+
+**STRATEGIC**
+- Forces player to burn pips escaping attacks
+- Prefers efficient attacks (lower pip cost penalty)
+- Creates pressure through resource denial
+- Pairs well with other enemies to compound pip drain
+
+**TACTICAL**
+- Maximizes threatened tiles
+- Herds player toward corners and edges
+- Sets up future turns by controlling space
+- Most effective in multi-enemy fights for coordinated zoning
 
 ---
 
@@ -101,7 +129,7 @@ The arena combat uses a tactical AI system based on **"Option Restriction"** str
 | **Vision Range** | 5 |
 | **Attack Range** | 1 (melee) |
 | **XP Value** | 10 |
-| **Behavior** | Pack |
+| **Behavior** | AGGRESSIVE |
 | **Flees** | No (default) |
 | **Floor Range** | 1-5 |
 | **Spawn Weight** | 100.0 (very common) |
@@ -123,7 +151,7 @@ The arena combat uses a tactical AI system based on **"Option Restriction"** str
 | **Vision Range** | 6 |
 | **Attack Range** | 1 (melee) |
 | **XP Value** | 20 |
-| **Behavior** | Pack |
+| **Behavior** | AGGRESSIVE |
 | **Flees** | Yes |
 | **Floor Range** | 1-8 |
 | **Spawn Weight** | 80.0 (common) |
@@ -145,14 +173,14 @@ The arena combat uses a tactical AI system based on **"Option Restriction"** str
 | **Vision Range** | 8 |
 | **Attack Range** | 6 (ranged) |
 | **XP Value** | 25 |
-| **Behavior** | Pack |
+| **Behavior** | STRATEGIC |
 | **Preferred Range** | 6 |
 | **Kites** | Yes |
 | **Flees** | Yes |
 | **Floor Range** | 2-8 |
 | **Spawn Weight** | 50.0 (uncommon) |
 
-**Description:** *A goblin that prefers to attack from a distance.*
+**Description:** *A goblin that prefers to attack from a distance. Uses strategic positioning to drain player resources.*
 
 ---
 
@@ -170,12 +198,12 @@ The arena combat uses a tactical AI system based on **"Option Restriction"** str
 | **Vision Range** | 7 |
 | **Attack Range** | 1 (melee) |
 | **XP Value** | 35 |
-| **Behavior** | Tactical |
+| **Behavior** | TACTICAL |
 | **Flees** | No |
 | **Floor Range** | 3-10 |
 | **Spawn Weight** | 60.0 (moderate) |
 
-**Description:** *An undead soldier, still wielding its ancient weapon.*
+**Description:** *An undead soldier that herds players into corners with calculated positioning.*
 
 ---
 
@@ -192,14 +220,13 @@ The arena combat uses a tactical AI system based on **"Option Restriction"** str
 | **Vision Range** | 8 |
 | **Attack Range** | 1 (melee) |
 | **XP Value** | 200 |
-| **Behavior** | Dominant |
-| **Can Command** | Yes |
+| **Behavior** | AGGRESSIVE |
 | **Aggression** | 0.8 |
 | **Flees** | No |
 | **Floor Range** | 5-10 |
 | **Spawn Weight** | 10.0 (rare) |
 
-**Description:** *A fearsome orc chieftain who commands lesser creatures in battle.*
+**Description:** *A fearsome orc chieftain focused on destroying the player with overwhelming force.*
 
 ---
 
@@ -212,31 +239,6 @@ The arena combat uses a tactical AI system based on **"Option Restriction"** str
 | TIER_1 | Veteran | 55 | Blue |
 | ELITE | Elite | 100 | Orange |
 | BOSS | Boss | 500 | Red |
-
----
-
-## Behavior Types
-
-| Behavior | Description |
-|----------|-------------|
-| **pack** | Fights in groups, may flee when alone |
-| **tactical** | Uses positioning and strategic attacks |
-| **dominant** | Leader type, can command other monsters |
-| **solitary** | Fights alone, doesn't group |
-| **swarm** | Overwhelming numbers, simple attacks |
-
-### Additional Behavior Flags
-
-| Flag | Effect |
-|------|--------|
-| `flees_behavior` | Will retreat when HP drops below threshold |
-| `flee_threshold` | HP percentage to trigger flee (default: 25%) |
-| `kites_behavior` | Maintains preferred range, backs away from player |
-| `preferred_range` | Ideal distance to maintain from player |
-| `can_command` | Can issue orders to other monsters |
-| `can_be_commanded` | Responds to leader commands |
-| `pack_courage` | Braver when allies are nearby |
-| `aggression` | 0-1 value affecting combat decisions |
 
 ---
 
@@ -286,5 +288,8 @@ Could add to MonsterData:
 @export_group("Arena Combat")
 @export var arena_pip_bonus: int = 0  # Extra starting pips
 @export var arena_regen_bonus: int = 0  # Extra pip regen per turn
-@export var heavy_attack_preference: float = 0.5  # 0-1, likelihood to use heavy attacks
 ```
+
+### Behavior Weight Tuning
+
+The current weight profiles can be adjusted in `tactical_analyzer.gd` in the `BEHAVIOR_PROFILES` dictionary. Consider playtesting to find optimal values for game balance.

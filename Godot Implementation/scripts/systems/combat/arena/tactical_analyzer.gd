@@ -2,7 +2,60 @@ class_name TacticalAnalyzer
 extends RefCounted
 
 ## Analyzes the tactical state of the arena for AI decision-making
-## Implements "Option Restriction" strategy - minimize player's safe options
+## Implements behavior-based scoring strategy
+
+## Behavior weight profiles for AI decision-making
+## Each behavior prioritizes different scoring factors
+class BehaviorWeights:
+	var guaranteed_hit: float
+	var lethal: float
+	var coverage: float
+	var escape_cost: float
+	var corner: float
+	var pip_cost_penalty: float
+
+	func _init(hit: float, leth: float, cov: float, esc: float, corn: float, pip: float) -> void:
+		guaranteed_hit = hit
+		lethal = leth
+		coverage = cov
+		escape_cost = esc
+		corner = corn
+		pip_cost_penalty = pip
+
+## Predefined weight profiles for each behavior type
+static var BEHAVIOR_PROFILES: Dictionary = {
+	Constants.EnemyBehavior.AGGRESSIVE: BehaviorWeights.new(
+		150.0,   # guaranteed_hit: High priority on hitting player
+		1000.0,  # lethal: Very high priority on killing blows
+		25.0,    # coverage: Low - doesn't care about area denial
+		5.0,     # escape_cost: Low - doesn't care about pip drain
+		10.0,    # corner: Low - doesn't care about positioning
+		3.0      # pip_cost_penalty: Low - willing to spend pips for damage
+	),
+	Constants.EnemyBehavior.STRATEGIC: BehaviorWeights.new(
+		25.0,    # guaranteed_hit: Low - hitting is secondary
+		100.0,   # lethal: Low - killing is not the primary goal
+		75.0,    # coverage: Medium - area denial helps force movement
+		60.0,    # escape_cost: Very high - primary goal is pip drain
+		30.0,    # corner: Medium - corners force expensive escapes
+		8.0      # pip_cost_penalty: Higher - prefers efficient attacks
+	),
+	Constants.EnemyBehavior.TACTICAL: BehaviorWeights.new(
+		50.0,    # guaranteed_hit: Medium - balanced
+		100.0,   # lethal: Low - killing is not the primary goal
+		200.0,   # coverage: Very high - maximize tiles threatened
+		30.0,    # escape_cost: Medium - contributes to control
+		150.0,   # corner: Very high - primary goal is cornering
+		4.0      # pip_cost_penalty: Low - willing to spend for position
+	)
+}
+
+## Get the weight profile for a behavior type
+static func get_weights(behavior: Constants.EnemyBehavior) -> BehaviorWeights:
+	if behavior in BEHAVIOR_PROFILES:
+		return BEHAVIOR_PROFILES[behavior]
+	# Default to AGGRESSIVE if not found
+	return BEHAVIOR_PROFILES[Constants.EnemyBehavior.AGGRESSIVE]
 
 ## Represents a tile the player can reach and its cost
 class ReachableTile:
@@ -33,8 +86,12 @@ class AttackPlan:
 	var forces_corner: bool = false  # Does escape leave player in corner?
 	var is_lethal: bool = false  # Would this kill the player?
 
-	func get_score() -> float:
+	func get_score(weights: BehaviorWeights = null) -> float:
 		var score := 0.0
+
+		# Use default weights if none provided
+		if weights == null:
+			weights = TacticalAnalyzer.get_weights(Constants.EnemyBehavior.AGGRESSIVE)
 
 		# If we don't cover ANY reachable tiles, this is a bad attack
 		# Only give positive scores to attacks that threaten the player
@@ -43,26 +100,26 @@ class AttackPlan:
 			# Give a very negative score so positioning is preferred
 			return -1000.0
 
-		# Primary: Coverage (how many options removed)
-		score += tiles_covered * 100.0
+		# Coverage: How many options removed from player
+		score += tiles_covered * weights.coverage
 
-		# Bonus: Guaranteed hit on current position
+		# Guaranteed hit on current position
 		if guaranteed_hit:
-			score += 50.0
+			score += weights.guaranteed_hit
 
-		# Bonus: Lethal damage
+		# Lethal damage potential
 		if is_lethal:
-			score += 500.0
+			score += weights.lethal
 
-		# Bonus: Forces expensive escape
-		score += max_escape_cost * 20.0
+		# Forces expensive escape (pip drain)
+		score += max_escape_cost * weights.escape_cost
 
-		# Bonus: Forces player into corner
+		# Forces player into corner
 		if forces_corner:
-			score += 30.0
+			score += weights.corner
 
-		# Penalty: High pip cost for the attack
-		score -= pip_cost * 5.0
+		# Penalty: Pip cost for the attack
+		score -= pip_cost * weights.pip_cost_penalty
 
 		return score
 
@@ -374,15 +431,15 @@ func _array_to_vector2i_array(arr: Array) -> Array[Vector2i]:
 	return result
 
 ## Find the best attack plan from all options
-func find_best_attack(plans: Array[AttackPlan]) -> AttackPlan:
+func find_best_attack(plans: Array[AttackPlan], weights: BehaviorWeights = null) -> AttackPlan:
 	if plans.is_empty():
 		return null
 
 	var best_plan: AttackPlan = plans[0]
-	var best_score: float = best_plan.get_score()
+	var best_score: float = best_plan.get_score(weights)
 
 	for plan in plans:
-		var score := plan.get_score()
+		var score := plan.get_score(weights)
 		if score > best_score:
 			best_score = score
 			best_plan = plan
