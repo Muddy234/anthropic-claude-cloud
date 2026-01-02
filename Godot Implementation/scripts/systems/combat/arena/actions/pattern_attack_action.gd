@@ -32,27 +32,48 @@ func get_icon_path() -> String:
 	return "res://assets/ui/icons/heavy_attack.png"
 
 ## Calculate which tiles this pattern affects from the given source position
-func calculate_affected_tiles(source_pos: Vector2i) -> Array[Vector2i]:
+## Obstacles block attacks - sweeps stop at obstacles, nova skips obstacle tiles
+func calculate_affected_tiles(source_pos: Vector2i, grid: ArenaGrid = null) -> Array[Vector2i]:
 	var tiles: Array[Vector2i] = []
 
 	match pattern:
 		Constants.HeavyAttackPattern.ROW_SWEEP:
-			# All tiles in the same row
-			for x in range(Constants.ARENA_SIZE.x):
-				if x != source_pos.x:  # Don't include self
-					tiles.append(Vector2i(x, source_pos.y))
+			# All tiles in the same row, stopping at obstacles
+			# Sweep left from source
+			for x in range(source_pos.x - 1, -1, -1):
+				var tile_pos := Vector2i(x, source_pos.y)
+				if grid and grid.blocks_attack(tile_pos):
+					break  # Obstacle blocks further tiles
+				tiles.append(tile_pos)
+			# Sweep right from source
+			for x in range(source_pos.x + 1, Constants.ARENA_SIZE.x):
+				var tile_pos := Vector2i(x, source_pos.y)
+				if grid and grid.blocks_attack(tile_pos):
+					break  # Obstacle blocks further tiles
+				tiles.append(tile_pos)
 
 		Constants.HeavyAttackPattern.COLUMN_SWEEP:
-			# All tiles in the same column
-			for y in range(Constants.ARENA_SIZE.y):
-				if y != source_pos.y:  # Don't include self
-					tiles.append(Vector2i(source_pos.x, y))
+			# All tiles in the same column, stopping at obstacles
+			# Sweep up from source
+			for y in range(source_pos.y - 1, -1, -1):
+				var tile_pos := Vector2i(source_pos.x, y)
+				if grid and grid.blocks_attack(tile_pos):
+					break  # Obstacle blocks further tiles
+				tiles.append(tile_pos)
+			# Sweep down from source
+			for y in range(source_pos.y + 1, Constants.ARENA_SIZE.y):
+				var tile_pos := Vector2i(source_pos.x, y)
+				if grid and grid.blocks_attack(tile_pos):
+					break  # Obstacle blocks further tiles
+				tiles.append(tile_pos)
 
 		Constants.HeavyAttackPattern.NOVA:
-			# All 8 surrounding tiles
+			# All 8 surrounding tiles, skipping obstacles
 			for dir in Constants.ALL_DIRECTIONS:
 				var tile_pos: Vector2i = source_pos + dir
 				if _is_within_bounds(tile_pos):
+					if grid and grid.blocks_attack(tile_pos):
+						continue  # Obstacle blocks this tile
 					tiles.append(tile_pos)
 
 		Constants.HeavyAttackPattern.ADJACENT:
@@ -78,7 +99,7 @@ func execute(grid: ArenaGrid, resolver: RefCounted) -> Dictionary:
 		return {"success": false, "action_type": action_type, "message": "Source no longer valid"}
 
 	var source_pos: Vector2i = grid.get_combatant_position(source)
-	affected_tiles = calculate_affected_tiles(source_pos)
+	affected_tiles = calculate_affected_tiles(source_pos, grid)
 
 	var total_damage := 0
 	var targets_hit := 0

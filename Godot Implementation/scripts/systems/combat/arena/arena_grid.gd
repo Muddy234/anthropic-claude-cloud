@@ -5,12 +5,16 @@ extends RefCounted
 
 signal combatant_moved(combatant: Node, from: Vector2i, to: Vector2i)
 signal tile_state_changed(position: Vector2i)
+signal combatant_killed_by_hazard(combatant: Node, position: Vector2i)
 
 # Grid dimensions
 var size: Vector2i = Constants.ARENA_SIZE
 
 # Grid state - stores which combatant (if any) is at each position
 var grid: Array = []  # 2D array of Node references (null = empty)
+
+# Tile types - stores special tile types (EMPTY, HAZARD, OBSTACLE)
+var tile_types: Dictionary = {}  # Vector2i -> Constants.ArenaTileType
 
 # Combatant positions cache for quick lookup
 var combatant_positions: Dictionary = {}  # Node -> Vector2i
@@ -21,6 +25,7 @@ func _init() -> void:
 func _init_grid() -> void:
 	grid.clear()
 	combatant_positions.clear()
+	tile_types.clear()
 
 	for x in range(size.x):
 		var column: Array = []
@@ -28,9 +33,147 @@ func _init_grid() -> void:
 			column.append(null)
 		grid.append(column)
 
+	# Initialize all tiles as EMPTY
+	for x in range(size.x):
+		for y in range(size.y):
+			tile_types[Vector2i(x, y)] = Constants.ArenaTileType.EMPTY
+
 ## Reset the grid to empty state
 func reset() -> void:
 	_init_grid()
+
+## Generate random hazards and obstacles on the grid
+## Call this BEFORE placing combatants to ensure spawn positions are valid
+## reserved_positions: Array of Vector2i that should remain EMPTY (spawn points)
+func generate_arena_tiles(reserved_positions: Array[Vector2i] = []) -> void:
+	# Clear existing special tiles
+	for pos in tile_types:
+		tile_types[pos] = Constants.ArenaTileType.EMPTY
+
+	# Collect all valid positions (not reserved)
+	var valid_positions: Array[Vector2i] = []
+	for x in range(size.x):
+		for y in range(size.y):
+			var pos := Vector2i(x, y)
+			if pos not in reserved_positions:
+				valid_positions.append(pos)
+
+	# Shuffle for random placement
+	valid_positions.shuffle()
+
+	# Determine number of hazards and obstacles
+	var num_hazards := randi_range(Constants.ARENA_MIN_HAZARDS, Constants.ARENA_MAX_HAZARDS)
+	var num_obstacles := randi_range(Constants.ARENA_MIN_OBSTACLES, Constants.ARENA_MAX_OBSTACLES)
+
+	var placed := 0
+
+	# Place hazards first
+	for i in range(num_hazards):
+		if placed >= valid_positions.size():
+			break
+		tile_types[valid_positions[placed]] = Constants.ArenaTileType.HAZARD
+		placed += 1
+
+	# Place obstacles
+	for i in range(num_obstacles):
+		if placed >= valid_positions.size():
+			break
+		tile_types[valid_positions[placed]] = Constants.ArenaTileType.OBSTACLE
+		placed += 1
+
+## Get the tile type at a position
+func get_tile_type(pos: Vector2i) -> Constants.ArenaTileType:
+	if pos in tile_types:
+		return tile_types[pos]
+	return Constants.ArenaTileType.EMPTY
+
+## Check if a tile is a hazard
+func is_hazard(pos: Vector2i) -> bool:
+	return get_tile_type(pos) == Constants.ArenaTileType.HAZARD
+
+## Check if a tile is an obstacle
+func is_obstacle(pos: Vector2i) -> bool:
+	return get_tile_type(pos) == Constants.ArenaTileType.OBSTACLE
+
+## Check if a tile blocks attacks (obstacles block, hazards don't)
+func blocks_attack(pos: Vector2i) -> bool:
+	return is_obstacle(pos)
+
+## Check if a tile blocks voluntary movement (both hazards and obstacles)
+func blocks_movement(pos: Vector2i) -> bool:
+	var tile_type := get_tile_type(pos)
+	return tile_type == Constants.ArenaTileType.HAZARD or tile_type == Constants.ArenaTileType.OBSTACLE
+
+## Get all hazard positions
+func get_hazards() -> Array[Vector2i]:
+	var hazards: Array[Vector2i] = []
+	for pos in tile_types:
+		if tile_types[pos] == Constants.ArenaTileType.HAZARD:
+			hazards.append(pos)
+	return hazards
+
+## Get all obstacle positions
+func get_obstacles() -> Array[Vector2i]:
+	var obstacles: Array[Vector2i] = []
+	for pos in tile_types:
+		if tile_types[pos] == Constants.ArenaTileType.OBSTACLE:
+			obstacles.append(pos)
+	return obstacles
+
+## Apply hazard effect to a combatant (instant kill)
+## Returns true if the combatant was killed
+func apply_hazard_effect(combatant: Node, pos: Vector2i) -> bool:
+	if not is_hazard(pos):
+		return false
+
+	# Kill the combatant
+	if combatant.has_method("take_damage"):
+		# Deal massive damage to ensure death
+		combatant.take_damage(99999, null)
+	elif "current_hp" in combatant:
+		combatant.current_hp = 0
+
+	combatant_killed_by_hazard.emit(combatant, pos)
+	return true
+
+## Force move a combatant (for push mechanics)
+## Unlike normal movement, this can push into hazards (causing death)
+## Cannot push into obstacles or out of bounds
+## Returns: Dictionary with {success: bool, killed_by_hazard: bool}
+func force_move_combatant(combatant: Node, new_pos: Vector2i) -> Dictionary:
+	if not combatant or not is_instance_valid(combatant) or combatant not in combatant_positions:
+		return {"success": false, "killed_by_hazard": false}
+
+	if not is_within_bounds(new_pos):
+		return {"success": false, "killed_by_hazard": false}
+
+	# Can't push into obstacles
+	if is_obstacle(new_pos):
+		return {"success": false, "killed_by_hazard": false}
+
+	# Can't push into another combatant
+	if grid[new_pos.x][new_pos.y] != null and grid[new_pos.x][new_pos.y] != combatant:
+		return {"success": false, "killed_by_hazard": false}
+
+	var old_pos: Vector2i = combatant_positions[combatant]
+
+	# Clear old position
+	grid[old_pos.x][old_pos.y] = null
+
+	# Check for hazard BEFORE updating position
+	var killed := false
+	if is_hazard(new_pos):
+		# Don't place on grid (they're dead), just update for the emit
+		combatant_positions.erase(combatant)
+		killed = apply_hazard_effect(combatant, new_pos)
+	else:
+		# Normal move
+		grid[new_pos.x][new_pos.y] = combatant
+		combatant_positions[combatant] = new_pos
+
+	combatant_moved.emit(combatant, old_pos, new_pos)
+
+	return {"success": true, "killed_by_hazard": killed}
 
 ## Place a combatant at a position
 func place_combatant(combatant: Node, pos: Vector2i) -> bool:
@@ -101,17 +244,26 @@ func get_combatant_at(pos: Vector2i) -> Node:
 func is_within_bounds(pos: Vector2i) -> bool:
 	return pos.x >= 0 and pos.x < size.x and pos.y >= 0 and pos.y < size.y
 
-## Check if a tile is blocked (has a combatant)
+## Check if a tile is blocked (has a combatant OR is an obstacle/hazard)
 func is_tile_blocked(pos: Vector2i) -> bool:
 	if not is_within_bounds(pos):
 		return true
+	if blocks_movement(pos):
+		return true
 	return grid[pos.x][pos.y] != null
 
-## Check if a tile is empty
+## Check if a tile is empty (no combatant AND not an obstacle/hazard)
 func is_tile_empty(pos: Vector2i) -> bool:
 	if not is_within_bounds(pos):
 		return false
+	if blocks_movement(pos):
+		return false
 	return grid[pos.x][pos.y] == null
+
+## Check if a tile is walkable for voluntary movement (empty and not blocked)
+## For forced movement (push), use is_within_bounds only and handle hazard separately
+func is_walkable(pos: Vector2i) -> bool:
+	return is_tile_empty(pos)
 
 ## Get all valid move targets for a combatant (cardinal adjacent empty tiles)
 func get_valid_move_targets(combatant: Node) -> Array[Vector2i]:
@@ -182,14 +334,22 @@ func setup_combat(player: Node, enemy: Node) -> void:
 func setup_combat_multi(player: Node, enemies: Array) -> void:
 	reset()
 
-	# Player starts on left side, centered vertically
+	# Calculate spawn positions first (before generating tiles)
 	var player_pos := Vector2i(0, size.y / 2)
-	place_combatant(player, player_pos)
-
-	# Enemy spawn positions on the right side of the grid
-	# Arranged to maximize coverage while avoiding overlap
 	var enemy_spawn_positions := _calculate_enemy_spawn_positions(enemies.size())
 
+	# Build reserved positions array (spawn points that must stay empty)
+	var reserved: Array[Vector2i] = [player_pos]
+	for pos in enemy_spawn_positions:
+		reserved.append(pos)
+
+	# Generate hazards and obstacles avoiding spawn positions
+	generate_arena_tiles(reserved)
+
+	# Place player
+	place_combatant(player, player_pos)
+
+	# Place enemies
 	for i in range(enemies.size()):
 		if i < enemy_spawn_positions.size():
 			place_combatant(enemies[i], enemy_spawn_positions[i])

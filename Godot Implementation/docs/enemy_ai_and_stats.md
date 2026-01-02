@@ -7,13 +7,16 @@ This document outlines the current enemy AI behavior, attack styles, and complet
 ## Table of Contents
 
 1. [Arena Combat AI Overview](#arena-combat-ai-overview)
-2. [Behavior Types](#behavior-types)
+2. [Arena Tiles](#arena-tiles)
+   - [Hazards](#hazards)
+   - [Obstacles](#obstacles)
+3. [Behavior Types](#behavior-types)
    - [Behavior Synergies](#behavior-synergies)
-3. [Attack Styles](#attack-styles)
-4. [Pip Economy](#pip-economy)
-5. [Enemy List](#enemy-list)
-6. [Monster Tiers](#monster-tiers)
-7. [Configuration Files](#configuration-files)
+4. [Attack Styles](#attack-styles)
+5. [Pip Economy](#pip-economy)
+6. [Enemy List](#enemy-list)
+7. [Monster Tiers](#monster-tiers)
+8. [Configuration Files](#configuration-files)
 
 ---
 
@@ -42,6 +45,67 @@ Synergy bonuses reward attacks that complement ally behaviors, creating emergent
 
 ---
 
+## Arena Tiles
+
+The 4x4 arena can contain special tile types that affect movement and combat. Tiles are randomly generated at the start of each battle, avoiding combatant spawn positions.
+
+### Tile Types
+
+| Type | Movement | Attacks | Effect |
+|------|----------|---------|--------|
+| **EMPTY** | Allowed | Pass through | Normal tile |
+| **HAZARD** | Blocked | Pass through | Instant kill on contact |
+| **OBSTACLE** | Blocked | Blocked | Provides cover |
+
+### Hazards
+
+Hazards are deadly tiles that instantly kill any combatant that lands on them.
+
+**Key Mechanics:**
+- **Voluntary Movement Blocked** - Neither player nor enemies can walk onto hazards
+- **Push Allowed** - Combatants CAN be pushed into hazards (instant death)
+- **Attacks Pass Through** - Hazards don't block attack patterns
+
+**Tactical Implications:**
+- TACTICAL enemies receive bonus scoring for herding player toward hazard-adjacent tiles
+- Push mechanics can be used to eliminate enemies by pushing them into hazards
+- Player must avoid being cornered near hazards
+
+### Obstacles
+
+Obstacles are impassable tiles that block both movement and attacks.
+
+**Key Mechanics:**
+- **Movement Blocked** - Cannot walk through obstacles
+- **Attacks Blocked** - Row/Column sweeps STOP at obstacles, Nova skips obstacle tiles
+- **Provides Cover** - Standing behind an obstacle protects from line attacks
+
+**Tactical Implications:**
+- Obstacles reduce effective attack coverage
+- Can be used as defensive cover by player
+- AI considers obstacles when calculating attack patterns
+
+### Generation Constants
+
+| Constant | Default Value |
+|----------|---------------|
+| `ARENA_MIN_HAZARDS` | 0 |
+| `ARENA_MAX_HAZARDS` | 2 |
+| `ARENA_MIN_OBSTACLES` | 0 |
+| `ARENA_MAX_OBSTACLES` | 2 |
+
+### AI Hazard Awareness
+
+The AI scoring system includes a `hazard_adjacent` weight that rewards attacks forcing the player toward hazard-adjacent tiles:
+
+| Behavior | Hazard Adjacent Weight |
+|----------|------------------------|
+| AGGRESSIVE | 50 (opportunistic use) |
+| STRATEGIC | 40 (limits options) |
+| TACTICAL | **200** (primary focus) |
+
+---
+
 ## Behavior Types
 
 Behaviors define the AI's **primary goal** during tactical combat. Each behavior applies different weights to the scoring system.
@@ -61,6 +125,7 @@ Behaviors define the AI's **primary goal** during tactical combat. Each behavior
 | Tiles covered | 25 | 75 | **200** |
 | Escape cost | 5 | **60** | 30 |
 | Forces corner | 10 | 30 | **150** |
+| Hazard adjacent | 50 | 40 | **200** |
 | Pip cost penalty | 3 | 8 | 4 |
 
 ### Behavior Descriptions
@@ -79,8 +144,9 @@ Behaviors define the AI's **primary goal** during tactical combat. Each behavior
 
 **TACTICAL**
 - Maximizes threatened tiles
-- Herds player toward corners and edges
+- Herds player toward corners, edges, and hazards
 - Sets up future turns by controlling space
+- Strongly prioritizes forcing player toward hazard-adjacent tiles
 - Most effective in multi-enemy fights for coordinated zoning
 
 ### Behavior Synergies
@@ -308,10 +374,12 @@ resources/monsters/
 | File | Purpose |
 |------|---------|
 | `scripts/data/monsters/monster_data.gd` | MonsterData resource class definition |
-| `autoload/constants.gd` | Combat constants, enums, pip costs |
+| `autoload/constants.gd` | Combat constants, enums, pip costs, tile generation params |
+| `scripts/systems/combat/arena/arena_grid.gd` | Grid state, tile types, hazard/obstacle logic |
 | `scripts/systems/combat/arena/arena_enemy_ai.gd` | Arena tactical AI |
 | `scripts/systems/combat/arena/tactical_analyzer.gd` | Attack plan generation and scoring |
 | `scripts/systems/combat/arena/actions/pattern_attack_action.gd` | Pattern attack implementation |
+| `scripts/systems/combat/arena/actions/move_action.gd` | Movement action (respects tile blocking) |
 | `scenes/entities/enemy/enemy.gd` | Enemy entity class |
 
 ---

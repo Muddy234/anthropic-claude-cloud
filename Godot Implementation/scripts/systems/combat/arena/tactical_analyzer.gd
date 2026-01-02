@@ -13,14 +13,16 @@ class BehaviorWeights:
 	var escape_cost: float
 	var corner: float
 	var pip_cost_penalty: float
+	var hazard_adjacent: float  # Bonus for forcing player toward hazard-adjacent tiles
 
-	func _init(hit: float, leth: float, cov: float, esc: float, corn: float, pip: float) -> void:
+	func _init(hit: float, leth: float, cov: float, esc: float, corn: float, pip: float, hazard: float = 0.0) -> void:
 		guaranteed_hit = hit
 		lethal = leth
 		coverage = cov
 		escape_cost = esc
 		corner = corn
 		pip_cost_penalty = pip
+		hazard_adjacent = hazard
 
 ## Predefined weight profiles for each behavior type
 static var BEHAVIOR_PROFILES: Dictionary = {
@@ -30,7 +32,8 @@ static var BEHAVIOR_PROFILES: Dictionary = {
 		25.0,    # coverage: Low - doesn't care about area denial
 		5.0,     # escape_cost: Low - doesn't care about pip drain
 		10.0,    # corner: Low - doesn't care about positioning
-		3.0      # pip_cost_penalty: Low - willing to spend pips for damage
+		3.0,     # pip_cost_penalty: Low - willing to spend pips for damage
+		50.0     # hazard_adjacent: Medium - will use hazards opportunistically
 	),
 	Constants.EnemyBehavior.STRATEGIC: BehaviorWeights.new(
 		25.0,    # guaranteed_hit: Low - hitting is secondary
@@ -38,7 +41,8 @@ static var BEHAVIOR_PROFILES: Dictionary = {
 		75.0,    # coverage: Medium - area denial helps force movement
 		60.0,    # escape_cost: Very high - primary goal is pip drain
 		30.0,    # corner: Medium - corners force expensive escapes
-		8.0      # pip_cost_penalty: Higher - prefers efficient attacks
+		8.0,     # pip_cost_penalty: Higher - prefers efficient attacks
+		40.0     # hazard_adjacent: Medium - hazards help limit options
 	),
 	Constants.EnemyBehavior.TACTICAL: BehaviorWeights.new(
 		50.0,    # guaranteed_hit: Medium - balanced
@@ -46,7 +50,8 @@ static var BEHAVIOR_PROFILES: Dictionary = {
 		200.0,   # coverage: Very high - maximize tiles threatened
 		30.0,    # escape_cost: Medium - contributes to control
 		150.0,   # corner: Very high - primary goal is cornering
-		4.0      # pip_cost_penalty: Low - willing to spend for position
+		4.0,     # pip_cost_penalty: Low - willing to spend for position
+		200.0    # hazard_adjacent: Very high - herding toward hazards is ideal
 	)
 }
 
@@ -181,6 +186,7 @@ class AttackPlan:
 	var max_escape_cost: int = 0  # Maximum pips if player picks worst escape
 	var forces_corner: bool = false  # Does escape leave player in corner?
 	var is_lethal: bool = false  # Would this kill the player?
+	var hazard_adjacent_escapes: int = 0  # How many escape routes are adjacent to hazards
 
 	func get_score(weights: BehaviorWeights = null) -> float:
 		var score := 0.0
@@ -213,6 +219,9 @@ class AttackPlan:
 		# Forces player into corner
 		if forces_corner:
 			score += weights.corner
+
+		# Forces player toward hazard-adjacent tiles
+		score += hazard_adjacent_escapes * weights.hazard_adjacent
 
 		# Penalty: Pip cost for the attack
 		score -= pip_cost * weights.pip_cost_penalty
@@ -303,34 +312,53 @@ func _state_key(pos: Vector2i, moves: int) -> String:
 	return "%d,%d,%d" % [pos.x, pos.y, moves]
 
 ## Calculate affected tiles for an attack pattern from a given position
+## Respects obstacles - sweeps stop at obstacles, nova skips obstacle tiles
 func get_pattern_tiles(source_pos: Vector2i, pattern: Constants.HeavyAttackPattern) -> Array[Vector2i]:
 	var tiles: Array[Vector2i] = []
 
 	match pattern:
 		Constants.HeavyAttackPattern.ADJACENT:
-			# All 4 adjacent tiles
+			# All 4 adjacent tiles (obstacles block)
 			for dir in Constants.CARDINAL_DIRECTIONS:
 				var tile_pos: Vector2i = source_pos + dir
-				if grid.is_within_bounds(tile_pos):
+				if grid.is_within_bounds(tile_pos) and not grid.blocks_attack(tile_pos):
 					tiles.append(tile_pos)
 
 		Constants.HeavyAttackPattern.ROW_SWEEP:
-			# All tiles in the same row
-			for x in range(Constants.ARENA_SIZE.x):
-				if x != source_pos.x:
-					tiles.append(Vector2i(x, source_pos.y))
+			# All tiles in the same row, stopping at obstacles
+			# Sweep left
+			for x in range(source_pos.x - 1, -1, -1):
+				var tile_pos := Vector2i(x, source_pos.y)
+				if grid.blocks_attack(tile_pos):
+					break
+				tiles.append(tile_pos)
+			# Sweep right
+			for x in range(source_pos.x + 1, Constants.ARENA_SIZE.x):
+				var tile_pos := Vector2i(x, source_pos.y)
+				if grid.blocks_attack(tile_pos):
+					break
+				tiles.append(tile_pos)
 
 		Constants.HeavyAttackPattern.COLUMN_SWEEP:
-			# All tiles in the same column
-			for y in range(Constants.ARENA_SIZE.y):
-				if y != source_pos.y:
-					tiles.append(Vector2i(source_pos.x, y))
+			# All tiles in the same column, stopping at obstacles
+			# Sweep up
+			for y in range(source_pos.y - 1, -1, -1):
+				var tile_pos := Vector2i(source_pos.x, y)
+				if grid.blocks_attack(tile_pos):
+					break
+				tiles.append(tile_pos)
+			# Sweep down
+			for y in range(source_pos.y + 1, Constants.ARENA_SIZE.y):
+				var tile_pos := Vector2i(source_pos.x, y)
+				if grid.blocks_attack(tile_pos):
+					break
+				tiles.append(tile_pos)
 
 		Constants.HeavyAttackPattern.NOVA:
-			# All 8 surrounding tiles
+			# All 8 surrounding tiles, skipping obstacles
 			for dir in Constants.ALL_DIRECTIONS:
 				var tile_pos: Vector2i = source_pos + dir
-				if grid.is_within_bounds(tile_pos):
+				if grid.is_within_bounds(tile_pos) and not grid.blocks_attack(tile_pos):
 					tiles.append(tile_pos)
 
 	return tiles
@@ -393,6 +421,7 @@ func evaluate_attack(plan: AttackPlan, reachability: Dictionary, player_pos: Vec
 	plan.max_escape_cost = 0
 	plan.forces_corner = false
 	plan.is_lethal = false
+	plan.hazard_adjacent_escapes = 0
 
 	var safe_tiles: Array[ReachableTile] = []
 
@@ -435,6 +464,18 @@ func evaluate_attack(plan: AttackPlan, reachability: Dictionary, player_pos: Vec
 			# Check if escape leads to corner (0-1 escape directions)
 			if safe_tile.escape_directions <= 1:
 				plan.forces_corner = true
+
+			# Check if escape tile is adjacent to a hazard
+			if _is_adjacent_to_hazard(safe_tile.position):
+				plan.hazard_adjacent_escapes += 1
+
+## Check if a tile is adjacent to any hazard
+func _is_adjacent_to_hazard(pos: Vector2i) -> bool:
+	for dir in Constants.CARDINAL_DIRECTIONS:
+		var adj_pos: Vector2i = pos + dir
+		if grid.is_within_bounds(adj_pos) and grid.is_hazard(adj_pos):
+			return true
+	return false
 
 ## Generate all possible attack plans for the enemy
 ## ally_covered_tiles: Tiles already covered by ally attacks (for coordination bonus)

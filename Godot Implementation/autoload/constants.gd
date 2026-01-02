@@ -25,6 +25,12 @@ const TELEGRAPH_DURATION := 0.0  # Seconds to show enemy intent (instant)
 const RESOLUTION_MOVE_TIME := 0.0  # Seconds per movement step (instant)
 const RESOLUTION_ATTACK_TIME := 0.0  # Seconds per attack animation (instant)
 
+# Arena tile generation
+const ARENA_MIN_HAZARDS := 0
+const ARENA_MAX_HAZARDS := 2
+const ARENA_MIN_OBSTACLES := 0
+const ARENA_MAX_OBSTACLES := 2
+
 # Pip economy
 const MAX_PIPS := 5
 const PIP_REGEN := 2  # Pips regenerated per turn
@@ -65,6 +71,13 @@ enum HeavyAttackPattern {
 	ROW_SWEEP,     # All tiles in the same row as the enemy
 	COLUMN_SWEEP,  # All tiles in the same column as the enemy
 	NOVA           # All 8 tiles surrounding the enemy
+}
+
+# Arena tile types (special tiles on the combat grid)
+enum ArenaTileType {
+	EMPTY,     # Normal walkable tile
+	HAZARD,    # Instant kill on contact - blocks voluntary movement, push allowed
+	OBSTACLE   # Blocks movement AND attacks - provides cover
 }
 
 # Movement
