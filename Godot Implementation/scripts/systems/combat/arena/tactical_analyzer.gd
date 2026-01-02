@@ -57,6 +57,102 @@ static func get_weights(behavior: Constants.EnemyBehavior) -> BehaviorWeights:
 	# Default to AGGRESSIVE if not found
 	return BEHAVIOR_PROFILES[Constants.EnemyBehavior.AGGRESSIVE]
 
+## Synergy bonus constants
+## These bonuses reward attacks that complement ally behaviors
+const SYNERGY_BONUSES := {
+	# AGGRESSIVE synergies: capitalize on ally setups
+	"AGGRESSIVE_WITH_TACTICAL": 100.0,    # Attack escape routes from TACTICAL ally
+	"AGGRESSIVE_WITH_STRATEGIC": 80.0,    # Attack cheapest escape from STRATEGIC ally
+
+	# TACTICAL synergies: enhance board control
+	"TACTICAL_WITH_TACTICAL": 50.0,       # Per tile of combined coverage eliminating safe tiles
+	"TACTICAL_WITH_AGGRESSIVE": 100.0,    # Herd player toward AGGRESSIVE ally
+
+	# STRATEGIC synergies: compound pip drain
+	"STRATEGIC_WITH_STRATEGIC": 60.0,     # Attack ally's escape routes (pip chain)
+	"STRATEGIC_WITH_TACTICAL": 70.0,      # Force movement into TACTICAL ally's net
+}
+
+## Calculate synergy bonus for an attack plan based on ally context
+## Returns bonus score to add to the plan's base score
+static func calculate_synergy_bonus(
+	plan: AttackPlan,
+	my_behavior: Constants.EnemyBehavior,
+	ally_behaviors: Array,  # Array of Constants.EnemyBehavior
+	ally_covered_tiles: Array,  # Array of Vector2i
+	ally_escape_routes: Array   # Array of Vector2i - tiles player can escape to from ally attacks
+) -> float:
+	var bonus := 0.0
+
+	# No allies = no synergy
+	if ally_behaviors.is_empty():
+		return 0.0
+
+	# Check each ally for synergy opportunities
+	var has_tactical := false
+	var has_strategic := false
+	var has_aggressive := false
+
+	for ally_behavior in ally_behaviors:
+		match ally_behavior:
+			Constants.EnemyBehavior.TACTICAL:
+				has_tactical = true
+			Constants.EnemyBehavior.STRATEGIC:
+				has_strategic = true
+			Constants.EnemyBehavior.AGGRESSIVE:
+				has_aggressive = true
+
+	# Calculate synergies based on MY behavior
+	match my_behavior:
+		Constants.EnemyBehavior.AGGRESSIVE:
+			# AGGRESSIVE benefits from attacking escape routes created by allies
+			if has_tactical or has_strategic:
+				# Count how many of my affected tiles are escape routes from ally attacks
+				var escape_attacks := 0
+				for tile in plan.affected_tiles:
+					if tile in ally_escape_routes:
+						escape_attacks += 1
+				if escape_attacks > 0:
+					if has_tactical:
+						bonus += SYNERGY_BONUSES["AGGRESSIVE_WITH_TACTICAL"]
+					if has_strategic:
+						bonus += SYNERGY_BONUSES["AGGRESSIVE_WITH_STRATEGIC"]
+
+		Constants.EnemyBehavior.TACTICAL:
+			# TACTICAL benefits from combined coverage and herding toward AGGRESSIVE
+			if has_tactical:
+				# Bonus for eliminating safe tiles together
+				# Count tiles that become unsafe when combined with ally coverage
+				var combined_threat := 0
+				for tile in plan.affected_tiles:
+					if tile in ally_escape_routes:
+						combined_threat += 1
+				bonus += combined_threat * SYNERGY_BONUSES["TACTICAL_WITH_TACTICAL"]
+
+			if has_aggressive:
+				# Bonus if my coverage herds player toward tiles near aggressive allies
+				# (simplified: bonus if we're reducing escape options)
+				if plan.forces_corner or plan.tiles_covered >= 3:
+					bonus += SYNERGY_BONUSES["TACTICAL_WITH_AGGRESSIVE"]
+
+		Constants.EnemyBehavior.STRATEGIC:
+			# STRATEGIC benefits from forcing movement into ally zones
+			if has_strategic:
+				# Pip chain: attack escape routes to compound pip cost
+				var escape_attacks := 0
+				for tile in plan.affected_tiles:
+					if tile in ally_escape_routes:
+						escape_attacks += 1
+				if escape_attacks > 0:
+					bonus += SYNERGY_BONUSES["STRATEGIC_WITH_STRATEGIC"]
+
+			if has_tactical:
+				# Force movement into tactical's net
+				if plan.max_escape_cost >= 2:  # Forces expensive escape
+					bonus += SYNERGY_BONUSES["STRATEGIC_WITH_TACTICAL"]
+
+	return bonus
+
 ## Represents a tile the player can reach and its cost
 class ReachableTile:
 	var position: Vector2i
@@ -431,20 +527,53 @@ func _array_to_vector2i_array(arr: Array) -> Array[Vector2i]:
 	return result
 
 ## Find the best attack plan from all options
-func find_best_attack(plans: Array[AttackPlan], weights: BehaviorWeights = null) -> AttackPlan:
+## Optionally applies synergy bonuses if ally context is provided
+func find_best_attack(
+	plans: Array[AttackPlan],
+	weights: BehaviorWeights = null,
+	my_behavior: Constants.EnemyBehavior = Constants.EnemyBehavior.AGGRESSIVE,
+	ally_behaviors: Array = [],
+	ally_covered_tiles: Array = [],
+	ally_escape_routes: Array = []
+) -> AttackPlan:
 	if plans.is_empty():
 		return null
 
 	var best_plan: AttackPlan = plans[0]
-	var best_score: float = best_plan.get_score(weights)
+	var best_score: float = _score_with_synergy(
+		best_plan, weights, my_behavior, ally_behaviors, ally_covered_tiles, ally_escape_routes
+	)
 
 	for plan in plans:
-		var score := plan.get_score(weights)
+		var score := _score_with_synergy(
+			plan, weights, my_behavior, ally_behaviors, ally_covered_tiles, ally_escape_routes
+		)
 		if score > best_score:
 			best_score = score
 			best_plan = plan
 
 	return best_plan
+
+## Calculate total score including synergy bonus
+func _score_with_synergy(
+	plan: AttackPlan,
+	weights: BehaviorWeights,
+	my_behavior: Constants.EnemyBehavior,
+	ally_behaviors: Array,
+	ally_covered_tiles: Array,
+	ally_escape_routes: Array
+) -> float:
+	var base_score := plan.get_score(weights)
+
+	# Don't apply synergy to invalid plans
+	if base_score <= -1000.0:
+		return base_score
+
+	var synergy := TacticalAnalyzer.calculate_synergy_bonus(
+		plan, my_behavior, ally_behaviors, ally_covered_tiles, ally_escape_routes
+	)
+
+	return base_score + synergy
 
 ## Generate positioning-only plans (when no good attack exists)
 ## Tries to move to positions that set up good attacks next turn

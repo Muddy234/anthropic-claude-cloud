@@ -8,6 +8,7 @@ This document outlines the current enemy AI behavior, attack styles, and complet
 
 1. [Arena Combat AI Overview](#arena-combat-ai-overview)
 2. [Behavior Types](#behavior-types)
+   - [Behavior Synergies](#behavior-synergies)
 3. [Attack Styles](#attack-styles)
 4. [Pip Economy](#pip-economy)
 5. [Enemy List](#enemy-list)
@@ -18,16 +19,26 @@ This document outlines the current enemy AI behavior, attack styles, and complet
 
 ## Arena Combat AI Overview
 
-The arena combat uses a tactical AI system with **behavior-based scoring**. Each enemy has a behavior type that determines how it prioritizes different tactical goals.
+The arena combat uses a tactical AI system with **behavior-based scoring** and **synergy coordination**. Each enemy has a behavior type that determines how it prioritizes tactical goals, and enemies receive bonus scoring for attacks that complement ally behaviors.
 
 ### AI Decision Process
 
 1. **Load Behavior Weights** - Each enemy has a behavior that defines scoring priorities
 2. **Build Reachability Map** - Calculate all tiles the player can reach given their current pips
-3. **Generate Attack Plans** - Evaluate all possible move + attack combinations
-4. **Score Each Plan** - Apply behavior-specific weights to scoring factors
-5. **Coordinate with Allies** - In multi-enemy fights, avoid redundant coverage
+3. **Build Ally Context** - Gather ally behaviors, covered tiles, and escape routes
+4. **Generate Attack Plans** - Evaluate all possible move + attack combinations
+5. **Score Each Plan** - Apply behavior-specific weights + synergy bonuses
 6. **Execute Best Plan** - Queue moves and attacks
+
+### Shared Goal, Individual Contribution
+
+All enemies share the same goal: **defeat the player**. Each enemy's behavior determines *how* they contribute:
+
+- **AGGRESSIVE** enemies deliver damage
+- **STRATEGIC** enemies drain player resources
+- **TACTICAL** enemies control the board
+
+Synergy bonuses reward attacks that complement ally behaviors, creating emergent coordination.
 
 ---
 
@@ -71,6 +82,44 @@ Behaviors define the AI's **primary goal** during tactical combat. Each behavior
 - Herds player toward corners and edges
 - Sets up future turns by controlling space
 - Most effective in multi-enemy fights for coordinated zoning
+
+### Behavior Synergies
+
+When multiple enemies fight together, they receive **synergy bonuses** for attacks that complement ally behaviors.
+
+| My Behavior | Ally Behavior | Synergy Condition | Bonus |
+|-------------|---------------|-------------------|-------|
+| AGGRESSIVE | TACTICAL | Attack escape routes from ally's coverage | +100 |
+| AGGRESSIVE | STRATEGIC | Attack cheapest escape from ally's attack | +80 |
+| TACTICAL | TACTICAL | Combined coverage eliminates safe tiles | +50/tile |
+| TACTICAL | AGGRESSIVE | Herd player toward ally's attack zone | +100 |
+| STRATEGIC | STRATEGIC | Attack ally's escape routes (pip chain) | +60 |
+| STRATEGIC | TACTICAL | Force movement into ally's net | +70 |
+
+### Coordination Examples
+
+**TACTICAL + AGGRESSIVE (Skeleton + Goblin)**
+```
+Turn: Skeleton plans first, Goblin plans second
+
+Skeleton (TACTICAL):
+  Uses ROW_SWEEP covering tiles [A, B, C]
+  Player can escape to tiles [D, E]
+
+Goblin (AGGRESSIVE):
+  Gets +100 synergy bonus for attacking tile D or E
+  Result: Attacks escape route, player has fewer options
+```
+
+**STRATEGIC + STRATEGIC (Archer + Archer)**
+```
+Turn: First archer covers tiles [A, B]
+      Escape from [A, B] costs 1 pip
+
+Second Archer:
+  Gets +60 synergy for attacking the 1-pip escape tiles
+  Result: Player must spend 3+ pips to escape both
+```
 
 ---
 
