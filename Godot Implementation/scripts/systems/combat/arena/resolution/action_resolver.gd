@@ -54,7 +54,8 @@ func resolve_all_multi(player: ArenaCombatant, enemies: Array[ArenaCombatant]) -
 		all_actions.append({
 			"action": action,
 			"combatant": player,
-			"priority": action.priority
+			"priority": action.priority,
+			"speed": _get_combatant_speed(player)
 		})
 
 	# Collect actions from all living enemies
@@ -66,11 +67,12 @@ func resolve_all_multi(player: ArenaCombatant, enemies: Array[ArenaCombatant]) -
 			all_actions.append({
 				"action": action,
 				"combatant": enemy,
-				"priority": action.priority
+				"priority": action.priority,
+				"speed": _get_combatant_speed(enemy)
 			})
 
-	# Sort by priority (lower = faster = executes first)
-	all_actions.sort_custom(func(a, b): return a.priority < b.priority)
+	# Sort by priority (lower = faster), then by speed (higher = faster)
+	all_actions.sort_custom(_compare_actions)
 
 	# Group by priority level for simultaneous resolution
 	var priority_groups: Dictionary = {}
@@ -124,6 +126,23 @@ func _resolve_priority_group(group: Array, skip_moves: bool) -> Array[Dictionary
 	# Resolve attacks and other actions
 	for entry in other_actions:
 		var action: CombatAction = entry.action
+
+		# Skip if combatant died during resolution (e.g., killed by earlier attack)
+		if not entry.combatant.is_alive:
+			# Emit cancelled action for UI feedback
+			var cancelled_result := {
+				"success": false,
+				"action_type": action.action_type,
+				"cancelled": true,
+				"reason": "combatant_dead",
+				"combatant": entry.combatant.entity,
+				"message": "Attack cancelled - combatant defeated"
+			}
+			action_resolved.emit(action, cancelled_result)
+			results.append(cancelled_result)
+			_current_action_index += 1
+			continue
+
 		action_resolving.emit(action)
 		EventBus.arena_action_resolving.emit(_current_action_index, action.to_dict())
 
@@ -147,6 +166,22 @@ func _resolve_simultaneous_moves(moves: Array) -> Array[Dictionary]:
 		# Single move - just execute it
 		var entry: Dictionary = moves[0]
 		var action: CombatAction = entry.action
+
+		# Skip if combatant died
+		if not entry.combatant.is_alive:
+			var cancelled_result := {
+				"success": false,
+				"action_type": Constants.CombatActionType.MOVE,
+				"cancelled": true,
+				"reason": "combatant_dead",
+				"combatant": entry.combatant.entity,
+				"message": "Movement cancelled - combatant defeated"
+			}
+			action_resolved.emit(action, cancelled_result)
+			results.append(cancelled_result)
+			_current_action_index += 1
+			return results
+
 		action_resolving.emit(action)
 		EventBus.arena_action_resolving.emit(_current_action_index, action.to_dict())
 
@@ -163,8 +198,21 @@ func _resolve_simultaneous_moves(moves: Array) -> Array[Dictionary]:
 
 	for entry in moves:
 		var action: CombatAction = entry.action
-		# Skip if combatant entity is no longer valid
+		# Skip if combatant entity is no longer valid or combatant is dead
 		if not entry.combatant.entity or not is_instance_valid(entry.combatant.entity):
+			continue
+		if not entry.combatant.is_alive:
+			var cancelled_result := {
+				"success": false,
+				"action_type": Constants.CombatActionType.MOVE,
+				"cancelled": true,
+				"reason": "combatant_dead",
+				"combatant": entry.combatant.entity,
+				"message": "Movement cancelled - combatant defeated"
+			}
+			action_resolved.emit(action, cancelled_result)
+			results.append(cancelled_result)
+			_current_action_index += 1
 			continue
 		move_targets.append({
 			"combatant": entry.combatant,
@@ -273,3 +321,37 @@ func calculate_resolution_time_multi(player: ArenaCombatant, enemies: Array[Aren
 
 	return (move_count * Constants.RESOLUTION_MOVE_TIME) + \
 		   (attack_count * Constants.RESOLUTION_ATTACK_TIME)
+
+## Compare two actions for sorting: by priority first, then by speed
+## Lower priority = faster, higher speed = faster
+func _compare_actions(a: Dictionary, b: Dictionary) -> bool:
+	# First compare by priority (lower = executes first)
+	if a.priority != b.priority:
+		return a.priority < b.priority
+	# Same priority: compare by speed (higher = executes first)
+	return a.speed > b.speed
+
+## Get the speed stat from a combatant
+## Returns speed value (higher = faster), defaults to 100 if not found
+func _get_combatant_speed(combatant: ArenaCombatant) -> int:
+	if not combatant or not combatant.entity:
+		return 100  # Default speed
+
+	var entity = combatant.entity
+
+	# Try to get speed from entity's get_stat method
+	if entity.has_method("get_stat"):
+		var speed = entity.get_stat("speed")
+		if speed != null:
+			return speed
+
+	# Try to get speed from monster_data
+	if "monster_data" in entity and entity.monster_data:
+		if "speed" in entity.monster_data:
+			return entity.monster_data.speed
+
+	# Try direct speed property
+	if "speed" in entity:
+		return entity.speed
+
+	return 100  # Default speed

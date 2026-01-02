@@ -6,7 +6,7 @@ extends CombatAction
 func _init(p_source: Node, p_target: Vector2i, p_move_number: int = 0) -> void:
 	super(p_source, p_target)
 	action_type = Constants.CombatActionType.MOVE
-	priority = Constants.PRIORITY_FAST  # Movement executes with fast priority
+	priority = Constants.PRIORITY_MOVEMENT  # Movement resolves before all attacks
 	move_number = p_move_number
 	# Calculate pip cost based on move number
 	var cost_index := mini(p_move_number, Constants.MOVE_COSTS.size() - 1)

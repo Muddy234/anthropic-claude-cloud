@@ -34,9 +34,10 @@ const HEAVY_ATTACK_COST := 3
 const ITEM_COST := 2
 
 # Action priorities (lower = faster)
-const PRIORITY_FAST := 1    # Light attack
-const PRIORITY_MEDIUM := 2  # Item use
-const PRIORITY_SLOW := 3    # Heavy attack
+const PRIORITY_MOVEMENT := 0  # Movement resolves first (escape before damage)
+const PRIORITY_FAST := 1      # Light attack
+const PRIORITY_MEDIUM := 2    # Item use
+const PRIORITY_SLOW := 3      # Heavy attack
 
 # Arena combat phases
 enum CombatPhase {
