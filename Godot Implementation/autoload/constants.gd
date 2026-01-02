@@ -17,7 +17,7 @@ const MIN_DAMAGE := 1
 const MAX_SIMULTANEOUS_ATTACKERS := 3
 
 # Arena combat constants
-const ARENA_SIZE := Vector2i(4, 4)
+const ARENA_SIZE := Vector2i(5, 5)
 const ARENA_ENGAGE_RANGE := 4  # Max distance for enemy to initiate arena combat
 const ARENA_JOIN_RANGE := 4  # Max distance for additional enemies to join combat
 const MAX_ARENA_ENEMIES := 4  # Maximum enemies in a single arena fight

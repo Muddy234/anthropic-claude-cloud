@@ -47,7 +47,7 @@ Synergy bonuses reward attacks that complement ally behaviors, creating emergent
 
 ## Arena Tiles
 
-The 4x4 arena can contain special tile types that affect movement and combat. Tiles are randomly generated at the start of each battle, avoiding combatant spawn positions.
+The 5x5 arena can contain special tile types that affect movement and combat. Tiles are randomly generated at the start of each battle, avoiding combatant spawn positions.
 
 ### Tile Types
 
