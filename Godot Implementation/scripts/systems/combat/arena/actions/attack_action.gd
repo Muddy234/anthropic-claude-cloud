@@ -2,9 +2,11 @@ class_name AttackAction
 extends CombatAction
 
 ## Attack action (light or heavy)
+## Uses strain as resource cost
 
 var is_heavy: bool = false
 var weapon_range: int = 1  # Tiles the attack can reach
+var base_damage: int = 0  # Base damage for this attack type
 
 func _init(p_source: Node, p_target: Vector2i, p_is_heavy: bool = false) -> void:
 	super(p_source, p_target)
@@ -13,11 +15,13 @@ func _init(p_source: Node, p_target: Vector2i, p_is_heavy: bool = false) -> void
 	if is_heavy:
 		action_type = Constants.CombatActionType.HEAVY_ATTACK
 		priority = Constants.PRIORITY_SLOW
-		pip_cost = Constants.HEAVY_ATTACK_COST
+		strain_cost = Constants.HEAVY_ATTACK_STRAIN
+		base_damage = Constants.HEAVY_ATTACK_DAMAGE
 	else:
 		action_type = Constants.CombatActionType.LIGHT_ATTACK
 		priority = Constants.PRIORITY_FAST
-		pip_cost = Constants.LIGHT_ATTACK_COST
+		strain_cost = Constants.LIGHT_ATTACK_STRAIN
+		base_damage = Constants.LIGHT_ATTACK_DAMAGE
 
 	# Get weapon range from source if available
 	if p_source and p_source.has_method("get_weapon_range"):
@@ -65,8 +69,20 @@ func execute(grid: ArenaGrid, resolver: RefCounted) -> Dictionary:
 			"message": "No target at position"
 		}
 
-	# Calculate damage using existing damage calculator
+	# Check if source is exhausted (attacks deal 0 damage when exhausted)
+	var damage_blocked := false
+	if resolver.has_method("get_combatant_for_entity"):
+		var source_combatant = resolver.get_combatant_for_entity(source)
+		if source_combatant and source_combatant.is_exhausted():
+			damage_blocked = true
+
+	# Calculate damage
 	var damage_result := _calculate_damage(target)
+
+	# Block damage if exhausted
+	if damage_blocked:
+		damage_result.damage = 0
+		damage_result["damage_blocked"] = true
 
 	# Apply damage through the resolver's wrapper to ensure is_alive gets updated
 	if damage_result.damage > 0:
@@ -78,6 +94,10 @@ func execute(grid: ArenaGrid, resolver: RefCounted) -> Dictionary:
 
 	EventBus.arena_combatant_attacked.emit(source, target_position, damage_result)
 
+	var message := "%s dealt %d damage" % [get_display_name(), damage_result.damage]
+	if damage_blocked:
+		message = "%s attack blocked (exhausted)" % get_display_name()
+
 	return {
 		"success": true,
 		"action_type": action_type,
@@ -85,35 +105,23 @@ func execute(grid: ArenaGrid, resolver: RefCounted) -> Dictionary:
 		"to": target_position,
 		"target": target,
 		"damage": damage_result.damage,
+		"damage_blocked": damage_blocked,
 		"is_crit": damage_result.get("is_crit", false),
-		"message": "%s dealt %d damage" % [get_display_name(), damage_result.damage]
+		"message": message
 	}
 
 func _calculate_damage(target: Node) -> Dictionary:
-	# Use existing DamageCalculator via GameManager's combat_system if available
-	if GameManager.combat_system and GameManager.combat_system.has_method("calculate_damage"):
-		var context := {"heavy_attack": is_heavy}
-		var result: Dictionary = GameManager.combat_system.calculate_damage(source, target, context)
-		# Apply heavy attack multiplier
-		if is_heavy:
-			result.damage = int(result.get("final_damage", result.get("damage", 0)) * 1.5)
-		else:
-			result.damage = result.get("final_damage", result.get("damage", 0))
-		return result
+	# Use the fixed damage values from the new system
+	# Light Attack: 2 damage, Heavy Attack: 6 damage
+	var damage := base_damage
 
-	# Fallback basic calculation
-	var base_damage: int = 5
-	if source.has_method("get_stat"):
-		base_damage = source.get_stat("attack")
-
-	if is_heavy:
-		base_damage = int(base_damage * 1.5)
-
+	# Check if target has defense
 	var defense: int = 0
 	if target.has_method("get_stat"):
 		defense = target.get_stat("defense")
 
-	var final_damage := maxi(Constants.MIN_DAMAGE, base_damage - defense)
+	# Apply defense reduction (simple subtraction, minimum 1 damage)
+	var final_damage := maxi(Constants.MIN_DAMAGE, damage - defense)
 
 	return {"damage": final_damage, "is_crit": false}
 

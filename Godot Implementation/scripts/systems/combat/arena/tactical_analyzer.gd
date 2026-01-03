@@ -12,16 +12,18 @@ class BehaviorWeights:
 	var coverage: float
 	var escape_cost: float
 	var corner: float
-	var pip_cost_penalty: float
+	var stamina_cost_penalty: float  # Penalty for stamina spent on movement
+	var strain_risk_penalty: float   # Penalty for risk of overload/exhaustion
 	var hazard_adjacent: float  # Bonus for forcing player toward hazard-adjacent tiles
 
-	func _init(hit: float, leth: float, cov: float, esc: float, corn: float, pip: float, hazard: float = 0.0) -> void:
+	func _init(hit: float, leth: float, cov: float, esc: float, corn: float, stam: float, strain: float = 0.5, hazard: float = 0.0) -> void:
 		guaranteed_hit = hit
 		lethal = leth
 		coverage = cov
 		escape_cost = esc
 		corner = corn
-		pip_cost_penalty = pip
+		stamina_cost_penalty = stam
+		strain_risk_penalty = strain
 		hazard_adjacent = hazard
 
 ## Predefined weight profiles for each behavior type
@@ -30,18 +32,20 @@ static var BEHAVIOR_PROFILES: Dictionary = {
 		150.0,   # guaranteed_hit: High priority on hitting player
 		1000.0,  # lethal: Very high priority on killing blows
 		25.0,    # coverage: Low - doesn't care about area denial
-		5.0,     # escape_cost: Low - doesn't care about pip drain
+		5.0,     # escape_cost: Low - doesn't care about stamina drain
 		10.0,    # corner: Low - doesn't care about positioning
-		3.0,     # pip_cost_penalty: Low - willing to spend pips for damage
+		3.0,     # stamina_cost_penalty: Low - willing to spend stamina for damage
+		0.3,     # strain_risk_penalty: Low - willing to risk overload for damage
 		50.0     # hazard_adjacent: Medium - will use hazards opportunistically
 	),
 	Constants.EnemyBehavior.STRATEGIC: BehaviorWeights.new(
 		25.0,    # guaranteed_hit: Low - hitting is secondary
 		100.0,   # lethal: Low - killing is not the primary goal
 		75.0,    # coverage: Medium - area denial helps force movement
-		60.0,    # escape_cost: Very high - primary goal is pip drain
+		60.0,    # escape_cost: Very high - primary goal is stamina drain
 		30.0,    # corner: Medium - corners force expensive escapes
-		8.0,     # pip_cost_penalty: Higher - prefers efficient attacks
+		8.0,     # stamina_cost_penalty: Higher - prefers efficient movement
+		1.0,     # strain_risk_penalty: High - avoids overload
 		40.0     # hazard_adjacent: Medium - hazards help limit options
 	),
 	Constants.EnemyBehavior.TACTICAL: BehaviorWeights.new(
@@ -50,7 +54,8 @@ static var BEHAVIOR_PROFILES: Dictionary = {
 		200.0,   # coverage: Very high - maximize tiles threatened
 		30.0,    # escape_cost: Medium - contributes to control
 		150.0,   # corner: Very high - primary goal is cornering
-		4.0,     # pip_cost_penalty: Low - willing to spend for position
+		4.0,     # stamina_cost_penalty: Low - willing to spend for position
+		0.5,     # strain_risk_penalty: Medium - balanced risk tolerance
 		200.0    # hazard_adjacent: Very high - herding toward hazards is ideal
 	)
 }
@@ -161,12 +166,12 @@ static func calculate_synergy_bonus(
 ## Represents a tile the player can reach and its cost
 class ReachableTile:
 	var position: Vector2i
-	var pip_cost: int  # Minimum pips required to reach this tile
+	var stamina_cost: int  # Minimum stamina required to reach this tile
 	var escape_directions: int  # Number of adjacent empty tiles (for corner detection)
 
 	func _init(pos: Vector2i, cost: int, escapes: int = 4) -> void:
 		position = pos
-		pip_cost = cost
+		stamina_cost = cost
 		escape_directions = escapes
 
 ## Represents a potential attack plan
@@ -177,13 +182,15 @@ class AttackPlan:
 	var pattern: Constants.HeavyAttackPattern
 	var target_pos: Vector2i  # For single-target attacks
 	var affected_tiles: Array[Vector2i] = []  # All tiles hit by this attack
-	var pip_cost: int  # Total pip cost (moves + attack)
+	var stamina_cost: int = 0  # Stamina cost for movement
+	var strain_cost: float = 0.0  # Strain cost for attack
+	var would_overload: bool = false  # Would this attack cause overload?
 
 	# Scoring
 	var tiles_covered: int = 0  # How many reachable tiles are hit
 	var guaranteed_hit: bool = false  # Does this hit player's current position?
-	var min_escape_cost: int = 0  # Minimum pips player needs to escape
-	var max_escape_cost: int = 0  # Maximum pips if player picks worst escape
+	var min_escape_cost: int = 0  # Minimum stamina player needs to escape
+	var max_escape_cost: int = 0  # Maximum stamina if player picks worst escape
 	var forces_corner: bool = false  # Does escape leave player in corner?
 	var is_lethal: bool = false  # Would this kill the player?
 	var hazard_adjacent_escapes: int = 0  # How many escape routes are adjacent to hazards
@@ -213,7 +220,7 @@ class AttackPlan:
 		if is_lethal:
 			score += weights.lethal
 
-		# Forces expensive escape (pip drain)
+		# Forces expensive escape (stamina drain)
 		score += max_escape_cost * weights.escape_cost
 
 		# Forces player into corner
@@ -223,8 +230,14 @@ class AttackPlan:
 		# Forces player toward hazard-adjacent tiles
 		score += hazard_adjacent_escapes * weights.hazard_adjacent
 
-		# Penalty: Pip cost for the attack
-		score -= pip_cost * weights.pip_cost_penalty
+		# Penalty: Stamina cost for movement
+		score -= stamina_cost * weights.stamina_cost_penalty
+
+		# Penalty: Strain risk (higher penalty if would cause overload)
+		if would_overload:
+			score -= 100.0 * weights.strain_risk_penalty  # Significant penalty for overload
+		else:
+			score -= (strain_cost / Constants.STRAIN_MAX) * 50.0 * weights.strain_risk_penalty
 
 		return score
 
@@ -233,18 +246,18 @@ var grid: ArenaGrid
 func _init(p_grid: ArenaGrid) -> void:
 	grid = p_grid
 
-## Build a map of all tiles the player can reach and their pip costs
+## Build a map of all tiles the player can reach and their stamina costs
 ## Returns Dictionary[Vector2i, ReachableTile]
 ## blocked_tiles: Additional tiles that should be considered blocked (e.g., ally enemy positions)
-func build_reachability_map(player_pos: Vector2i, player_pips: int, blocked_tiles: Array[Vector2i] = []) -> Dictionary:
+func build_reachability_map(player_pos: Vector2i, player_stamina: int, blocked_tiles: Array[Vector2i] = []) -> Dictionary:
 	var reachable: Dictionary = {}
 
 	# Standing still is always an option (cost 0)
 	reachable[player_pos] = ReachableTile.new(player_pos, 0, _count_escape_directions(player_pos, blocked_tiles))
 
 	# BFS to find all reachable tiles with movement costs
-	# Movement costs: 1st move = 1 pip, 2nd move = 2 pips, 3rd move = 3 pips
-	var move_costs := Constants.MOVE_COSTS  # [1, 2, 3]
+	# Movement costs: 1st tile = 1 stamina, cumulative costs [1, 3, 6]
+	var cumulative_costs := Constants.MOVE_COSTS  # [1, 3, 6]
 
 	# Track visited states: (position, moves_made) to avoid revisiting
 	var visited: Dictionary = {}
@@ -257,7 +270,7 @@ func build_reachability_map(player_pos: Vector2i, player_pips: int, blocked_tile
 		var current = queue.pop_front()
 		var pos: Vector2i = current[0]
 		var moves_made: int = current[1]
-		var total_cost: int = current[2]
+		var _total_cost: int = current[2]
 
 		# Try each cardinal direction
 		for dir in Constants.CARDINAL_DIRECTIONS:
@@ -273,11 +286,13 @@ func build_reachability_map(player_pos: Vector2i, player_pips: int, blocked_tile
 				continue
 
 			var next_moves: int = moves_made + 1
-			var move_cost_index: int = mini(moves_made, move_costs.size() - 1)
-			var next_cost: int = total_cost + move_costs[move_cost_index]
+			# Use cumulative cost from constants
+			var cost_index: int = mini(next_moves - 1, cumulative_costs.size() - 1)
+			var next_cost: int = cumulative_costs[cost_index]
 
-			# Check if player can afford this
-			if next_cost > player_pips:
+			# Check if player can afford this (including desperate dash possibility)
+			# For AI analysis, we consider tiles reachable with stamina alone
+			if next_cost > player_stamina:
 				continue
 
 			# Check if we've visited this state
@@ -287,7 +302,7 @@ func build_reachability_map(player_pos: Vector2i, player_pips: int, blocked_tile
 			visited[state_key] = true
 
 			# Record this reachable tile (keep lowest cost if already found)
-			if next_pos not in reachable or reachable[next_pos].pip_cost > next_cost:
+			if next_pos not in reachable or reachable[next_pos].stamina_cost > next_cost:
 				var escapes := _count_escape_directions(next_pos, blocked_tiles)
 				reachable[next_pos] = ReachableTile.new(next_pos, next_cost, escapes)
 
@@ -363,26 +378,25 @@ func get_pattern_tiles(source_pos: Vector2i, pattern: Constants.HeavyAttackPatte
 
 	return tiles
 
-## Get all positions the enemy can move to with given pips
-## Returns Array of [final_position, moves_sequence, pip_cost]
-func get_enemy_move_options(enemy_pos: Vector2i, max_pips: int) -> Array:
+## Get all positions the enemy can move to with given stamina
+## Returns Array of [final_position, moves_sequence, stamina_cost]
+func get_enemy_move_options(enemy_pos: Vector2i, max_stamina: int) -> Array:
 	var options: Array = []
 
 	# Option 0: Stay in place (cost 0)
 	options.append([enemy_pos, [], 0])
 
-	var move_costs := Constants.MOVE_COSTS
+	var cumulative_costs := Constants.MOVE_COSTS  # [1, 3, 6]
 
 	# BFS for movement options
 	var visited: Dictionary = {enemy_pos: true}
-	var queue: Array = [[enemy_pos, [], 0, 0]]  # [pos, path, total_cost, moves_made]
+	var queue: Array = [[enemy_pos, [], 0]]  # [pos, path, moves_made]
 
 	while not queue.is_empty():
 		var current = queue.pop_front()
 		var pos: Vector2i = current[0]
 		var path: Array = current[1]
-		var total_cost: int = current[2]
-		var moves_made: int = current[3]
+		var moves_made: int = current[2]
 
 		for dir in Constants.CARDINAL_DIRECTIONS:
 			var next_pos: Vector2i = pos + dir
@@ -394,10 +408,12 @@ func get_enemy_move_options(enemy_pos: Vector2i, max_pips: int) -> Array:
 			if next_pos in visited:
 				continue
 
-			var move_cost_index: int = mini(moves_made, move_costs.size() - 1)
-			var next_cost: int = total_cost + move_costs[move_cost_index]
+			var next_moves := moves_made + 1
+			# Use cumulative cost
+			var cost_index: int = mini(next_moves - 1, cumulative_costs.size() - 1)
+			var next_cost: int = cumulative_costs[cost_index]
 
-			if next_cost > max_pips:
+			if next_cost > max_stamina:
 				continue
 
 			visited[next_pos] = true
@@ -407,8 +423,8 @@ func get_enemy_move_options(enemy_pos: Vector2i, max_pips: int) -> Array:
 			options.append([next_pos, next_path, next_cost])
 
 			# Continue exploring
-			if moves_made + 1 < 3:
-				queue.append([next_pos, next_path, next_cost, moves_made + 1])
+			if next_moves < 3:
+				queue.append([next_pos, next_path, next_moves])
 
 	return options
 
@@ -458,8 +474,8 @@ func evaluate_attack(plan: AttackPlan, reachability: Dictionary, player_pos: Vec
 		plan.max_escape_cost = 999
 	else:
 		for safe_tile in safe_tiles:
-			plan.min_escape_cost = mini(plan.min_escape_cost, safe_tile.pip_cost)
-			plan.max_escape_cost = maxi(plan.max_escape_cost, safe_tile.pip_cost)
+			plan.min_escape_cost = mini(plan.min_escape_cost, safe_tile.stamina_cost)
+			plan.max_escape_cost = maxi(plan.max_escape_cost, safe_tile.stamina_cost)
 
 			# Check if escape leads to corner (0-1 escape directions)
 			if safe_tile.escape_directions <= 1:
@@ -479,84 +495,87 @@ func _is_adjacent_to_hazard(pos: Vector2i) -> bool:
 
 ## Generate all possible attack plans for the enemy
 ## ally_covered_tiles: Tiles already covered by ally attacks (for coordination bonus)
+## current_strain: Enemy's current strain level (for overload prediction)
 func generate_all_attack_plans(
 	enemy_pos: Vector2i,
-	enemy_pips: int,
+	enemy_stamina: int,
 	player_pos: Vector2i,
 	reachability: Dictionary,
 	player_hp: int,
 	light_damage: int,
 	heavy_damage: int,
-	ally_covered_tiles: Array[Vector2i] = []
+	ally_covered_tiles: Array[Vector2i] = [],
+	current_strain: float = 0.0
 ) -> Array[AttackPlan]:
 	var plans: Array[AttackPlan] = []
 
-	# Get all positions enemy can move to
-	var move_options := get_enemy_move_options(enemy_pos, enemy_pips)
+	# Get all positions enemy can move to (based on stamina)
+	var move_options := get_enemy_move_options(enemy_pos, enemy_stamina)
 
 	for move_option in move_options:
 		var final_pos: Vector2i = move_option[0]
 		var move_path: Array = move_option[1]
 		var move_cost: int = move_option[2]
-		var remaining_pips := enemy_pips - move_cost
 
-		# Try Light Attack (1 pip, hits single tile)
-		if remaining_pips >= Constants.LIGHT_ATTACK_COST:
-			# Light attack can target any reachable tile within range 1
-			for dir in Constants.CARDINAL_DIRECTIONS:
-				var target_pos: Vector2i = final_pos + dir
-				if not grid.is_within_bounds(target_pos):
-					continue
+		# Try Light Attack (always available, costs strain)
+		for dir in Constants.CARDINAL_DIRECTIONS:
+			var target_pos: Vector2i = final_pos + dir
+			if not grid.is_within_bounds(target_pos):
+				continue
 
-				var plan := AttackPlan.new()
-				plan.enemy_moves = _array_to_vector2i_array(move_path)
-				plan.enemy_final_pos = final_pos
-				plan.attack_type = Constants.CombatActionType.LIGHT_ATTACK
-				plan.pattern = Constants.HeavyAttackPattern.ADJACENT
-				plan.target_pos = target_pos
-				plan.affected_tiles = [target_pos]
-				plan.pip_cost = move_cost + Constants.LIGHT_ATTACK_COST
+			var plan := AttackPlan.new()
+			plan.enemy_moves = _array_to_vector2i_array(move_path)
+			plan.enemy_final_pos = final_pos
+			plan.attack_type = Constants.CombatActionType.LIGHT_ATTACK
+			plan.pattern = Constants.HeavyAttackPattern.ADJACENT
+			plan.target_pos = target_pos
+			plan.affected_tiles = [target_pos]
+			plan.stamina_cost = move_cost
+			plan.strain_cost = Constants.LIGHT_ATTACK_STRAIN
+			plan.would_overload = (current_strain + Constants.LIGHT_ATTACK_STRAIN) > Constants.STRAIN_MAX
 
-				evaluate_attack(plan, reachability, player_pos, player_hp, light_damage, ally_covered_tiles)
-				plans.append(plan)
+			evaluate_attack(plan, reachability, player_pos, player_hp, light_damage, ally_covered_tiles)
+			plans.append(plan)
 
-		# Try Heavy Attack - ADJACENT (single target, like light attack but stronger)
-		if remaining_pips >= Constants.HEAVY_ATTACK_COST:
-			for dir in Constants.CARDINAL_DIRECTIONS:
-				var target_pos: Vector2i = final_pos + dir
-				if not grid.is_within_bounds(target_pos):
-					continue
+		# Try Heavy Attack - ADJACENT (single target)
+		for dir in Constants.CARDINAL_DIRECTIONS:
+			var target_pos: Vector2i = final_pos + dir
+			if not grid.is_within_bounds(target_pos):
+				continue
 
-				var plan := AttackPlan.new()
-				plan.enemy_moves = _array_to_vector2i_array(move_path)
-				plan.enemy_final_pos = final_pos
-				plan.attack_type = Constants.CombatActionType.HEAVY_ATTACK
-				plan.pattern = Constants.HeavyAttackPattern.ADJACENT
-				plan.target_pos = target_pos
-				plan.affected_tiles = [target_pos]
-				plan.pip_cost = move_cost + Constants.HEAVY_ATTACK_COST
+			var plan := AttackPlan.new()
+			plan.enemy_moves = _array_to_vector2i_array(move_path)
+			plan.enemy_final_pos = final_pos
+			plan.attack_type = Constants.CombatActionType.HEAVY_ATTACK
+			plan.pattern = Constants.HeavyAttackPattern.ADJACENT
+			plan.target_pos = target_pos
+			plan.affected_tiles = [target_pos]
+			plan.stamina_cost = move_cost
+			plan.strain_cost = Constants.HEAVY_ATTACK_STRAIN
+			plan.would_overload = (current_strain + Constants.HEAVY_ATTACK_STRAIN) > Constants.STRAIN_MAX
 
-				evaluate_attack(plan, reachability, player_pos, player_hp, heavy_damage, ally_covered_tiles)
-				plans.append(plan)
+			evaluate_attack(plan, reachability, player_pos, player_hp, heavy_damage, ally_covered_tiles)
+			plans.append(plan)
 
-		# Try Heavy Attack patterns (3 pips each) - ROW_SWEEP, COLUMN_SWEEP, NOVA
-		if remaining_pips >= Constants.HEAVY_ATTACK_COST:
-			for pattern in [
-				Constants.HeavyAttackPattern.ROW_SWEEP,
-				Constants.HeavyAttackPattern.COLUMN_SWEEP,
-				Constants.HeavyAttackPattern.NOVA
-			]:
-				var plan := AttackPlan.new()
-				plan.enemy_moves = _array_to_vector2i_array(move_path)
-				plan.enemy_final_pos = final_pos
-				plan.attack_type = Constants.CombatActionType.HEAVY_ATTACK
-				plan.pattern = pattern
-				plan.target_pos = final_pos  # Pattern attacks use enemy position
-				plan.affected_tiles = get_pattern_tiles(final_pos, pattern)
-				plan.pip_cost = move_cost + Constants.HEAVY_ATTACK_COST
+		# Try Heavy Attack patterns - ROW_SWEEP, COLUMN_SWEEP, NOVA
+		for pattern in [
+			Constants.HeavyAttackPattern.ROW_SWEEP,
+			Constants.HeavyAttackPattern.COLUMN_SWEEP,
+			Constants.HeavyAttackPattern.NOVA
+		]:
+			var plan := AttackPlan.new()
+			plan.enemy_moves = _array_to_vector2i_array(move_path)
+			plan.enemy_final_pos = final_pos
+			plan.attack_type = Constants.CombatActionType.HEAVY_ATTACK
+			plan.pattern = pattern
+			plan.target_pos = final_pos  # Pattern attacks use enemy position
+			plan.affected_tiles = get_pattern_tiles(final_pos, pattern)
+			plan.stamina_cost = move_cost
+			plan.strain_cost = Constants.HEAVY_ATTACK_STRAIN
+			plan.would_overload = (current_strain + Constants.HEAVY_ATTACK_STRAIN) > Constants.STRAIN_MAX
 
-				evaluate_attack(plan, reachability, player_pos, player_hp, heavy_damage, ally_covered_tiles)
-				plans.append(plan)
+			evaluate_attack(plan, reachability, player_pos, player_hp, heavy_damage, ally_covered_tiles)
+			plans.append(plan)
 
 	return plans
 
@@ -620,12 +639,12 @@ func _score_with_synergy(
 ## Tries to move to positions that set up good attacks next turn
 func generate_positioning_plans(
 	enemy_pos: Vector2i,
-	enemy_pips: int,
+	enemy_stamina: int,
 	player_pos: Vector2i,
 	reachability: Dictionary
 ) -> Array[AttackPlan]:
 	var plans: Array[AttackPlan] = []
-	var move_options := get_enemy_move_options(enemy_pos, enemy_pips)
+	var move_options := get_enemy_move_options(enemy_pos, enemy_stamina)
 
 	for move_option in move_options:
 		var final_pos: Vector2i = move_option[0]
@@ -640,7 +659,8 @@ func generate_positioning_plans(
 		plan.enemy_moves = _array_to_vector2i_array(move_path)
 		plan.enemy_final_pos = final_pos
 		plan.attack_type = Constants.CombatActionType.MOVE
-		plan.pip_cost = move_cost
+		plan.stamina_cost = move_cost
+		plan.strain_cost = 0.0  # Movement doesn't cost strain
 		plan.affected_tiles = []
 
 		# Calculate coverage potential from this position

@@ -31,13 +31,25 @@ const ARENA_MAX_HAZARDS := 2
 const ARENA_MIN_OBSTACLES := 0
 const ARENA_MAX_OBSTACLES := 2
 
-# Pip economy
-const MAX_PIPS := 5
-const PIP_REGEN := 2  # Pips regenerated per turn
-const MOVE_COSTS := [1, 2, 3]  # Escalating cost: 1st move = 1 pip, 2nd = 2, 3rd = 3
-const LIGHT_ATTACK_COST := 1
-const HEAVY_ATTACK_COST := 3
-const ITEM_COST := 2
+# Stamina (Movement Resource)
+const STAMINA_MAX := 6              # Maximum stamina (battery cells)
+const STAMINA_REGEN := 1            # Stamina regenerated per turn start
+const MOVE_COST_TIER_1 := 1         # Cost for 1st tile moved
+const MOVE_COST_TIER_2 := 2         # Cost for 2nd tile moved
+const MOVE_COST_TIER_3 := 3         # Cost for 3rd tile moved
+const MOVE_COSTS := [1, 3, 6]       # Cumulative costs: 1 tile = 1, 2 tiles = 3, 3 tiles = 6
+const DESPERATE_DASH_PENALTY := 10.0  # Strain added per 1 stamina deficit
+
+# Strain (Combat Resource)
+const STRAIN_MAX := 100.0           # Overload threshold
+const STRAIN_RECOVERY := 25.0       # Strain recovered per turn start (positive value, subtracted)
+const LIGHT_ATTACK_STRAIN := 15.0   # Strain cost for light attack
+const HEAVY_ATTACK_STRAIN := 40.0   # Strain cost for heavy attack
+const ITEM_STRAIN := 10.0           # Strain cost for item use
+
+# Attack damage values
+const LIGHT_ATTACK_DAMAGE := 2
+const HEAVY_ATTACK_DAMAGE := 6
 
 # Action priorities (lower = faster)
 const PRIORITY_MOVEMENT := 0  # Movement resolves first (escape before damage)
@@ -51,7 +63,7 @@ enum CombatPhase {
 	TELEGRAPH,    # Enemy shows intent
 	PLANNING,     # Player queues actions
 	RESOLUTION,   # Actions execute by priority
-	CLEANUP,      # Regen pips, check deaths
+	CLEANUP,      # Upkeep: stamina regen, strain recovery, check deaths
 	VICTORY,      # Player won
 	DEFEAT,       # Player lost
 	EXITING       # Zoom-out animation
@@ -123,7 +135,7 @@ enum MonsterTier {
 # These define the AI's primary goal during tactical combat
 enum EnemyBehavior {
 	AGGRESSIVE,  # Goal: Kill the player - prioritizes damage and lethal hits
-	STRATEGIC,   # Goal: Bankrupt player pips - forces costly movement/escapes
+	STRATEGIC,   # Goal: Exhaust player resources - forces costly movement/strain buildup
 	TACTICAL     # Goal: Corner the player - minimizes escape options
 }
 

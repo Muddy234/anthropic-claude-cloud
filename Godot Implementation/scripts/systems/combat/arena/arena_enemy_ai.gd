@@ -62,17 +62,35 @@ func generate_actions() -> void:
 	if enemy_pos == Vector2i(-1, -1) or player_pos == Vector2i(-1, -1):
 		return
 
-	# Get resources
-	var enemy_pips := combatant.get_current_pips()
-	var player_pips := player_combatant.get_current_pips()
+	# Get resources (Stamina for movement, Strain for attack planning)
+	var enemy_stamina := combatant.get_current_stamina()
+	var enemy_strain := combatant.get_current_strain()
+	var player_stamina := player_combatant.get_current_stamina()
 	var player_hp := player_combatant.get_hp()
 
-	# Calculate expected damage values
+	# Skip planning if exhausted (attacks will deal 0 damage anyway)
+	if combatant.is_exhausted():
+		# Just do positioning moves when exhausted
+		var blocked_tiles := _get_ally_positions()
+		var reachability := tactical_analyzer.build_reachability_map(player_pos, player_stamina, blocked_tiles)
+		var positioning_plans := tactical_analyzer.generate_positioning_plans(
+			enemy_pos,
+			enemy_stamina,
+			player_pos,
+			reachability
+		)
+		if not positioning_plans.is_empty():
+			var best_position := tactical_analyzer.find_best_attack(positioning_plans, _behavior_weights)
+			if best_position:
+				_execute_plan(best_position, player_pos)
+		return
+
+	# Calculate expected damage values (fixed values in new system)
 	_calculate_damage_values()
 
 	# Step 1: Build player's reachability map (accounting for ally positions)
 	var blocked_tiles := _get_ally_positions()
-	var reachability := tactical_analyzer.build_reachability_map(player_pos, player_pips, blocked_tiles)
+	var reachability := tactical_analyzer.build_reachability_map(player_pos, player_stamina, blocked_tiles)
 
 	# Step 2: Build ally context for coordination
 	_ally_context = _build_ally_context(reachability)
@@ -80,13 +98,14 @@ func generate_actions() -> void:
 	# Step 3: Generate and evaluate all possible attack plans
 	var attack_plans := tactical_analyzer.generate_all_attack_plans(
 		enemy_pos,
-		enemy_pips,
+		enemy_stamina,
 		player_pos,
 		reachability,
 		player_hp,
 		_light_damage,
 		_heavy_damage,
-		_ally_context.covered_tiles  # Pass ally coverage for base coordination
+		_ally_context.covered_tiles,  # Pass ally coverage for base coordination
+		enemy_strain  # Pass current strain for overload prediction
 	)
 
 	# Step 4: Find the best attack plan using behavior weights + synergy bonuses
@@ -103,7 +122,7 @@ func generate_actions() -> void:
 	if best_plan == null or best_plan.tiles_covered == 0:
 		var positioning_plans := tactical_analyzer.generate_positioning_plans(
 			enemy_pos,
-			enemy_pips,
+			enemy_stamina,
 			player_pos,
 			reachability
 		)
@@ -218,18 +237,15 @@ func _get_combatant_behavior(comb: ArenaCombatant) -> Constants.EnemyBehavior:
 
 	return Constants.EnemyBehavior.AGGRESSIVE
 
-## Calculate expected damage for attacks
+## Calculate expected damage for attacks (using fixed values from new system)
 func _calculate_damage_values() -> void:
-	var base_attack := 5
-	if combatant.entity.has_method("get_stat"):
-		base_attack = combatant.entity.get_stat("attack")
-
 	var player_defense := 0
 	if player_combatant.entity.has_method("get_stat"):
 		player_defense = player_combatant.entity.get_stat("defense")
 
-	_light_damage = maxi(Constants.MIN_DAMAGE, base_attack - player_defense)
-	_heavy_damage = maxi(Constants.MIN_DAMAGE, int(base_attack * 1.5) - player_defense)
+	# Use fixed damage values from Constants (Light = 2, Heavy = 6)
+	_light_damage = maxi(Constants.MIN_DAMAGE, Constants.LIGHT_ATTACK_DAMAGE - player_defense)
+	_heavy_damage = maxi(Constants.MIN_DAMAGE, Constants.HEAVY_ATTACK_DAMAGE - player_defense)
 
 ## Load behavior weights from entity's monster data
 func _load_behavior_weights() -> void:

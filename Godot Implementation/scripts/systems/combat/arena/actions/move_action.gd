@@ -1,16 +1,15 @@
 class_name MoveAction
 extends CombatAction
 
-## Movement action with escalating pip cost
+## Movement action with escalating stamina cost
+## Stamina costs are calculated by the ActionQueue based on total distance
 
 func _init(p_source: Node, p_target: Vector2i, p_move_number: int = 0) -> void:
 	super(p_source, p_target)
 	action_type = Constants.CombatActionType.MOVE
 	priority = Constants.PRIORITY_MOVEMENT  # Movement resolves before all attacks
 	move_number = p_move_number
-	# Calculate pip cost based on move number
-	var cost_index := mini(p_move_number, Constants.MOVE_COSTS.size() - 1)
-	pip_cost = Constants.MOVE_COSTS[cost_index]
+	# Note: stamina_cost and strain_cost are set by ActionQueue during queuing
 
 func get_display_name() -> String:
 	return "Move"

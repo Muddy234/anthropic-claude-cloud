@@ -2,6 +2,7 @@ class_name PatternAttackAction
 extends CombatAction
 
 ## Heavy attack with a specific pattern (row sweep, column sweep, nova)
+## Uses strain as resource cost
 
 var pattern: Constants.HeavyAttackPattern = Constants.HeavyAttackPattern.ADJACENT
 var affected_tiles: Array[Vector2i] = []  # Tiles that will be hit
@@ -12,7 +13,7 @@ func _init(p_source: Node, p_source_pos: Vector2i, p_pattern: Constants.HeavyAtt
 	pattern = p_pattern
 	action_type = Constants.CombatActionType.HEAVY_ATTACK
 	priority = Constants.PRIORITY_SLOW
-	pip_cost = Constants.HEAVY_ATTACK_COST
+	strain_cost = Constants.HEAVY_ATTACK_STRAIN
 	# Pre-calculate affected tiles immediately using the provided position
 	# This ensures the correct position is used for telegraphs before any caching occurs
 	affected_tiles = calculate_affected_tiles(p_source_pos)
@@ -101,6 +102,13 @@ func execute(grid: ArenaGrid, resolver: RefCounted) -> Dictionary:
 	var source_pos: Vector2i = grid.get_combatant_position(source)
 	affected_tiles = calculate_affected_tiles(source_pos, grid)
 
+	# Check if source is exhausted (attacks deal 0 damage when exhausted)
+	var damage_blocked := false
+	if resolver.has_method("get_combatant_for_entity"):
+		var source_combatant = resolver.get_combatant_for_entity(source)
+		if source_combatant and source_combatant.is_exhausted():
+			damage_blocked = true
+
 	var total_damage := 0
 	var targets_hit := 0
 	var hit_results: Array[Dictionary] = []
@@ -111,6 +119,11 @@ func execute(grid: ArenaGrid, resolver: RefCounted) -> Dictionary:
 		if target and target != source:
 			var damage_result := _calculate_damage(target)
 
+			# Block damage if exhausted
+			if damage_blocked:
+				damage_result.damage = 0
+				damage_result["damage_blocked"] = true
+
 			if damage_result.damage > 0:
 				if resolver.has_method("apply_damage_to_entity"):
 					resolver.apply_damage_to_entity(target, damage_result.damage, source)
@@ -118,15 +131,21 @@ func execute(grid: ArenaGrid, resolver: RefCounted) -> Dictionary:
 					target.take_damage(damage_result.damage, source)
 
 				total_damage += damage_result.damage
-				targets_hit += 1
-				hit_results.append({
-					"target": target,
-					"tile": tile_pos,
-					"damage": damage_result.damage,
-					"is_crit": damage_result.get("is_crit", false)
-				})
+
+			targets_hit += 1
+			hit_results.append({
+				"target": target,
+				"tile": tile_pos,
+				"damage": damage_result.damage,
+				"damage_blocked": damage_blocked,
+				"is_crit": damage_result.get("is_crit", false)
+			})
 
 			EventBus.arena_combatant_attacked.emit(source, tile_pos, damage_result)
+
+	var message := "%s hit %d targets for %d total damage" % [get_display_name(), targets_hit, total_damage]
+	if damage_blocked:
+		message = "%s attack blocked (exhausted)" % get_display_name()
 
 	return {
 		"success": true,
@@ -136,31 +155,22 @@ func execute(grid: ArenaGrid, resolver: RefCounted) -> Dictionary:
 		"affected_tiles": affected_tiles,
 		"targets_hit": targets_hit,
 		"total_damage": total_damage,
+		"damage_blocked": damage_blocked,
 		"hit_results": hit_results,
-		"message": "%s hit %d targets for %d total damage" % [get_display_name(), targets_hit, total_damage]
+		"message": message
 	}
 
 func _calculate_damage(target: Node) -> Dictionary:
-	# Use existing DamageCalculator via GameManager's combat_system if available
-	if GameManager.combat_system and GameManager.combat_system.has_method("calculate_damage"):
-		var context := {"heavy_attack": true, "pattern_attack": true}
-		var result: Dictionary = GameManager.combat_system.calculate_damage(source, target, context)
-		# Apply heavy attack multiplier
-		result.damage = int(result.get("final_damage", result.get("damage", 0)) * 1.5)
-		return result
+	# Use fixed damage value for heavy/pattern attacks
+	var damage := Constants.HEAVY_ATTACK_DAMAGE
 
-	# Fallback basic calculation
-	var base_damage: int = 5
-	if source.has_method("get_stat"):
-		base_damage = source.get_stat("attack")
-
-	base_damage = int(base_damage * 1.5)  # Heavy attack multiplier
-
+	# Check if target has defense
 	var defense: int = 0
 	if target.has_method("get_stat"):
 		defense = target.get_stat("defense")
 
-	var final_damage := maxi(Constants.MIN_DAMAGE, base_damage - defense)
+	# Apply defense reduction (minimum 1 damage)
+	var final_damage := maxi(Constants.MIN_DAMAGE, damage - defense)
 
 	return {"damage": final_damage, "is_crit": false}
 

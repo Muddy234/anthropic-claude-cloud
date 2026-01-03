@@ -184,6 +184,12 @@ func _start_turn() -> void:
 	current_turn += 1
 	turn_started.emit(current_turn)
 
+	# Process upkeep for all combatants (stamina regen, strain recovery)
+	player_combatant.process_upkeep()
+	for combatant in enemy_combatants:
+		if combatant.is_alive:
+			combatant.process_upkeep()
+
 	# Generate enemy AI actions during telegraph (all enemies simultaneously)
 	_generate_enemy_actions()
 
@@ -192,7 +198,7 @@ func _start_turn() -> void:
 
 ## End the current turn
 func _end_turn() -> void:
-	# Regenerate pips for all combatants
+	# Clear executed actions for all combatants
 	player_combatant.end_turn()
 	for combatant in enemy_combatants:
 		if combatant.is_alive:

@@ -5,34 +5,52 @@ extends RefCounted
 ## Provides combat-specific state while preserving the original entity
 
 signal died()
+signal exhausted()
+signal overloaded()
 
 var entity: Node  # The underlying Player or Enemy node
-var pip_economy: PipEconomy
+var resources: CombatResources
 var action_queue: ActionQueue
 var is_player: bool = false
 
 # Combat state
 var arena_position: Vector2i = Vector2i.ZERO
 var is_alive: bool = true
+var last_turn_moved: bool = false  # Tracks if movement occurred (for UI/anims)
 
 func _init(p_entity: Node) -> void:
 	entity = p_entity
 	is_player = p_entity.is_in_group("player") or p_entity.get_class() == "Player"
 
-	pip_economy = PipEconomy.new()
-	action_queue = ActionQueue.new(entity, pip_economy)
+	resources = CombatResources.new()
+	action_queue = ActionQueue.new(entity, resources)
+
+	# Connect resource signals
+	resources.exhausted_triggered.connect(_on_exhausted_triggered)
 
 ## Initialize for combat start
 func setup() -> void:
-	pip_economy.reset()
+	resources.reset()
 	action_queue.clear()
 	is_alive = true
+	last_turn_moved = false
+
+## Called at start of each turn (upkeep phase)
+func process_upkeep() -> void:
+	resources.process_upkeep()
 
 ## Called at end of each turn
 func end_turn() -> void:
-	pip_economy.regenerate()
-	# Clear without refunding - actions have been executed, pips were spent
+	# Track if movement occurred before clearing
+	last_turn_moved = action_queue.had_moves_this_turn()
+	# Clear without refunding - actions have been executed
 	action_queue.clear_without_refund()
+	# Clear exhaustion at end of turn (after attacks were blocked)
+	resources.clear_exhaustion()
+
+func _on_exhausted_triggered() -> void:
+	exhausted.emit()
+	overloaded.emit()
 
 ## Get current HP
 func get_hp() -> int:
@@ -138,16 +156,33 @@ func clear_actions() -> void:
 func get_queued_actions() -> Array[CombatAction]:
 	return action_queue.get_actions()
 
-## Get pips
-func get_current_pips() -> int:
-	return pip_economy.current_pips
+## Get stamina
+func get_current_stamina() -> int:
+	return resources.current_stamina
 
-func get_max_pips() -> int:
-	return pip_economy.max_pips
+func get_max_stamina() -> int:
+	return resources.max_stamina
 
-## Check if can afford action
-func can_afford(action_type: Constants.CombatActionType) -> bool:
-	return pip_economy.can_afford(action_type)
+## Get strain
+func get_current_strain() -> float:
+	return resources.current_strain
+
+func get_strain_percentage() -> float:
+	return resources.get_strain_percentage()
+
+func is_exhausted() -> bool:
+	return resources.is_exhausted
+
+func is_overloaded() -> bool:
+	return resources.is_overloaded()
+
+## Check if can afford movement
+func can_afford_move(distance: int) -> bool:
+	return resources.can_afford_move(distance)
+
+## Check if can attack (not exhausted)
+func can_attack() -> bool:
+	return resources.can_attack()
 
 ## Get predicted position after all queued moves
 func get_predicted_position(grid: ArenaGrid) -> Vector2i:

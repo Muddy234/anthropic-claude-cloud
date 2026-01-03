@@ -800,7 +800,7 @@ func _update_hp_display() -> void:
 			var max_hp := enemy.get_max_hp()
 			enemy_hp_label.text = "HP: %d/%d" % [hp, max_hp]
 
-## Update pip display for player
+## Update stamina display for player (battery-style resource)
 func _update_pip_display() -> void:
 	if not pip_container or not combat_arena:
 		return
@@ -813,12 +813,12 @@ func _update_pip_display() -> void:
 	if not player:
 		return
 
-	var current := player.get_current_pips()
-	var max_pips := player.get_max_pips()
+	var current := player.get_current_stamina()
+	var max_stamina := player.get_max_stamina()
 
-	for i in range(max_pips):
-		var pip := PanelContainer.new()
-		pip.custom_minimum_size = Vector2(20, 20)
+	for i in range(max_stamina):
+		var cell := PanelContainer.new()
+		cell.custom_minimum_size = Vector2(20, 20)
 
 		var style := StyleBoxFlat.new()
 		style.corner_radius_top_left = 3
@@ -827,12 +827,12 @@ func _update_pip_display() -> void:
 		style.corner_radius_bottom_left = 3
 
 		if i < current:
-			style.bg_color = Color(0.95, 0.75, 0.15)  # Gold for available
+			style.bg_color = Color(0.3, 0.9, 0.3)  # Green for available stamina
 			style.border_width_left = 1
 			style.border_width_top = 1
 			style.border_width_right = 1
 			style.border_width_bottom = 1
-			style.border_color = Color(1.0, 0.9, 0.4)
+			style.border_color = Color(0.5, 1.0, 0.5)
 		else:
 			style.bg_color = Color(0.25, 0.25, 0.25)  # Gray for spent
 			style.border_width_left = 1
@@ -841,10 +841,23 @@ func _update_pip_display() -> void:
 			style.border_width_bottom = 1
 			style.border_color = Color(0.35, 0.35, 0.35)
 
-		pip.add_theme_stylebox_override("panel", style)
-		pip_container.add_child(pip)
+		cell.add_theme_stylebox_override("panel", style)
+		pip_container.add_child(cell)
 
-## Update pip display for enemy
+	# Add strain indicator after stamina cells
+	var strain_percentage := player.get_strain_percentage()
+	var strain_color := player.resources.get_strain_color() if player.resources else Color(0.3, 1.0, 0.3)
+
+	var strain_label := Label.new()
+	if player.is_exhausted():
+		strain_label.text = " [EXHAUSTED]"
+		strain_label.add_theme_color_override("font_color", Color(1.0, 0.2, 0.2))
+	else:
+		strain_label.text = " Strain: %d%%" % int(strain_percentage * 100)
+		strain_label.add_theme_color_override("font_color", strain_color)
+	pip_container.add_child(strain_label)
+
+## Update stamina display for enemy
 func _update_enemy_pip_display() -> void:
 	if not enemy_pip_container or not combat_arena:
 		return
@@ -857,12 +870,12 @@ func _update_enemy_pip_display() -> void:
 	if not enemy or not is_instance_valid(enemy.entity):
 		return
 
-	var current := enemy.get_current_pips()
-	var max_pips := enemy.get_max_pips()
+	var current := enemy.get_current_stamina()
+	var max_stamina := enemy.get_max_stamina()
 
-	for i in range(max_pips):
-		var pip := PanelContainer.new()
-		pip.custom_minimum_size = Vector2(16, 16)  # Slightly smaller than player pips
+	for i in range(max_stamina):
+		var cell := PanelContainer.new()
+		cell.custom_minimum_size = Vector2(16, 16)  # Slightly smaller than player cells
 
 		var style := StyleBoxFlat.new()
 		style.corner_radius_top_left = 3
@@ -871,7 +884,7 @@ func _update_enemy_pip_display() -> void:
 		style.corner_radius_bottom_left = 3
 
 		if i < current:
-			style.bg_color = Color(0.85, 0.35, 0.35)  # Red for enemy available pips
+			style.bg_color = Color(0.85, 0.35, 0.35)  # Red for enemy available stamina
 			style.border_width_left = 1
 			style.border_width_top = 1
 			style.border_width_right = 1
@@ -885,8 +898,19 @@ func _update_enemy_pip_display() -> void:
 			style.border_width_bottom = 1
 			style.border_color = Color(0.35, 0.35, 0.35)
 
-		pip.add_theme_stylebox_override("panel", style)
-		enemy_pip_container.add_child(pip)
+		cell.add_theme_stylebox_override("panel", style)
+		enemy_pip_container.add_child(cell)
+
+	# Add strain indicator
+	var strain_percentage := enemy.get_strain_percentage()
+	var strain_label := Label.new()
+	if enemy.is_exhausted():
+		strain_label.text = " [EXH]"
+		strain_label.add_theme_color_override("font_color", Color(1.0, 0.2, 0.2))
+	elif strain_percentage >= 0.5:
+		strain_label.text = " %d%%" % int(strain_percentage * 100)
+		strain_label.add_theme_color_override("font_color", enemy.resources.get_strain_color() if enemy.resources else Color(1.0, 1.0, 0.0))
+		enemy_pip_container.add_child(strain_label)
 
 ## Update queue display
 func _update_queue_display() -> void:
