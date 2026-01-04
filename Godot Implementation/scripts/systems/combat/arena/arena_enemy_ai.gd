@@ -95,6 +95,9 @@ func generate_actions() -> void:
 	# Step 2: Build ally context for coordination
 	_ally_context = _build_ally_context(reachability)
 
+	# Get ally positions for friendly fire check
+	var ally_positions := _get_ally_positions()
+
 	# Step 3: Generate and evaluate all possible attack plans
 	var attack_plans := tactical_analyzer.generate_all_attack_plans(
 		enemy_pos,
@@ -105,7 +108,8 @@ func generate_actions() -> void:
 		_light_damage,
 		_heavy_damage,
 		_ally_context.covered_tiles,  # Pass ally coverage for base coordination
-		enemy_strain  # Pass current strain for overload prediction
+		enemy_strain,  # Pass current strain for overload prediction
+		ally_positions  # Pass ally positions for friendly fire check
 	)
 
 	# Step 4: Find the best attack plan using behavior weights + synergy bonuses

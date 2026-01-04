@@ -15,8 +15,9 @@ class BehaviorWeights:
 	var stamina_cost_penalty: float  # Penalty for stamina spent on movement
 	var strain_risk_penalty: float   # Penalty for risk of overload/exhaustion
 	var hazard_adjacent: float  # Bonus for forcing player toward hazard-adjacent tiles
+	var friendly_fire_penalty: float  # Penalty per ally that would be hit
 
-	func _init(hit: float, leth: float, cov: float, esc: float, corn: float, stam: float, strain: float = 0.5, hazard: float = 0.0) -> void:
+	func _init(hit: float, leth: float, cov: float, esc: float, corn: float, stam: float, strain: float = 0.5, hazard: float = 0.0, ff_penalty: float = 200.0) -> void:
 		guaranteed_hit = hit
 		lethal = leth
 		coverage = cov
@@ -25,6 +26,7 @@ class BehaviorWeights:
 		stamina_cost_penalty = stam
 		strain_risk_penalty = strain
 		hazard_adjacent = hazard
+		friendly_fire_penalty = ff_penalty
 
 ## Predefined weight profiles for each behavior type
 static var BEHAVIOR_PROFILES: Dictionary = {
@@ -36,7 +38,8 @@ static var BEHAVIOR_PROFILES: Dictionary = {
 		10.0,    # corner: Low - doesn't care about positioning
 		3.0,     # stamina_cost_penalty: Low - willing to spend stamina for damage
 		0.3,     # strain_risk_penalty: Low - willing to risk overload for damage
-		50.0     # hazard_adjacent: Medium - will use hazards opportunistically
+		50.0,    # hazard_adjacent: Medium - will use hazards opportunistically
+		100.0    # friendly_fire_penalty: Lower - willing to sacrifice allies for damage
 	),
 	Constants.EnemyBehavior.STRATEGIC: BehaviorWeights.new(
 		25.0,    # guaranteed_hit: Low - hitting is secondary
@@ -46,7 +49,8 @@ static var BEHAVIOR_PROFILES: Dictionary = {
 		30.0,    # corner: Medium - corners force expensive escapes
 		8.0,     # stamina_cost_penalty: Higher - prefers efficient movement
 		1.0,     # strain_risk_penalty: High - avoids overload
-		40.0     # hazard_adjacent: Medium - hazards help limit options
+		40.0,    # hazard_adjacent: Medium - hazards help limit options
+		250.0    # friendly_fire_penalty: Medium - prefers avoiding but will accept
 	),
 	Constants.EnemyBehavior.TACTICAL: BehaviorWeights.new(
 		50.0,    # guaranteed_hit: Medium - balanced
@@ -56,7 +60,8 @@ static var BEHAVIOR_PROFILES: Dictionary = {
 		150.0,   # corner: Very high - primary goal is cornering
 		4.0,     # stamina_cost_penalty: Low - willing to spend for position
 		0.5,     # strain_risk_penalty: Medium - balanced risk tolerance
-		200.0    # hazard_adjacent: Very high - herding toward hazards is ideal
+		200.0,   # hazard_adjacent: Very high - herding toward hazards is ideal
+		500.0    # friendly_fire_penalty: Very high - avoids hitting allies to maintain formation
 	)
 }
 
@@ -194,6 +199,7 @@ class AttackPlan:
 	var forces_corner: bool = false  # Does escape leave player in corner?
 	var is_lethal: bool = false  # Would this kill the player?
 	var hazard_adjacent_escapes: int = 0  # How many escape routes are adjacent to hazards
+	var allies_hit: int = 0  # How many ally enemies would be hit by friendly fire
 
 	func get_score(weights: BehaviorWeights = null) -> float:
 		var score := 0.0
@@ -238,6 +244,9 @@ class AttackPlan:
 			score -= 100.0 * weights.strain_risk_penalty  # Significant penalty for overload
 		else:
 			score -= (strain_cost / Constants.STRAIN_MAX) * 50.0 * weights.strain_risk_penalty
+
+		# Penalty: Friendly fire - hitting allied enemies
+		score -= allies_hit * weights.friendly_fire_penalty
 
 		return score
 
@@ -430,7 +439,8 @@ func get_enemy_move_options(enemy_pos: Vector2i, max_stamina: int) -> Array:
 
 ## Evaluate an attack plan against the player's reachability map
 ## ally_covered_tiles: Tiles already covered by ally attacks (for coordination)
-func evaluate_attack(plan: AttackPlan, reachability: Dictionary, player_pos: Vector2i, player_hp: int, attack_damage: int, ally_covered_tiles: Array[Vector2i] = []) -> void:
+## ally_positions: Positions of allied enemies (for friendly fire check)
+func evaluate_attack(plan: AttackPlan, reachability: Dictionary, player_pos: Vector2i, player_hp: int, attack_damage: int, ally_covered_tiles: Array[Vector2i] = [], ally_positions: Array[Vector2i] = []) -> void:
 	plan.tiles_covered = 0
 	plan.guaranteed_hit = false
 	plan.min_escape_cost = 999
@@ -438,8 +448,14 @@ func evaluate_attack(plan: AttackPlan, reachability: Dictionary, player_pos: Vec
 	plan.forces_corner = false
 	plan.is_lethal = false
 	plan.hazard_adjacent_escapes = 0
+	plan.allies_hit = 0
 
 	var safe_tiles: Array[ReachableTile] = []
+
+	# Check for friendly fire - count allies in our affected tiles
+	for ally_pos in ally_positions:
+		if ally_pos in plan.affected_tiles:
+			plan.allies_hit += 1
 
 	# Combine our affected tiles with ally covered tiles for total coverage
 	var all_covered_tiles: Array[Vector2i] = plan.affected_tiles.duplicate()
@@ -496,6 +512,7 @@ func _is_adjacent_to_hazard(pos: Vector2i) -> bool:
 ## Generate all possible attack plans for the enemy
 ## ally_covered_tiles: Tiles already covered by ally attacks (for coordination bonus)
 ## current_strain: Enemy's current strain level (for overload prediction)
+## ally_positions: Positions of allied enemies (for friendly fire check)
 func generate_all_attack_plans(
 	enemy_pos: Vector2i,
 	enemy_stamina: int,
@@ -505,7 +522,8 @@ func generate_all_attack_plans(
 	light_damage: int,
 	heavy_damage: int,
 	ally_covered_tiles: Array[Vector2i] = [],
-	current_strain: float = 0.0
+	current_strain: float = 0.0,
+	ally_positions: Array[Vector2i] = []
 ) -> Array[AttackPlan]:
 	var plans: Array[AttackPlan] = []
 
@@ -534,7 +552,7 @@ func generate_all_attack_plans(
 			plan.strain_cost = Constants.LIGHT_ATTACK_STRAIN
 			plan.would_overload = (current_strain + Constants.LIGHT_ATTACK_STRAIN) > Constants.STRAIN_MAX
 
-			evaluate_attack(plan, reachability, player_pos, player_hp, light_damage, ally_covered_tiles)
+			evaluate_attack(plan, reachability, player_pos, player_hp, light_damage, ally_covered_tiles, ally_positions)
 			plans.append(plan)
 
 		# Try Heavy Attack - ADJACENT (single target)
@@ -554,7 +572,7 @@ func generate_all_attack_plans(
 			plan.strain_cost = Constants.HEAVY_ATTACK_STRAIN
 			plan.would_overload = (current_strain + Constants.HEAVY_ATTACK_STRAIN) > Constants.STRAIN_MAX
 
-			evaluate_attack(plan, reachability, player_pos, player_hp, heavy_damage, ally_covered_tiles)
+			evaluate_attack(plan, reachability, player_pos, player_hp, heavy_damage, ally_covered_tiles, ally_positions)
 			plans.append(plan)
 
 		# Try Heavy Attack patterns - ROW_SWEEP, COLUMN_SWEEP, NOVA
@@ -574,7 +592,7 @@ func generate_all_attack_plans(
 			plan.strain_cost = Constants.HEAVY_ATTACK_STRAIN
 			plan.would_overload = (current_strain + Constants.HEAVY_ATTACK_STRAIN) > Constants.STRAIN_MAX
 
-			evaluate_attack(plan, reachability, player_pos, player_hp, heavy_damage, ally_covered_tiles)
+			evaluate_attack(plan, reachability, player_pos, player_hp, heavy_damage, ally_covered_tiles, ally_positions)
 			plans.append(plan)
 
 	return plans
