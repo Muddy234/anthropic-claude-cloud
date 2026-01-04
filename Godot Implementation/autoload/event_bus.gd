@@ -135,6 +135,12 @@ signal game_over()
 signal game_saved()
 signal game_loaded()
 
+# === CAMERA EVENTS ===
+signal camera_combat_started(arena_center: Vector3)
+signal camera_combat_ended()
+signal camera_transition_started(from_state: int, to_state: int)
+signal camera_transition_completed(state: int)
+
 # === AUDIO EVENTS ===
 signal play_sfx(sfx_name: String)
 signal play_music(track_name: String)

@@ -135,6 +135,9 @@ func start_combat_multi(player: Node, enemies: Array) -> void:
 		combat_started_multi.emit(player, original_enemies)
 		EventBus.arena_combat_started_multi.emit(player, original_enemies)
 
+	# Trigger camera transition to combat mode
+	_trigger_camera_combat()
+
 	# Immediately advance from ENTERING since duration is 0
 	call_deferred("_advance_phase")
 
@@ -354,6 +357,9 @@ func _finalize_combat() -> void:
 	is_active = false
 	is_ending = false
 
+	# Trigger camera transition back to exploration mode
+	_trigger_camera_exploration()
+
 	# Remove combatants from grid first to prevent stale references
 	if original_player and is_instance_valid(original_player):
 		grid.remove_combatant(original_player)
@@ -454,6 +460,35 @@ func get_grid() -> ArenaGrid:
 ## Check if in planning phase
 func is_planning() -> bool:
 	return phase_machine.get_phase() == Constants.CombatPhase.PLANNING
+
+## Trigger camera transition to combat mode
+func _trigger_camera_combat() -> void:
+	if not CameraManager:
+		return
+
+	# Get player world position
+	var player_pos := Vector3.ZERO
+	if original_player and is_instance_valid(original_player):
+		if "global_position" in original_player:
+			player_pos = original_player.global_position
+		elif "position" in original_player:
+			player_pos = original_player.position
+
+	# Collect enemy world positions
+	var enemy_positions: Array = []
+	for enemy in original_enemies:
+		if enemy and is_instance_valid(enemy):
+			if "global_position" in enemy:
+				enemy_positions.append(enemy.global_position)
+			elif "position" in enemy:
+				enemy_positions.append(enemy.position)
+
+	CameraManager.initiate_combat(player_pos, enemy_positions)
+
+## Trigger camera transition back to exploration mode
+func _trigger_camera_exploration() -> void:
+	if CameraManager:
+		CameraManager.end_combat()
 
 ## Player queues a move action
 func player_queue_move(target_pos: Vector2i) -> bool:
