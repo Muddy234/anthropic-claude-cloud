@@ -926,17 +926,22 @@ function getDistance(entity1, entity2) {
 }
 
 function getCurrentRoom(entity) {
+    // Use consolidated RoomUtils if available
+    if (typeof RoomUtils !== 'undefined') {
+        return RoomUtils.getCurrentRoom(entity);
+    }
+    // Fallback implementation (for backwards compatibility)
     if (!game.rooms) return null;
-    
+
     const x = entity.gridX ?? entity.x;
     const y = entity.gridY ?? entity.y;
-    
+
     for (const room of game.rooms) {
         const rx = room.floorX ?? room.x;
         const ry = room.floorY ?? room.y;
         const rw = room.floorWidth ?? room.width;
         const rh = room.floorHeight ?? room.height;
-        
+
         if (x >= rx && x < rx + rw && y >= ry && y < ry + rh) {
             return room;
         }

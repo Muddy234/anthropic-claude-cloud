@@ -29,17 +29,36 @@ const DialogueUI = {
 
     /**
      * Open dialogue with an NPC
+     * Issue #9: Added validation for NPC data
      * @param {Object} npc - NPC instance
      */
     open(npc) {
-        if (!npc) return;
+        if (!npc) {
+            console.error('[DialogueUI] Cannot open dialogue: NPC is null/undefined');
+            return;
+        }
+
+        // Validate NPC has required properties
+        if (!npc.name) {
+            console.warn('[DialogueUI] NPC missing name property, using default');
+            npc.name = 'Unknown';
+        }
 
         this.active = true;
         this.currentNPC = npc;
         this.selectedOption = 0;
+        this._failedNodeCount = 0; // Track consecutive failures to prevent infinite loops
 
         // Get initial dialogue
         const nodeId = npc.currentDialogue || npc.initialDialogue;
+
+        // Validate we have a starting node
+        if (!nodeId) {
+            console.error(`[DialogueUI] NPC ${npc.name} has no initial dialogue node`);
+            this._showFallbackDialogue('...');
+            return;
+        }
+
         this.showNode(nodeId);
 
         // Set game state
@@ -51,24 +70,80 @@ const DialogueUI = {
     },
 
     /**
+     * Show fallback dialogue when tree is broken
+     * Issue #9: Graceful handling for missing dialogue data
+     * @param {string} fallbackText - Text to display
+     * @private
+     */
+    _showFallbackDialogue(fallbackText) {
+        this.currentNode = {
+            text: fallbackText,
+            responses: [
+                { text: '[End conversation]', action: 'close' }
+            ]
+        };
+        this.fullText = fallbackText;
+        this.displayedText = '';
+        this.animatingText = true;
+        this.textAnimTimer = 0;
+        console.warn('[DialogueUI] Using fallback dialogue');
+    },
+
+    /**
      * Show a dialogue node
+     * Issue #9: Added robust error handling for missing/invalid nodes
      * @param {string} nodeId
      */
     showNode(nodeId) {
-        const node = getDialogueNode(nodeId);
-        if (!node) {
-            console.warn(`[DialogueUI] Unknown dialogue node: ${nodeId}`);
-            this.close();
+        // Validate nodeId
+        if (!nodeId || typeof nodeId !== 'string') {
+            console.error(`[DialogueUI] Invalid node ID: ${nodeId}`);
+            this._handleMissingNode(nodeId);
             return;
         }
+
+        // Check if getDialogueNode function exists
+        if (typeof getDialogueNode !== 'function') {
+            console.error('[DialogueUI] getDialogueNode function not found - dialogue system not initialized');
+            this._showFallbackDialogue('The conversation cannot continue...');
+            return;
+        }
+
+        const node = getDialogueNode(nodeId);
+
+        if (!node) {
+            console.warn(`[DialogueUI] Unknown dialogue node: ${nodeId}`);
+            this._handleMissingNode(nodeId);
+            return;
+        }
+
+        // Validate node structure
+        if (!node.text && !node.dynamic) {
+            console.warn(`[DialogueUI] Node ${nodeId} has no text or dynamic content`);
+            node.text = '...';
+        }
+
+        // Reset failure counter on successful node load
+        this._failedNodeCount = 0;
 
         this.currentNode = node;
         this.selectedOption = 0;
 
-        // Handle dynamic text
+        // Handle dynamic text with error handling
         let text = node.text || '';
         if (node.dynamic) {
-            text = this._getDynamicText(node.dynamic);
+            try {
+                text = this._getDynamicText(node.dynamic);
+            } catch (e) {
+                console.error(`[DialogueUI] Error getting dynamic text for '${node.dynamic}':`, e);
+                text = node.text || '...';
+            }
+        }
+
+        // Validate responses array
+        if (node.responses && !Array.isArray(node.responses)) {
+            console.warn(`[DialogueUI] Node ${nodeId} has invalid responses (not an array)`);
+            node.responses = [];
         }
 
         // Start text animation
@@ -76,6 +151,26 @@ const DialogueUI = {
         this.displayedText = '';
         this.animatingText = true;
         this.textAnimTimer = 0;
+    },
+
+    /**
+     * Handle missing dialogue node gracefully
+     * Issue #9: Prevents crashes from bad dialogue data
+     * @param {string} nodeId - The missing node ID
+     * @private
+     */
+    _handleMissingNode(nodeId) {
+        this._failedNodeCount = (this._failedNodeCount || 0) + 1;
+
+        // Prevent infinite loop of failures
+        if (this._failedNodeCount > 3) {
+            console.error('[DialogueUI] Too many consecutive node failures, closing dialogue');
+            this.close();
+            return;
+        }
+
+        // Show fallback and allow closing
+        this._showFallbackDialogue(`[Missing dialogue: ${nodeId || 'unknown'}]`);
     },
 
     /**
@@ -181,14 +276,31 @@ const DialogueUI = {
 
     /**
      * Select a dialogue option
+     * Issue #9: Added validation for response data
      * @param {number} index
      * @private
      */
     _selectOption(index) {
+        if (!this.currentNode) {
+            console.error('[DialogueUI] No current node when selecting option');
+            this.close();
+            return;
+        }
+
         const responses = this.currentNode.responses || [];
-        if (index < 0 || index >= responses.length) return;
+        if (index < 0 || index >= responses.length) {
+            console.warn(`[DialogueUI] Invalid option index: ${index} (max: ${responses.length - 1})`);
+            return;
+        }
 
         const response = responses[index];
+
+        // Validate response object
+        if (!response || typeof response !== 'object') {
+            console.error(`[DialogueUI] Invalid response at index ${index}`);
+            this.close();
+            return;
+        }
 
         // Handle action
         if (response.action) {
@@ -198,6 +310,12 @@ const DialogueUI = {
 
         // Navigate to next node
         if (response.next) {
+            // Validate next node ID
+            if (typeof response.next !== 'string') {
+                console.error(`[DialogueUI] Invalid next node ID: ${response.next}`);
+                this.close();
+                return;
+            }
             this.showNode(response.next);
         } else {
             this.close();

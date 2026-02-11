@@ -217,14 +217,33 @@ const RENDER_CONFIG = {
 };
 
 // ============================================================================
-// AUDIO (placeholder for future)
+// AUDIO SYSTEM
 // ============================================================================
 
 const AUDIO_CONFIG = {
+    // Volume levels (0.0 - 1.0)
     masterVolume: 1.0,
     musicVolume: 0.7,
     sfxVolume: 1.0,
-    ambientVolume: 0.5
+    ambientVolume: 0.5,
+    uiVolume: 0.8,
+
+    // Voice management
+    maxVoices: 16,            // Maximum simultaneous sounds
+    maxSameSound: 3,          // Max instances of same sound
+    sameSoundCooldown: 50,    // Minimum ms between same sound plays
+
+    // Spatial audio
+    spatialEnabled: true,     // Enable position-based panning
+    maxHearingDistance: 20,   // Tiles for full falloff
+
+    // Adaptive music
+    tensionFadeTime: 2.0,     // Seconds to fade tension layers
+    musicCrossfade: 3.0,      // Seconds to crossfade tracks
+
+    // Performance
+    preloadAll: false,        // Load sounds on demand (true = preload all)
+    mobileOptimized: true     // Reduce polyphony on mobile devices
 };
 
 // ============================================================================
@@ -349,11 +368,58 @@ const BANKING_CONFIG = {
 };
 
 // ============================================================================
-// FLOOR DEGRADATION
+// DEGRADATION SYSTEM
+// ============================================================================
+//
+// The degradation system creates risk/reward tension through two mechanics:
+//
+// ## VILLAGE DEGRADATION
+// The village degrades when the player fails runs (dies without extraction).
+// Successful extractions heal the village. This creates visual feedback and
+// NPC dialogue changes to reflect the player's overall performance.
+//
+// Village Degradation Levels:
+//   Level 0 (Thriving): Progress 0-29  - Village is healthy, NPCs optimistic
+//   Level 1 (Damaged):  Progress 30-59 - Some buildings damaged, NPCs worried
+//   Level 2 (Ruined):   Progress 60+   - Major damage, NPCs desperate
+//
+// Degradation Changes:
+//   - Failed run (death): +10 progress
+//   - Successful extraction: -5 base, -2 per floor depth
+//   - Materials can also restore the village
+//
+// ## FLOOR DEGRADATION
+// Each floor degrades separately based on how many times it's been extracted.
+// This encourages pushing deeper rather than farming early floors.
+//
+// Floor Quality Multiplier:
+//   - Starts at 1.0 (100% loot quality)
+//   - Each extraction: -0.15 (15% reduction)
+//   - Minimum: 0.40 (40% floor - loot never goes below this)
+//
+// Effects of Floor Degradation:
+//   - Reduced stack sizes on materials
+//   - Chance to downgrade item rarity when quality < 70%
+//   - Visual cues (floor appears more "picked over")
+//
+// ## RESTORATION
+// Village can be restored using materials:
+//   - Chasm Iron: 1 point per unit
+//   - Emberstone: 2 points per unit
+//   - Living Crystal: 5 points per unit
+//   - Void Metal: 10 points per unit
+//   - Primordial Essence: 25 points per unit
+//
+// Floor degradation is PERMANENT and cannot be restored.
+//
 // ============================================================================
 
 const DEGRADATION_CONFIG = {
-    // Village degradation stages based on deepest floor reached
+    // ========================================================================
+    // VILLAGE DEGRADATION
+    // ========================================================================
+
+    // Village visual/NPC stages based on deepest floor reached (cosmetic only)
     stages: {
         1: { floors: [1, 2], description: 'Peaceful' },
         2: { floors: [3, 4], description: 'Smoke on Horizon' },
@@ -361,13 +427,32 @@ const DEGRADATION_CONFIG = {
         4: { floors: ['core'], description: 'Final Hour' }
     },
 
-    // Drop rate reduction per extraction from a floor
+    // Progress thresholds for village degradation levels
+    // Level 0: 0-29, Level 1: 30-59, Level 2: 60+
+    degradationThresholds: [30, 60],
+
+    // Progress added on failed run (death without extraction)
+    failedRunPenalty: 10,
+
+    // Progress removed on successful extraction
+    extractionRecovery: 5,
+
+    // Bonus recovery per floor depth (floor 1 = 0 bonus, floor 6 = 10 bonus)
+    deepExtractionBonus: 2,
+
+    // ========================================================================
+    // FLOOR DEGRADATION
+    // ========================================================================
+
+    // Quality reduction per extraction from a floor (15% per extraction)
+    floorDegradationRate: 0.15,
+
+    // Minimum floor quality (floor never goes below 40%)
+    floorMinQuality: 0.40,
+
+    // Legacy aliases for backwards compatibility
     stepReduction: 0.15,
-
-    // Minimum drop rate (floor never goes below 40%)
     minimum: 0.40,
-
-    // Initial drop rate
     baseRate: 1.0
 };
 

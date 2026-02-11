@@ -104,6 +104,165 @@ const PerlinNoise = {
 PerlinNoise.init(Date.now());
 
 // ============================================================================
+// FLICKER LOOKUP TABLE
+// ============================================================================
+// Pre-calculated flicker values to avoid expensive Perlin noise per-frame
+// ============================================================================
+
+const FlickerLookupTable = {
+    // Pre-computed flicker values (256 entries for smooth looping)
+    values: new Float32Array(256),
+    fastValues: new Float32Array(256), // Secondary fast flicker overlay
+    initialized: false,
+
+    /**
+     * Initialize lookup tables with Perlin noise values
+     * Called once on load, not per frame
+     */
+    init() {
+        if (this.initialized) return;
+
+        // Generate base flicker values using FBM
+        for (let i = 0; i < 256; i++) {
+            const t = i / 256;
+            // Main flicker: slower, smoother
+            this.values[i] = PerlinNoise.fbm(t * 10, 0, 2, 0.5);
+            // Fast flicker: higher frequency overlay
+            this.fastValues[i] = PerlinNoise.noise2D(t * 30, 50) * 0.12;
+        }
+
+        this.initialized = true;
+    },
+
+    /**
+     * Get flicker value at a specific phase (0-1)
+     * Uses linear interpolation between lookup entries
+     * @param {number} phase - Phase value 0-1 (will be wrapped)
+     * @param {number} offset - Unique offset per light source
+     * @returns {number} - Flicker value in range [-1, 1]
+     */
+    getFlicker(phase, offset = 0) {
+        // Wrap phase to 0-1 range
+        const wrappedPhase = ((phase + offset) % 1 + 1) % 1;
+
+        // Convert to index
+        const exactIndex = wrappedPhase * 255;
+        const index0 = Math.floor(exactIndex) & 255;
+        const index1 = (index0 + 1) & 255;
+        const frac = exactIndex - Math.floor(exactIndex);
+
+        // Linear interpolation for smooth values
+        const baseFlicker = this.values[index0] + frac * (this.values[index1] - this.values[index0]);
+        const fastFlicker = this.fastValues[index0] + frac * (this.fastValues[index1] - this.fastValues[index0]);
+
+        return baseFlicker + fastFlicker;
+    }
+};
+
+// Initialize lookup table immediately
+FlickerLookupTable.init();
+
+// ============================================================================
+// SPATIAL GRID FOR LIGHT SOURCES
+// ============================================================================
+// Partitions space into cells for efficient nearest-light queries
+// ============================================================================
+
+const LightSpatialGrid = {
+    // Grid configuration
+    cellSize: 8,  // 8x8 tiles per cell
+    cells: new Map(),
+
+    /**
+     * Get cell key for a position
+     * @param {number} x - Grid X
+     * @param {number} y - Grid Y
+     * @returns {string} - Cell key
+     */
+    getCellKey(x, y) {
+        const cellX = Math.floor(x / this.cellSize);
+        const cellY = Math.floor(y / this.cellSize);
+        return `${cellX},${cellY}`;
+    },
+
+    /**
+     * Clear all cells
+     */
+    clear() {
+        this.cells.clear();
+    },
+
+    /**
+     * Add a light source to the grid
+     * @param {object} source - Light source object
+     */
+    addSource(source) {
+        const key = this.getCellKey(source.gridX, source.gridY);
+        if (!this.cells.has(key)) {
+            this.cells.set(key, []);
+        }
+        this.cells.get(key).push(source);
+    },
+
+    /**
+     * Rebuild the entire grid from a source map
+     * @param {Map} sources - Map of sourceId -> source object
+     */
+    rebuild(sources) {
+        this.clear();
+        sources.forEach(source => {
+            if (source.active) {
+                // Get current position (handle attached sources)
+                let x = source.gridX;
+                let y = source.gridY;
+                if (source.attachedTo) {
+                    x = source.attachedTo.gridX ?? source.attachedTo.x ?? x;
+                    y = source.attachedTo.gridY ?? source.attachedTo.y ?? y;
+                }
+                source._cachedGridX = x;
+                source._cachedGridY = y;
+
+                const key = this.getCellKey(x, y);
+                if (!this.cells.has(key)) {
+                    this.cells.set(key, []);
+                }
+                this.cells.get(key).push(source);
+            }
+        });
+    },
+
+    /**
+     * Get all light sources that could affect a position
+     * Returns sources within range (checks neighboring cells based on max radius)
+     * @param {number} x - Query X position
+     * @param {number} y - Query Y position
+     * @param {number} maxRadius - Maximum light radius to consider (default 10)
+     * @returns {Array} - Array of potentially relevant light sources
+     */
+    getSourcesNear(x, y, maxRadius = 10) {
+        const results = [];
+
+        // Calculate cell range to check
+        const cellRadius = Math.ceil(maxRadius / this.cellSize) + 1;
+        const centerCellX = Math.floor(x / this.cellSize);
+        const centerCellY = Math.floor(y / this.cellSize);
+
+        // Check all cells in range
+        for (let cy = centerCellY - cellRadius; cy <= centerCellY + cellRadius; cy++) {
+            for (let cx = centerCellX - cellRadius; cx <= centerCellX + cellRadius; cx++) {
+                const key = `${cx},${cy}`;
+                const cell = this.cells.get(key);
+                if (cell) {
+                    results.push(...cell);
+                }
+            }
+        }
+
+        return results;
+    }
+};
+
+// ============================================================================
 // COOKIE TEXTURE GENERATOR
 // ============================================================================
 // Creates irregular light shapes like real torches cast
@@ -217,6 +376,9 @@ const LightSourceSystem = {
     noiseTime: 0,            // Time accumulator for Perlin noise
     flickerOffset: 0,        // Current global flicker offset (legacy compat)
     sourceFlickers: new Map(), // Per-source flicker values for organic variation
+    spatialGridDirty: true,  // Flag to rebuild spatial grid
+    flickerPhase: 0,         // Current phase for lookup table (0-1)
+    cachedFlickerMultipliers: new Map(), // Per-source cached flicker values
 
     // ========================================================================
     // LIGHT SOURCE TYPES
@@ -369,9 +531,8 @@ const LightSourceSystem = {
             // Rendering
             flickerPhase: Math.random() * Math.PI * 2,
 
-            // Perlin noise offset for unique flicker pattern per source
-            noiseOffsetX: Math.random() * 1000,
-            noiseOffsetY: Math.random() * 1000,
+            // Unique offset for flicker lookup table (0-1 range)
+            flickerOffset: Math.random(),
 
             // Cookie texture for irregular light shape
             cookieId: config.id || `cookie_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
@@ -379,6 +540,7 @@ const LightSourceSystem = {
 
         this.sources.set(source.id, source);
         this.invalidateCache();
+        this.spatialGridDirty = true;
 
         if (this.config.debugLogging) {
             console.log(`[LightSource] Added source: ${source.id} at (${source.gridX}, ${source.gridY})`);
@@ -393,7 +555,9 @@ const LightSourceSystem = {
      */
     removeSource(sourceId) {
         this.sources.delete(sourceId);
+        this.cachedFlickerMultipliers.delete(sourceId);
         this.invalidateCache();
+        this.spatialGridDirty = true;
 
         if (this.config.debugLogging) {
             console.log(`[LightSource] Removed source: ${sourceId}`);
@@ -436,6 +600,7 @@ const LightSourceSystem = {
         if (source) {
             source.active = active;
             this.invalidateCache();
+            this.spatialGridDirty = true;
         }
     },
 
@@ -456,52 +621,62 @@ const LightSourceSystem = {
 
         if (!source.active && source.fuel > 0) {
             source.active = true;
+            this.spatialGridDirty = true;
         }
 
         this.invalidateCache();
     },
 
     // ========================================================================
-    // VISIBILITY CALCULATION
+    // VISIBILITY CALCULATION (OPTIMIZED)
     // ========================================================================
 
     /**
-     * Get Perlin noise flicker value for a specific light source
-     * Each source has unique noise offset for organic variation
+     * Get cached flicker multiplier for a source
+     * Updated once per frame in update() method
      * @param {object} source - Light source object
      * @returns {number} - Flicker multiplier (0.9 to 1.1 range approximately)
      */
     getSourceFlicker(source) {
         if (!source.flicker) return 1.0;
 
-        // Use Perlin noise for smooth, organic flicker
-        // Each source uses its unique noise offset for variation
-        const noiseX = this.noiseTime * this.config.flickerSpeed / 1000 + source.noiseOffsetX;
-        const noiseY = source.noiseOffsetY;
+        // Return cached value if available
+        const cached = this.cachedFlickerMultipliers.get(source.id);
+        if (cached !== undefined) {
+            return cached;
+        }
 
-        // Use FBM for more complex, layered flicker
-        // More octaves and persistence creates more organic, lively movement
-        const noiseValue = PerlinNoise.fbm(
-            noiseX,
-            noiseY,
-            this.config.flickerOctaves,
-            this.config.flickerPersistence || 0.5
-        );
+        // Calculate using lookup table (fast path)
+        const noiseValue = FlickerLookupTable.getFlicker(this.flickerPhase, source.flickerOffset);
 
-        // Add a secondary faster flicker for more "alive" feel
-        const fastFlicker = PerlinNoise.noise2D(
-            noiseX * 3, // Faster
-            noiseY + 100
-        ) * 0.1; // Subtle high-frequency variation
+        // Convert noise to flicker multiplier
+        const flickerMultiplier = 1 + noiseValue * this.config.flickerIntensity;
 
-        // Convert noise (-1 to 1) to flicker multiplier
-        // Apply configured intensity
-        const combinedNoise = noiseValue + fastFlicker;
-        return 1 + combinedNoise * this.config.flickerIntensity;
+        // Cache the value
+        this.cachedFlickerMultipliers.set(source.id, flickerMultiplier);
+
+        return flickerMultiplier;
+    },
+
+    /**
+     * Update all cached flicker values for the current frame
+     * Called once per update, not per query
+     */
+    updateFlickerCache() {
+        this.cachedFlickerMultipliers.clear();
+
+        this.sources.forEach(source => {
+            if (source.flicker && source.active) {
+                const noiseValue = FlickerLookupTable.getFlicker(this.flickerPhase, source.flickerOffset);
+                const flickerMultiplier = 1 + noiseValue * this.config.flickerIntensity;
+                this.cachedFlickerMultipliers.set(source.id, flickerMultiplier);
+            }
+        });
     },
 
     /**
      * Calculate visibility at a specific point
+     * OPTIMIZED: Uses spatial grid for nearby source lookup
      * @param {number} x - Grid X
      * @param {number} y - Grid Y
      * @returns {number} - 0 (no visibility) to 1 (full visibility)
@@ -513,35 +688,36 @@ const LightSourceSystem = {
         // Start with darkness-based visibility
         let visibility = 1 - this.globalDarkness;
 
-        // Add light from each source
-        this.sources.forEach(source => {
-            if (!source.active) return;
+        // Use spatial grid for efficient lookup
+        const nearbySources = LightSpatialGrid.getSourcesNear(x, y, 10);
 
-            // Get source position (handle attached sources)
-            let srcX = source.gridX;
-            let srcY = source.gridY;
-            if (source.attachedTo) {
-                srcX = source.attachedTo.gridX ?? source.attachedTo.x ?? srcX;
-                srcY = source.attachedTo.gridY ?? source.attachedTo.y ?? srcY;
-            }
+        // Add light from each nearby source
+        for (let i = 0; i < nearbySources.length; i++) {
+            const source = nearbySources[i];
+            if (!source.active) continue;
+
+            // Use cached position from spatial grid rebuild
+            const srcX = source._cachedGridX ?? source.gridX;
+            const srcY = source._cachedGridY ?? source.gridY;
 
             // Calculate distance
-            const dist = Math.sqrt((x - srcX) ** 2 + (y - srcY) ** 2);
+            const dx = x - srcX;
+            const dy = y - srcY;
+            const dist = Math.sqrt(dx * dx + dy * dy);
 
-            // Apply Perlin noise flicker to radius for organic effect
+            // Get cached flicker multiplier
             const flickerMultiplier = this.getSourceFlicker(source);
-            let effectiveRadius = source.radius * flickerMultiplier;
+            const effectiveRadius = source.radius * flickerMultiplier;
 
             // If within light radius
             if (dist <= effectiveRadius) {
-                // SmoothStep falloff for soft penumbra (instead of linear)
-                // Creates a more natural light edge
+                // SmoothStep falloff for soft penumbra
                 const t = dist / effectiveRadius;
                 const smoothFalloff = 1 - (t * t * (3 - 2 * t)); // Smoothstep
                 const lightContribution = smoothFalloff * source.intensity * flickerMultiplier;
                 visibility = Math.min(1, visibility + lightContribution);
             }
-        });
+        }
 
         return visibility;
     },
@@ -559,22 +735,24 @@ const LightSourceSystem = {
 
     /**
      * Check if a point is near any light source
+     * OPTIMIZED: Uses spatial grid
      * @param {number} x - Grid X
      * @param {number} y - Grid Y
      * @returns {boolean}
      */
     isNearLightSource(x, y) {
-        for (const [id, source] of this.sources) {
+        const nearbySources = LightSpatialGrid.getSourcesNear(x, y, 10);
+
+        for (let i = 0; i < nearbySources.length; i++) {
+            const source = nearbySources[i];
             if (!source.active) continue;
 
-            let srcX = source.gridX;
-            let srcY = source.gridY;
-            if (source.attachedTo) {
-                srcX = source.attachedTo.gridX ?? source.attachedTo.x ?? srcX;
-                srcY = source.attachedTo.gridY ?? source.attachedTo.y ?? srcY;
-            }
+            const srcX = source._cachedGridX ?? source.gridX;
+            const srcY = source._cachedGridY ?? source.gridY;
 
-            const dist = Math.sqrt((x - srcX) ** 2 + (y - srcY) ** 2);
+            const dx = x - srcX;
+            const dy = y - srcY;
+            const dist = Math.sqrt(dx * dx + dy * dy);
             if (dist <= source.radius) return true;
         }
         return false;
@@ -582,36 +760,38 @@ const LightSourceSystem = {
 
     /**
      * Get warmth bonus at a position (for FROSTBITE)
+     * OPTIMIZED: Uses spatial grid
      * @param {number} x - Grid X
      * @param {number} y - Grid Y
      * @returns {number} - Warmth bonus per second
      */
     getWarmthBonusAt(x, y) {
         let bonus = 0;
+        const nearbySources = LightSpatialGrid.getSourcesNear(x, y, 10);
 
-        this.sources.forEach(source => {
-            if (!source.active || !source.warmthBonus) return;
+        for (let i = 0; i < nearbySources.length; i++) {
+            const source = nearbySources[i];
+            if (!source.active || !source.warmthBonus) continue;
 
-            let srcX = source.gridX;
-            let srcY = source.gridY;
-            if (source.attachedTo) {
-                srcX = source.attachedTo.gridX ?? source.attachedTo.x ?? srcX;
-                srcY = source.attachedTo.gridY ?? source.attachedTo.y ?? srcY;
-            }
+            const srcX = source._cachedGridX ?? source.gridX;
+            const srcY = source._cachedGridY ?? source.gridY;
 
-            const dist = Math.sqrt((x - srcX) ** 2 + (y - srcY) ** 2);
+            const dx = x - srcX;
+            const dy = y - srcY;
+            const dist = Math.sqrt(dx * dx + dy * dy);
             if (dist <= source.radius) {
                 // Bonus decreases with distance
                 const factor = 1 - (dist / source.radius);
                 bonus += source.warmthBonus * factor;
             }
-        });
+        }
 
         return bonus;
     },
 
     /**
      * Get the nearest light source to a position
+     * OPTIMIZED: Uses spatial grid
      * @param {number} x - Grid X
      * @param {number} y - Grid Y
      * @returns {object|null} - {source, distance} or null
@@ -619,23 +799,23 @@ const LightSourceSystem = {
     getNearestSource(x, y) {
         let nearest = null;
         let nearestDist = Infinity;
+        const nearbySources = LightSpatialGrid.getSourcesNear(x, y, 20);
 
-        this.sources.forEach(source => {
-            if (!source.active) return;
+        for (let i = 0; i < nearbySources.length; i++) {
+            const source = nearbySources[i];
+            if (!source.active) continue;
 
-            let srcX = source.gridX;
-            let srcY = source.gridY;
-            if (source.attachedTo) {
-                srcX = source.attachedTo.gridX ?? source.attachedTo.x ?? srcX;
-                srcY = source.attachedTo.gridY ?? source.attachedTo.y ?? srcY;
-            }
+            const srcX = source._cachedGridX ?? source.gridX;
+            const srcY = source._cachedGridY ?? source.gridY;
 
-            const dist = Math.sqrt((x - srcX) ** 2 + (y - srcY) ** 2);
+            const dx = x - srcX;
+            const dy = y - srcY;
+            const dist = Math.sqrt(dx * dx + dy * dy);
             if (dist < nearestDist) {
                 nearestDist = dist;
                 nearest = { source, distance: dist };
             }
-        });
+        }
 
         return nearest;
     },
@@ -703,29 +883,36 @@ const LightSourceSystem = {
             this.invalidateCache();
         }
 
-        // Advance Perlin noise time for organic flicker
+        // Advance flicker phase (wraps 0-1 over ~4 seconds for natural movement)
         this.noiseTime += dt;
+        this.flickerPhase = (this.noiseTime * this.config.flickerSpeed / 4000) % 1;
 
-        // Update global flickerOffset for player torchlight
-        // Uses FBM with fast flicker overlay for lively feel
-        const baseFlicker = PerlinNoise.fbm(
-            this.noiseTime * this.config.flickerSpeed / 1000,
-            0,
-            this.config.flickerOctaves,
-            this.config.flickerPersistence || 0.5
-        );
-        const fastFlicker = PerlinNoise.noise2D(
-            this.noiseTime * this.config.flickerSpeed / 1000 * 3,
-            50
-        ) * 0.12;
-        this.flickerOffset = baseFlicker + fastFlicker;
+        // Update flicker cache once per frame (OPTIMIZATION: not per-query)
+        this.updateFlickerCache();
+
+        // Update global flickerOffset for player torchlight (legacy compatibility)
+        this.flickerOffset = FlickerLookupTable.getFlicker(this.flickerPhase, 0);
+
+        // Rebuild spatial grid if dirty
+        if (this.spatialGridDirty) {
+            LightSpatialGrid.rebuild(this.sources);
+            this.spatialGridDirty = false;
+        }
 
         // Update each source
+        let anySourceMoved = false;
         this.sources.forEach((source, id) => {
             // Update attached position
             if (source.attachedTo) {
-                source.gridX = source.attachedTo.gridX ?? source.attachedTo.x ?? source.gridX;
-                source.gridY = source.attachedTo.gridY ?? source.attachedTo.y ?? source.gridY;
+                const newX = source.attachedTo.gridX ?? source.attachedTo.x ?? source.gridX;
+                const newY = source.attachedTo.gridY ?? source.attachedTo.y ?? source.gridY;
+
+                // Check if position changed
+                if (newX !== source.gridX || newY !== source.gridY) {
+                    source.gridX = newX;
+                    source.gridY = newY;
+                    anySourceMoved = true;
+                }
             }
 
             // Consume fuel
@@ -736,6 +923,7 @@ const LightSourceSystem = {
                     source.fuel = 0;
                     source.active = false;
                     this.invalidateCache();
+                    this.spatialGridDirty = true;
 
                     if (this.config.debugLogging) {
                         console.log(`[LightSource] Source ${id} burned out`);
@@ -743,6 +931,11 @@ const LightSourceSystem = {
                 }
             }
         });
+
+        // Rebuild spatial grid if any source moved
+        if (anySourceMoved) {
+            this.spatialGridDirty = true;
+        }
 
         // Apply undead damage from holy lights
         if (this.globalDarkness > 0 && game.enemies) {
@@ -828,8 +1021,12 @@ const LightSourceSystem = {
         this.globalDarkness = 0;
         this.targetDarkness = 0;
         this.noiseTime = 0;
+        this.flickerPhase = 0;
         this.sourceFlickers.clear();
+        this.cachedFlickerMultipliers.clear();
         this.invalidateCache();
+        this.spatialGridDirty = true;
+        LightSpatialGrid.clear();
 
         // Clear cookie texture cache
         LightCookieSystem.clearCache();
@@ -968,6 +1165,8 @@ const LightSourceSystem = {
             targetDarkness: this.targetDarkness.toFixed(2),
             totalSources: this.sources.size,
             activeSources: this.getActiveCount(),
+            spatialGridCells: LightSpatialGrid.cells.size,
+            cachedFlickers: this.cachedFlickerMultipliers.size,
             sourcesByType
         };
     },
@@ -1097,6 +1296,7 @@ const LightSourceSystem = {
     /**
      * Get brightness contribution from all light sources at a tile
      * Uses unified flicker for consistent animation
+     * OPTIMIZED: Uses spatial grid for efficient lookup
      * @param {number} tileX - Tile X position
      * @param {number} tileY - Tile Y position
      * @param {number} minBrightness - Minimum brightness floor
@@ -1140,18 +1340,18 @@ const LightSourceSystem = {
             // Torch OFF: no brightness contribution from player - relies on ambient light
         }
 
-        // Check all light sources
-        this.sources.forEach(source => {
-            if (!source.active) return;
-            if (source.type === 'player' || source.attachedTo === game.player) return;
+        // Use spatial grid for efficient nearby source lookup
+        const nearbySources = LightSpatialGrid.getSourcesNear(tileX, tileY, 10);
+
+        // Check all nearby light sources
+        for (let i = 0; i < nearbySources.length; i++) {
+            const source = nearbySources[i];
+            if (!source.active) continue;
+            if (source.type === 'player' || source.attachedTo === game.player) continue;
 
             // Center on tile (add 0.5) to match glow rendering
-            let sourceX = source.gridX + 0.5;
-            let sourceY = source.gridY + 0.5;
-            if (source.attachedTo) {
-                sourceX = (source.attachedTo.displayX ?? source.attachedTo.gridX ?? source.gridX) + 0.5;
-                sourceY = (source.attachedTo.displayY ?? source.attachedTo.gridY ?? source.gridY) + 0.5;
-            }
+            const sourceX = (source._cachedGridX ?? source.gridX) + 0.5;
+            const sourceY = (source._cachedGridY ?? source.gridY) + 0.5;
 
             const dx = tileX - sourceX;
             const dy = tileY - sourceY;
@@ -1172,7 +1372,7 @@ const LightSourceSystem = {
                     maxBrightness = Math.max(maxBrightness, brightness);
                 }
             }
-        });
+        }
 
         return Math.min(1.0, maxBrightness);
     }
@@ -1213,6 +1413,7 @@ if (typeof SystemManager !== 'undefined') {
 window.LightSourceSystem = LightSourceSystem;
 window.PerlinNoise = PerlinNoise;
 window.LightCookieSystem = LightCookieSystem;
+window.FlickerLookupTable = FlickerLookupTable;
+window.LightSpatialGrid = LightSpatialGrid;
 
-console.log('✅ Light Source System loaded (with Perlin noise flicker & cookie textures)');
-
+console.log('LightSourceSystem loaded (with pre-calculated flicker lookup & spatial partitioning)');

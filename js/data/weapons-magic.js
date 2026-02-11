@@ -47,6 +47,8 @@ const MAGIC_WEAPONS = {
 'blizzard_wand': { id: 'blizzard_wand', name: 'Blizzard Wand', slot: 'MAIN', weaponType: 'wand', damageType: 'magic', rarity: 'epic', stats: { damage: 9, speed: 1.35, range: 5, str: 0, agi: 7, int: 11, pDef: 0, mDef: 3 }, element: 'ice', elementPower: 5, special: { slowAmount: 0.25 }, noise: { onAttack: 25 }, goldValue: 355 },
 'soulreaver_wand': { id: 'soulreaver_wand', name: 'Soulreaver Wand', slot: 'MAIN', weaponType: 'wand', damageType: 'magic', rarity: 'epic', stats: { damage: 9, speed: 1.3, range: 5, str: 0, agi: 7, int: 11, pDef: 0, mDef: 3 }, element: 'death', elementPower: 5, special: { lifeSteal: 0.10 }, noise: { onAttack: 20 }, goldValue: 360 },
 'worldweaver_wand': { id: 'worldweaver_wand', name: 'Worldweaver Wand', slot: 'MAIN', weaponType: 'wand', damageType: 'magic', rarity: 'epic', stats: { damage: 12, speed: 1.15, range: 5, str: 0, agi: 7, int: 11, pDef: 0, mDef: 3 }, element: 'arcane', elementPower: 5, noise: { onAttack: 25 }, goldValue: 365 },
+'tidal_wand': { id: 'tidal_wand', name: 'Tidal Wand', slot: 'MAIN', weaponType: 'wand', damageType: 'magic', rarity: 'epic', stats: { damage: 10, speed: 1.25, range: 5, str: 0, agi: 7, int: 11, pDef: 0, mDef: 3 }, element: 'water', elementPower: 5, special: { pushback: 2 }, noise: { onAttack: 25 }, goldValue: 350 },
+'earthshaker_wand': { id: 'earthshaker_wand', name: 'Earthshaker Wand', slot: 'MAIN', weaponType: 'wand', damageType: 'magic', rarity: 'epic', stats: { damage: 11, speed: 1.1, range: 5, str: 0, agi: 7, int: 11, pDef: 0, mDef: 3 }, element: 'earth', elementPower: 5, special: { stagger: 0.20 }, noise: { onAttack: 30 }, goldValue: 355 },
 
 // === TOMES (16) === [Tome: Primary INT (80%), low base damage, high spell power]
 'apprentice_tome': { id: 'apprentice_tome', name: 'Apprentice Tome', slot: 'MAIN', weaponType: 'tome', damageType: 'magic', rarity: 'common', stats: { damage: 4, speed: 1.0, range: 3, str: 0, agi: 0, int: 4, pDef: 0, mDef: 1 }, element: null, elementPower: 0, noise: { onAttack: 20 }, goldValue: 25 },
@@ -64,7 +66,19 @@ const MAGIC_WEAPONS = {
 'codex_of_divinity': { id: 'codex_of_divinity', name: 'Codex of Divinity', slot: 'MAIN', weaponType: 'tome', damageType: 'magic', rarity: 'epic', stats: { damage: 9, speed: 1.05, range: 4, str: 0, agi: 0, int: 14, pDef: 0, mDef: 5 }, element: 'holy', elementPower: 6, noise: { onAttack: 20 }, goldValue: 375 },
 'codex_of_the_elements': { id: 'codex_of_the_elements', name: 'Codex of the Elements', slot: 'MAIN', weaponType: 'tome', damageType: 'magic', rarity: 'epic', stats: { damage: 8, speed: 1.1, range: 4, str: 0, agi: 0, int: 14, pDef: 0, mDef: 5 }, element: 'arcane', elementPower: 6, noise: { onAttack: 20 }, goldValue: 385 },
 'necronomicon': { id: 'necronomicon', name: 'Necronomicon', slot: 'MAIN', weaponType: 'tome', damageType: 'magic', rarity: 'epic', stats: { damage: 8, speed: 1.0, range: 4, str: 0, agi: 0, int: 14, pDef: 0, mDef: 5 }, element: 'death', elementPower: 6, special: { lifeSteal: 0.20 }, noise: { onAttack: 15 }, goldValue: 400 },
-'book_of_ages': { id: 'book_of_ages', name: 'Book of Ages', slot: 'MAIN', weaponType: 'tome', damageType: 'magic', rarity: 'epic', stats: { damage: 11, speed: 0.95, range: 4, str: 0, agi: 0, int: 14, pDef: 0, mDef: 5 }, element: null, elementPower: 0, special: { doubleStrike: 0.15 }, noise: { onAttack: 20 }, goldValue: 395 }
+'book_of_ages': { id: 'book_of_ages', name: 'Book of Ages', slot: 'MAIN', weaponType: 'tome', damageType: 'magic', rarity: 'epic', stats: { damage: 11, speed: 0.95, range: 4, str: 0, agi: 0, int: 14, pDef: 0, mDef: 5 }, element: null, elementPower: 0, special: { doubleStrike: 0.15 }, noise: { onAttack: 20 }, goldValue: 395 },
+'codex_of_the_tides': { id: 'codex_of_the_tides', name: 'Codex of the Tides', slot: 'MAIN', weaponType: 'tome', damageType: 'magic', rarity: 'epic', stats: { damage: 9, speed: 1.05, range: 4, str: 0, agi: 0, int: 14, pDef: 0, mDef: 5 }, element: 'water', elementPower: 6, special: { manaRegen: 0.15 }, noise: { onAttack: 20 }, goldValue: 375 },
+'codex_of_the_earth': { id: 'codex_of_the_earth', name: 'Codex of the Earth', slot: 'MAIN', weaponType: 'tome', damageType: 'magic', rarity: 'epic', stats: { damage: 10, speed: 0.95, range: 4, str: 0, agi: 0, int: 14, pDef: 0, mDef: 5 }, element: 'earth', elementPower: 6, special: { armorBonus: 5 }, noise: { onAttack: 25 }, goldValue: 380 },
+
+// === LEGENDARY STAFFS (2) ===
+'primordial_scepter': { id: 'primordial_scepter', name: 'Primordial Scepter', slot: 'MAIN', weaponType: 'staff', damageType: 'magic', rarity: 'legendary', stats: { damage: 22, speed: 0.95, range: 2, str: 0, agi: 0, int: 18, pDef: 0, mDef: 8 }, element: 'arcane', elementPower: 7, special: { magicPen: 0.35, spellEcho: 0.15 }, noise: { onAttack: 35 }, goldValue: 1350 },
+'staff_of_eternity': { id: 'staff_of_eternity', name: 'Staff of Eternity', slot: 'MAIN', weaponType: 'staff', damageType: 'magic', rarity: 'legendary', stats: { damage: 20, speed: 1.0, range: 2, str: 0, agi: 0, int: 18, pDef: 0, mDef: 8 }, element: 'holy', elementPower: 7, special: { lifeSteal: 0.15, manaRegen: 0.10 }, noise: { onAttack: 30 }, goldValue: 1300 },
+
+// === LEGENDARY WANDS (1) ===
+'void_conduit': { id: 'void_conduit', name: 'Void Conduit', slot: 'MAIN', weaponType: 'wand', damageType: 'magic', rarity: 'legendary', stats: { damage: 16, speed: 1.4, range: 6, str: 0, agi: 10, int: 15, pDef: 0, mDef: 5 }, element: 'dark', elementPower: 7, special: { magicPen: 0.30, chaosOrb: 0.10 }, noise: { onAttack: 20 }, goldValue: 1200 },
+
+// === LEGENDARY TOMES (1) ===
+'grimoire_of_oblivion': { id: 'grimoire_of_oblivion', name: 'Grimoire of Oblivion', slot: 'MAIN', weaponType: 'tome', damageType: 'magic', rarity: 'legendary', stats: { damage: 14, speed: 1.1, range: 5, str: 0, agi: 0, int: 20, pDef: 0, mDef: 8 }, element: 'death', elementPower: 7, special: { executeBonus: 0.35, soulHarvest: 0.20 }, noise: { onAttack: 15 }, goldValue: 1400 }
 
 };
 

@@ -1,7 +1,28 @@
 // ============================================================================
 // SYSTEM MANAGER - The Shifting Chasm
 // ============================================================================
-// Updated: Added new systems to expected list, improved diagnostics
+// Manages registration, lifecycle, and priority-based execution of game systems.
+//
+// PRIORITY SYSTEM:
+// - Lower priority numbers execute FIRST (both for init and update)
+// - Systems are sorted by priority before initialization
+// - Dependent systems should have HIGHER priority numbers than their dependencies
+//
+// PRIORITY RANGES:
+//   0-9     : Core infrastructure (rarely used)
+//   10-29   : Input & Movement (player input, movement processing)
+//   30-39   : Environmental (noise, hazards, lighting)
+//   40-49   : AI & Behavior (enemy AI, social systems)
+//   50-59   : Combat (damage, skills, status effects)
+//   60-79   : Post-Combat (inventory, loot, rewards)
+//   80-89   : UI Updates (HUD, overlays)
+//   90-99   : Cleanup & Finalization
+//
+// INITIALIZATION ORDER:
+// Systems are initialized in priority order (lowest first). This ensures
+// that dependent systems have their dependencies already initialized.
+// Example: 'enemy-ai' (priority 40) initializes after 'noise-system' (priority 30)
+//
 // ============================================================================
 
 // ============================================================================
@@ -104,29 +125,36 @@ const SystemManager = {
     // ========================================================================
     
     /**
-     * Initialize all registered systems
+     * Initialize all registered systems in priority order (lowest priority first)
+     * This ensures dependent systems have their dependencies initialized first.
+     * @param {object} gameRef - Reference to the game state object
      */
     initAll(gameRef) {
+        // Sort systems by priority BEFORE initialization
         this._rebuildSortedSystems();
-        
-        console.log('[SystemManager] Initializing all systems...');
+
+        console.log('[SystemManager] Initializing all systems in priority order...');
+        console.log(`[SystemManager] Init order: ${this._sortedSystems.map(e => `${e.name}(${e.priority})`).join(' -> ')}`);
+
         let initCount = 0;
-        
+        const initOrder = [];
+
         for (const entry of this._sortedSystems) {
             if (!entry.enabled) continue;
-            
+
             try {
                 if (typeof entry.system.init === 'function') {
                     entry.system.init(gameRef);
+                    initOrder.push(entry.name);
                     initCount++;
                 }
             } catch (e) {
-                console.error(`[SystemManager] Error initializing ${entry.name}:`, e);
+                console.error(`[SystemManager] Error initializing ${entry.name} (priority ${entry.priority}):`, e);
             }
         }
-        
+
         this._initialized = true;
-        console.log(`[SystemManager] Initialized ${initCount} systems`);
+        console.log(`[SystemManager] Initialized ${initCount} systems: ${initOrder.join(', ')}`);
     },
     
     /**
@@ -357,6 +385,48 @@ const SystemManager = {
         return this._sortedSystems
             .filter(entry => entry.priority >= min && entry.priority <= max)
             .map(entry => entry.system);
+    },
+
+    /**
+     * Verify that a system's dependencies have lower priority (initialize first)
+     * @param {string} systemName - Name of the system to check
+     * @param {string[]} dependencies - Names of required dependency systems
+     * @returns {object} - { valid: boolean, issues: string[] }
+     */
+    verifyDependencyOrder(systemName, dependencies) {
+        const systemEntry = this.systems.get(systemName);
+        if (!systemEntry) {
+            return { valid: false, issues: [`System '${systemName}' not registered`] };
+        }
+
+        const issues = [];
+        for (const depName of dependencies) {
+            const depEntry = this.systems.get(depName);
+            if (!depEntry) {
+                issues.push(`Dependency '${depName}' not registered`);
+            } else if (depEntry.priority >= systemEntry.priority) {
+                issues.push(
+                    `'${depName}' (priority ${depEntry.priority}) should have lower priority than ` +
+                    `'${systemName}' (priority ${systemEntry.priority}) to initialize first`
+                );
+            }
+        }
+
+        return {
+            valid: issues.length === 0,
+            issues: issues
+        };
+    },
+
+    /**
+     * Get initialization order summary for debugging
+     * @returns {string} - Human-readable initialization order
+     */
+    getInitOrder() {
+        this._rebuildSortedSystems();
+        return this._sortedSystems
+            .map((entry, idx) => `${idx + 1}. ${entry.name} (priority: ${entry.priority})`)
+            .join('\n');
     }
 };
 

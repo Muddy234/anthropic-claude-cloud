@@ -2,6 +2,34 @@
 // SURVIVAL EXTRACTION UPDATE: Village hub map generation
 
 // ============================================================================
+// FALLBACK DEFINITIONS
+// ============================================================================
+
+/**
+ * Fallback for getTransformedTile if village-tile-states.js not loaded
+ * Returns the original tile unchanged
+ */
+function _fallbackGetTransformedTile(baseTileType, worldState) {
+    return { type: baseTileType };
+}
+
+/**
+ * Fallback for getBuildingState if village-tile-states.js not loaded
+ * Returns default intact building state
+ */
+function _fallbackGetBuildingState(buildingId, worldState) {
+    return { status: 'intact', usable: true };
+}
+
+/**
+ * Fallback for getDamageConfig if village-tile-states.js not loaded
+ * Returns no damage effects
+ */
+function _fallbackGetDamageConfig(worldState) {
+    return { crackChance: 0, rubbleChance: 0, fireChance: 0 };
+}
+
+// ============================================================================
 // VILLAGE GENERATOR
 // ============================================================================
 
@@ -446,31 +474,41 @@ const VillageGenerator = {
      * @private
      */
     _applyWorldState(map, buildings, worldState) {
+        // Use global functions if available, otherwise fallbacks
+        const _getDamageConfig = typeof getDamageConfig === 'function'
+            ? getDamageConfig
+            : _fallbackGetDamageConfig;
+        const _getTransformedTile = typeof getTransformedTile === 'function'
+            ? getTransformedTile
+            : _fallbackGetTransformedTile;
+        const _getBuildingState = typeof getBuildingState === 'function'
+            ? getBuildingState
+            : _fallbackGetBuildingState;
+
         // Get damage configuration for this world state
-        const damageConfig = typeof getDamageConfig === 'function' ?
-            getDamageConfig(worldState) : { crackChance: 0, rubbleChance: 0, fireChance: 0 };
+        const damageConfig = _getDamageConfig(worldState);
 
         // Transform tiles based on world state
         for (let y = 0; y < this.HEIGHT; y++) {
             for (let x = 0; x < this.WIDTH; x++) {
                 const tile = map[y][x];
+                if (!tile) continue;  // Defensive check
+
                 const baseType = tile.baseType || tile.type;
 
-                // Apply tile transformation if available
-                if (typeof getTransformedTile === 'function') {
-                    const transformed = getTransformedTile(baseType, worldState);
-                    if (transformed.type !== baseType) {
-                        tile.baseType = baseType;  // Remember original
-                        tile.type = transformed.type;
-                        if (transformed.color) {
-                            tile.stateColor = transformed.color;
-                        }
+                // Apply tile transformation
+                const transformed = _getTransformedTile(baseType, worldState);
+                if (transformed && transformed.type !== baseType) {
+                    tile.baseType = baseType;  // Remember original
+                    tile.type = transformed.type;
+                    if (transformed.color) {
+                        tile.stateColor = transformed.color;
                     }
                 }
 
-                // Apply random damage effects
+                // Apply random damage effects (only if not already damaged)
                 if (damageConfig.crackChance > 0 && Math.random() < damageConfig.crackChance) {
-                    if (tile.type.includes('path') || tile.type.includes('cobble')) {
+                    if (tile.type && (tile.type.includes('path') || tile.type.includes('cobble'))) {
                         tile.cracked = true;
                     }
                 }
@@ -483,7 +521,7 @@ const VillageGenerator = {
                 }
 
                 if (damageConfig.fireChance > 0 && Math.random() < damageConfig.fireChance) {
-                    if (tile.type.includes('grass') || tile.type.includes('floor')) {
+                    if (tile.type && (tile.type.includes('grass') || tile.type.includes('floor'))) {
                         tile.onFire = true;
                     }
                 }
@@ -492,34 +530,34 @@ const VillageGenerator = {
 
         // Apply building state transformations
         buildings.forEach(building => {
-            if (typeof getBuildingState === 'function') {
-                const buildingState = getBuildingState(building.id, worldState);
+            if (!building) return;  // Defensive check
 
-                building.status = buildingState.status;
-                building.usable = buildingState.usable !== false;
+            const buildingState = _getBuildingState(building.id, worldState);
+            if (!buildingState) return;  // Defensive check
 
-                if (buildingState.name) {
-                    building.displayName = buildingState.name;
-                }
-                if (buildingState.color) {
-                    building.stateColor = buildingState.color;
-                }
-                if (buildingState.description) {
-                    building.stateDescription = buildingState.description;
-                }
-                if (buildingState.replacementInteraction) {
-                    building.replacementInteraction = buildingState.replacementInteraction;
-                }
-                if (buildingState.npc === null) {
-                    building.npcs = [];  // NPC is dead/gone
-                    building.npcDead = true;
-                }
+            building.status = buildingState.status || 'intact';
+            building.usable = buildingState.usable !== false;
 
-                // Special case: Bank is crushed in BURNING state
-                if (building.id === 'bank' && buildingState.status === 'crushed') {
-                    this._crushBuilding(map, building);
-                }
+            if (buildingState.name) {
+                building.displayName = buildingState.name;
+            }
+            if (buildingState.color) {
+                building.stateColor = buildingState.color;
+            }
+            if (buildingState.description) {
+                building.stateDescription = buildingState.description;
+            }
+            if (buildingState.replacementInteraction) {
+                building.replacementInteraction = buildingState.replacementInteraction;
+            }
+            if (buildingState.npc === null) {
+                building.npcs = [];  // NPC is dead/gone
+                building.npcDead = true;
+            }
 
+            // Special case: Bank is crushed in BURNING state
+            if (building.id === 'bank' && buildingState.status === 'crushed') {
+                this._crushBuilding(map, building);
             }
         });
     },

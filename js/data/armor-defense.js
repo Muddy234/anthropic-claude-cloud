@@ -6,10 +6,6 @@ const DEFENSE_ARMOR = {
 
 // === SHIELDS (24) === [Heavy (armored/stone): pDef+STR | Light (hide/scaled/bone): AGI+pDef | Cloth (ethereal): INT+mDef]
 'wooden_shield': { id: 'wooden_shield', name: 'Wooden Shield', slot: 'OFF', armorType: 'hide', rarity: 'common', stats: { defense: 2, block: 0.15, str: 0, agi: 2, int: 0, pDef: 1, mDef: 0 }, element: null, elementPower: 0, noise: { onMove: 5 }, goldValue: 15 },
-
-// === UTILITY OFF-HAND ===
-'torch': { id: 'torch', name: 'Torch', slot: 'OFF', armorType: 'utility', rarity: 'common', stats: { visionBonus: 2 }, element: 'fire', elementPower: 0, noise: { onMove: 0 }, goldValue: 5, description: 'A simple torch that illuminates the darkness. +2 vision range.' },
-
 'iron_shield': { id: 'iron_shield', name: 'Iron Shield', slot: 'OFF', armorType: 'armored', rarity: 'common', stats: { defense: 3, block: 0.20, str: 1, agi: 0, int: 0, pDef: 2, mDef: 0 }, element: null, elementPower: 0, noise: { onMove: 10 }, goldValue: 35 },
 'steel_shield': { id: 'steel_shield', name: 'Steel Shield', slot: 'OFF', armorType: 'armored', rarity: 'uncommon', stats: { defense: 4, block: 0.25, str: 2, agi: 0, int: 0, pDef: 4, mDef: 0 }, element: null, elementPower: 0, noise: { onMove: 10 }, goldValue: 80 },
 'tower_shield': { id: 'tower_shield', name: 'Tower Shield', slot: 'OFF', armorType: 'armored', rarity: 'uncommon', stats: { defense: 6, block: 0.35, str: 2, agi: 0, int: 0, pDef: 4, mDef: 0 }, element: null, elementPower: 0, special: { speedPenalty: -0.10 }, noise: { onMove: 15 }, goldValue: 100 },

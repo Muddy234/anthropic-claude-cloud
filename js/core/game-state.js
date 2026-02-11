@@ -1,13 +1,78 @@
 // === js/core/game-state.js ===
 // SURVIVAL EXTRACTION UPDATE: Added persistent, session, and village state
 
+/**
+ * ============================================================================
+ * STATE AUTHORITY DOCUMENTATION
+ * ============================================================================
+ *
+ * This file defines four state objects. To avoid confusion about which object
+ * is authoritative for each piece of data, refer to this guide:
+ *
+ * ## State Objects Overview:
+ *
+ * 1. `game` - Legacy dungeon runtime state (during active gameplay)
+ *    - Authoritative during dungeon gameplay
+ *    - Contains live player data, map data, enemies, etc.
+ *    - NOT saved directly - synchronized to session/persistent on save
+ *
+ * 2. `persistentState` - Permanent progress (survives death)
+ *    - Bank storage, shortcuts, stats, quest progress
+ *    - SAVED to localStorage
+ *
+ * 3. `sessionState` - Current run data (lost on death unless rescued)
+ *    - Run tracking, floor info, extraction points
+ *    - SAVED to localStorage (for crash recovery)
+ *
+ * 4. `villageState` - Village instance (reset on village load)
+ *    - Player position in village, NPC interaction, map data
+ *    - SAVED to localStorage
+ *
+ * ## AUTHORITATIVE DATA SOURCES:
+ *
+ * | Data Type         | Authoritative Source        | Notes                           |
+ * |-------------------|-----------------------------|---------------------------------|
+ * | Player inventory  | `game.player.inventory`     | Use during dungeon gameplay     |
+ * | Player gold       | `game.player.gold`          | @deprecated Use bank for safety |
+ * | Player stats      | `game.player.stats`         | Derived from base + equipment   |
+ * | Current floor     | `sessionState.currentFloor` | Synced to game.floor on init    |
+ * | Bank items        | `persistentState.bank`      | Safe storage between runs       |
+ * | Run active status | `sessionState.active`       | True during dungeon run         |
+ * | Map/tiles         | `game.map`                  | Generated per floor             |
+ *
+ * ## DUPLICATE FIELDS (for compatibility):
+ *
+ * - `game.floor` mirrors `sessionState.currentFloor`
+ *   -> sessionState.currentFloor is authoritative
+ *
+ * - `game.gold` should NOT be used - use `game.player.gold` during run
+ *   -> @deprecated Will be removed
+ *
+ * - `sessionState.inventory` is synced FROM `game.player.inventory`
+ *   -> game.player.inventory is authoritative during gameplay
+ *   -> sessionState.inventory used for save/load and death drop
+ *
+ * - `sessionState.gold` is synced FROM `game.player.gold`
+ *   -> game.player.gold is authoritative during gameplay
+ *
+ * ## SYNCHRONIZATION POINTS:
+ *
+ * 1. Run Start: loadout -> sessionState.inventory -> game.player.inventory
+ * 2. During Gameplay: Items added directly to game.player.inventory
+ * 3. Save/AutoSave: game.player.inventory -> sessionState.inventory (sync)
+ * 4. Extraction: game.player.inventory -> persistentState.bank
+ * 5. Death: game.player.inventory -> persistentState.deathDrop
+ *
+ * ============================================================================
+ */
+
 // ============================================================================
 // LEGACY GAME STATE (maintained for compatibility during transition)
 // ============================================================================
 
 let game = {
     state: 'menu',
-    floor: 1,
+    floor: 1,  // @sync mirrors sessionState.currentFloor
     player: null,
     map: [],
     enemies: [],
@@ -29,7 +94,7 @@ let game = {
     keys: {},
     lastMoveTime: 0,
     moveDelay: 150,
-    gold: 50,
+    gold: 50,  // @deprecated Use game.player.gold during gameplay
     merchantVisited: false,
     doorways: [],
     lavaVents: [],
@@ -75,6 +140,8 @@ let persistentState = {
     },
 
     // Floor degradation tracking
+    // See DEGRADATION_CONFIG in constants.js for full system documentation
+    // floorMultipliers: { [floorNumber]: qualityMultiplier (0.4-1.0) }
     degradation: {
         stage: 1,
         floorMultipliers: {}
@@ -107,6 +174,8 @@ let persistentState = {
     },
 
     // Village state
+    // degradationStage: 1-4 based on deepest floor reached (cosmetic)
+    // See DEGRADATION_CONFIG.stages in constants.js
     village: {
         degradationStage: 1,
         improvements: [],
@@ -157,13 +226,13 @@ let sessionState = {
 
     // Floor information
     startFloor: 1,
-    currentFloor: 1,
+    currentFloor: 1,  // @authoritative - synced to game.floor
     floorTime: 0,
     floorStartTime: null,
 
-    // Carried items (at risk)
+    // Carried items (at risk) - @sync from game.player.inventory on save
     inventory: [],
-    gold: 0,
+    gold: 0,  // @sync from game.player.gold on save
 
     // Extraction points for current floor
     extractionPoints: [],
@@ -411,6 +480,23 @@ function loadPersistentState(saveData) {
 }
 
 /**
+ * Synchronize session state from game state
+ * Call this before saving to ensure session reflects current gameplay
+ */
+function syncSessionFromGame() {
+    if (!game.player) return;
+
+    // Sync inventory from game.player (authoritative during gameplay)
+    sessionState.inventory = (game.player.inventory || []).map(item => ({ ...item }));
+
+    // Sync gold from game.player
+    sessionState.gold = game.player.gold || 0;
+
+    // Sync floor
+    sessionState.currentFloor = game.floor || sessionState.currentFloor;
+}
+
+/**
  * Initialize starting kit in bank for new players
  */
 function initializeStartingKit() {
@@ -504,6 +590,7 @@ window.resetSessionState = resetSessionState;
 window.resetVillageState = resetVillageState;
 window.loadPersistentState = loadPersistentState;
 window.initializeStartingKit = initializeStartingKit;
+window.syncSessionFromGame = syncSessionFromGame;
 
 // Bestiary tracking functions
 window.discoverMonster = discoverMonster;

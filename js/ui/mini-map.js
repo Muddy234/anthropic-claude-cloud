@@ -2,6 +2,7 @@
 // MINI-MAP - CotDG Inspired Circular Radar
 // ============================================================================
 // Circular radar-style minimap with dark atmosphere and glowing entities
+// Performance optimized with offscreen canvas caching for explored terrain
 // ============================================================================
 
 // Mini-map configuration
@@ -22,8 +23,195 @@ window.minimapState = {
     pulsePhase: 0
 };
 
+// =============================================================================
+// MINIMAP CACHE SYSTEM - Issue #6 Performance Optimization
+// =============================================================================
+// Caches explored terrain to offscreen canvas, only redraws entities each frame
+// =============================================================================
+
+const MinimapCache = {
+    // Offscreen canvas for terrain
+    terrainCanvas: null,
+    terrainCtx: null,
+
+    // Track what we've cached
+    cachedPlayerX: null,
+    cachedPlayerY: null,
+    cachedExploredCount: 0,
+
+    // Dirty flag - when true, terrain needs full redraw
+    isDirty: true,
+
+    // Frame counter for periodic refresh (handles edge cases)
+    frameCount: 0,
+    REFRESH_INTERVAL: 60, // Full refresh every 60 frames (1 second at 60fps)
+
+    /**
+     * Initialize the offscreen canvas
+     */
+    init() {
+        if (this.terrainCanvas) return; // Already initialized
+
+        const cfg = MINIMAP_CONFIG;
+        this.terrainCanvas = document.createElement('canvas');
+        this.terrainCanvas.width = cfg.size;
+        this.terrainCanvas.height = cfg.size;
+        this.terrainCtx = this.terrainCanvas.getContext('2d');
+
+        console.log('[MinimapCache] Initialized offscreen canvas for terrain caching');
+    },
+
+    /**
+     * Check if cache needs to be invalidated
+     */
+    checkDirty(playerGridX, playerGridY) {
+        // Player moved - cache is dirty
+        if (this.cachedPlayerX !== playerGridX || this.cachedPlayerY !== playerGridY) {
+            this.isDirty = true;
+            this.cachedPlayerX = playerGridX;
+            this.cachedPlayerY = playerGridY;
+            return true;
+        }
+
+        // Count explored tiles (simple heuristic - if count changes, exploration happened)
+        let exploredCount = 0;
+        if (game.map) {
+            const cfg = MINIMAP_CONFIG;
+            const startX = Math.max(0, playerGridX - cfg.tileRadius);
+            const endX = Math.min(game.map[0]?.length || 0, playerGridX + cfg.tileRadius);
+            const startY = Math.max(0, playerGridY - cfg.tileRadius);
+            const endY = Math.min(game.map.length, playerGridY + cfg.tileRadius);
+
+            for (let y = startY; y < endY; y++) {
+                for (let x = startX; x < endX; x++) {
+                    if (game.map[y]?.[x]?.explored) exploredCount++;
+                }
+            }
+        }
+
+        if (exploredCount !== this.cachedExploredCount) {
+            this.isDirty = true;
+            this.cachedExploredCount = exploredCount;
+            return true;
+        }
+
+        // Periodic refresh (handles edge cases like visibility changes)
+        this.frameCount++;
+        if (this.frameCount >= this.REFRESH_INTERVAL) {
+            this.frameCount = 0;
+            this.isDirty = true;
+            return true;
+        }
+
+        return false;
+    },
+
+    /**
+     * Mark cache as dirty (call when map structure changes)
+     */
+    invalidate() {
+        this.isDirty = true;
+    },
+
+    /**
+     * Render terrain to offscreen canvas
+     */
+    renderTerrain(centerX, centerY, radius, playerGridX, playerGridY, colors) {
+        if (!this.terrainCtx) this.init();
+
+        const ctx = this.terrainCtx;
+        const cfg = MINIMAP_CONFIG;
+
+        // Clear offscreen canvas
+        ctx.clearRect(0, 0, cfg.size, cfg.size);
+
+        // Local center (offscreen canvas is centered at size/2)
+        const localCenterX = cfg.size / 2;
+        const localCenterY = cfg.size / 2;
+
+        // Clip to circular region
+        ctx.save();
+        ctx.beginPath();
+        ctx.arc(localCenterX, localCenterY, radius - 2, 0, Math.PI * 2);
+        ctx.clip();
+
+        // Background gradient
+        const bgGrad = ctx.createRadialGradient(localCenterX, localCenterY, 0, localCenterX, localCenterY, radius);
+        bgGrad.addColorStop(0, colors.bgDark || '#12121a');
+        bgGrad.addColorStop(0.7, colors.bgDarkest || '#0a0a0f');
+        bgGrad.addColorStop(1, '#000000');
+        ctx.fillStyle = bgGrad;
+        ctx.fillRect(0, 0, cfg.size, cfg.size);
+
+        // Grid lines
+        drawMinimapGridToContext(ctx, localCenterX, localCenterY, radius, colors);
+
+        // Calculate tile range
+        const startX = Math.max(0, playerGridX - cfg.tileRadius);
+        const endX = Math.min(game.map[0]?.length || 0, playerGridX + cfg.tileRadius);
+        const startY = Math.max(0, playerGridY - cfg.tileRadius);
+        const endY = Math.min(game.map.length, playerGridY + cfg.tileRadius);
+
+        // Draw tiles
+        for (let mapY = startY; mapY < endY; mapY++) {
+            for (let mapX = startX; mapX < endX; mapX++) {
+                const tile = game.map[mapY]?.[mapX];
+                if (!tile) continue;
+
+                const relX = mapX - playerGridX;
+                const relY = mapY - playerGridY;
+                const minimapX = localCenterX + (relX * cfg.tileSize);
+                const minimapY = localCenterY + (relY * cfg.tileSize);
+
+                const distFromCenter = Math.sqrt(relX * relX + relY * relY) * cfg.tileSize;
+                if (distFromCenter > radius - 5) continue;
+
+                drawMinimapTileCotDG(ctx, minimapX, minimapY, cfg.tileSize, tile, colors);
+            }
+        }
+
+        ctx.restore();
+
+        this.isDirty = false;
+    },
+
+    /**
+     * Get the cached terrain canvas
+     */
+    getTerrainCanvas() {
+        return this.terrainCanvas;
+    }
+};
+
+/**
+ * Draw grid lines to a specific context (used by cache)
+ */
+function drawMinimapGridToContext(ctx, cx, cy, radius, colors) {
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.05)';
+    ctx.lineWidth = 1;
+
+    // Concentric circles
+    for (let r = 0.33; r < 1; r += 0.33) {
+        ctx.beginPath();
+        ctx.arc(cx, cy, radius * r, 0, Math.PI * 2);
+        ctx.stroke();
+    }
+
+    // Cross lines
+    ctx.beginPath();
+    ctx.moveTo(cx - radius, cy);
+    ctx.lineTo(cx + radius, cy);
+    ctx.moveTo(cx, cy - radius);
+    ctx.lineTo(cx, cy + radius);
+    ctx.stroke();
+}
+
+// Export cache for external invalidation
+window.MinimapCache = MinimapCache;
+
 /**
  * Render the mini-map - CotDG style circular radar
+ * OPTIMIZED: Uses offscreen canvas caching for terrain (Issue #6)
  */
 function renderMiniMap(ctx, canvasWidth) {
     if (!game.player || !game.map) return;
@@ -51,55 +239,36 @@ function renderMiniMap(ctx, canvasWidth) {
     window.minimapState.scanAngle += cfg.scanLineSpeed * 16; // Assume ~60fps
     window.minimapState.pulsePhase += cfg.pulseSpeed * 16;
 
-    ctx.save();
-
-    // === CLIP TO CIRCULAR REGION ===
-    ctx.beginPath();
-    ctx.arc(centerX, centerY, radius - 2, 0, Math.PI * 2);
-    ctx.clip();
-
-    // === BACKGROUND ===
-    const bgGrad = ctx.createRadialGradient(centerX, centerY, 0, centerX, centerY, radius);
-    bgGrad.addColorStop(0, colors.bgDark || '#12121a');
-    bgGrad.addColorStop(0.7, colors.bgDarkest || '#0a0a0f');
-    bgGrad.addColorStop(1, '#000000');
-    ctx.fillStyle = bgGrad;
-    ctx.fillRect(centerX - radius, centerY - radius, cfg.size, cfg.size);
-
-    // === GRID LINES (subtle) ===
-    drawMinimapGrid(ctx, centerX, centerY, radius, colors);
-
     // Calculate center tile (player position)
     const playerGridX = Math.floor(game.player.gridX);
     const playerGridY = Math.floor(game.player.gridY);
 
-    // Calculate tile range to display
-    const startX = Math.max(0, playerGridX - cfg.tileRadius);
-    const endX = Math.min(game.map[0]?.length || 0, playerGridX + cfg.tileRadius);
-    const startY = Math.max(0, playerGridY - cfg.tileRadius);
-    const endY = Math.min(game.map.length, playerGridY + cfg.tileRadius);
+    // === CACHED TERRAIN RENDERING (Issue #6 Optimization) ===
+    // Initialize cache if needed
+    MinimapCache.init();
 
-    // === DRAW TILES ===
-    for (let mapY = startY; mapY < endY; mapY++) {
-        for (let mapX = startX; mapX < endX; mapX++) {
-            const tile = game.map[mapY]?.[mapX];
-            if (!tile) continue;
+    // Check if terrain cache needs refresh
+    MinimapCache.checkDirty(playerGridX, playerGridY);
 
-            // Calculate position on minimap
-            const relX = mapX - playerGridX;
-            const relY = mapY - playerGridY;
-            const minimapX = centerX + (relX * cfg.tileSize);
-            const minimapY = centerY + (relY * cfg.tileSize);
-
-            // Check if within circular bounds
-            const distFromCenter = Math.sqrt(relX * relX + relY * relY) * cfg.tileSize;
-            if (distFromCenter > radius - 5) continue;
-
-            drawMinimapTileCotDG(ctx, minimapX, minimapY, cfg.tileSize, tile, colors);
-        }
+    // Render terrain to cache if dirty
+    if (MinimapCache.isDirty) {
+        MinimapCache.renderTerrain(centerX, centerY, radius, playerGridX, playerGridY, colors);
     }
 
-    // === DRAW ENTITIES ===
+    // Draw cached terrain to main canvas
+    const terrainCanvas = MinimapCache.getTerrainCanvas();
+    if (terrainCanvas) {
+        ctx.drawImage(terrainCanvas, centerX - radius, centerY - radius);
+    }
+
+    ctx.save();
+
+    // === CLIP TO CIRCULAR REGION (for entities) ===
+    ctx.beginPath();
+    ctx.arc(centerX, centerY, radius - 2, 0, Math.PI * 2);
+    ctx.clip();
+
+    // === DRAW ENTITIES (always fresh each frame) ===
     drawMinimapEntities(ctx, centerX, centerY, cfg, playerGridX, playerGridY, colors);
 
     // === PLAYER MARKER (always centered) ===

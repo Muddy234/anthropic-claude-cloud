@@ -71,6 +71,11 @@ class EnemyAI {
         // Social system position override
         this.targetPosition = null;
 
+        // Frustration system (pathfinding failure handling)
+        this.frustrationCounter = 0;
+        this.lastPosition = { x: enemy.gridX, y: enemy.gridY };
+        this.stuckCheckTimer = 0;
+
         // Tier-based behavior (from MONSTER_TIERS)
         const tierConfig = enemy.tierConfig || MONSTER_TIERS?.[enemy.tier] || null;
         this.reactionDelay = tierConfig?.senses?.reactionDelay || enemy.perception?.reactionDelay || 0;
@@ -411,6 +416,23 @@ class EnemyAI {
 
     _chase(dt, game) {
         if (!this.target) return;
+
+        // FRUSTRATION CHECK: Detect if enemy is stuck
+        this.stuckCheckTimer += dt;
+        if (this.stuckCheckTimer >= 500) { // Check every 500ms
+            this.stuckCheckTimer = 0;
+            const moved = Math.abs(this.enemy.gridX - this.lastPosition.x) > 0.1 ||
+                          Math.abs(this.enemy.gridY - this.lastPosition.y) > 0.1;
+
+            if (!moved && !this.enemy.isMoving) {
+                this.frustrationCounter++;
+                if (this._handleFrustration(game)) return;
+            } else {
+                // Made progress - reset frustration
+                this.frustrationCounter = Math.max(0, this.frustrationCounter - 1);
+            }
+            this.lastPosition = { x: this.enemy.gridX, y: this.enemy.gridY };
+        }
 
         // HIGH PRIORITY: Social/Swarm position override
         // If this enemy has a swarm-assigned position, go there first
@@ -811,6 +833,57 @@ class EnemyAI {
         this._changeState(AI_STATES.CHASING);
     }
 
+    // HELPER: Handle frustration when enemy is stuck
+    _handleFrustration(game) {
+        const tier = this.enemy.tier || 'TIER_2';
+
+        // Tier 3 (fodder): Give up after 5 failures and return to patrol
+        if (this.isSacrificial && this.frustrationCounter >= 5) {
+            this.frustrationCounter = 0;
+            this.target = null;
+            this.lastKnownTargetPos = null;
+            if (typeof showStatusText === 'function') {
+                showStatusText(this.enemy, '...', '#888888');
+            }
+            this._changeState(AI_STATES.RETURNING);
+            return true;
+        }
+
+        // Tier 2+: After 5 failures, try alternate tactics
+        if (this.frustrationCounter >= 5 && this.frustrationCounter < 10) {
+            // Try to find a flanking position
+            const player = game.player;
+            if (player) {
+                // Pick a random angle around the player
+                const angle = Math.random() * Math.PI * 2;
+                const flankDist = (this.enemy.combat?.attackRange || 1) + 2;
+                const flankX = player.gridX + Math.cos(angle) * flankDist;
+                const flankY = player.gridY + Math.sin(angle) * flankDist;
+
+                // Try to move to flanking position instead
+                if (!this.enemy.isMoving) {
+                    this._moveToward(flankX, flankY, game, 0.9);
+                }
+            }
+            return false; // Continue in chase state but with new target
+        }
+
+        // All tiers: After 10 failures, enter SEARCHING state
+        if (this.frustrationCounter >= 10) {
+            this.frustrationCounter = 0;
+            if (this.target) {
+                this.lastKnownTargetPos = { x: this.target.gridX, y: this.target.gridY };
+            }
+            if (typeof showStatusText === 'function') {
+                showStatusText(this.enemy, 'Where...?', '#FFAA00');
+            }
+            this._changeState(AI_STATES.SEARCHING);
+            return true;
+        }
+
+        return false;
+    }
+
     // HELPER: Count nearby allies for pack courage
     _countNearbyAllies(range) {
         if (!AIManager.game?.enemies) return 0;
@@ -1089,6 +1162,11 @@ class EnemyAI {
     }
 
     _getCurrentRoom(game) {
+        // Use consolidated RoomUtils if available, otherwise fallback
+        if (typeof RoomUtils !== 'undefined') {
+            return RoomUtils.getCurrentRoom(this.enemy, game);
+        }
+        // Fallback implementation
         if (!game.rooms) return null;
         for (const r of game.rooms) {
             if (this.enemy.gridX >= r.floorX && this.enemy.gridX < r.floorX + r.floorWidth &&
@@ -1153,6 +1231,8 @@ class EnemyAI {
         this.currentState = newState;
         this.stateTimer = 0;
         this.stateData = {};
+        this.frustrationCounter = 0; // Reset frustration on state change
+        this.stuckCheckTimer = 0;
 
         if (newState === AI_STATES.SHOUTING) { this.shoutTimer = 0; this.isShoutInterrupted = false; }
         if (newState === AI_STATES.DEFENSIVE) this.retreatAlly = null;
@@ -1168,6 +1248,206 @@ class EnemyAI {
     }
 
     setDebugLog(enabled) { this.debugLog = enabled; }
+}
+
+// ============================================================
+// ENCIRCLEMENT WARNING SYSTEM
+// ============================================================
+
+/**
+ * EncirclementSystem - Detects when player is flanked or surrounded by enemies
+ *
+ * States:
+ * - CLEAR: No significant threat positioning
+ * - FLANKED: 2+ enemies in rear 180-degree arc
+ * - SURROUNDED: Enemies in 3+ quadrants around player
+ *
+ * @fires encirclement:changed - When encirclement state changes
+ * @fires encirclement:flanked - When player becomes flanked
+ * @fires encirclement:surrounded - When player becomes surrounded
+ * @fires encirclement:clear - When player escapes encirclement
+ */
+const EncirclementSystem = {
+    STATES: {
+        CLEAR: 'clear',
+        FLANKED: 'flanked',
+        SURROUNDED: 'surrounded'
+    },
+
+    currentState: 'clear',
+    lastState: 'clear',
+    checkInterval: 250, // ms between checks
+    checkTimer: 0,
+    threatRange: 6, // tiles - enemies beyond this don't count
+    minFlankEnemies: 2, // minimum enemies in rear arc for "flanked"
+    minQuadrants: 3, // minimum occupied quadrants for "surrounded"
+
+    /**
+     * Check encirclement status and emit events if state changes
+     * @param {Object} player - Player entity with gridX, gridY, facing
+     * @param {Array} enemies - Array of enemy entities
+     * @returns {Object} { state, flanking, quadrants, threatCount }
+     */
+    checkEncirclement(player, enemies) {
+        if (!player || !enemies || enemies.length === 0) {
+            return this._updateState(this.STATES.CLEAR, 0, []);
+        }
+
+        const px = player.gridX ?? player.x;
+        const py = player.gridY ?? player.y;
+        const facing = player.facing || 'down';
+
+        // Get player facing angle
+        const facingAngles = { right: 0, down: 90, left: 180, up: 270 };
+        const playerFacingAngle = facingAngles[facing] ?? 0;
+
+        // Track enemies in quadrants and rear arc
+        const quadrants = { front: 0, right: 0, back: 0, left: 0 };
+        let rearArcCount = 0;
+        let threatCount = 0;
+        const flankingEnemies = [];
+
+        for (const enemy of enemies) {
+            if (enemy.hp <= 0) continue;
+
+            const ex = enemy.gridX ?? enemy.x;
+            const ey = enemy.gridY ?? enemy.y;
+            const dist = Math.sqrt((ex - px) ** 2 + (ey - py) ** 2);
+
+            // Only count nearby enemies as threats
+            if (dist > this.threatRange) continue;
+
+            threatCount++;
+
+            // Calculate angle from player to enemy (0 = right, 90 = down)
+            const angleToEnemy = Math.atan2(ey - py, ex - px) * (180 / Math.PI);
+            // Normalize to 0-360
+            const normalizedAngle = ((angleToEnemy % 360) + 360) % 360;
+
+            // Calculate relative angle from player's facing direction
+            let relativeAngle = normalizedAngle - playerFacingAngle;
+            if (relativeAngle < 0) relativeAngle += 360;
+            if (relativeAngle > 360) relativeAngle -= 360;
+
+            // Determine quadrant (relative to player facing)
+            // Front: 315-45, Right: 45-135, Back: 135-225, Left: 225-315
+            if (relativeAngle >= 315 || relativeAngle < 45) {
+                quadrants.front++;
+            } else if (relativeAngle >= 45 && relativeAngle < 135) {
+                quadrants.right++;
+            } else if (relativeAngle >= 135 && relativeAngle < 225) {
+                quadrants.back++;
+                rearArcCount++;
+                flankingEnemies.push(enemy);
+            } else {
+                quadrants.left++;
+            }
+
+            // Also check for rear 180-degree arc (90-270 relative)
+            if (relativeAngle >= 90 && relativeAngle < 270) {
+                if (!flankingEnemies.includes(enemy)) {
+                    rearArcCount++;
+                    flankingEnemies.push(enemy);
+                }
+            }
+        }
+
+        // Count occupied quadrants
+        const occupiedQuadrants = Object.values(quadrants).filter(c => c > 0).length;
+
+        // Determine state
+        let newState = this.STATES.CLEAR;
+
+        if (occupiedQuadrants >= this.minQuadrants) {
+            newState = this.STATES.SURROUNDED;
+        } else if (rearArcCount >= this.minFlankEnemies) {
+            newState = this.STATES.FLANKED;
+        }
+
+        return this._updateState(newState, threatCount, flankingEnemies, quadrants);
+    },
+
+    /**
+     * Update state and emit events if changed
+     */
+    _updateState(newState, threatCount, flankingEnemies, quadrants = {}) {
+        const result = {
+            state: newState,
+            threatCount: threatCount,
+            flanking: flankingEnemies || [],
+            quadrants: quadrants,
+            changed: newState !== this.currentState
+        };
+
+        if (result.changed) {
+            this.lastState = this.currentState;
+            this.currentState = newState;
+
+            // Emit state change event
+            if (typeof EventBus !== 'undefined') {
+                EventBus.emit('encirclement:changed', {
+                    oldState: this.lastState,
+                    newState: newState,
+                    threatCount: threatCount,
+                    flanking: flankingEnemies
+                });
+
+                // Emit specific state events
+                if (newState === this.STATES.FLANKED) {
+                    EventBus.emit('encirclement:flanked', {
+                        enemies: flankingEnemies,
+                        count: flankingEnemies.length
+                    });
+                } else if (newState === this.STATES.SURROUNDED) {
+                    EventBus.emit('encirclement:surrounded', {
+                        quadrants: quadrants,
+                        threatCount: threatCount
+                    });
+                } else if (newState === this.STATES.CLEAR) {
+                    EventBus.emit('encirclement:clear', {});
+                }
+            }
+
+            // Visual feedback for player
+            if (typeof showStatusText === 'function' && typeof game !== 'undefined' && game.player) {
+                if (newState === this.STATES.SURROUNDED) {
+                    showStatusText(game.player, 'SURROUNDED!', '#FF0000');
+                } else if (newState === this.STATES.FLANKED) {
+                    showStatusText(game.player, 'FLANKED!', '#FF8800');
+                }
+            }
+        }
+
+        return result;
+    },
+
+    /**
+     * Get current encirclement state
+     */
+    getState() {
+        return this.currentState;
+    },
+
+    /**
+     * Check if player is in danger (flanked or surrounded)
+     */
+    isInDanger() {
+        return this.currentState !== this.STATES.CLEAR;
+    },
+
+    /**
+     * Reset state (call on floor transition, combat end, etc.)
+     */
+    reset() {
+        this.currentState = this.STATES.CLEAR;
+        this.lastState = this.STATES.CLEAR;
+        this.checkTimer = 0;
+    }
+};
+
+// Export EncirclementSystem
+if (typeof window !== 'undefined') {
+    window.EncirclementSystem = EncirclementSystem;
 }
 
 // AI MANAGER
@@ -1276,6 +1556,15 @@ const AIManager = {
                 if (ai.thinkTimer >= 500) { ai.thinkTimer = 0; ai.update(dt, this.game); }
             }
         });
+
+        // ENCIRCLEMENT CHECK: Periodically check if player is flanked/surrounded
+        EncirclementSystem.checkTimer += dt;
+        if (EncirclementSystem.checkTimer >= EncirclementSystem.checkInterval) {
+            EncirclementSystem.checkTimer = 0;
+            if (player && this.game.enemies) {
+                EncirclementSystem.checkEncirclement(player, this.game.enemies);
+            }
+        }
     },
 
     getAI(enemy) { return this.ais.get(enemy.id); }
@@ -1286,6 +1575,7 @@ if (typeof window !== 'undefined') {
     window.AIManager = AIManager;
     window.EnemyAI = EnemyAI;
     window.AI_STATES = AI_STATES;
+    window.EncirclementSystem = EncirclementSystem;
 }
 
 // SYSTEM MANAGER REGISTRATION

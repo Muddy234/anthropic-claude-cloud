@@ -56,6 +56,8 @@
     <script src="js/data/quests.js"></script>
     <script src="js/data/crafting-data.js"></script>
     <script src="js/data/core-data.js"></script>
+    <script src="js/data/audio-definitions.js"></script>  <!-- Audio metadata definitions -->
+    <script src="js/data/music-tracks.js"></script>       <!-- Music track definitions -->
 
     <!-- ==================== -->
     <!-- UTILS: Helper functions (no registration) -->
@@ -69,7 +71,17 @@
     <script src="js/systems/combat-master.js"></script>           <!-- Consolidated combat system -->
     <!-- <script src="js/utils/damage-calculator.js"></script> --> <!-- Consolidated into combat-master.js -->
     <script src="js/utils/stat-system.js"></script>
-    
+
+    <!-- ==================== -->
+    <!-- AUDIO: Sound system (after combat-master for hooks) -->
+    <!-- ==================== -->
+    <script src="js/audio/audio-manager.js"></script>            <!-- Priority 5: Core audio engine -->
+    <script src="js/audio/sfx-system.js"></script>               <!-- SFX playback with voice pooling -->
+    <script src="js/audio/music-system.js"></script>             <!-- Music playback and crossfade -->
+    <script src="js/audio/ambient-system.js"></script>           <!-- Environmental ambient audio -->
+    <script src="js/audio/combat-audio.js"></script>             <!-- Combat sound integration -->
+    <script src="js/audio/ui-audio.js"></script>                 <!-- UI sound integration -->
+
     <!-- ==================== -->
     <!-- ENTITIES: Factories (no registration) -->
     <!-- ==================== -->
@@ -156,6 +168,7 @@
 
     <script src="js/systems/vision-system.js"></script>             <!-- Priority 5 (Fog of War) -->
     <script src="js/systems/input-handler.js"></script>             <!-- Priority 10 -->
+    <script src="js/systems/dodge-system.js"></script>              <!-- Priority 25: Active defense (Issue #7) -->
     <script src="js/systems/advanced-enemy-system.js"></script>
     <!-- <script src="js/systems/pokemon-movement.js"></script> --> <!-- Consolidated into movement-master.js -->
     <script src="js/systems/player-animation.js"></script>          <!-- Priority 25 -->
@@ -213,6 +226,7 @@
     <!-- ==================== -->
     <!-- DEBUG: Load after everything else -->
     <!-- ==================== -->
+    <script src="js/debug/ai-visualizer.js"></script>  <!-- AI Debug Visualizer (F3 toggle) - Issue #9 -->
     <script src="debug-commands.js"></script>
 </body>
 

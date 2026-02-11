@@ -9,10 +9,11 @@ const MONSTER_DATA = {
         xp: 25,
         element: 'fire', attack: 'Slam', attackType: 'physical', damageType: 'blunt',
         attackRange: 1, attackSpeed: 2.5,  // Slow melee attacker
+        armorType: 'unarmored',  // Gelatinous, weak to blades
         elite: false, moveInterval: 3, aggression: 2, spawnWeight: 30,
         loot: [
             { name: 'Magma Core', dropChance: 0.03, rarity: 'rare', favorValue: 45 },
-            { name: 'ite', dropChance: 0.25, rarity: 'common', favorValue: 3 },
+            { name: 'Magma Residue', dropChance: 0.25, rarity: 'common', favorValue: 3 },
             { name: 'Hardened Slime', dropChance: 0.25, rarity: 'common', favorValue: 3 }
         ],
         description: 'A slow, gelatinous blob of living lava.'
@@ -22,6 +23,7 @@ const MONSTER_DATA = {
         xp: 45,
         element: 'physical', attack: 'Boulder Smash', attackType: 'physical', damageType: 'blunt',
         attackRange: 1, attackSpeed: 3.0,  // Very slow but powerful melee
+        armorType: 'stone',  // Rock construct, weak to blunt
         elite: false, moveInterval: 3, aggression: 2, spawnWeight: 3,
         loot: [
             { name: 'Obsidian Shard', dropChance: 0.03, rarity: 'rare', favorValue: 45 },
@@ -35,6 +37,7 @@ const MONSTER_DATA = {
         xp: 35,
         element: 'fire', attack: 'Flare', attackType: 'magic', damageType: 'magic',
         attackRange: 4, attackSpeed: 1.5,  // Fast ranged caster
+        armorType: 'ethereal',  // Incorporeal flame spirit
         elite: false, moveInterval: 1, aggression: 4, spawnWeight: 7,
         loot: [
             { name: 'Fire Mote', dropChance: 0.03, rarity: 'rare', favorValue: 45 },
@@ -48,6 +51,7 @@ const MONSTER_DATA = {
         xp: 30,
         element: 'fire', attack: 'Singe Bite', attackType: 'physical', damageType: 'pierce',
         attackRange: 1, attackSpeed: 1.2,  // Very fast melee attacker
+        armorType: 'hide',  // Leathery bat skin
         elite: false, moveInterval: 1, aggression: 5, spawnWeight: 8,
         loot: [
             { name: 'Bat Wing', dropChance: 0.03, rarity: 'rare', favorValue: 45 },
@@ -59,8 +63,9 @@ const MONSTER_DATA = {
     'Ash Walker': {
         hp: 75, str: 14, agi: 6, int: 5, pDef: 8, mDef: 12,
         xp: 30,
-        element: 'shadow', attack: 'Choke', attackType: 'physical', damageType: 'blunt',
+        element: 'dark', attack: 'Choke', attackType: 'physical', damageType: 'blunt',
         attackRange: 1, attackSpeed: 2.2,  // Medium-slow melee
+        armorType: 'bone',  // Reanimated corpse with skeletal structure
         elite: false, moveInterval: 2, aggression: 3, spawnWeight: 6,
         loot: [
             { name: 'Tattered Cloth', dropChance: 0.03, rarity: 'rare', favorValue: 45 },
@@ -74,6 +79,7 @@ const MONSTER_DATA = {
         xp: 35,
         element: 'nature', attack: 'Tail Whip', attackType: 'physical', damageType: 'blunt',
         attackRange: 1, attackSpeed: 1.8,  // Balanced melee
+        armorType: 'scaled',  // Reptilian scales
         elite: false, moveInterval: 2, aggression: 3, spawnWeight: 5,
         loot: [
             { name: 'Lizard Scale', dropChance: 0.03, rarity: 'rare', favorValue: 45 },
@@ -87,6 +93,7 @@ const MONSTER_DATA = {
         xp: 40,
         element: 'fire', attack: 'Ember Bolt', attackType: 'magic', damageType: 'magic',
         attackRange: 5, attackSpeed: 2.0,  // Long range caster
+        armorType: 'unarmored',  // Cloth-wearing mage
         elite: false, moveInterval: 2, aggression: 4, spawnWeight: 3,
         loot: [
             { name: 'Spell Scroll', dropChance: 0.03, rarity: 'rare', favorValue: 45 },
@@ -102,6 +109,7 @@ const MONSTER_DATA = {
         xp: 15,
         element: 'physical', attack: 'Bite', attackType: 'physical', damageType: 'pierce',
         attackRange: 1, attackSpeed: 1.0,  // Very fast weak melee
+        armorType: 'hide',  // Leathery bat skin
         elite: false, moveInterval: 1, aggression: 4, spawnWeight: 12,
         loot: [
             { name: 'Bat Wing', dropChance: 0.05, rarity: 'uncommon', favorValue: 12 },
@@ -114,6 +122,7 @@ const MONSTER_DATA = {
         xp: 35,
         element: 'earth', attack: 'Rock Slam', attackType: 'physical', damageType: 'blunt',
         attackRange: 1, attackSpeed: 2.8,  // Slow heavy melee
+        armorType: 'stone',  // Rock creature
         elite: false, moveInterval: 3, aggression: 2, spawnWeight: 5,
         loot: [
             { name: 'Stone Heart', dropChance: 0.03, rarity: 'rare', favorValue: 50 },
@@ -126,6 +135,7 @@ const MONSTER_DATA = {
         xp: 28,
         element: 'nature', attack: 'Spore Cloud', attackType: 'magic', damageType: 'magic',
         attackRange: 3, attackSpeed: 2.2,  // Medium range AOE caster
+        armorType: 'unarmored',  // Soft fungal body
         elite: false, moveInterval: 2, aggression: 2, spawnWeight: 30,
         loot: [
             { name: 'Glowing Spore', dropChance: 0.04, rarity: 'rare', favorValue: 40 },
@@ -138,6 +148,7 @@ const MONSTER_DATA = {
         xp: 32,
         element: 'physical', attack: 'Venomous Bite', attackType: 'physical', damageType: 'pierce',
         attackRange: 1, attackSpeed: 1.3,  // Fast melee with venom
+        armorType: 'scaled',  // Crystalline exoskeleton
         elite: false, moveInterval: 1, aggression: 4, spawnWeight: 5,
         loot: [
             { name: 'Crystal Fang', dropChance: 0.04, rarity: 'rare', favorValue: 42 },
@@ -153,6 +164,7 @@ const MONSTER_DATA = {
         xp: 28,
         element: 'death', attack: 'Bone Slash', attackType: 'physical', damageType: 'blade',
         attackRange: 1, attackSpeed: 1.8,  // Standard melee fighter
+        armorType: 'bone',  // Skeletal frame
         elite: false, moveInterval: 2, aggression: 3, spawnWeight: 8,
         loot: [
             { name: 'Ancient Bone', dropChance: 0.04, rarity: 'uncommon', favorValue: 18 },
@@ -166,6 +178,7 @@ const MONSTER_DATA = {
         xp: 38,
         element: 'death', attack: 'Soul Drain', attackType: 'magic', damageType: 'magic',
         attackRange: 3, attackSpeed: 2.0,  // Medium range life drainer
+        armorType: 'ethereal',  // Incorporeal ghost
         elite: false, moveInterval: 2, aggression: 3, spawnWeight: 30,
         loot: [
             { name: 'Ectoplasm', dropChance: 0.05, rarity: 'rare', favorValue: 45 },
@@ -178,6 +191,7 @@ const MONSTER_DATA = {
         xp: 55,
         element: 'death', attack: 'Crushing Blow', attackType: 'physical', damageType: 'blunt',
         attackRange: 1, attackSpeed: 3.2,  // Very slow devastating melee
+        armorType: 'bone',  // Massive bone construct
         elite: false, moveInterval: 3, aggression: 2, spawnWeight: 2,
         loot: [
             { name: 'Bone Core', dropChance: 0.03, rarity: 'epic', favorValue: 110 },
@@ -193,6 +207,7 @@ const MONSTER_DATA = {
         xp: 30,
         element: 'water', attack: 'Pincer Strike', attackType: 'physical', damageType: 'pierce',
         attackRange: 1, attackSpeed: 1.6,  // Medium-fast melee
+        armorType: 'scaled',  // Crustacean shell/exoskeleton
         elite: false, moveInterval: 2, aggression: 3, spawnWeight: 6,
         loot: [
             { name: 'Crustacean Shell', dropChance: 0.04, rarity: 'rare', favorValue: 38 },
@@ -205,6 +220,7 @@ const MONSTER_DATA = {
         xp: 40,
         element: 'water', attack: 'Aqua Fang', attackType: 'physical', damageType: 'pierce',
         attackRange: 1, attackSpeed: 1.4,  // Fast melee striker
+        armorType: 'scaled',  // Snake scales
         elite: false, moveInterval: 1, aggression: 4, spawnWeight: 4,
         loot: [
             { name: 'Serpent Scale', dropChance: 0.04, rarity: 'rare', favorValue: 42 },
@@ -217,8 +233,9 @@ const MONSTER_DATA = {
     'Shadow Stalker': {
         hp: 45, str: 15, agi: 16, int: 8, pDef: 6, mDef: 10,
         xp: 42,
-        element: 'shadow', attack: 'Shadow Strike', attackType: 'physical', damageType: 'blade',
+        element: 'dark', attack: 'Shadow Strike', attackType: 'physical', damageType: 'blade',
         attackRange: 1, attackSpeed: 1.0,  // Extremely fast assassin
+        armorType: 'hide',  // Shadowy hide
         elite: false, moveInterval: 1, aggression: 5, spawnWeight: 4,
         loot: [
             { name: 'Shadow Essence', dropChance: 0.04, rarity: 'rare', favorValue: 48 },
@@ -229,14 +246,73 @@ const MONSTER_DATA = {
     'Void Touched': {
         hp: 70, str: 10, agi: 8, int: 18, pDef: 8, mDef: 16,
         xp: 48,
-        element: 'shadow', attack: 'Void Bolt', attackType: 'magic', damageType: 'magic',
+        element: 'dark', attack: 'Void Bolt', attackType: 'magic', damageType: 'magic',
         attackRange: 4, attackSpeed: 1.8,  // Ranged void caster
+        armorType: 'ethereal',  // Void-corrupted being
         elite: false, moveInterval: 2, aggression: 3, spawnWeight: 30,
         loot: [
             { name: 'Void Crystal', dropChance: 0.03, rarity: 'epic', favorValue: 120 },
             { name: 'Shadow Essence', dropChance: 0.20, rarity: 'uncommon', favorValue: 15 }
         ],
         description: 'A being corrupted by void energy. Powerful magic attacks.'
+    },
+
+    // === ICE MONSTERS ===
+    'Frost Elemental': {
+        hp: 55, str: 6, agi: 10, int: 18, pDef: 4, mDef: 18,
+        xp: 45,
+        element: 'ice', attack: 'Frost Bolt', attackType: 'magic', damageType: 'magic',
+        attackRange: 4, attackSpeed: 1.6,  // Ethereal caster
+        elite: false, moveInterval: 2, aggression: 3, spawnWeight: 5,
+        armorType: 'ethereal',
+        loot: [
+            { name: 'Frozen Core', dropChance: 0.04, rarity: 'rare', favorValue: 50 },
+            { name: 'Ice Shard', dropChance: 0.25, rarity: 'common', favorValue: 4 },
+            { name: 'Frost Essence', dropChance: 0.20, rarity: 'uncommon', favorValue: 12 }
+        ],
+        description: 'A sentient manifestation of pure cold. Casts powerful ice magic.'
+    },
+    'Ice Golem': {
+        hp: 130, str: 20, agi: 3, int: 4, pDef: 22, mDef: 12,
+        xp: 55,
+        element: 'ice', attack: 'Frozen Slam', attackType: 'physical', damageType: 'blunt',
+        attackRange: 1, attackSpeed: 3.2,  // Very slow but devastating melee
+        elite: false, moveInterval: 3, aggression: 2, spawnWeight: 3,
+        armorType: 'stone',
+        loot: [
+            { name: 'Permafrost Core', dropChance: 0.03, rarity: 'epic', favorValue: 100 },
+            { name: 'Glacial Stone', dropChance: 0.25, rarity: 'uncommon', favorValue: 15 },
+            { name: 'Ice Shard', dropChance: 0.30, rarity: 'common', favorValue: 3 }
+        ],
+        description: 'A massive construct of ancient ice. Incredibly durable and slow.'
+    },
+    'Frozen Husk': {
+        hp: 60, str: 14, agi: 6, int: 4, pDef: 10, mDef: 8,
+        xp: 32,
+        element: 'ice', attack: 'Chilling Grasp', attackType: 'physical', damageType: 'blade',
+        attackRange: 1, attackSpeed: 2.0,  // Undead melee attacker
+        elite: false, moveInterval: 2, aggression: 3, spawnWeight: 6,
+        armorType: 'bone',
+        loot: [
+            { name: 'Frozen Bone', dropChance: 0.04, rarity: 'uncommon', favorValue: 18 },
+            { name: 'Bone Fragment', dropChance: 0.30, rarity: 'common', favorValue: 2 },
+            { name: 'Ice Shard', dropChance: 0.20, rarity: 'common', favorValue: 3 }
+        ],
+        description: 'A frozen corpse animated by bitter cold. Chills on contact.'
+    },
+    'Blizzard Spirit': {
+        hp: 35, str: 4, agi: 20, int: 14, pDef: 2, mDef: 14,
+        xp: 38,
+        element: 'ice', attack: 'Frost Wind', attackType: 'magic', damageType: 'magic',
+        attackRange: 3, attackSpeed: 1.2,  // Fast ethereal attacker
+        elite: false, moveInterval: 1, aggression: 4, spawnWeight: 5,
+        armorType: 'ethereal',
+        loot: [
+            { name: 'Spirit Ice', dropChance: 0.04, rarity: 'rare', favorValue: 45 },
+            { name: 'Frost Essence', dropChance: 0.25, rarity: 'uncommon', favorValue: 12 },
+            { name: 'Spirit Dust', dropChance: 0.25, rarity: 'common', favorValue: 4 }
+        ],
+        description: 'A swift winter spirit. Moves like the wind and freezes all it touches.'
     }
 };
 

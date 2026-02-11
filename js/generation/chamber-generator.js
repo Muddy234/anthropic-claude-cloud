@@ -16,7 +16,7 @@ const CHAMBER_CONFIG = {
     minSectionSize: 12,            // Minimum 12x12 for CA to work
     splitVariance: 0.2,            // Split at 40-60% (0.5 ± 0.2)
 
-    // CA Settings (very light, for interior detail only)
+    // CA Settings (default, for interior detail only)
     initialWallChance: 0.20,       // Very light interior texture (reduced from 0.30)
     smoothingPasses: 3,            // Moderate smoothing
     wallThreshold: 4,              // B4: floors become walls on 4+ neighbors
@@ -37,6 +37,112 @@ const CHAMBER_CONFIG = {
     debugLogging: false,
     trackStats: false
 };
+
+// ============================================================================
+// THEME-SPECIFIC CA RULES
+// ============================================================================
+// Each theme has its own CA parameters for visual variety
+// B = birth threshold, S = survival threshold
+
+const THEME_CA_RULES = {
+    // Fire: More chaotic, jagged formations (lower survival = more erosion)
+    fire: {
+        initialWallChance: 0.25,
+        smoothingPasses: 2,
+        wallThreshold: 3,          // B3: walls form more easily
+        floorThreshold: 3          // S3: walls erode more easily -> jagged
+    },
+
+    // Ice: More linear, crystalline formations (higher survival = stable structures)
+    ice: {
+        initialWallChance: 0.15,
+        smoothingPasses: 4,
+        wallThreshold: 5,          // B5: walls need more support to form
+        floorThreshold: 4          // S4: standard survival
+    },
+
+    // Shadow/Void: Dense clusters with clear paths
+    shadow: {
+        initialWallChance: 0.30,
+        smoothingPasses: 3,
+        wallThreshold: 4,          // B4: standard birth
+        floorThreshold: 5          // S5: walls are more persistent -> dense clusters
+    },
+
+    // Earth: Solid formations, fewer but larger obstacles
+    earth: {
+        initialWallChance: 0.18,
+        smoothingPasses: 4,
+        wallThreshold: 4,          // B4: standard birth
+        floorThreshold: 4          // S4: standard survival
+    },
+
+    // Physical/Neutral: Standard B4/S4 rules
+    physical: {
+        initialWallChance: 0.20,
+        smoothingPasses: 3,
+        wallThreshold: 4,
+        floorThreshold: 4
+    },
+
+    // Default fallback
+    default: {
+        initialWallChance: 0.20,
+        smoothingPasses: 3,
+        wallThreshold: 4,
+        floorThreshold: 4
+    }
+};
+
+/**
+ * Get CA rules for a given element/theme
+ * @param {string} element - Element type (fire, ice, shadow, earth, physical, etc.)
+ * @returns {Object} CA rule configuration
+ */
+function getCArulesForElement(element) {
+    if (!element) return THEME_CA_RULES.default;
+
+    // Normalize element name
+    const normalized = element.toLowerCase();
+
+    // Check for direct match
+    if (THEME_CA_RULES[normalized]) {
+        return THEME_CA_RULES[normalized];
+    }
+
+    // Map related elements to rule sets
+    const elementMapping = {
+        // Fire-like
+        'fire': 'fire',
+        'lava': 'fire',
+        'magma': 'fire',
+        'flame': 'fire',
+
+        // Ice-like
+        'ice': 'ice',
+        'frost': 'ice',
+        'cold': 'ice',
+        'water': 'ice',
+
+        // Shadow-like
+        'shadow': 'shadow',
+        'void': 'shadow',
+        'dark': 'shadow',
+        'death': 'shadow',
+
+        // Earth-like
+        'earth': 'earth',
+        'stone': 'earth',
+        'nature': 'earth'
+    };
+
+    const mappedType = elementMapping[normalized];
+    if (mappedType && THEME_CA_RULES[mappedType]) {
+        return THEME_CA_RULES[mappedType];
+    }
+
+    return THEME_CA_RULES.default;
+}
 
 // Statistics tracking
 const CHAMBER_STATS = {
@@ -103,10 +209,10 @@ function generateChambers(room) {
         // 1. BSP Subdivision
         sections = binarySpacePartition(width, height);
 
-        // 2. Apply CA to each section
+        // 2. Apply CA to each section (using room element for theme-specific rules)
         grid = Array(height).fill(null).map(() => Array(width).fill(1)); // Start with walls
         for (const section of sections) {
-            applyCellularAutomataToSection(grid, section, width, height);
+            applyCellularAutomataToSection(grid, section, width, height, room.element);
         }
 
         // 3. Carve corridors between sections
@@ -321,72 +427,104 @@ function findNeighboringSections(section, allSections) {
 }
 
 // ============================================================================
-// CELLULAR AUTOMATA (APPLIED PER SECTION)
+// CELLULAR AUTOMATA (APPLIED PER SECTION) - DOUBLE-BUFFERED
 // ============================================================================
+
+// Shared CA buffers for double-buffering optimization
+// Allocated once and reused across all sections
+let caBufferA = null;
+let caBufferB = null;
+
+/**
+ * Ensure CA buffers are allocated with sufficient size
+ * @param {number} width - Required width
+ * @param {number} height - Required height
+ */
+function ensureCABuffers(width, height) {
+    // Only reallocate if current buffers are too small or don't exist
+    if (!caBufferA || caBufferA.length < height || caBufferA[0]?.length < width) {
+        caBufferA = Array(height).fill(null).map(() => new Uint8Array(width));
+        caBufferB = Array(height).fill(null).map(() => new Uint8Array(width));
+    }
+}
 
 /**
  * Apply light CA to a single section for organic interior
+ * Uses double-buffering for improved performance (avoids grid copies per pass)
+ * @param {Array} grid - The grid to modify
+ * @param {Object} section - Section bounds
+ * @param {number} gridWidth - Full grid width
+ * @param {number} gridHeight - Full grid height
+ * @param {string} element - Optional element for theme-specific rules
  */
-function applyCellularAutomataToSection(grid, section, gridWidth, gridHeight) {
+function applyCellularAutomataToSection(grid, section, gridWidth, gridHeight, element = null) {
     const { x, y, width, height } = section;
 
-    // Initialize section with random walls
+    // Get theme-specific CA rules (or default)
+    const caRules = element ? getCArulesForElement(element) : THEME_CA_RULES.default;
+
+    // Ensure we have appropriately sized buffers
+    ensureCABuffers(width, height);
+
+    // Use local references to buffers
+    let readBuffer = caBufferA;
+    let writeBuffer = caBufferB;
+
+    // Initialize section with random walls (in readBuffer)
+    // Uses theme-specific initial wall chance
+    for (let sy = 0; sy < height; sy++) {
+        for (let sx = 0; sx < width; sx++) {
+            readBuffer[sy][sx] = Math.random() < caRules.initialWallChance ? 1 : 0;
+        }
+    }
+
+    // Run CA smoothing passes with double-buffering
+    // Uses theme-specific smoothing passes and thresholds
+    for (let pass = 0; pass < caRules.smoothingPasses; pass++) {
+        // Read from readBuffer, write to writeBuffer
+        for (let sy = 0; sy < height; sy++) {
+            for (let sx = 0; sx < width; sx++) {
+                // Count wall neighbors (relative to section)
+                let wallCount = 0;
+                for (let dy = -1; dy <= 1; dy++) {
+                    for (let dx = -1; dx <= 1; dx++) {
+                        if (dx === 0 && dy === 0) continue;
+                        const nx = sx + dx;
+                        const ny = sy + dy;
+
+                        // Out of section bounds = wall
+                        if (nx < 0 || nx >= width || ny < 0 || ny >= height) {
+                            wallCount++;
+                        } else {
+                            if (readBuffer[ny][nx] === 1) wallCount++;
+                        }
+                    }
+                }
+
+                // Apply theme-specific B/S rules
+                if (readBuffer[sy][sx] === 1) {
+                    // Wall survives if neighbors >= survival threshold
+                    writeBuffer[sy][sx] = wallCount >= caRules.floorThreshold ? 1 : 0;
+                } else {
+                    // Floor becomes wall if neighbors >= birth threshold
+                    writeBuffer[sy][sx] = wallCount >= caRules.wallThreshold ? 1 : 0;
+                }
+            }
+        }
+
+        // Swap buffers (no copying needed!)
+        const temp = readBuffer;
+        readBuffer = writeBuffer;
+        writeBuffer = temp;
+    }
+
+    // Copy final result from readBuffer to the actual grid
     for (let sy = 0; sy < height; sy++) {
         for (let sx = 0; sx < width; sx++) {
             const gx = x + sx;
             const gy = y + sy;
             if (gx >= 0 && gx < gridWidth && gy >= 0 && gy < gridHeight) {
-                grid[gy][gx] = Math.random() < CHAMBER_CONFIG.initialWallChance ? 1 : 0;
-            }
-        }
-    }
-
-    // Run CA smoothing passes
-    for (let pass = 0; pass < CHAMBER_CONFIG.smoothingPasses; pass++) {
-        const newGrid = grid.map(row => [...row]);
-
-        for (let sy = 0; sy < height; sy++) {
-            for (let sx = 0; sx < width; sx++) {
-                const gx = x + sx;
-                const gy = y + sy;
-                if (gx < 0 || gx >= gridWidth || gy < 0 || gy >= gridHeight) continue;
-
-                // Count wall neighbors
-                let wallCount = 0;
-                for (let dy = -1; dy <= 1; dy++) {
-                    for (let dx = -1; dx <= 1; dx++) {
-                        if (dx === 0 && dy === 0) continue;
-                        const nx = gx + dx;
-                        const ny = gy + dy;
-
-                        // Out of bounds or out of section = wall
-                        if (nx < x || nx >= x + width || ny < y || ny >= y + height) {
-                            wallCount++;
-                        } else if (nx >= 0 && nx < gridWidth && ny >= 0 && ny < gridHeight) {
-                            if (grid[ny][nx] === 1) wallCount++;
-                        }
-                    }
-                }
-
-                // Apply B4/S4 rules
-                if (grid[gy][gx] === 1) {
-                    // Wall survives if 4+ neighbors
-                    newGrid[gy][gx] = wallCount >= CHAMBER_CONFIG.floorThreshold ? 1 : 0;
-                } else {
-                    // Floor becomes wall if 4+ neighbors
-                    newGrid[gy][gx] = wallCount >= CHAMBER_CONFIG.wallThreshold ? 1 : 0;
-                }
-            }
-        }
-
-        // Copy new grid to grid (only within section bounds)
-        for (let sy = 0; sy < height; sy++) {
-            for (let sx = 0; sx < width; sx++) {
-                const gx = x + sx;
-                const gy = y + sy;
-                if (gx >= 0 && gx < gridWidth && gy >= 0 && gy < gridHeight) {
-                    grid[gy][gx] = newGrid[gy][gx];
-                }
+                grid[gy][gx] = readBuffer[sy][sx];
             }
         }
     }
@@ -959,6 +1097,8 @@ function isInSafeChamber(room, x, y) {
 if (typeof window !== 'undefined') {
     window.CHAMBER_CONFIG = CHAMBER_CONFIG;
     window.CHAMBER_STATS = CHAMBER_STATS;
+    window.THEME_CA_RULES = THEME_CA_RULES;
+    window.getCArulesForElement = getCArulesForElement;
     window.generateChambers = generateChambers;
     window.getSafeSpawnChamber = getSafeSpawnChamber;
     window.isInSafeChamber = isInSafeChamber;

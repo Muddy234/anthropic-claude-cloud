@@ -12,6 +12,10 @@ const BankUI = {
     selectedTab: 0,  // 0 = Bank, 1 = Inventory
     selectedIndex: 0,
     scrollOffset: [0, 0],  // Per-tab scroll
+    focusArea: 'list',  // 'tabs', 'list', 'buttons'
+    message: '',
+    messageType: '',
+    messageTimeout: null,
 
     // Layout
     PANEL_WIDTH: 900,
@@ -33,6 +37,8 @@ const BankUI = {
         this.selectedTab = 0;
         this.selectedIndex = 0;
         this.scrollOffset = [0, 0];
+        this.focusArea = 'list';
+        this.message = '';
 
         game.state = GAME_STATES ? GAME_STATES.BANK : 'bank';
         console.log('[BankUI] Opened');
@@ -43,6 +49,10 @@ const BankUI = {
      */
     close() {
         this.active = false;
+        if (this.messageTimeout) {
+            clearTimeout(this.messageTimeout);
+            this.messageTimeout = null;
+        }
         game.state = GAME_STATES ? GAME_STATES.VILLAGE : 'village';
         console.log('[BankUI] Closed');
     },
@@ -54,41 +64,134 @@ const BankUI = {
     /**
      * Handle keyboard input
      * @param {string} key
+     * @param {boolean} shiftKey - Whether shift is held
      */
-    handleInput(key) {
+    handleInput(key, shiftKey = false) {
         if (!this.active) return;
 
+        // Escape always closes
+        if (key === 'Escape') {
+            this.close();
+            return;
+        }
+
+        // Tab cycling through focus areas
+        if (key === 'Tab') {
+            if (shiftKey) {
+                // Shift+Tab goes backwards
+                if (this.focusArea === 'buttons') {
+                    this.focusArea = 'list';
+                } else if (this.focusArea === 'list') {
+                    this.focusArea = 'tabs';
+                } else {
+                    this.focusArea = 'buttons';
+                }
+            } else {
+                // Tab goes forward
+                if (this.focusArea === 'tabs') {
+                    this.focusArea = 'list';
+                } else if (this.focusArea === 'list') {
+                    this.focusArea = 'buttons';
+                } else {
+                    this.focusArea = 'tabs';
+                }
+            }
+            return;
+        }
+
+        // Handle input based on focus area
+        switch (this.focusArea) {
+            case 'tabs':
+                this._handleTabsInput(key);
+                break;
+            case 'list':
+                this._handleListInput(key);
+                break;
+            case 'buttons':
+                this._handleButtonsInput(key);
+                break;
+        }
+    },
+
+    /**
+     * Handle input when tabs are focused
+     */
+    _handleTabsInput(key) {
+        switch (key) {
+            case 'ArrowLeft':
+            case 'a':
+            case 'A':
+                if (this.selectedTab > 0) {
+                    this.selectedTab = 0;
+                    this.selectedIndex = 0;
+                    this.scrollOffset[0] = 0;
+                }
+                break;
+            case 'ArrowRight':
+            case 'd':
+            case 'D':
+                if (this.selectedTab < 1) {
+                    this.selectedTab = 1;
+                    this.selectedIndex = 0;
+                    this.scrollOffset[1] = 0;
+                }
+                break;
+            case 'ArrowDown':
+            case 's':
+            case 'S':
+            case 'Enter':
+            case ' ':
+                this.focusArea = 'list';
+                break;
+        }
+    },
+
+    /**
+     * Handle input when item list is focused
+     */
+    _handleListInput(key) {
         const items = this._getCurrentItems();
+        const maxIndex = Math.max(0, items.length - 1);
 
         switch (key) {
             case 'ArrowUp':
             case 'w':
             case 'W':
-                this.selectedIndex = Math.max(0, this.selectedIndex - 1);
-                this._ensureVisible();
+                if (this.selectedIndex > 0) {
+                    this.selectedIndex--;
+                    this._ensureVisible();
+                } else {
+                    // Move to tabs when at top
+                    this.focusArea = 'tabs';
+                }
                 break;
 
             case 'ArrowDown':
             case 's':
             case 'S':
-                this.selectedIndex = Math.min(items.length - 1, this.selectedIndex + 1);
-                this._ensureVisible();
+                if (this.selectedIndex < maxIndex) {
+                    this.selectedIndex++;
+                    this._ensureVisible();
+                } else {
+                    // Move to buttons when at bottom
+                    this.focusArea = 'buttons';
+                }
                 break;
 
             case 'ArrowLeft':
             case 'a':
             case 'A':
-                this.selectedTab = (this.selectedTab - 1 + 2) % 2;
+                this.selectedTab = 0;
                 this.selectedIndex = 0;
-                this.scrollOffset[this.selectedTab] = 0;
+                this.scrollOffset[0] = 0;
                 break;
 
             case 'ArrowRight':
             case 'd':
             case 'D':
-                this.selectedTab = (this.selectedTab + 1) % 2;
+                this.selectedTab = 1;
                 this.selectedIndex = 0;
-                this.scrollOffset[this.selectedTab] = 0;
+                this.scrollOffset[1] = 0;
                 break;
 
             case 'Enter':
@@ -98,24 +201,43 @@ const BankUI = {
                 this._transferSelectedItem();
                 break;
 
-            case 'Escape':
-                this.close();
-                break;
-
-            case '1':
-            case '2':
-            case '3':
-            case '4':
-            case '5':
-            case '6':
-            case '7':
-            case '8':
-            case '9':
-                const idx = parseInt(key) - 1;
-                if (idx < items.length) {
-                    this.selectedIndex = idx;
-                    this._transferSelectedItem();
+            default:
+                // Number keys 1-9 for quick selection and transfer
+                const numKey = parseInt(key);
+                if (numKey >= 1 && numKey <= 9) {
+                    const targetIndex = this.scrollOffset[this.selectedTab] + numKey - 1;
+                    if (targetIndex < items.length) {
+                        this.selectedIndex = targetIndex;
+                        this._transferSelectedItem();
+                    }
                 }
+                break;
+        }
+    },
+
+    /**
+     * Handle input when buttons are focused
+     */
+    _handleButtonsInput(key) {
+        switch (key) {
+            case 'ArrowUp':
+            case 'w':
+            case 'W':
+                this.focusArea = 'list';
+                break;
+            case 'ArrowLeft':
+            case 'a':
+            case 'A':
+                // Could switch between multiple buttons here
+                break;
+            case 'ArrowRight':
+            case 'd':
+            case 'D':
+                // Could switch between multiple buttons here
+                break;
+            case 'Enter':
+            case ' ':
+                this.close();
                 break;
         }
     },
@@ -155,7 +277,10 @@ const BankUI = {
      */
     _transferSelectedItem() {
         const items = this._getCurrentItems();
-        if (this.selectedIndex >= items.length) return;
+        if (this.selectedIndex >= items.length) {
+            this._showMessage('No item selected!', 'error');
+            return;
+        }
 
         if (this.selectedTab === 0) {
             // Withdraw from bank
@@ -172,14 +297,24 @@ const BankUI = {
      * @private
      */
     _withdrawItem(index) {
-        if (!BankingSystem) return;
+        if (!BankingSystem) {
+            this._showMessage('Banking system unavailable!', 'error');
+            return;
+        }
 
+        const bankItems = persistentState?.bank?.items || [];
+        if (index >= bankItems.length) return;
+
+        const itemName = bankItems[index]?.name || 'item';
         const item = BankingSystem.withdraw(index);
+
         if (item) {
             // Add to player inventory
             if (game.player && game.player.inventory) {
                 game.player.inventory.push(item);
             }
+
+            this._showMessage(`Withdrew ${itemName}`, 'success');
             console.log(`[BankUI] Withdrew ${item.name}`);
 
             // Adjust selection if needed
@@ -187,6 +322,8 @@ const BankUI = {
             if (this.selectedIndex >= items.length) {
                 this.selectedIndex = Math.max(0, items.length - 1);
             }
+        } else {
+            this._showMessage('Failed to withdraw item!', 'error');
         }
     },
 
@@ -196,23 +333,65 @@ const BankUI = {
      * @private
      */
     _depositItem(index) {
-        if (!BankingSystem || !game.player || !game.player.inventory) return;
+        if (!BankingSystem || !game.player || !game.player.inventory) {
+            this._showMessage('Cannot deposit right now!', 'error');
+            return;
+        }
 
         const item = game.player.inventory[index];
-        if (!item) return;
+        if (!item) {
+            this._showMessage('Invalid item!', 'error');
+            return;
+        }
 
+        // Check bank capacity
+        const bankItems = persistentState?.bank?.items || [];
+        const bankCapacity = persistentState?.bank?.capacity || 50;
+
+        if (bankItems.length >= bankCapacity) {
+            this._showMessage('Bank is full!', 'error');
+            return;
+        }
+
+        const itemName = item.name;
         const success = BankingSystem.deposit(item);
+
         if (success) {
             // Remove from inventory
             game.player.inventory.splice(index, 1);
-            console.log(`[BankUI] Deposited ${item.name}`);
+
+            this._showMessage(`Deposited ${itemName}`, 'success');
+            console.log(`[BankUI] Deposited ${itemName}`);
 
             // Adjust selection if needed
             const items = this._getCurrentItems();
             if (this.selectedIndex >= items.length) {
                 this.selectedIndex = Math.max(0, items.length - 1);
             }
+        } else {
+            this._showMessage('Failed to deposit item!', 'error');
         }
+    },
+
+    /**
+     * Show a message to the player
+     * @param {string} text - Message text
+     * @param {string} type - 'success' or 'error'
+     */
+    _showMessage(text, type = 'success') {
+        this.message = text;
+        this.messageType = type;
+
+        // Clear any existing timeout
+        if (this.messageTimeout) {
+            clearTimeout(this.messageTimeout);
+        }
+
+        // Auto-clear message after 2 seconds
+        this.messageTimeout = setTimeout(() => {
+            this.message = '';
+            this.messageType = '';
+        }, 2000);
     },
 
     // ========================================================================
@@ -247,6 +426,14 @@ const BankUI = {
 
         // Draw items
         this._renderItems(ctx, panelX, panelY);
+
+        // Draw message
+        if (this.message) {
+            this._renderMessage(ctx, panelX, panelY);
+        }
+
+        // Draw close button
+        this._renderCloseButton(ctx, panelX, panelY);
 
         // Draw controls hint
         this._renderControls(ctx, panelX, panelY);
@@ -286,10 +473,12 @@ const BankUI = {
         const tabHeight = 35;
         const startX = panelX + 20;
         const tabY = panelY + 50;
+        const tabsFocused = this.focusArea === 'tabs';
 
         this.TABS.forEach((tab, index) => {
             const tabX = startX + index * (tabWidth + 10);
             const isSelected = index === this.selectedTab;
+            const isFocused = tabsFocused && isSelected;
 
             // Tab background
             if (isSelected) {
@@ -302,9 +491,9 @@ const BankUI = {
             }
             ctx.fillRect(tabX, tabY, tabWidth, tabHeight);
 
-            // Tab border
-            ctx.strokeStyle = isSelected ? '#FFD700' : '#4a4a6a';
-            ctx.lineWidth = 2;
+            // Tab border - white when focused
+            ctx.strokeStyle = isFocused ? '#FFF' : (isSelected ? '#FFD700' : '#4a4a6a');
+            ctx.lineWidth = isFocused ? 3 : 2;
             ctx.strokeRect(tabX, tabY, tabWidth, tabHeight);
 
             // Tab text
@@ -354,12 +543,15 @@ const BankUI = {
         const listY = panelY + 110;
         const listWidth = this.PANEL_WIDTH - 60;
         const itemHeight = 40;
+        const listFocused = this.focusArea === 'list';
 
         // List background
         ctx.fillStyle = '#12121a';
         ctx.fillRect(listX, listY, listWidth, this.ITEMS_PER_PAGE * itemHeight + 10);
-        ctx.strokeStyle = '#3a3a5a';
-        ctx.lineWidth = 1;
+
+        // List border - highlight when focused
+        ctx.strokeStyle = listFocused ? '#FFD700' : '#3a3a5a';
+        ctx.lineWidth = listFocused ? 2 : 1;
         ctx.strokeRect(listX, listY, listWidth, this.ITEMS_PER_PAGE * itemHeight + 10);
 
         if (items.length === 0) {
@@ -382,17 +574,25 @@ const BankUI = {
         visibleItems.forEach((item, idx) => {
             const realIndex = offset + idx;
             const itemY = listY + 5 + idx * itemHeight;
-            const isSelected = realIndex === this.selectedIndex;
+            const isSelected = realIndex === this.selectedIndex && listFocused;
 
             // Selection highlight
             if (isSelected) {
-                ctx.fillStyle = '#3a3a5e';
+                ctx.fillStyle = '#3a4a3e';
                 ctx.fillRect(listX + 5, itemY, listWidth - 10, itemHeight - 2);
 
                 // Selection border
-                ctx.strokeStyle = '#8888FF';
+                ctx.strokeStyle = '#8aff8a';
                 ctx.lineWidth = 2;
                 ctx.strokeRect(listX + 5, itemY, listWidth - 10, itemHeight - 2);
+            }
+
+            // Item number (for quick selection)
+            if (idx < 9) {
+                ctx.font = '12px Arial';
+                ctx.textAlign = 'left';
+                ctx.fillStyle = '#666';
+                ctx.fillText(`[${idx + 1}]`, listX + 10, itemY + 25);
             }
 
             // Item rarity color
@@ -409,12 +609,12 @@ const BankUI = {
             ctx.font = isSelected ? 'bold 16px Arial' : '16px Arial';
             ctx.textAlign = 'left';
             ctx.fillStyle = color;
-            ctx.fillText(item.name, listX + 15, itemY + 25);
+            ctx.fillText(item.name, listX + 40, itemY + 25);
 
             // Item type and count
             ctx.font = '12px Arial';
             ctx.fillStyle = '#888';
-            const typeText = item.type.charAt(0).toUpperCase() + item.type.slice(1);
+            const typeText = item.type ? (item.type.charAt(0).toUpperCase() + item.type.slice(1)) : 'Item';
             ctx.fillText(typeText, listX + 300, itemY + 25);
 
             // Stack count
@@ -428,7 +628,29 @@ const BankUI = {
             ctx.textAlign = 'right';
             ctx.fillStyle = '#FFD700';
             ctx.fillText(`${item.sellValue || 0}g`, listX + listWidth - 20, itemY + 25);
+
+            // Action hint for selected item
+            if (isSelected) {
+                ctx.fillStyle = '#8aff8a';
+                ctx.font = '10px Arial';
+                const actionHint = this.selectedTab === 0 ? 'WITHDRAW' : 'DEPOSIT';
+                ctx.fillText(`[Enter] ${actionHint}`, listX + listWidth - 20, itemY + 38);
+            }
         });
+
+        // Scroll indicators
+        if (offset > 0) {
+            ctx.fillStyle = '#888';
+            ctx.textAlign = 'center';
+            ctx.font = '12px Arial';
+            ctx.fillText(String.fromCharCode(9650) + ' more items above', listX + listWidth / 2, listY + 15);
+        }
+        if (offset + this.ITEMS_PER_PAGE < items.length) {
+            ctx.fillStyle = '#888';
+            ctx.textAlign = 'center';
+            ctx.font = '12px Arial';
+            ctx.fillText(String.fromCharCode(9660) + ' more items below', listX + listWidth / 2, listY + this.ITEMS_PER_PAGE * itemHeight);
+        }
 
         // Scrollbar
         if (items.length > this.ITEMS_PER_PAGE) {
@@ -438,9 +660,49 @@ const BankUI = {
 
             ctx.fillStyle = '#3a3a5a';
             ctx.fillRect(listX + listWidth - 8, listY, 6, scrollHeight);
-            ctx.fillStyle = '#8888FF';
+            ctx.fillStyle = listFocused ? '#FFD700' : '#8888FF';
             ctx.fillRect(listX + listWidth - 8, barY, 6, barHeight);
         }
+    },
+
+    /**
+     * Render message
+     * @private
+     */
+    _renderMessage(ctx, panelX, panelY) {
+        const msgY = panelY + this.PANEL_HEIGHT - 60;
+
+        ctx.font = 'bold 16px Arial';
+        ctx.textAlign = 'center';
+        ctx.fillStyle = this.messageType === 'error' ? '#e74c3c' : '#2ecc71';
+        ctx.fillText(this.message, panelX + this.PANEL_WIDTH / 2, msgY);
+    },
+
+    /**
+     * Render close button
+     * @private
+     */
+    _renderCloseButton(ctx, panelX, panelY) {
+        const btnX = panelX + this.PANEL_WIDTH - 120;
+        const btnY = panelY + this.PANEL_HEIGHT - 50;
+        const btnW = 100;
+        const btnH = 35;
+        const isFocused = this.focusArea === 'buttons';
+
+        // Button background
+        ctx.fillStyle = isFocused ? '#ff6b6b' : '#e74c3c';
+        ctx.fillRect(btnX, btnY, btnW, btnH);
+
+        // Button border
+        ctx.strokeStyle = isFocused ? '#fff' : '#c0392b';
+        ctx.lineWidth = isFocused ? 2 : 1;
+        ctx.strokeRect(btnX, btnY, btnW, btnH);
+
+        // Button text
+        ctx.font = 'bold 14px Arial';
+        ctx.textAlign = 'center';
+        ctx.fillStyle = '#fff';
+        ctx.fillText('CLOSE', btnX + btnW / 2, btnY + 23);
     },
 
     /**
@@ -448,7 +710,7 @@ const BankUI = {
      * @private
      */
     _renderControls(ctx, panelX, panelY) {
-        const controlsY = panelY + this.PANEL_HEIGHT - 30;
+        const controlsY = panelY + this.PANEL_HEIGHT - 20;
 
         ctx.font = '12px Arial';
         ctx.textAlign = 'center';
@@ -456,7 +718,9 @@ const BankUI = {
 
         const action = this.selectedTab === 0 ? 'Withdraw' : 'Deposit';
         ctx.fillText(
-            `[Up/Down] Select | [Left/Right] Switch Tab | [E/Enter] ${action} | [ESC] Close`,
+            String.fromCharCode(8593) + String.fromCharCode(8595) + ' Navigate | ' +
+            String.fromCharCode(8592) + String.fromCharCode(8594) + ' Switch Tab | ' +
+            `[1-9] Quick ${action} | [Enter] ${action} | [Tab] Focus | [ESC] Close`,
             panelX + this.PANEL_WIDTH / 2,
             controlsY
         );
@@ -470,7 +734,11 @@ const BankUI = {
 // Hook into global keyboard handler
 window.addEventListener('keydown', (e) => {
     if (game.state === 'bank' || game.state === GAME_STATES?.BANK) {
-        BankUI.handleInput(e.key);
+        // Prevent default for Tab to avoid losing focus
+        if (e.key === 'Tab') {
+            e.preventDefault();
+        }
+        BankUI.handleInput(e.key, e.shiftKey);
     }
 });
 
@@ -480,4 +748,4 @@ window.addEventListener('keydown', (e) => {
 
 window.BankUI = BankUI;
 
-console.log('[BankUI] Bank UI loaded');
+console.log('[BankUI] Bank UI loaded (with keyboard navigation)');

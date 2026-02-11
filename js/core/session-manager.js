@@ -1,6 +1,16 @@
 // === js/core/session-manager.js ===
 // SURVIVAL EXTRACTION UPDATE: Manages run lifecycle
 
+/**
+ * SESSION MANAGER - Run Lifecycle Management
+ *
+ * INVENTORY AUTHORITY: game.player.inventory is the authoritative source
+ * during active gameplay. This manager syncs from game.player.inventory
+ * when needed for saves, extraction, and death drops.
+ *
+ * See game-state.js for full state authority documentation.
+ */
+
 // ============================================================================
 // SESSION MANAGER
 // ============================================================================
@@ -81,7 +91,7 @@ const SessionManager = {
 
         const floor = sessionState.currentFloor;
 
-        // Use game.player.inventory as the source of truth (items are added there during gameplay)
+        // Use game.player.inventory as the authoritative source (items are added there during gameplay)
         const playerInventory = game.player?.inventory || [];
         const itemCount = playerInventory.length;
         const goldAmount = game.player?.gold || sessionState.gold || 0;
@@ -100,20 +110,6 @@ const SessionManager = {
             }
         });
 
-        // Also transfer any items in sessionState.inventory (for backwards compatibility)
-        sessionState.inventory.forEach(item => {
-            // Avoid duplicates - only add if not already in player inventory
-            const isDuplicate = playerInventory.some(pi => pi.id === item.id && pi.name === item.name);
-            if (!isDuplicate) {
-                if (typeof BankingSystem !== 'undefined') {
-                    BankingSystem.deposit(item);
-                } else {
-                    persistentState.bank.items.push(item);
-                    persistentState.bank.usedSlots++;
-                }
-            }
-        });
-
         // Transfer gold to bank
         if (typeof BankingSystem !== 'undefined') {
             BankingSystem.depositGold(goldAmount);
@@ -125,8 +121,8 @@ const SessionManager = {
         persistentState.stats.successfulExtractions++;
         persistentState.stats.totalGoldExtracted += goldAmount;
 
-        // Count materials extracted
-        const materialCount = sessionState.inventory.filter(i => i.type === 'material').length;
+        // Count materials extracted (from authoritative source)
+        const materialCount = playerInventory.filter(i => i.type === 'material').length;
         persistentState.stats.totalMaterialsExtracted += materialCount;
 
         // Unlock shortcut if first extraction from this floor
@@ -247,11 +243,18 @@ const SessionManager = {
         }
 
         const floor = sessionState.currentFloor;
-        const hadItems = sessionState.inventory.length > 0;
-        const hadGold = sessionState.gold > 0;
+
+        // Use game.player.inventory as authoritative source (fix for Issue #3)
+        // Fall back to sessionState.inventory only if game.player doesn't exist
+        const playerInventory = game.player?.inventory || sessionState.inventory || [];
+        const playerGold = game.player?.gold ?? sessionState.gold ?? 0;
+
+        const hadItems = playerInventory.length > 0;
+        const hadGold = playerGold > 0;
         const wasRescueRun = sessionState.isRescueRun;
 
         console.log(`[SessionManager] Player died on floor ${floor}`);
+        console.log(`[SessionManager] Had ${playerInventory.length} items and ${playerGold} gold`);
 
         // Create death drop if carrying anything AND not already a rescue run
         if ((hadItems || hadGold) && !wasRescueRun) {
@@ -259,8 +262,8 @@ const SessionManager = {
                 floor: floor,
                 x: deathX,
                 y: deathY,
-                items: sessionState.inventory.map(i => ({ ...i })),
-                gold: sessionState.gold,
+                items: playerInventory.map(i => ({ ...i })),
+                gold: playerGold,
                 timestamp: Date.now()
             };
             console.log('[SessionManager] Death drop created. Next run can recover items.');
@@ -333,17 +336,27 @@ const SessionManager = {
             return { success: false, reason: 'Not in rescue run' };
         }
 
-        // Add items to current inventory
+        // Add items to game.player.inventory (authoritative) if available, else sessionState
+        const targetInventory = game.player?.inventory || sessionState.inventory;
+
         persistentState.deathDrop.items.forEach(item => {
+            if (game.player?.inventory) {
+                game.player.inventory.push({ ...item });
+            }
+            // Also sync to sessionState for save compatibility
             sessionState.inventory.push({ ...item });
         });
 
-        // Add gold
-        sessionState.gold += persistentState.deathDrop.gold;
+        // Add gold to game.player (authoritative) and sync to sessionState
+        const recoveredGold = persistentState.deathDrop.gold;
+        if (game.player) {
+            game.player.gold = (game.player.gold || 0) + recoveredGold;
+        }
+        sessionState.gold += recoveredGold;
 
         const recovered = {
             items: persistentState.deathDrop.items.length,
-            gold: persistentState.deathDrop.gold
+            gold: recoveredGold
         };
 
         // Mark as collected (cleared on successful extraction)
@@ -411,8 +424,12 @@ const SessionManager = {
         // Mark game as completed
         persistentState.stats.coreDefeated = true;
 
+        // Use game.player.inventory as authoritative source
+        const playerInventory = game.player?.inventory || sessionState.inventory || [];
+        const playerGold = game.player?.gold ?? sessionState.gold ?? 0;
+
         // Transfer all items to bank
-        sessionState.inventory.forEach(item => {
+        playerInventory.forEach(item => {
             if (typeof BankingSystem !== 'undefined') {
                 BankingSystem.deposit(item);
             } else {
@@ -421,9 +438,9 @@ const SessionManager = {
         });
 
         if (typeof BankingSystem !== 'undefined') {
-            BankingSystem.depositGold(sessionState.gold);
+            BankingSystem.depositGold(playerGold);
         } else {
-            persistentState.bank.gold += sessionState.gold;
+            persistentState.bank.gold += playerGold;
         }
 
         // Reset village degradation (the world is saved!)
@@ -454,13 +471,17 @@ const SessionManager = {
      * @returns {Object}
      */
     getRunStatus() {
+        // Use authoritative source for inventory/gold counts
+        const playerInventory = game.player?.inventory || sessionState.inventory || [];
+        const playerGold = game.player?.gold ?? sessionState.gold ?? 0;
+
         return {
             active: sessionState.active,
             runId: sessionState.runId,
             floor: sessionState.currentFloor,
             floorTime: sessionState.floorTime,
-            inventoryCount: sessionState.inventory.length,
-            gold: sessionState.gold,
+            inventoryCount: playerInventory.length,
+            gold: playerGold,
             isRescueRun: sessionState.isRescueRun,
             miniBossDefeated: sessionState.miniBossDefeated,
             pathDownDiscovered: sessionState.pathDown.discovered
@@ -468,32 +489,72 @@ const SessionManager = {
     },
 
     /**
-     * Add item to session inventory
+     * Add item to player inventory (authoritative: game.player.inventory)
      * @param {Object} item
      */
     addToInventory(item) {
         if (!sessionState.active) return false;
 
+        // Prefer game.player.inventory as authoritative
+        const targetInventory = game.player?.inventory || sessionState.inventory;
+
         // Check for stackable
         if (item.stackable || item.type === 'material') {
-            const existing = sessionState.inventory.find(i => i.id === item.id);
+            const existing = targetInventory.find(i => i.id === item.id);
             if (existing) {
                 existing.count = (existing.count || 1) + (item.count || 1);
                 return true;
             }
         }
 
-        sessionState.inventory.push({ ...item });
+        targetInventory.push({ ...item });
+
+        // Also sync to sessionState if we used game.player.inventory
+        if (game.player?.inventory && targetInventory !== sessionState.inventory) {
+            if (item.stackable || item.type === 'material') {
+                const existing = sessionState.inventory.find(i => i.id === item.id);
+                if (existing) {
+                    existing.count = (existing.count || 1) + (item.count || 1);
+                } else {
+                    sessionState.inventory.push({ ...item });
+                }
+            } else {
+                sessionState.inventory.push({ ...item });
+            }
+        }
+
         return true;
     },
 
     /**
-     * Add gold to session
+     * Add gold to player (authoritative: game.player.gold)
      * @param {number} amount
      */
     addGold(amount) {
         if (!sessionState.active) return;
+
+        // Update authoritative source
+        if (game.player) {
+            game.player.gold = (game.player.gold || 0) + amount;
+        }
+
+        // Also sync to sessionState
         sessionState.gold += amount;
+    },
+
+    /**
+     * Sync session state from game state
+     * Call before saves to ensure sessionState reflects current gameplay
+     */
+    syncFromGame() {
+        if (typeof syncSessionFromGame === 'function') {
+            syncSessionFromGame();
+        } else if (game.player) {
+            // Fallback sync
+            sessionState.inventory = (game.player.inventory || []).map(item => ({ ...item }));
+            sessionState.gold = game.player.gold || 0;
+            sessionState.currentFloor = game.floor || sessionState.currentFloor;
+        }
     },
 
     // ========================================================================

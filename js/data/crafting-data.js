@@ -119,6 +119,35 @@ const CRAFTING_RECIPES = {
     },
 
     // ========================================================================
+    // WEAPONS - TIER 1 (Floor 1-2 materials) - RANGED
+    // ========================================================================
+
+    hunting_bow: {
+        id: 'hunting_bow',
+        name: 'Hunting Bow',
+        category: 'weapons',
+        tier: 1,
+        description: 'A reliable bow for ranged combat',
+        materials: [
+            { id: 'rough_leather', count: 8 },
+            { id: 'chasm_iron', count: 5 }
+        ],
+        goldCost: 60,
+        craftTime: 2,
+        result: {
+            type: 'weapon',
+            weaponType: 'bow',
+            damageType: 'pierce',
+            name: 'Hunting Bow',
+            damage: 10,
+            attackSpeed: 1.1,
+            range: 7,
+            rarity: 'uncommon'
+        },
+        unlocked: true
+    },
+
+    // ========================================================================
     // WEAPONS - TIER 2 (Floor 2-3 materials)
     // ========================================================================
 
@@ -170,6 +199,85 @@ const CRAFTING_RECIPES = {
         prerequisite: 'guardian_floor_1'
     },
 
+    fire_wand: {
+        id: 'fire_wand',
+        name: 'Fire Wand',
+        category: 'weapons',
+        tier: 2,
+        description: 'A wand that channels flame magic',
+        materials: [
+            { id: 'emberstone', count: 6 },
+            { id: 'crystal_shard', count: 8 }
+        ],
+        goldCost: 140,
+        craftTime: 3,
+        result: {
+            type: 'weapon',
+            weaponType: 'wand',
+            damageType: 'magic',
+            name: 'Fire Wand',
+            damage: 8,
+            attackSpeed: 1.4,
+            magicDamage: 16,
+            element: 'fire',
+            rarity: 'rare'
+        },
+        prerequisite: 'guardian_floor_1'
+    },
+
+    tome_of_shadows: {
+        id: 'tome_of_shadows',
+        name: 'Tome of Shadows',
+        category: 'weapons',
+        tier: 2,
+        description: 'A dark tome filled with shadow magic',
+        materials: [
+            { id: 'shadow_thread', count: 12 },
+            { id: 'crystal_shard', count: 6 }
+        ],
+        goldCost: 160,
+        craftTime: 4,
+        result: {
+            type: 'weapon',
+            weaponType: 'tome',
+            damageType: 'magic',
+            name: 'Tome of Shadows',
+            damage: 6,
+            attackSpeed: 1.2,
+            magicDamage: 20,
+            element: 'dark',
+            rarity: 'rare'
+        },
+        prerequisite: 'guardian_floor_1'
+    },
+
+    ember_crossbow: {
+        id: 'ember_crossbow',
+        name: 'Ember Crossbow',
+        category: 'weapons',
+        tier: 2,
+        description: 'A crossbow that fires flaming bolts',
+        materials: [
+            { id: 'emberstone', count: 6 },
+            { id: 'chasm_iron', count: 10 },
+            { id: 'dense_stone', count: 4 }
+        ],
+        goldCost: 180,
+        craftTime: 4,
+        result: {
+            type: 'weapon',
+            weaponType: 'crossbow',
+            damageType: 'pierce',
+            name: 'Ember Crossbow',
+            damage: 16,
+            attackSpeed: 0.6,
+            range: 8,
+            fireDamage: 8,
+            rarity: 'rare'
+        },
+        prerequisite: 'guardian_floor_1'
+    },
+
     // ========================================================================
     // WEAPONS - TIER 3 (Floor 3-4 materials)
     // ========================================================================
@@ -189,6 +297,7 @@ const CRAFTING_RECIPES = {
         result: {
             type: 'weapon',
             weaponType: 'bow',
+            damageType: 'pierce',
             name: 'Living Bow',
             damage: 18,
             attackSpeed: 1.3,
@@ -218,6 +327,87 @@ const CRAFTING_RECIPES = {
             damage: 35,
             attackSpeed: 0.5,
             slowOnHit: 0.3,
+            rarity: 'rare'
+        },
+        prerequisite: 'guardian_floor_2'
+    },
+
+    frost_staff: {
+        id: 'frost_staff',
+        name: 'Frost Staff',
+        category: 'weapons',
+        tier: 3,
+        description: 'A staff that channels bitter cold',
+        materials: [
+            { id: 'frost_essence', count: 8 },
+            { id: 'living_crystal', count: 5 }
+        ],
+        goldCost: 320,
+        craftTime: 5,
+        result: {
+            type: 'weapon',
+            weaponType: 'staff',
+            damageType: 'magic',
+            name: 'Frost Staff',
+            damage: 10,
+            attackSpeed: 1.1,
+            magicDamage: 24,
+            element: 'ice',
+            slowOnHit: 0.2,
+            rarity: 'rare'
+        },
+        prerequisite: 'guardian_floor_2'
+    },
+
+    tome_of_binding: {
+        id: 'tome_of_binding',
+        name: 'Tome of Binding',
+        category: 'weapons',
+        tier: 3,
+        description: 'An ancient tome containing binding rituals',
+        materials: [
+            { id: 'living_crystal', count: 8 },
+            { id: 'corrupted_bone', count: 6 }
+        ],
+        goldCost: 340,
+        craftTime: 5,
+        result: {
+            type: 'weapon',
+            weaponType: 'tome',
+            damageType: 'magic',
+            name: 'Tome of Binding',
+            damage: 8,
+            attackSpeed: 1.0,
+            magicDamage: 28,
+            element: 'arcane',
+            rootChance: 0.15,
+            rarity: 'rare'
+        },
+        prerequisite: 'guardian_floor_2'
+    },
+
+    frost_bow: {
+        id: 'frost_bow',
+        name: 'Frost Bow',
+        category: 'weapons',
+        tier: 3,
+        description: 'A bow carved from eternal ice',
+        materials: [
+            { id: 'frost_essence', count: 8 },
+            { id: 'rough_leather', count: 10 }
+        ],
+        goldCost: 280,
+        craftTime: 5,
+        result: {
+            type: 'weapon',
+            weaponType: 'bow',
+            damageType: 'pierce',
+            name: 'Frost Bow',
+            damage: 14,
+            attackSpeed: 1.2,
+            range: 8,
+            element: 'ice',
+            slowOnHit: 0.25,
             rarity: 'rare'
         },
         prerequisite: 'guardian_floor_2'
@@ -266,11 +456,67 @@ const CRAFTING_RECIPES = {
         result: {
             type: 'weapon',
             weaponType: 'staff',
+            damageType: 'magic',
             name: 'Arcane Staff',
             damage: 15,
             attackSpeed: 1.0,
             magicDamage: 40,
+            element: 'arcane',
             manaRegen: 2,
+            rarity: 'epic'
+        },
+        prerequisite: 'guardian_floor_3'
+    },
+
+    void_wand: {
+        id: 'void_wand',
+        name: 'Void Wand',
+        category: 'weapons',
+        tier: 4,
+        description: 'A wand that tears holes in reality',
+        materials: [
+            { id: 'void_metal', count: 8 },
+            { id: 'arcane_dust', count: 10 }
+        ],
+        goldCost: 480,
+        craftTime: 7,
+        result: {
+            type: 'weapon',
+            weaponType: 'wand',
+            damageType: 'magic',
+            name: 'Void Wand',
+            damage: 10,
+            attackSpeed: 1.3,
+            magicDamage: 32,
+            element: 'dark',
+            armorPenetration: 0.20,
+            rarity: 'epic'
+        },
+        prerequisite: 'guardian_floor_3'
+    },
+
+    void_crossbow: {
+        id: 'void_crossbow',
+        name: 'Void Crossbow',
+        category: 'weapons',
+        tier: 4,
+        description: 'A crossbow that fires bolts of pure darkness',
+        materials: [
+            { id: 'void_metal', count: 10 },
+            { id: 'shadow_thread', count: 8 }
+        ],
+        goldCost: 520,
+        craftTime: 7,
+        result: {
+            type: 'weapon',
+            weaponType: 'crossbow',
+            damageType: 'pierce',
+            name: 'Void Crossbow',
+            damage: 22,
+            attackSpeed: 0.5,
+            range: 9,
+            element: 'dark',
+            armorPenetration: 0.15,
             rarity: 'epic'
         },
         prerequisite: 'guardian_floor_3'
@@ -326,6 +572,63 @@ const CRAFTING_RECIPES = {
             attackSpeed: 0.9,
             lifesteal: 0.15,
             soulHarvest: true,
+            rarity: 'epic'
+        },
+        prerequisite: 'guardian_floor_4'
+    },
+
+    void_tome: {
+        id: 'void_tome',
+        name: 'Void Tome',
+        category: 'weapons',
+        tier: 5,
+        description: 'Contains forbidden knowledge from beyond the veil',
+        materials: [
+            { id: 'soul_fragment', count: 6 },
+            { id: 'void_metal', count: 8 },
+            { id: 'arcane_dust', count: 12 }
+        ],
+        goldCost: 1100,
+        craftTime: 10,
+        result: {
+            type: 'weapon',
+            weaponType: 'tome',
+            damageType: 'magic',
+            name: 'Void Tome',
+            damage: 12,
+            attackSpeed: 1.0,
+            magicDamage: 50,
+            element: 'dark',
+            manaRegen: 3,
+            spellPenetration: 0.20,
+            rarity: 'epic'
+        },
+        prerequisite: 'guardian_floor_4'
+    },
+
+    abyssal_bow: {
+        id: 'abyssal_bow',
+        name: 'Abyssal Bow',
+        category: 'weapons',
+        tier: 5,
+        description: 'A bow forged in the deepest abyss',
+        materials: [
+            { id: 'abyssal_ore', count: 6 },
+            { id: 'dragon_scale', count: 4 },
+            { id: 'shadow_thread', count: 10 }
+        ],
+        goldCost: 950,
+        craftTime: 10,
+        result: {
+            type: 'weapon',
+            weaponType: 'bow',
+            damageType: 'pierce',
+            name: 'Abyssal Bow',
+            damage: 24,
+            attackSpeed: 1.1,
+            range: 10,
+            element: 'dark',
+            critChance: 0.20,
             rarity: 'epic'
         },
         prerequisite: 'guardian_floor_4'

@@ -1904,8 +1904,22 @@ function performAttack(attacker, defender) {
     const isAmbush = checkAmbush(attacker, defender);
 
     const isEnemy = attacker !== game.player;
-    const comboCount = isEnemy ? (attacker.combat?.comboCount || 1) : 1;
-    const isComboFinisher = isEnemy && comboCount === 3;
+
+    // Issue #12: Player Combo System - Get combo count for both player and enemies
+    // Player combo tracked in mouseAttackState, enemy combo in attacker.combat
+    let comboCount;
+    if (isEnemy) {
+        comboCount = attacker.combat?.comboCount || 1;
+    } else {
+        // Player combo from mouse attack system (1, 2, 3 cycle)
+        // Note: comboCount was already incremented after attack start, so 1 means just did 3rd hit
+        comboCount = mouseAttackState?.comboCount || 1;
+        // Since combo increments AFTER performMouseAttack, we need the previous value
+        // If current is 1, previous was 3 (finisher). If current is 2, previous was 1. If current is 3, previous was 2.
+        const previousCombo = comboCount === 1 ? 3 : comboCount - 1;
+        comboCount = previousCombo;
+    }
+    const isComboFinisher = comboCount === 3;
 
     let result;
     if (typeof DamageCalculator !== 'undefined') {
@@ -1954,7 +1968,16 @@ function performAttack(attacker, defender) {
         }
     }
 
-    showDamageNumber(defender, result.finalDamage, color, { isCrit: result.isCrit || result.isAmbush });
+    // Issue #12: Show COMBO! text for player combo finisher
+    if (result.isComboFinisher && !isEnemy) {
+        showDamageNumber(defender, 'COMBO!', '#ff00ff', { isCrit: true });
+        // Small screen shake for satisfying feedback
+        if (typeof triggerScreenEffect === 'function') {
+            triggerScreenEffect('shake', 0.25, 150);
+        }
+    }
+
+    showDamageNumber(defender, result.finalDamage, color, { isCrit: result.isCrit || result.isAmbush || result.isComboFinisher });
 
     if (typeof NoiseSystem !== 'undefined') {
         if (attacker === game.player) NoiseSystem.playerNoise('HIT_IMPACT');
@@ -2126,6 +2149,11 @@ function getDistance(entity1, entity2) {
 }
 
 function getCurrentRoom(entity) {
+    // Use consolidated RoomUtils if available
+    if (typeof RoomUtils !== 'undefined') {
+        return RoomUtils.getCurrentRoom(entity);
+    }
+    // Fallback implementation (for backwards compatibility)
     if (!game.rooms) return null;
     const x = entity.gridX ?? entity.x;
     const y = entity.gridY ?? entity.y;
@@ -2361,8 +2389,16 @@ function updateDash(deltaTime) {
     }
 }
 
-function playerHasIframes() { return dashState.hasIframes; }
-function playerIsDashing() { return dashState.isDashing; }
+function playerHasIframes() {
+    if (dashState.hasIframes) return true;
+    if (typeof DodgeSystem !== 'undefined' && DodgeSystem.isInvincible()) return true;
+    return false;
+}
+function playerIsDashing() {
+    if (dashState.isDashing) return true;
+    if (typeof DodgeSystem !== 'undefined' && DodgeSystem.isDodging()) return true;
+    return false;
+}
 function getDashCooldown() { return dashState.cooldown; }
 function getDashCooldownMax() { return COMBAT_ENHANCEMENTS_CONFIG.dash.cooldown; }
 

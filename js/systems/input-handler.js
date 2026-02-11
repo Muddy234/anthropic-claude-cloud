@@ -151,6 +151,15 @@ window.addEventListener('keydown', e => {
 
     // Playing state - hotkeys and movement
     if (game.state === 'playing') {
+        // DODGE ROLL (Space key) - Active defense with i-frames
+        if (e.key === ' ') {
+            e.preventDefault();
+            if (typeof DodgeSystem !== 'undefined' && DodgeSystem.initialized) {
+                DodgeSystem.tryDodge(game.player);
+            }
+            return;
+        }
+
         // Tab targeting
         if (e.key === 'Tab') {
             e.preventDefault(); // Prevent default tab behavior

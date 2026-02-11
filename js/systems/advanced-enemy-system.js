@@ -7,6 +7,87 @@
 // PART 1: MONSTER TIERS (Data)
 // ============================================================
 
+/**
+ * MONSTER_TIERS Schema Documentation
+ * ==================================
+ *
+ * Each tier represents a distinct enemy power level with associated AI behaviors,
+ * social dynamics, and combat capabilities. Tiers scale from basic fodder (TIER_1)
+ * to legendary boss-caliber enemies (TIER_5).
+ *
+ * @typedef {Object} TierConfig
+ * @property {string} id - Unique tier identifier (e.g., 'tier_1', 'tier_2')
+ * @property {string} name - Human-readable tier name (e.g., 'Basic', 'Elite')
+ * @property {number[]} floors - Array of floor numbers where this tier spawns
+ * @property {TierBaseStats} baseStats - Base combat statistics
+ * @property {string[]} monsters - Array of monster type IDs that belong to this tier
+ *
+ * @typedef {Object} TierBaseStats
+ * @property {number} hp - Base hit points before multipliers
+ * @property {number} damage - Base damage output before multipliers
+ * @property {number} defense - Damage reduction value
+ * @property {number} exp - Experience points awarded on kill
+ *
+ * Extended Properties (Used by EnemyAI in enemy-ai.js):
+ * =====================================================
+ *
+ * @typedef {Object} TierSenses
+ * @property {number} reactionDelay - Milliseconds before aggro after spotting player
+ *   - TIER_3 (Fodder): 300ms (slow, dumb)
+ *   - TIER_2 (Standard): 150ms (moderate)
+ *   - TIER_1 (Veteran): 50ms (alert)
+ *   - ELITE: 0ms (instant reaction)
+ * @property {number} sightRange - Vision range in tiles (default: 6)
+ * @property {number} hearingRange - Audio detection range in tiles
+ *
+ * @typedef {Object} TierSocial
+ * @property {boolean} packCourage - If true, becomes fearless with 4+ allies nearby
+ * @property {number} packCourageThreshold - Number of allies needed for pack courage (default: 4)
+ * @property {boolean} isSacrificial - Can be consumed by Elite for healing
+ * @property {boolean} canSacrificeMinions - Elite: Can consume nearby Tier 3s to heal
+ * @property {number} sacrificeThreshold - HP% at which sacrifice behavior triggers (default: 0.3)
+ * @property {number} sacrificeHeal - HP% healed per sacrifice (default: 0.25)
+ * @property {number} sacrificeDamageBuff - Damage multiplier buff after sacrifice (default: 0.2)
+ * @property {string[]} retreatHierarchy - Array of tiers this enemy will retreat toward
+ *   - TIER_3: ['TIER_2', 'TIER_1', 'ELITE'] (retreats to any higher tier)
+ *   - TIER_2: ['ELITE'] (only retreats to Elite)
+ *   - TIER_1/ELITE: [] (never retreats)
+ *
+ * @typedef {Object} TierBehavior
+ * @property {string} searchBehavior - How enemy searches when losing sight of player
+ *   - 'none': Immediately gives up ("must have been the wind")
+ *   - 'lastKnown': Checks last known position then gives up
+ *   - 'tactical': Throws projectile at last known spot before checking
+ *   - 'aggressive': Commands nearby Tier 3s to investigate
+ * @property {number} preferredRange - Optimal combat distance (1 = melee, 3+ = ranged)
+ * @property {boolean} kitesBehavior - If true, will retreat when player gets too close
+ *
+ * @typedef {Object} TierCombat
+ * @property {number} windupDuration - Milliseconds of attack telegraph (allows dodging)
+ *   - Higher tiers have shorter windups (more dangerous)
+ *   - TIER_3: 500ms, TIER_2: 400ms, TIER_1: 300ms, ELITE: 200ms
+ * @property {number} attackRange - Tiles at which attack can be executed
+ * @property {number} attackCooldown - Milliseconds between attacks
+ *
+ * Example Extended Tier Config:
+ * -----------------------------
+ * TIER_3: {
+ *   id: 'tier_3',
+ *   name: 'Fodder',
+ *   floors: [1, 2],
+ *   baseStats: { hp: 30, damage: 5, defense: 0, exp: 10 },
+ *   senses: { reactionDelay: 300, sightRange: 5 },
+ *   social: {
+ *     packCourage: true,
+ *     isSacrificial: true,
+ *     retreatHierarchy: ['TIER_2', 'TIER_1', 'ELITE']
+ *   },
+ *   behavior: { searchBehavior: 'none' },
+ *   combat: { windupDuration: 500 },
+ *   monsters: ['goblin_grunt', 'rat_giant']
+ * }
+ */
+
 const MONSTER_TIERS = {
       // TIER 1: BASIC ENEMIES (Floors 1-2)
       TIER_1: {

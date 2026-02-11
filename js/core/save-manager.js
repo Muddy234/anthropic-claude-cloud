@@ -160,8 +160,11 @@ const SaveManager = {
             // Version migration
             const migrated = this._migrateVersion(parsed);
 
+            // Restore special types (Sets, etc.) that were serialized
+            const restored = this._restoreTypes(migrated);
+
             console.log(`[SaveManager] Loaded from slot ${slot}`);
-            return migrated;
+            return restored;
         } catch (e) {
             console.error('[SaveManager] Load failed:', e);
             return null;

@@ -311,16 +311,29 @@ function updateDash(deltaTime) {
 
 /**
  * Check if player currently has i-frames
+ * Checks both dash state and DodgeSystem
  */
 function playerHasIframes() {
-    return dashState.hasIframes;
+    // Check dash i-frames
+    if (dashState.hasIframes) return true;
+
+    // Check DodgeSystem i-frames (Issue #7: Active Defense)
+    if (typeof DodgeSystem !== 'undefined' && DodgeSystem.isInvincible()) return true;
+
+    return false;
 }
 
 /**
- * Check if player is currently dashing
+ * Check if player is currently dashing or dodging
  */
 function playerIsDashing() {
-    return dashState.isDashing;
+    // Check dash state
+    if (dashState.isDashing) return true;
+
+    // Check DodgeSystem (Issue #7: Active Defense)
+    if (typeof DodgeSystem !== 'undefined' && DodgeSystem.isDodging()) return true;
+
+    return false;
 }
 
 /**

@@ -8,7 +8,7 @@
 const DamageCalculator = {
     // Configuration
     config: {
-        baseVariance: 0,             // No random variance (was 0.10)
+        baseVariance: 0.10,          // 10% damage variance (0.90x to 1.10x)
         minDamage: 1,                // Minimum damage floor
         critMultiplier: 2.5,         // Critical hit multiplier (was 1.5, buffed for balance)
         baseCritChance: 0.05,        // 5% base crit chance

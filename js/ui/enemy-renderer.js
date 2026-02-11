@@ -605,11 +605,27 @@ function drawTierIndicator(ctx, enemy, cx, ey, tileSize) {
 
 /**
  * Draw health bar for enemy
+ * Issue #12: Now uses shared HealthBarUtils for consistency
  */
 function drawEnemyHealthBar(ctx, x, y, width, hp, maxHp, isTargeted, barHeight) {
     // Default bar height if not specified
     barHeight = barHeight || 4;
 
+    // Use HealthBarUtils if available
+    if (typeof HealthBarUtils !== 'undefined') {
+        HealthBarUtils.drawSimple(ctx, {
+            x: x,
+            y: y,
+            width: width,
+            height: barHeight,
+            current: hp,
+            max: maxHp,
+            highlighted: isTargeted
+        });
+        return;
+    }
+
+    // Fallback implementation for backwards compatibility
     const pct = Math.max(0, Math.min(1, hp / maxHp));
 
     // Background

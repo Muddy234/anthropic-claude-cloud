@@ -30,6 +30,11 @@ const MELEE_WEAPONS = {
 'worldshard_blade': { id: 'worldshard_blade', name: 'Worldshard Blade', slot: 'MAIN', weaponType: 'sword', damageType: 'blade', rarity: 'epic', stats: { damage: 19, speed: 0.85, range: 1.25, str: 11, agi: 7, int: 0, pDef: 0, mDef: 0 }, element: 'earth', elementPower: 5, noise: { onAttack: 55 }, goldValue: 360 },
 'nullblade': { id: 'nullblade', name: 'Nullblade', slot: 'MAIN', weaponType: 'sword', damageType: 'blade', rarity: 'epic', stats: { damage: 18, speed: 1.0, range: 1.25, str: 11, agi: 7, int: 0, pDef: 0, mDef: 0 }, element: null, elementPower: 0, special: { dispel: true }, noise: { onAttack: 45 }, goldValue: 380 },
 
+// === LEGENDARY BLADE (3) ===
+'primordial_edge': { id: 'primordial_edge', name: 'Primordial Edge', slot: 'MAIN', weaponType: 'sword', damageType: 'blade', rarity: 'legendary', stats: { damage: 25, speed: 1.05, range: 1.25, str: 15, agi: 10, int: 0, pDef: 0, mDef: 0 }, element: 'dark', elementPower: 7, special: { critBonus: 0.25, lifeSteal: 0.10 }, noise: { onAttack: 50 }, goldValue: 1200 },
+'sunrazor': { id: 'sunrazor', name: 'Sunrazor', slot: 'MAIN', weaponType: 'sword', damageType: 'blade', rarity: 'legendary', stats: { damage: 24, speed: 1.1, range: 1.25, str: 15, agi: 10, int: 0, pDef: 0, mDef: 0 }, element: 'holy', elementPower: 7, special: { holySmite: true, critBonus: 0.20 }, noise: { onAttack: 55 }, goldValue: 1150 },
+'frostmourne_echo': { id: 'frostmourne_echo', name: 'Frostmourne Echo', slot: 'MAIN', weaponType: 'sword', damageType: 'blade', rarity: 'legendary', stats: { damage: 23, speed: 0.95, range: 1.25, str: 15, agi: 10, int: 0, pDef: 0, mDef: 0 }, element: 'ice', elementPower: 7, special: { slowAmount: 0.35, freezeChance: 0.15 }, noise: { onAttack: 45 }, goldValue: 1100 },
+
 // === BLUNT (24) === [Blunt: Primary STR (60%), Secondary pDef (40%)]
 'wooden_club': { id: 'wooden_club', name: 'Wooden Club', slot: 'MAIN', weaponType: 'mace', damageType: 'blunt', rarity: 'common', stats: { damage: 8, speed: 0.9, range: 1.25, str: 2, agi: 0, int: 0, pDef: 1, mDef: 0 }, element: null, elementPower: 0, noise: { onAttack: 50 }, goldValue: 10 },
 'iron_mace': { id: 'iron_mace', name: 'Iron Mace', slot: 'MAIN', weaponType: 'mace', damageType: 'blunt', rarity: 'common', stats: { damage: 11, speed: 0.9, range: 1.25, str: 2, agi: 0, int: 0, pDef: 1, mDef: 0 }, element: null, elementPower: 0, noise: { onAttack: 55 }, goldValue: 35 },
@@ -53,7 +58,12 @@ const MELEE_WEAPONS = {
 'consecrated_maul': { id: 'consecrated_maul', name: 'Consecrated Maul', slot: 'MAIN', weaponType: 'mace', damageType: 'blunt', rarity: 'epic', stats: { damage: 18, speed: 0.85, range: 1.25, str: 11, agi: 0, int: 0, pDef: 7, mDef: 0 }, element: 'holy', elementPower: 5, noise: { onAttack: 55 }, goldValue: 350 },
 'voidhammer': { id: 'voidhammer', name: 'Voidhammer', slot: 'MAIN', weaponType: 'mace', damageType: 'blunt', rarity: 'epic', stats: { damage: 17, speed: 0.9, range: 1.25, str: 11, agi: 0, int: 0, pDef: 7, mDef: 0 }, element: 'dark', elementPower: 5, noise: { onAttack: 50 }, goldValue: 340 },
 'wavebreaker': { id: 'wavebreaker', name: 'Wavebreaker', slot: 'MAIN', weaponType: 'mace', damageType: 'blunt', rarity: 'epic', stats: { damage: 19, speed: 0.8, range: 1.25, str: 11, agi: 0, int: 0, pDef: 7, mDef: 0 }, element: 'water', elementPower: 5, noise: { onAttack: 60 }, goldValue: 350 },
-'spellshatter_mace': { id: 'spellshatter_mace', name: 'Spellshatter Mace', slot: 'MAIN', weaponType: 'mace', damageType: 'blunt', rarity: 'epic', stats: { damage: 16, speed: 0.95, range: 1.25, str: 11, agi: 0, int: 0, pDef: 7, mDef: 0 }, element: 'arcane', elementPower: 5, special: { silence: true }, noise: { onAttack: 55 }, goldValue: 360 }
+'spellshatter_mace': { id: 'spellshatter_mace', name: 'Spellshatter Mace', slot: 'MAIN', weaponType: 'mace', damageType: 'blunt', rarity: 'epic', stats: { damage: 16, speed: 0.95, range: 1.25, str: 11, agi: 0, int: 0, pDef: 7, mDef: 0 }, element: 'arcane', elementPower: 5, special: { silence: true }, noise: { onAttack: 55 }, goldValue: 360 },
+
+// === LEGENDARY BLUNT (3) ===
+'titans_grasp': { id: 'titans_grasp', name: "Titan's Grasp", slot: 'MAIN', weaponType: 'mace', damageType: 'blunt', rarity: 'legendary', stats: { damage: 28, speed: 0.7, range: 1.25, str: 15, agi: 0, int: 0, pDef: 10, mDef: 0 }, element: 'earth', elementPower: 7, special: { armorPen: 0.30, stagger: 0.25 }, noise: { onAttack: 75 }, goldValue: 1300 },
+'dawnbreaker': { id: 'dawnbreaker', name: 'Dawnbreaker', slot: 'MAIN', weaponType: 'mace', damageType: 'blunt', rarity: 'legendary', stats: { damage: 24, speed: 0.85, range: 1.25, str: 15, agi: 0, int: 0, pDef: 10, mDef: 0 }, element: 'holy', elementPower: 7, special: { holySmite: true, undeadBane: 0.50 }, noise: { onAttack: 60 }, goldValue: 1200 },
+'maelstrom_crusher': { id: 'maelstrom_crusher', name: 'Maelstrom Crusher', slot: 'MAIN', weaponType: 'mace', damageType: 'blunt', rarity: 'legendary', stats: { damage: 26, speed: 0.75, range: 1.25, str: 15, agi: 0, int: 0, pDef: 10, mDef: 0 }, element: 'water', elementPower: 7, special: { cleave: 0.40, knockback: 2 }, noise: { onAttack: 65 }, goldValue: 1250 }
 
 };
 

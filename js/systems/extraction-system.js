@@ -189,8 +189,15 @@ const ExtractionSystem = {
             addMessage(`An extraction shaft is becoming unstable!`, 'warning');
         }
 
-        // TODO: Play warning sound
-        // TODO: Add screen effect
+        // Play warning sound
+        if (typeof UIAudio !== 'undefined') {
+            UIAudio.playExtractionWarning(2);
+        }
+
+        // Add screen effect - subtle shake
+        if (typeof ScreenEffects !== 'undefined' && ScreenEffects.shake) {
+            ScreenEffects.shake(0.3, 200);
+        }
     },
 
     /**
@@ -206,8 +213,15 @@ const ExtractionSystem = {
             addMessage(`An extraction shaft has collapsed!`, 'danger');
         }
 
-        // TODO: Play collapse sound
-        // TODO: Screen shake
+        // Play collapse sound
+        if (typeof UIAudio !== 'undefined') {
+            UIAudio.playExtractionCollapse();
+        }
+
+        // Screen shake
+        if (typeof ScreenEffects !== 'undefined' && ScreenEffects.shake) {
+            ScreenEffects.shake(0.8, 500);
+        }
 
         // Check if all collapsed
         const activePoints = this.points.filter(p => p.isActive());
@@ -228,7 +242,14 @@ const ExtractionSystem = {
             addMessage('All extraction shafts have collapsed! Find the path down!', 'critical');
         }
 
-        // TODO: Dramatic effect
+        // Play critical warning and heavy screen shake
+        if (typeof UIAudio !== 'undefined') {
+            UIAudio.playExtractionWarning(3);
+        }
+        if (typeof ScreenEffects !== 'undefined' && ScreenEffects.shake) {
+            ScreenEffects.shake(1.0, 800);
+        }
+
         // The player must now find the path down or die when shift occurs
     },
 
