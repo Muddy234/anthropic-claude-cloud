@@ -6,12 +6,75 @@
 // ============================================================================
 
 const LOOT_CONFIG = {
-    despawnTime: 60000,         // 60 seconds in ms
-    pileSize: 0.66,             // 2/3 of tile size
-    monsterItemChance: 0.25,    // 25% chance for monster-specific item (already has dropChance)
-    equipmentDropChance: 0.08,  // 8% base chance to roll for equipment
+    despawnTime: 120000,            // 120 seconds in ms (was 60)
+    pileSize: 0.66,                 // 2/3 of tile size
+    monsterItemChance: 0.25,        // 25% chance for monster-specific item (unchanged)
+    equipmentDropChance: 0.40,      // 40% chance per kill (was 0.08)
+    equipmentTypeWeights: {
+        weapon: 0.50,               // 50% of equipment drops are weapons
+        armor: 0.50,                // 50% are armor
+    },
+    shieldFromArmorChance: 0.15,    // 15% chance armor roll becomes shield
     stackableTypes: ['material', 'consumable']
 };
+
+// ============================================================================
+// FLOOR-BASED RARITY WEIGHTS
+// ============================================================================
+
+const FLOOR_RARITY_WEIGHTS = {
+    1:  { common: 0.90, uncommon: 0.10, rare: 0.00, epic: 0.00 },
+    2:  { common: 0.80, uncommon: 0.17, rare: 0.03, epic: 0.00 },
+    3:  { common: 0.65, uncommon: 0.25, rare: 0.09, epic: 0.01 },
+    4:  { common: 0.55, uncommon: 0.28, rare: 0.14, epic: 0.03 },
+    5:  { common: 0.50, uncommon: 0.28, rare: 0.17, epic: 0.05 },
+    6:  { common: 0.45, uncommon: 0.28, rare: 0.20, epic: 0.07 },
+    7:  { common: 0.40, uncommon: 0.28, rare: 0.22, epic: 0.10 },
+    8:  { common: 0.35, uncommon: 0.28, rare: 0.24, epic: 0.13 },
+    9:  { common: 0.30, uncommon: 0.28, rare: 0.26, epic: 0.16 },
+    10: { common: 0.25, uncommon: 0.28, rare: 0.28, epic: 0.19 },
+};
+
+// ============================================================================
+// ELEMENT ENCHANTMENT SYSTEM
+// ============================================================================
+
+const ENCHANTMENT_CONFIG = {
+    noEnchantmentChance: 0.33,   // 33% chance of no element
+    enchantmentChance: 0.67,     // 67% chance of random element
+};
+
+const ELEMENTS = ['fire', 'ice', 'water', 'earth', 'nature', 'death', 'arcane', 'dark', 'holy', 'physical'];
+
+// Element power by rarity: Common=1, Uncommon=2, Rare=3-4, Epic=5-6, Legendary=7
+const ELEMENT_POWER_BY_RARITY = {
+    common: { min: 1, max: 1 },
+    uncommon: { min: 2, max: 2 },
+    rare: { min: 3, max: 4 },
+    epic: { min: 5, max: 6 },
+    legendary: { min: 7, max: 7 }
+};
+
+/**
+ * Roll for an element enchantment
+ * @returns {string|null} - Element name or null for no enchantment
+ */
+function rollElement() {
+    if (Math.random() < ENCHANTMENT_CONFIG.noEnchantmentChance) {
+        return null;
+    }
+    return ELEMENTS[Math.floor(Math.random() * ELEMENTS.length)];
+}
+
+/**
+ * Get element power based on item rarity
+ * @param {string} rarity - Item rarity
+ * @returns {number} - Element power level
+ */
+function getElementPower(rarity) {
+    const range = ELEMENT_POWER_BY_RARITY[rarity] || ELEMENT_POWER_BY_RARITY.common;
+    return range.min + Math.floor(Math.random() * (range.max - range.min + 1));
+}
 
 // ============================================================================
 // FAVOR VALUE CONFIG - HP restoration from sacrificing items
@@ -146,85 +209,197 @@ function rollMonsterLootInternal(monsterName) {
 }
 
 /**
+ * Roll rarity based on current floor using FLOOR_RARITY_WEIGHTS
+ * @param {number} floor - Current dungeon floor (1-10)
+ * @returns {string} - Selected rarity
+ */
+function rollFloorBasedRarity(floor) {
+    // Clamp floor to valid range, default to floor 1
+    const clampedFloor = Math.max(1, Math.min(10, floor || 1));
+    const weights = FLOOR_RARITY_WEIGHTS[clampedFloor];
+
+    // Apply shift multiplier to epic drops when shift is active
+    let adjustedWeights = { ...weights };
+    if (game.shiftActive && game.shiftLootMultiplier) {
+        adjustedWeights.epic *= game.shiftLootMultiplier;
+    }
+
+    const roll = Math.random();
+    let cumulative = 0;
+
+    for (const [rarity, weight] of Object.entries(adjustedWeights)) {
+        cumulative += weight;
+        if (roll < cumulative) {
+            return rarity;
+        }
+    }
+
+    return 'common'; // Fallback
+}
+
+/**
  * Roll for equipment drop (weapons, armor, shields)
+ * Uses floor-based rarity and element enchantment system
  * @returns {object|null} - Equipment item or null
  */
 function rollEquipmentDrop() {
-    // Rarity weights (higher number = more common)
-    const rarityWeights = {
-        'common': 50,      // 50% of drops
-        'uncommon': 35,    // 35% of drops
-        'rare': 13,        // 13% of drops
-        'epic': 2          // 2% of drops
-    };
+    // Get current floor (default to 1 if not available)
+    const currentFloor = game.currentFloor || game.floor || 1;
 
-    // Apply shift multiplier to epic drops when shift is active
-    if (game.shiftActive && game.shiftLootMultiplier) {
-        rarityWeights['epic'] *= game.shiftLootMultiplier;
-    }
+    // Roll for rarity based on floor
+    const selectedRarity = rollFloorBasedRarity(currentFloor);
 
-    // Roll for rarity
-    const totalWeight = Object.values(rarityWeights).reduce((a, b) => a + b, 0);
-    let roll = Math.random() * totalWeight;
-    let selectedRarity = 'common';
+    // Roll 50/50 for weapon vs armor
+    const equipmentTypeRoll = Math.random();
+    let equipmentType;
 
-    for (const [rarity, weight] of Object.entries(rarityWeights)) {
-        roll -= weight;
-        if (roll <= 0) {
-            selectedRarity = rarity;
-            break;
+    if (equipmentTypeRoll < LOOT_CONFIG.equipmentTypeWeights.weapon) {
+        equipmentType = 'weapon';
+    } else {
+        // Armor selected - 15% chance to become shield instead
+        if (Math.random() < LOOT_CONFIG.shieldFromArmorChance) {
+            equipmentType = 'shield';
+        } else {
+            equipmentType = 'armor';
         }
     }
 
-    // Collect all equipment items of the selected rarity
+    // Collect items based on equipment type and rarity
     const equipmentPool = [];
 
-    // Add melee weapons
-    if (typeof MELEE_WEAPONS !== 'undefined') {
-        for (const item of Object.values(MELEE_WEAPONS)) {
-            if (item.rarity === selectedRarity) {
-                equipmentPool.push({ ...item, type: 'weapon' });
+    if (equipmentType === 'weapon') {
+        // Add melee weapons
+        if (typeof MELEE_WEAPONS !== 'undefined') {
+            for (const item of Object.values(MELEE_WEAPONS)) {
+                if (item.rarity === selectedRarity) {
+                    equipmentPool.push({ ...item, type: 'weapon' });
+                }
             }
         }
-    }
 
-    // Add ranged weapons
-    if (typeof RANGED_WEAPONS !== 'undefined') {
-        for (const item of Object.values(RANGED_WEAPONS)) {
-            if (item.rarity === selectedRarity) {
-                equipmentPool.push({ ...item, type: 'weapon' });
+        // Add ranged weapons
+        if (typeof RANGED_WEAPONS !== 'undefined') {
+            for (const item of Object.values(RANGED_WEAPONS)) {
+                if (item.rarity === selectedRarity) {
+                    equipmentPool.push({ ...item, type: 'weapon' });
+                }
             }
         }
-    }
-
-    // Add armor
-    if (typeof DEFENSE_ARMOR !== 'undefined') {
-        for (const item of Object.values(DEFENSE_ARMOR)) {
-            if (item.rarity === selectedRarity) {
-                equipmentPool.push({ ...item, type: 'armor' });
+    } else if (equipmentType === 'armor') {
+        // Add defense armor
+        if (typeof DEFENSE_ARMOR !== 'undefined') {
+            for (const item of Object.values(DEFENSE_ARMOR)) {
+                if (item.rarity === selectedRarity) {
+                    equipmentPool.push({ ...item, type: 'armor' });
+                }
             }
         }
-    }
 
-    if (typeof MOBILITY_ARMOR !== 'undefined') {
-        for (const item of Object.values(MOBILITY_ARMOR)) {
-            if (item.rarity === selectedRarity) {
-                equipmentPool.push({ ...item, type: 'armor' });
+        // Add mobility armor
+        if (typeof MOBILITY_ARMOR !== 'undefined') {
+            for (const item of Object.values(MOBILITY_ARMOR)) {
+                if (item.rarity === selectedRarity) {
+                    equipmentPool.push({ ...item, type: 'armor' });
+                }
+            }
+        }
+    } else if (equipmentType === 'shield') {
+        // Add shields
+        if (typeof SHIELDS !== 'undefined') {
+            for (const item of Object.values(SHIELDS)) {
+                if (item.rarity === selectedRarity) {
+                    equipmentPool.push({ ...item, type: 'shield' });
+                }
             }
         }
     }
 
     // Select random item from pool
     if (equipmentPool.length === 0) {
-        return null;
+        // Fallback: try any equipment type if pool is empty
+        return rollEquipmentFallback(selectedRarity);
     }
 
     const selectedItem = equipmentPool[Math.floor(Math.random() * equipmentPool.length)];
 
-    // Return a copy with count property for inventory system
+    // Roll for element enchantment
+    const element = rollElement();
+    const elementPower = element ? getElementPower(selectedRarity) : 0;
+
+    // Return a copy with count property and element data
     return {
         ...selectedItem,
-        count: 1
+        count: 1,
+        element: element,
+        elementPower: elementPower
+    };
+}
+
+/**
+ * Fallback equipment roll when primary pool is empty
+ * Tries all equipment types for the given rarity
+ * @param {string} rarity - Target rarity
+ * @returns {object|null} - Equipment item or null
+ */
+function rollEquipmentFallback(rarity) {
+    const fallbackPool = [];
+
+    // Try all equipment sources
+    if (typeof MELEE_WEAPONS !== 'undefined') {
+        for (const item of Object.values(MELEE_WEAPONS)) {
+            if (item.rarity === rarity) {
+                fallbackPool.push({ ...item, type: 'weapon' });
+            }
+        }
+    }
+
+    if (typeof RANGED_WEAPONS !== 'undefined') {
+        for (const item of Object.values(RANGED_WEAPONS)) {
+            if (item.rarity === rarity) {
+                fallbackPool.push({ ...item, type: 'weapon' });
+            }
+        }
+    }
+
+    if (typeof DEFENSE_ARMOR !== 'undefined') {
+        for (const item of Object.values(DEFENSE_ARMOR)) {
+            if (item.rarity === rarity) {
+                fallbackPool.push({ ...item, type: 'armor' });
+            }
+        }
+    }
+
+    if (typeof MOBILITY_ARMOR !== 'undefined') {
+        for (const item of Object.values(MOBILITY_ARMOR)) {
+            if (item.rarity === rarity) {
+                fallbackPool.push({ ...item, type: 'armor' });
+            }
+        }
+    }
+
+    if (typeof SHIELDS !== 'undefined') {
+        for (const item of Object.values(SHIELDS)) {
+            if (item.rarity === rarity) {
+                fallbackPool.push({ ...item, type: 'shield' });
+            }
+        }
+    }
+
+    if (fallbackPool.length === 0) {
+        return null;
+    }
+
+    const selectedItem = fallbackPool[Math.floor(Math.random() * fallbackPool.length)];
+
+    // Roll for element enchantment
+    const element = rollElement();
+    const elementPower = element ? getElementPower(rarity) : 0;
+
+    return {
+        ...selectedItem,
+        count: 1,
+        element: element,
+        elementPower: elementPower
     };
 }
 
@@ -569,7 +744,14 @@ function getLootPileSummary(pile) {
 
 window.LOOT_CONFIG = LOOT_CONFIG;
 window.FAVOR_CONFIG = FAVOR_CONFIG;
+window.FLOOR_RARITY_WEIGHTS = FLOOR_RARITY_WEIGHTS;
+window.ENCHANTMENT_CONFIG = ENCHANTMENT_CONFIG;
+window.ELEMENTS = ELEMENTS;
+window.ELEMENT_POWER_BY_RARITY = ELEMENT_POWER_BY_RARITY;
 window.getFavorValue = getFavorValue;
+window.rollElement = rollElement;
+window.getElementPower = getElementPower;
+window.rollFloorBasedRarity = rollFloorBasedRarity;
 window.spawnLootPile = spawnLootPile;
 window.getLootPileAt = getLootPileAt;
 window.pickupLootPile = pickupLootPile;

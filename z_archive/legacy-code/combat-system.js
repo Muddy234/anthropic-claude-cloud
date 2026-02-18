@@ -10,15 +10,15 @@
 // ============================================================================
 
 const COMBAT_CONFIG = {
-    baseAttackTime: 700,          // Base attack speed in ms (1.0 speed = 700ms)
+    baseAttackTime: 1200,         // Base attack speed in ms - INCREASED from 700 for better pacing
     engageDelay: 0.4,             // Initial delay when engaging (seconds)
     minDamage: 1,                 // Minimum damage floor
     missChance: 0.08,             // Base 8% miss chance
     debugLogging: true,
-    // Enemy attack animation settings
-    enemyAttackDuration: 400,     // Total enemy attack animation duration (ms)
-    enemyWindupPercent: 0.35,     // 35% of attack is windup (140ms at 400ms total)
-    enemyWhiteFlashStart: 0.85,   // White flash starts at 85% of windup (last 15%)
+    // Enemy attack animation settings - SIGNIFICANTLY INCREASED for readability
+    enemyAttackDuration: 800,     // Total enemy attack animation duration (ms) - was 400
+    enemyWindupPercent: 0.50,     // 50% of attack is windup (400ms) - was 0.35
+    enemyWhiteFlashStart: 0.70,   // White flash starts at 70% of windup - was 0.85 (more warning time)
     playerWindupPercent: 0.15,    // Player windup is 15% for comparison
     // Combat disengage settings
     combatDisengageTime: 30000    // Time (ms) without combat before auto-disengage (30 seconds)
@@ -182,7 +182,14 @@ function updateEntityCombat(entity, deltaTime) {
 
         // Fall back to basic attack with windup if no ability used
         if (!usedAbility) {
-            startAttackWindup(entity, combat.currentTarget);
+            // BUGFIX: Don't fall through to basic attack if enemy has a signature ability
+            // (ability is just on cooldown, not missing). Only use basic attacks for
+            // unmapped monsters without any ability configuration.
+            const hasSignatureAbility = typeof EnemyAbilitySystem !== 'undefined' &&
+                EnemyAbilitySystem.enemyAbilities?.get(entity.id)?.signatureAbility;
+            if (!hasSignatureAbility) {
+                startAttackWindup(entity, combat.currentTarget);
+            }
         } else {
             // Abilities have their own telegraph, reset cooldown
             const baseSpeed = combat.attackSpeed || 1.0;
@@ -201,7 +208,8 @@ function startAttackWindup(attacker, target) {
 
     // Determine attack type based on enemy's equipped weapon or abilities
     let attackType = 'melee';
-    if (attacker.attackRange && attacker.attackRange > 2) {
+    const attackRange = attacker.combat?.attackRange || attacker.attackRange || 1;
+    if (attackRange > 2) {
         attackType = 'ranged';
     }
     if (attacker.element && ['fire', 'ice', 'arcane', 'void', 'death'].includes(attacker.element)) {
@@ -285,30 +293,36 @@ function updateAttackAnimation(entity, deltaTime) {
 
 /**
  * Get attack animation progress for rendering
+ * FIXED: Now checks BOTH the combat system's attackAnimation AND the AI system's windup state
+ * This ensures monster attack windups are visible regardless of which system triggered them
  * @returns {object|null} Animation info or null if not animating
  */
 function getAttackAnimationState(entity) {
+    // Check combat system's attack animation first
     const anim = entity.combat?.attackAnimation;
-    if (!anim || anim.state === 'idle') return null;
+    if (anim && anim.state !== 'idle') {
+        const windupDuration = anim.maxTimer;
+        const windupProgress = anim.state === 'windup'
+            ? 1 - (anim.timer / windupDuration)
+            : 1;
 
-    const windupDuration = anim.maxTimer;
-    const windupProgress = anim.state === 'windup'
-        ? 1 - (anim.timer / windupDuration)
-        : 1;
+        // Calculate if in white flash phase (last 15% of windup)
+        const flashStart = COMBAT_CONFIG.enemyWhiteFlashStart;
+        const inFlashPhase = anim.state === 'windup' && windupProgress >= flashStart;
 
-    // Calculate if in white flash phase (last 15% of windup)
-    const flashStart = COMBAT_CONFIG.enemyWhiteFlashStart;
-    const inFlashPhase = anim.state === 'windup' && windupProgress >= flashStart;
+        return {
+            state: anim.state,
+            type: anim.type,
+            progress: windupProgress,
+            inFlashPhase: inFlashPhase,
+            targetLocked: anim.targetLocked,
+            isWindup: anim.state === 'windup',
+            isRecovery: anim.state === 'recovery'
+        };
+    }
 
-    return {
-        state: anim.state,
-        type: anim.type,
-        progress: windupProgress,
-        inFlashPhase: inFlashPhase,
-        targetLocked: anim.targetLocked,
-        isWindup: anim.state === 'windup',
-        isRecovery: anim.state === 'recovery'
-    };
+    // Enemy windup system disabled - attacks now use createMonsterAttackEffect for visuals
+    return null;
 }
 
 // ============================================================================
@@ -603,6 +617,17 @@ function applyDamage(entity, damage, source, damageResult) {
         damage = 1;
     }
 
+    // === ENEMY ABILITY SYSTEM: Pre-damage hook (evasion, shield, ethereal) ===
+    // Called BEFORE damage is applied - can modify or block damage
+    if (entity !== game.player && typeof EnemyAbilitySystem !== 'undefined') {
+        const modifiedDamage = EnemyAbilitySystem.onEnemyAttacked(entity, damage, source);
+        if (modifiedDamage === 0) {
+            // Attack was blocked/dodged - skip damage application
+            return;
+        }
+        damage = modifiedDamage;
+    }
+
     // Apply damage reduction from status effects
     if (typeof StatusEffectSystem !== 'undefined') {
         const damageTakenMod = StatusEffectSystem.getStatModifier(entity, 'damageTaken');
@@ -627,19 +652,45 @@ function applyDamage(entity, damage, source, damageResult) {
         entity.hp = 0;
     }
 
-    // Soul & Body: Award Defense XP when player takes damage
-    if (entity === game.player && typeof awardDefenseXp === 'function') {
-        awardDefenseXp(game.player, damage);
-    }
+    // Defense XP removed - defense is now handled by equipment only (per skill-system-implementation.md)
 
     // === VISUAL FEEDBACK FOR PLAYER DAMAGE ===
     if (entity === game.player) {
+        // CRITICAL FIX: Add combat log message when player takes damage
+        // This was missing - players couldn't see when/what was hitting them
+        if (typeof addMessage === 'function' && source && source !== entity) {
+            const sourceName = source.name || 'Enemy';
+            const isCrit = damageResult?.isCrit;
+            let msg = `${sourceName} hits you for ${damage} damage!`;
+            if (isCrit) msg = `${sourceName} CRITS you for ${damage} damage!`;
+            addMessage(msg, 'combat');  // Fixed: use 'combat' type, not 'combat-damage'
+        }
+
         // Trigger screen damage flash (CotDG-style red vignette)
         if (typeof triggerScreenEffect === 'function') {
             // Intensity scales with damage percentage
             const dmgPct = Math.min(1, damage / entity.maxHp);
             const intensity = 0.2 + dmgPct * 0.4; // 0.2 to 0.6
             triggerScreenEffect('damage', intensity, 200);
+
+            // Critical hit flash: intense red flash for big hits (crit or >20% of max HP)
+            const isCrit = damageResult?.isCrit;
+            const isBigHit = dmgPct >= 0.2;
+            if (isCrit || isBigHit) {
+                // Use critFlash effect for intense red vignette
+                const critIntensity = isCrit ? 0.5 : (0.25 + dmgPct * 0.3);
+                triggerScreenEffect('critFlash', critIntensity, isCrit ? 150 : 100);
+            }
+        }
+
+        // ENHANCED: Also trigger screen shake for significant hits
+        if (typeof triggerScreenEffect === 'function') {
+            const dmgPct = damage / entity.maxHp;
+            if (dmgPct > 0.1) {
+                // Shake intensity based on damage (0.1-0.4)
+                const shakeIntensity = Math.min(0.4, 0.1 + dmgPct * 0.3);
+                triggerScreenEffect('shake', shakeIntensity, 150);
+            }
         }
 
         // Trigger entity hit flash
@@ -668,10 +719,27 @@ function applyDamage(entity, damage, source, damageResult) {
         }
     }
 
-    // Trigger damage-based mechanics for enemies
+    // === ENEMY ABILITY SYSTEM: Post-damage hook (thorns, teleport, adaptive resistance) ===
+    // Called AFTER damage is applied - triggers reactive passives
     if (entity !== game.player && typeof EnemyAbilitySystem !== 'undefined') {
         entity.lastDamageTime = Date.now();  // For regeneration passive
+
+        // Determine damage type from attack
+        const damageType = damageResult?.breakdown?.elementMod > 1.0
+            ? (source?.element || source?.equipped?.MAIN?.element || 'physical')
+            : 'physical';
+
+        // Call the post-damage hook
+        EnemyAbilitySystem.onEnemyDamaged(entity, damage, damageType, source);
+
+        // Also check mechanics (for legacy support)
         EnemyAbilitySystem.checkMechanics(entity, 'on_damaged', { damage, source });
+    }
+
+    // IMMEDIATE COMBAT ENTRY: Force enemy into combat when damaged
+    // This bypasses the reaction delay so enemies respond immediately when attacked
+    if (entity !== game.player && entity.ai && source === game.player) {
+        entity.ai.forceEnterCombat(source);
     }
 
     // Break invisibility on damage
@@ -774,6 +842,17 @@ function handleDeath(entity, killer) {
         return;
     }
 
+    // === ENEMY ABILITY SYSTEM: Death hook (undying, death_explosion, split) ===
+    // Called BEFORE death is finalized - can prevent death via undying
+    if (typeof EnemyAbilitySystem !== 'undefined') {
+        const survived = EnemyAbilitySystem.onEnemyDeath(entity);
+        if (survived) {
+            // Undying triggered - enemy survives at low HP
+            // Don't process death, just return
+            return;
+        }
+    }
+
     // Immediately disengage combat for the dead entity to prevent ghost attacks
     if (entity.combat) {
         entity.combat.isInCombat = false;
@@ -855,14 +934,10 @@ function handleDeath(entity, killer) {
         AIManager.unregisterEnemy(entity);
     }
 
-    // Remove from social groups
-    if (typeof MonsterSocialSystem !== 'undefined') {
-        if (entity.packId) {
-            const pack = MonsterSocialSystem.packs.get(entity.packId);
-            if (pack) {
-                pack.members = pack.members.filter(m => m !== entity);
-            }
-        }
+    // Remove from social groups (real-time cleanup via GroupSystem hook)
+    if (typeof GroupSystem !== 'undefined' && GroupSystem.onEnemyDeath) {
+        const enemyId = entity.id || `${entity.name}_${entity.gridX}_${entity.gridY}`;
+        GroupSystem.onEnemyDeath(enemyId);
     }
 
     // Remove from enemies array
@@ -1281,12 +1356,19 @@ if (typeof SystemManager !== 'undefined') {
 
 /**
  * Create visual effect for monster attacks
+ * SIMPLIFIED: Auto-detects attack type from monster stats
  * @param {Object} attacker - The attacking monster
  * @param {Object} defender - The target (usually player)
- * @param {string} attackType - 'melee', 'ranged', or 'magic'
- * @param {Object} result - Damage calculation result
+ * @param {string} [attackType] - Optional: 'melee', 'ranged', or 'magic'
+ * @param {Object} [result] - Optional: Damage calculation result
  */
 function createMonsterAttackEffect(attacker, defender, attackType, result) {
+    console.log(`[MonsterAttack] createMonsterAttackEffect called for ${attacker?.name} -> ${defender?.name}`);
+    if (!attacker || !defender) {
+        console.log('[MonsterAttack] Missing attacker or defender, aborting');
+        return;
+    }
+
     // Get attacker position (tile coordinates, centered)
     const ax = (attacker.displayX ?? attacker.gridX) + 0.5;
     const ay = (attacker.displayY ?? attacker.gridY) + 0.5;
@@ -1297,6 +1379,26 @@ function createMonsterAttackEffect(attacker, defender, attackType, result) {
 
     // Calculate facing angle
     const facingAngle = Math.atan2(ty - ay, tx - ax);
+
+    // Auto-detect attack type if not provided
+    if (!attackType) {
+        const range = attacker.stats?.range || attacker.attackRange || 1;
+        if (range > 2) {
+            // Check if magic or ranged based on element
+            if (attacker.element && ['fire', 'ice', 'arcane', 'void', 'death'].includes(attacker.element)) {
+                attackType = 'magic';
+            } else {
+                attackType = 'ranged';
+            }
+        } else {
+            attackType = 'melee';
+        }
+    }
+
+    // Default result if not provided
+    if (!result) {
+        result = { isCrit: false };
+    }
 
     switch (attackType) {
         case 'melee':
@@ -1315,7 +1417,11 @@ function createMonsterAttackEffect(attacker, defender, attackType, result) {
  * Create melee slash effect for monster
  */
 function createMonsterMeleeEffect(ax, ay, facingAngle, attacker, result) {
-    if (typeof MeleeSlashEffect === 'undefined') return;
+    console.log(`[MonsterAttack] createMonsterMeleeEffect at (${ax.toFixed(2)}, ${ay.toFixed(2)}), MeleeSlashEffect exists:`, typeof MeleeSlashEffect !== 'undefined');
+    if (typeof MeleeSlashEffect === 'undefined') {
+        console.log('[MonsterAttack] MeleeSlashEffect not defined!');
+        return;
+    }
 
     // Base options for monster melee
     const options = {

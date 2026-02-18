@@ -2,28 +2,44 @@
 // COMBAT EFFECT SYSTEM - The Shifting Chasm
 // ============================================================================
 // Manages combat visual effects: slash animations, magic effects, explosions
-// Loads individual PNG frames and plays them as animations
+//
+// NOTE: External spritesheet loading has been DISABLED because the required
+// assets do not exist in the repository:
+// - assets/spritesheet/slash2/png/... (NOT FOUND)
+// - assets/spritesheet/slash5/png/... (NOT FOUND)
+// - assets/spritesheet/magic_effect/... (NOT FOUND)
+// - assets/spritesheet/explosion_effects/... (NOT FOUND)
+//
+// Instead, use the code-based effect systems which work without external assets:
+// - MeleeSlashEffect (js/effects/melee-slash-effect.js) - Canvas-drawn slashes
+// - MonsterMagicEffect (js/effects/monster-attack-effects.js) - Canvas-drawn magic
+// - MonsterRangedEffect (js/effects/monster-attack-effects.js) - Canvas-drawn projectiles
 // ============================================================================
 
 // ============================================================================
-// EFFECT SPRITE CACHE
+// EXTERNAL SPRITESHEET LOADING DISABLED
 // ============================================================================
+// The following sprite loading code has been disabled to prevent console errors.
+// Re-enable this section if/when the external spritesheet assets are added.
 
 /**
- * Cache for loaded effect sprites
+ * Cache for loaded effect sprites (DISABLED - no assets available)
  * Structure: { 'effectType_N': [Image, Image, ...] }
  */
 const EFFECT_SPRITE_CACHE = {};
 
 /**
  * Tracks effect sprite loading status
+ * NOTE: isReady is set to true to prevent systems from waiting indefinitely
+ * for sprites that will never load.
  */
 const EFFECT_LOADER_STATUS = {
     isLoading: false,
-    isReady: false,
+    isReady: true,  // Set to true since we're using code-based fallbacks
     totalEffects: 0,
     loadedEffects: 0,
-    failedEffects: []
+    failedEffects: [],
+    disabled: true  // Flag indicating sprite loading is intentionally disabled
 };
 
 // ============================================================================
@@ -147,8 +163,33 @@ const activeEffects = [];
 /**
  * Load all combat effect sprites
  * Should be called during game initialization
+ *
+ * NOTE: DISABLED - External spritesheet assets do not exist.
+ * This function now immediately returns without attempting to load any sprites.
+ * The system uses code-based effects (MeleeSlashEffect, MonsterMagicEffect) instead.
  */
 function loadCombatEffectSprites() {
+    // DISABLED: External spritesheet assets do not exist
+    // The following assets are NOT available in the repository:
+    // - assets/spritesheet/slash{1-10}/png/*.png
+    // - assets/spritesheet/magic_effect/{1-10}/*.png
+    // - assets/spritesheet/explosion_effects/{1-5}/*.png
+    //
+    // Instead of loading (and failing), we mark the system as "ready"
+    // so that spawning functions gracefully return null, allowing
+    // code-based effects (MeleeSlashEffect, MonsterMagicEffect) to be used instead.
+
+    if (EFFECT_LOADER_STATUS.disabled) {
+        console.log('[CombatEffect] Spritesheet loading DISABLED - using code-based effects instead');
+        console.log('[CombatEffect] See: MeleeSlashEffect, MonsterMagicEffect, MonsterRangedEffect');
+        return;
+    }
+
+    // =========================================================================
+    // ORIGINAL LOADING CODE (DISABLED)
+    // Uncomment this section if/when external spritesheet assets are added
+    // =========================================================================
+    /*
     // Prevent duplicate loading
     if (EFFECT_LOADER_STATUS.isLoading || EFFECT_LOADER_STATUS.isReady) {
         console.log('[CombatEffect] Sprites already loading or loaded, skipping');
@@ -207,10 +248,15 @@ function loadCombatEffectSprites() {
             console.warn(`   Failed: ${EFFECT_LOADER_STATUS.failedEffects.length}`);
         }
     });
+    */
 }
 
 /**
  * Load a single effect frame
+ *
+ * NOTE: This function is part of the DISABLED spritesheet loading system.
+ * It will not be called unless EFFECT_LOADER_STATUS.disabled is set to false
+ * and the external spritesheet assets are added to the repository.
  */
 function loadEffectFrame(effectType, variant, frame, config, cacheKey) {
     return new Promise((resolve, reject) => {
@@ -246,10 +292,11 @@ function loadEffectFrame(effectType, variant, frame, config, cacheKey) {
         };
 
         img.onerror = () => {
-            const errorMsg = `Failed to load: ${path}`;
-            EFFECT_LOADER_STATUS.failedEffects.push(errorMsg);
-            console.error(`[CombatEffect] ${errorMsg}`);
-            reject(errorMsg);
+            // Silently handle missing assets - this is expected when assets don't exist
+            // Only log at debug level to prevent console spam
+            EFFECT_LOADER_STATUS.failedEffects.push(path);
+            // Resolve instead of reject to prevent Promise.allSettled from showing errors
+            resolve();
         };
 
         img.src = path;
@@ -274,17 +321,32 @@ function areCombatEffectsReady() {
  * @param {number} x - World X position (grid coords)
  * @param {number} y - World Y position (grid coords)
  * @param {Object} options - Additional options
+ *
+ * NOTE: This function returns null when sprite loading is disabled (default).
+ * Use the code-based effect systems instead:
+ * - MeleeSlashEffect.createFromAttack() for melee attacks
+ * - MonsterMagicEffect.create() for magic attacks
+ * - MonsterRangedEffect.create() for ranged attacks
  */
 function spawnCombatEffect(category, subType, x, y, options = {}) {
+    // When sprite loading is disabled, silently return null
+    // This allows the game to fall back to code-based effects
+    if (EFFECT_LOADER_STATUS.disabled) {
+        return null;
+    }
+
     if (!EFFECT_LOADER_STATUS.isReady) {
-        console.warn(`[CombatEffect] Sprites not ready yet`);
+        // Only warn if we're actively trying to load sprites
+        if (EFFECT_LOADER_STATUS.isLoading) {
+            console.warn(`[CombatEffect] Sprites still loading...`);
+        }
         return null;  // Effects not loaded yet
     }
 
     // Get effect mapping
     const mapping = EFFECT_MAPPINGS[category]?.[subType] || EFFECT_MAPPINGS[category]?.default;
     if (!mapping) {
-        console.warn(`[CombatEffect] Unknown effect category/type: ${category}/${subType}`);
+        // Silently return null - the code-based effects will handle this
         return null;
     }
 
@@ -296,8 +358,8 @@ function spawnCombatEffect(category, subType, x, y, options = {}) {
     const frames = EFFECT_SPRITE_CACHE[cacheKey];
 
     if (!frames || frames.length === 0) {
-        console.warn(`[CombatEffect] No frames for ${cacheKey}, loaded: ${EFFECT_LOADER_STATUS.loadedEffects}/${EFFECT_LOADER_STATUS.totalEffects}`);
-        return null;  // No frames loaded for this effect
+        // Silently return null - no sprites loaded (expected when disabled)
+        return null;
     }
 
     // Create the effect instance
@@ -482,9 +544,10 @@ const CombatEffectSystemDef = {
     name: 'combat-effect-system',
 
     init(game) {
-        // Start loading effect sprites
+        // Note: Sprite loading is DISABLED - see loadCombatEffectSprites() for details
+        // The game uses code-based effects (MeleeSlashEffect, MonsterMagicEffect) instead
         loadCombatEffectSprites();
-        console.log('✅ Combat Effect System initialized');
+        console.log('✅ Combat Effect System initialized (sprite loading disabled, using code-based effects)');
     },
 
     update(dt) {
@@ -534,4 +597,4 @@ if (typeof window !== 'undefined') {
     window.renderCombatEffects = renderCombatEffects;
 }
 
-console.log('✅ Combat Effect System loaded');
+console.log('✅ Combat Effect System loaded (sprite loading disabled - using code-based fallbacks)');

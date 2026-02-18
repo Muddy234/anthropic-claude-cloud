@@ -1643,6 +1643,15 @@ const BoonSystem = {
     },
 
     /**
+     * Get stack count for a specific boon (alias for hasBoon)
+     * @param {string} boonId - Boon ID to check
+     * @returns {number} Stack count (0 if not owned)
+     */
+    getBoonStacks(boonId) {
+        return this.activeBoons[boonId] || 0;
+    },
+
+    /**
      * Get list of active boons for UI
      * @returns {Array} Array of { boon, stacks }
      */

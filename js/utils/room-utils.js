@@ -19,10 +19,11 @@ const RoomUtils = {
         const g = gameRef || (typeof game !== 'undefined' ? game : null);
         if (!g?.rooms) return null;
 
-        // Clear cache on floor change
-        if (g.currentFloor !== this._cacheFloor) {
+        // Clear cache on floor change (game uses .floor, not .currentFloor)
+        const currentFloor = g.floor ?? g.currentFloor ?? 1;
+        if (currentFloor !== this._cacheFloor) {
             this._cache.clear();
-            this._cacheFloor = g.currentFloor;
+            this._cacheFloor = currentFloor;
         }
 
         // Get coordinates (support both entity and position objects)

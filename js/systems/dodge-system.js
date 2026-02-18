@@ -89,7 +89,7 @@ const DodgeSystem = {
         this.resetState();
 
         this.initialized = true;
-        console.log('[DodgeSystem] Initialized');
+        // console.log('[DodgeSystem] Initialized');
     },
 
     /**
@@ -220,16 +220,26 @@ const DodgeSystem = {
             return false;
         }
 
-        // Check stamina cost
-        if ((player.stamina || 0) < DODGE_CONFIG.staminaCost) {
-            if (typeof addMessage === 'function') {
-                addMessage('Not enough stamina to dodge!', 'warning');
+        // STAMINA CHECK: Use StaminaSystem if available, fallback to direct player.stamina
+        if (typeof StaminaSystem !== 'undefined') {
+            // Use centralized stamina system
+            if (!StaminaSystem.consumeAction('dodge')) {
+                // StaminaSystem handles feedback
+                if (typeof addMessage === 'function') {
+                    addMessage('Not enough stamina to dodge!', 'warning');
+                }
+                return false;
             }
-            return false;
+        } else {
+            // Fallback: check player.stamina directly
+            if ((player.stamina || 0) < DODGE_CONFIG.staminaCost) {
+                if (typeof addMessage === 'function') {
+                    addMessage('Not enough stamina to dodge!', 'warning');
+                }
+                return false;
+            }
+            player.stamina -= DODGE_CONFIG.staminaCost;
         }
-
-        // Consume stamina
-        player.stamina -= DODGE_CONFIG.staminaCost;
 
         // Start the dodge roll
         this.startRoll(player, direction || player.facing);
@@ -295,7 +305,7 @@ const DodgeSystem = {
             });
         }
 
-        console.log(`[DodgeSystem] Dodge started - direction: ${direction}, target: (${targetX.toFixed(2)}, ${targetY.toFixed(2)})`);
+        // console.log(`[DodgeSystem] Dodge started - direction: ${direction}, target: (${targetX.toFixed(2)}, ${targetY.toFixed(2)})`);
     },
 
     /**
@@ -326,7 +336,7 @@ const DodgeSystem = {
             });
         }
 
-        console.log(`[DodgeSystem] Dodge ended at (${player.gridX.toFixed(2)}, ${player.gridY.toFixed(2)})`);
+        // console.log(`[DodgeSystem] Dodge ended at (${player.gridX.toFixed(2)}, ${player.gridY.toFixed(2)})`);
     },
 
     /**
@@ -539,4 +549,4 @@ if (typeof window !== 'undefined') {
     window.DODGE_CONFIG = DODGE_CONFIG;
 }
 
-console.log('[DodgeSystem] Dodge system loaded');
+// console.log('[DodgeSystem] Dodge system loaded');

@@ -106,15 +106,16 @@ window.addEventListener('keydown', e => {
         }
     }
 
-    // Start new game
-    if (e.key === ' ') {
-        if (game.state === 'menu') {
-            startNewGame();
-            return;
-        } else if (game.state === 'gameover') {
-            restartGame();
-            return;
-        }
+    // === MAIN MENU INPUT HANDLING ===
+    if (game.state === 'menu') {
+        handleMenuInput(e);
+        return;
+    }
+
+    // Game over - restart
+    if (e.key === ' ' && game.state === 'gameover') {
+        restartGame();
+        return;
     }
 
     // Trigger shift (debug)
@@ -151,10 +152,15 @@ window.addEventListener('keydown', e => {
 
     // Playing state - hotkeys and movement
     if (game.state === 'playing') {
-        // DODGE ROLL (Space key) - Active defense with i-frames
+        // SPELL ACTIVATION (Space key) - Dash/Heal/Shield based on loadout selection
         if (e.key === ' ') {
             e.preventDefault();
-            if (typeof DodgeSystem !== 'undefined' && DodgeSystem.initialized) {
+            // Prevent key repeat from triggering multiple times
+            if (e.repeat) return;
+            // Use SpellSystem if available, fallback to DodgeSystem
+            if (typeof SpellSystem !== 'undefined' && SpellSystem.initialized) {
+                SpellSystem.tryActivate(game.player);
+            } else if (typeof DodgeSystem !== 'undefined' && DodgeSystem.initialized) {
                 DodgeSystem.tryDodge(game.player);
             }
             return;
@@ -345,6 +351,11 @@ function handleInventoryInput(e) {
                         updateActionHotkeys(game.player);
                     }
 
+                    // Clear sprite cache for equipment change
+                    if (typeof PlayerSpriteRenderer !== 'undefined') {
+                        PlayerSpriteRenderer.clearCache();
+                    }
+
                     addMessage(`Equipped ${selectedItem.name}`);
                 } else if (selectedItem.type === 'consumable') {
                     // Use consumable via useItemByIndex from inventory-system.js
@@ -394,6 +405,11 @@ function handleInventoryInput(e) {
                     updateActionHotkeys(game.player);
                 }
 
+                // Clear sprite cache for equipment change
+                if (typeof PlayerSpriteRenderer !== 'undefined') {
+                    PlayerSpriteRenderer.clearCache();
+                }
+
                 addMessage(`Unequipped ${item.name}`);
             }
         }
@@ -436,6 +452,16 @@ function handleMovementInput(deltaTime) {
     // Use both string and GAME_STATES comparison for safety
     const isPlaying = game.state === 'playing' || game.state === GAME_STATES?.PLAYING;
     if (!isPlaying) return;
+
+    // Update player knockback if active (takes priority over normal movement)
+    if (typeof updatePlayerKnockback === 'function') {
+        updatePlayerKnockback(deltaTime || 16.67);
+    }
+
+    // If player is being knocked back, don't process normal movement input
+    if (typeof isPlayerKnockedBack === 'function' && isPlayerKnockedBack()) {
+        return;
+    }
 
     // Check which directional keys are held
     const up = keys['w'] || keys['W'] || keys['ArrowUp'];
@@ -550,6 +576,15 @@ const setupCanvasHandlers = () => {
 
     // LEFT CLICK - Mouse-driven attack toward cursor
     canvas.addEventListener('click', (e) => {
+        // Handle main menu clicks
+        if (game.state === 'menu') {
+            const rect = canvas.getBoundingClientRect();
+            const clickX = e.clientX - rect.left;
+            const clickY = e.clientY - rect.top;
+            handleMenuClick(clickX, clickY, rect.width, rect.height);
+            return;
+        }
+
         // Handle skills overlay clicks (pentagon radar, tabs)
         if (game.state === 'skills' && typeof handleSkillsOverlayClick === 'function') {
             const rect = canvas.getBoundingClientRect();
@@ -610,6 +645,16 @@ const setupCanvasHandlers = () => {
     // RIGHT CLICK - Context menu handled by right-click-init.js
     // Removed duplicate handler to prevent double rendering
 
+    // MOUSE MOVE - Menu hover effects
+    canvas.addEventListener('mousemove', (e) => {
+        if (game.state !== 'menu') return;
+
+        const rect = canvas.getBoundingClientRect();
+        const mouseX = e.clientX - rect.left;
+        const mouseY = e.clientY - rect.top;
+        handleMenuHover(mouseX, mouseY, rect.width, rect.height);
+    });
+
     console.log('✓ Canvas click handlers initialized');
 };
 
@@ -628,6 +673,339 @@ function onPlayerHit() {
     }
     if (window.contextMenu?.visible) {
         window.contextMenu.visible = false;
+    }
+}
+
+// ============================================================================
+// MAIN MENU INPUT HANDLING
+// ============================================================================
+
+/**
+ * Handle input for the main menu system
+ */
+function handleMenuInput(e) {
+    const menuState = game.menuState;
+    if (!menuState) return;
+
+    // Get option counts for current screen
+    let optionCount = 4; // Main menu: NEW GAME, CONTINUE, SETTINGS, CREDITS
+    if (menuState.currentScreen === 'settings') {
+        optionCount = 3; // Music, SFX, Back
+    } else if (menuState.currentScreen === 'credits') {
+        optionCount = 1; // Just Back
+    }
+
+    // Navigation: Up/Down or W/S
+    if (e.key === 'ArrowUp' || e.key === 'w' || e.key === 'W') {
+        e.preventDefault();
+        menuState.selectedIndex = (menuState.selectedIndex - 1 + optionCount) % optionCount;
+        playMenuSound('navigate');
+        return;
+    }
+
+    if (e.key === 'ArrowDown' || e.key === 's' || e.key === 'S') {
+        e.preventDefault();
+        menuState.selectedIndex = (menuState.selectedIndex + 1) % optionCount;
+        playMenuSound('navigate');
+        return;
+    }
+
+    // Settings screen: Left/Right to adjust sliders
+    if (menuState.currentScreen === 'settings') {
+        if (e.key === 'ArrowLeft' || e.key === 'a' || e.key === 'A') {
+            e.preventDefault();
+            adjustSettingsValue(menuState, -10);
+            return;
+        }
+        if (e.key === 'ArrowRight' || e.key === 'd' || e.key === 'D') {
+            e.preventDefault();
+            adjustSettingsValue(menuState, 10);
+            return;
+        }
+    }
+
+    // ESC - Go back from submenus
+    if (e.key === 'Escape') {
+        if (menuState.currentScreen !== 'main') {
+            menuState.currentScreen = 'main';
+            menuState.selectedIndex = 0;
+            playMenuSound('back');
+        }
+        return;
+    }
+
+    // Enter or Space - Select
+    if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        executeMenuSelection(menuState);
+        return;
+    }
+}
+
+/**
+ * Adjust settings slider value
+ */
+function adjustSettingsValue(menuState, delta) {
+    if (menuState.selectedIndex === 0) {
+        // Music volume
+        menuState.musicVolume = Math.max(0, Math.min(100, (menuState.musicVolume || 70) + delta));
+        applyVolumeSettings(menuState);
+        playMenuSound('adjust');
+    } else if (menuState.selectedIndex === 1) {
+        // SFX volume
+        menuState.sfxVolume = Math.max(0, Math.min(100, (menuState.sfxVolume || 80) + delta));
+        applyVolumeSettings(menuState);
+        playMenuSound('adjust');
+    }
+}
+
+/**
+ * Apply volume settings to audio systems
+ */
+function applyVolumeSettings(menuState) {
+    // Save to localStorage
+    if (typeof localStorage !== 'undefined') {
+        localStorage.setItem('shiftingChasm_settings', JSON.stringify({
+            musicVolume: menuState.musicVolume,
+            sfxVolume: menuState.sfxVolume
+        }));
+    }
+
+    // Apply to audio manager if available
+    if (typeof AudioManager !== 'undefined') {
+        if (typeof AudioManager.setMusicVolume === 'function') {
+            AudioManager.setMusicVolume(menuState.musicVolume / 100);
+        }
+        if (typeof AudioManager.setSfxVolume === 'function') {
+            AudioManager.setSfxVolume(menuState.sfxVolume / 100);
+        }
+    }
+}
+
+/**
+ * Execute the currently selected menu option
+ */
+function executeMenuSelection(menuState) {
+    playMenuSound('select');
+
+    if (menuState.currentScreen === 'main') {
+        switch (menuState.selectedIndex) {
+            case 0: // NEW GAME
+                startNewGame();
+                break;
+            case 1: // CONTINUE
+                if (menuState.hasSaveData) {
+                    loadSavedGame();
+                }
+                break;
+            case 2: // SETTINGS
+                menuState.currentScreen = 'settings';
+                menuState.selectedIndex = 0;
+                break;
+            case 3: // CREDITS
+                menuState.currentScreen = 'credits';
+                menuState.selectedIndex = 0;
+                break;
+        }
+    } else if (menuState.currentScreen === 'settings') {
+        if (menuState.selectedIndex === 2) {
+            // Back
+            menuState.currentScreen = 'main';
+            menuState.selectedIndex = 2; // Return to Settings option
+        }
+    } else if (menuState.currentScreen === 'credits') {
+        // Back
+        menuState.currentScreen = 'main';
+        menuState.selectedIndex = 3; // Return to Credits option
+    }
+}
+
+/**
+ * Load saved game and continue
+ */
+function loadSavedGame() {
+    if (typeof SaveManager !== 'undefined' && typeof SaveManager.loadGame === 'function') {
+        const success = SaveManager.loadGame();
+        if (success) {
+            console.log('[Menu] Loaded saved game');
+            // Start in village with loaded state
+            if (typeof startInVillage === 'function') {
+                startInVillage();
+            }
+        } else {
+            console.warn('[Menu] Failed to load saved game, starting new');
+            startNewGame();
+        }
+    } else {
+        // No SaveManager, try manual load
+        const savedData = localStorage.getItem('shiftingChasm_persistent');
+        if (savedData) {
+            try {
+                const data = JSON.parse(savedData);
+                if (typeof loadPersistentState === 'function') {
+                    loadPersistentState(data);
+                }
+                if (typeof startInVillage === 'function') {
+                    startInVillage();
+                }
+            } catch (e) {
+                console.error('[Menu] Failed to parse saved game:', e);
+                startNewGame();
+            }
+        } else {
+            startNewGame();
+        }
+    }
+}
+
+/**
+ * Handle mouse hover on menu (for selection highlighting)
+ */
+function handleMenuHover(mouseX, mouseY, canvasWidth, canvasHeight) {
+    const menuState = game.menuState;
+    if (!menuState) return;
+
+    let newIndex = -1;
+
+    if (menuState.currentScreen === 'main') {
+        const menuStartY = canvasHeight * 0.5;
+        const menuSpacing = 50;
+        const hitHeight = 40;
+
+        for (let i = 0; i < 4; i++) {
+            const optionY = menuStartY + i * menuSpacing;
+            if (mouseY >= optionY - hitHeight / 2 && mouseY <= optionY + hitHeight / 2) {
+                if (Math.abs(mouseX - canvasWidth / 2) < 120) {
+                    // Don't highlight disabled Continue option
+                    if (i === 1 && !menuState.hasSaveData) continue;
+                    newIndex = i;
+                    break;
+                }
+            }
+        }
+    } else if (menuState.currentScreen === 'settings') {
+        const settingsStartY = canvasHeight * 0.4;
+        const settingsSpacing = 70;
+        const hitHeight = 50;
+
+        for (let i = 0; i < 3; i++) {
+            const optionY = settingsStartY + i * settingsSpacing;
+            if (mouseY >= optionY - hitHeight / 2 && mouseY <= optionY + hitHeight / 2) {
+                newIndex = i;
+                break;
+            }
+        }
+    } else if (menuState.currentScreen === 'credits') {
+        const backY = canvasHeight * 0.85;
+        if (mouseY >= backY - 25 && mouseY <= backY + 25) {
+            if (Math.abs(mouseX - canvasWidth / 2) < 80) {
+                newIndex = 0;
+            }
+        }
+    }
+
+    // Update selection if hovering over a valid option
+    if (newIndex !== -1 && newIndex !== menuState.selectedIndex) {
+        menuState.selectedIndex = newIndex;
+        playMenuSound('navigate');
+    }
+}
+
+/**
+ * Handle mouse clicks on menu
+ */
+function handleMenuClick(clickX, clickY, canvasWidth, canvasHeight) {
+    const menuState = game.menuState;
+    if (!menuState) return;
+
+    if (menuState.currentScreen === 'main') {
+        // Main menu options
+        const menuStartY = canvasHeight * 0.5;
+        const menuSpacing = 50;
+        const hitHeight = 40;
+
+        for (let i = 0; i < 4; i++) {
+            const optionY = menuStartY + i * menuSpacing;
+            if (clickY >= optionY - hitHeight / 2 && clickY <= optionY + hitHeight / 2) {
+                if (Math.abs(clickX - canvasWidth / 2) < 120) {
+                    // Check if Continue is disabled
+                    if (i === 1 && !menuState.hasSaveData) {
+                        return; // Can't click disabled option
+                    }
+                    menuState.selectedIndex = i;
+                    executeMenuSelection(menuState);
+                    return;
+                }
+            }
+        }
+    } else if (menuState.currentScreen === 'settings') {
+        // Settings options
+        const settingsStartY = canvasHeight * 0.4;
+        const settingsSpacing = 70;
+        const hitHeight = 50;
+
+        for (let i = 0; i < 3; i++) {
+            const optionY = settingsStartY + i * settingsSpacing;
+            if (clickY >= optionY - hitHeight / 2 && clickY <= optionY + hitHeight / 2) {
+                if (i < 2) {
+                    // Slider - check if clicking on slider area
+                    const sliderX = canvasWidth / 2 + 20;
+                    const sliderWidth = 200;
+                    if (clickX >= sliderX && clickX <= sliderX + sliderWidth) {
+                        // Set value based on click position
+                        const percent = Math.round(((clickX - sliderX) / sliderWidth) * 100);
+                        if (i === 0) {
+                            menuState.musicVolume = Math.max(0, Math.min(100, percent));
+                        } else {
+                            menuState.sfxVolume = Math.max(0, Math.min(100, percent));
+                        }
+                        menuState.selectedIndex = i;
+                        applyVolumeSettings(menuState);
+                        playMenuSound('adjust');
+                        return;
+                    }
+                } else {
+                    // Back button
+                    if (Math.abs(clickX - canvasWidth / 2) < 80) {
+                        menuState.selectedIndex = i;
+                        executeMenuSelection(menuState);
+                        return;
+                    }
+                }
+            }
+        }
+    } else if (menuState.currentScreen === 'credits') {
+        // Back button
+        const backY = canvasHeight * 0.85;
+        if (clickY >= backY - 25 && clickY <= backY + 25) {
+            if (Math.abs(clickX - canvasWidth / 2) < 80) {
+                executeMenuSelection(menuState);
+                return;
+            }
+        }
+    }
+}
+
+/**
+ * Play menu navigation/selection sounds
+ */
+function playMenuSound(type) {
+    // Only play if sound systems are available
+    if (typeof UIAudio !== 'undefined') {
+        switch (type) {
+            case 'navigate':
+                if (typeof UIAudio.playHover === 'function') UIAudio.playHover();
+                break;
+            case 'select':
+                if (typeof UIAudio.playClick === 'function') UIAudio.playClick();
+                break;
+            case 'back':
+                if (typeof UIAudio.playClose === 'function') UIAudio.playClose();
+                break;
+            case 'adjust':
+                if (typeof UIAudio.playTick === 'function') UIAudio.playTick();
+                break;
+        }
     }
 }
 

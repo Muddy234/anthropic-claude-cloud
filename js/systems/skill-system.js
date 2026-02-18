@@ -1,55 +1,45 @@
-// === SKILLS SYSTEM (Soul & Body Model) ===
-// Permanent skill progression - skills NEVER reset on death
+// === SKILLS SYSTEM ===
+// Run-based skill progression - skills reset on death
 // Power = (Gear_Base × Skill_Mult) × (1 + Boon_Bonus)
 //
-// Three Pillars:
-// - BODY (Gear): Volatile, dropped on death - provides base stats
-// - SOUL (Skills): Permanent, never lost - multiplies effectiveness
-// - RUN (Boons): Session-only buffs from shrines
+// On Death - Everything Resets:
+// - Gear: Lost
+// - Skills: Reset to level 0
+// - Boons: Lost
+//
+// Skills level up DURING a run by performing actions (dealing damage, taking damage, healing)
 
 // ============================================================================
 // CONFIGURATION
 // ============================================================================
 
 const SKILL_CONFIG = {
-    // Level caps (uncapped for proficiency, capped for specialization)
-    proficiencyCap: 100,             // Soft cap - can go higher but XP scales
-    specializationCap: 100,           // Per specialization slot
+    // Level caps
+    proficiencyCap: 30,
+    specialtyCap: 30,
 
-    // Bonus per level (multiplicative formula)
-    // Multiplier = (1 + ProfLevel × 0.02) × (1 + SpecLevel × 0.02)
-    proficiencyBonusPerLevel: 0.02,   // +2% per proficiency level
-    specializationBonusPerLevel: 0.02, // +2% per specialization level
+    // Damage bonuses (ADDITIVE, not multiplicative)
+    proficiencyBonusPerLevel: 0.05,   // +5% per proficiency level
+    specialtyBonusPerLevel: 0.05,     // +5% per specialty level
 
-    // Specialization unlock thresholds
-    // New specialization slot unlocks at proficiency 25, 50, 75, 100
-    specializationUnlockThresholds: [25, 50, 75, 100],
+    // XP curve
+    xpEarlyBase: 25,                  // Levels 1-5: base multiplier
+    xpLateMultiplier: 15,             // Levels 6-30: coefficient
+    xpLateExponent: 1.8,              // Levels 6-30: exponent
+    xpEarlyThreshold: 5,              // Level at which curve switches
 
-    // XP curve: 100 * level^1.5
-    xpCurveBase: 100,
-    xpCurveExponent: 1.5,
-
-    // Vitality HP bonus per level
-    vitalityHpPerLevel: 2,            // +2 HP per vitality level
-
-    // Base player HP (no gear, no vitality)
-    basePlayerHp: 100,
-
-    // Action settings (legacy - for specialty actions)
-    actionUnlockLevel: 5,             // Specialty level to unlock action
-    actionScalingPerLevel: 0.02,      // +2% action damage per level above 5
-    defaultCooldown: 10000,           // 10 seconds in milliseconds
+    // Actions
+    actionUnlockLevel: 5,             // Specialty level to unlock weapon action
+    defaultCooldown: 10000,           // 10 seconds (milliseconds)
 };
 
 // ============================================================================
-// PROFICIENCY DEFINITIONS (Soul & Body Model)
+// PROFICIENCY DEFINITIONS
 // ============================================================================
 // XP Sources:
 // - Melee: XP from landing melee hits (damage dealt)
 // - Ranged: XP from landing ranged hits (damage dealt)
 // - Magic: XP from casting spells (damage dealt)
-// - Defense: XP from taking damage (damage received)
-// - Vitality: XP from effective healing only (actual HP restored)
 
 const PROFICIENCIES = {
     melee: {
@@ -59,11 +49,10 @@ const PROFICIENCIES = {
         icon: 'M',
         color: '#c0392b',
         xpSource: 'melee_damage_dealt',
-        // Specializations unlock at proficiency 25, 50, 75, 100
-        specializations: ['blade', 'blunt', 'polearm', 'unarmed'],
+        specialties: ['sword', 'knife', 'axe', 'polearm', 'mace', 'staff', 'unarmed', 'shield'],
         getBonuses: (level) => ({
             damageMultiplier: 1 + (level * SKILL_CONFIG.proficiencyBonusPerLevel),
-            critChance: level * 0.2  // +0.2% crit per level
+            critChance: level * 0.3  // +0.3% crit per level
         })
     },
 
@@ -74,10 +63,10 @@ const PROFICIENCIES = {
         icon: 'R',
         color: '#27ae60',
         xpSource: 'ranged_damage_dealt',
-        specializations: ['bow', 'crossbow', 'throwing', 'firearms'],
+        specialties: ['bow'],
         getBonuses: (level) => ({
             damageMultiplier: 1 + (level * SKILL_CONFIG.proficiencyBonusPerLevel),
-            accuracy: level * 0.3  // +0.3% accuracy per level
+            accuracy: level * 0.5  // +0.5% accuracy per level
         })
     },
 
@@ -88,39 +77,10 @@ const PROFICIENCIES = {
         icon: 'A',
         color: '#9b59b6',
         xpSource: 'magic_damage_dealt',
-        specializations: ['fire', 'ice', 'lightning', 'necromancy'],
+        specialties: ['fire', 'ice', 'lightning', 'necromancy', 'water', 'earth', 'nature', 'dark', 'holy', 'arcane', 'death'],
         getBonuses: (level) => ({
             damageMultiplier: 1 + (level * SKILL_CONFIG.proficiencyBonusPerLevel),
-            manaCostReduction: level * 0.3  // -0.3% mana cost per level
-        })
-    },
-
-    defense: {
-        id: 'defense',
-        name: 'Defense',
-        description: 'Proficiency with defensive techniques. XP gained by taking damage.',
-        icon: 'D',
-        color: '#3498db',
-        xpSource: 'damage_taken',
-        specializations: ['armor', 'blocking', 'dodging', 'resilience'],
-        getBonuses: (level) => ({
-            damageReduction: level * 0.002,  // +0.2% damage reduction per level (20% at 100)
-            blockChance: level * 0.15        // +0.15% block per level
-        })
-    },
-
-    vitality: {
-        id: 'vitality',
-        name: 'Vitality',
-        description: 'Proficiency with life force. XP gained ONLY from effective healing (actual HP restored).',
-        icon: 'V',
-        color: '#e74c3c',
-        xpSource: 'effective_healing',
-        specializations: ['regeneration', 'constitution', 'recovery', 'fortitude'],
-        getBonuses: (level) => ({
-            // Each vitality level adds HP
-            bonusHp: level * SKILL_CONFIG.vitalityHpPerLevel,
-            healingEffectiveness: 1 + (level * 0.005)  // +0.5% healing effectiveness per level
+            manaCostReduction: level * 0.5  // -0.5% mana cost per level
         })
     }
 };
@@ -132,21 +92,23 @@ const LEGACY_PROFICIENCY_MAP = {
     'sword': 'melee',
     'knife': 'melee',
     'axe': 'melee',
+    'polearm': 'melee',
     'mace': 'melee',
     'staff': 'melee',
     'unarmed': 'melee',
-    'shield': 'defense',
+    'shield': 'melee',
     'bow': 'ranged',
-    'crossbow': 'ranged',
-    'throwing': 'ranged',
     'fire': 'magic',
     'ice': 'magic',
     'lightning': 'magic',
     'necromancy': 'magic',
-    'traps': 'defense',
-    'potions': 'vitality',
-    'lockpicking': 'defense',
-    'tinkering': 'defense'
+    'water': 'magic',
+    'earth': 'magic',
+    'nature': 'magic',
+    'dark': 'magic',
+    'holy': 'magic',
+    'arcane': 'magic',
+    'death': 'magic'
 };
 
 // ============================================================================
@@ -154,22 +116,22 @@ const LEGACY_PROFICIENCY_MAP = {
 // ============================================================================
 
 const SPECIALTIES = {
-    // === BLADE SPECIALTIES ===
+    // === MELEE SPECIALTIES ===
     sword: {
         id: 'sword',
         name: 'Sword Mastery',
-        proficiency: 'blade',
+        proficiency: 'melee',
         description: 'Balanced weapons favoring fluid technique.',
         getBonuses: (level) => ({
             damageMultiplier: 1 + (level * SKILL_CONFIG.specialtyBonusPerLevel),
             parryChance: level * 0.4  // +0.4% parry per level
         })
     },
-    
+
     knife: {
         id: 'knife',
         name: 'Knife Mastery',
-        proficiency: 'blade',
+        proficiency: 'melee',
         description: 'Quick weapons favoring precision and critical strikes.',
         getBonuses: (level) => ({
             damageMultiplier: 1 + (level * SKILL_CONFIG.specialtyBonusPerLevel),
@@ -177,11 +139,11 @@ const SPECIALTIES = {
             attackSpeed: level * 0.3      // +0.3% attack speed per level
         })
     },
-    
+
     axe: {
         id: 'axe',
         name: 'Axe Mastery',
-        proficiency: 'blade',
+        proficiency: 'melee',
         description: 'Heavy weapons favoring raw power and armor penetration.',
         getBonuses: (level) => ({
             damageMultiplier: 1 + (level * SKILL_CONFIG.specialtyBonusPerLevel),
@@ -192,19 +154,18 @@ const SPECIALTIES = {
     polearm: {
         id: 'polearm',
         name: 'Polearm Mastery',
-        proficiency: 'blade',
+        proficiency: 'melee',
         description: 'Long weapons favoring reach and area control.',
         getBonuses: (level) => ({
             damageMultiplier: 1 + (level * SKILL_CONFIG.specialtyBonusPerLevel),
-            reach: Math.floor(level / 25) + 1  // +1 reach at level 25, 50
+            reach: level >= 20 ? 2 : (level >= 10 ? 1 : 0)  // +1 reach at levels 10, 20
         })
     },
-    
-    // === BLUNT SPECIALTIES ===
+
     mace: {
         id: 'mace',
         name: 'Mace Mastery',
-        proficiency: 'blunt',
+        proficiency: 'melee',
         description: 'Crushing weapons favoring stuns and armor penetration.',
         getBonuses: (level) => ({
             damageMultiplier: 1 + (level * SKILL_CONFIG.specialtyBonusPerLevel),
@@ -212,39 +173,37 @@ const SPECIALTIES = {
             armorPenetration: level * 0.3  // +0.3% armor pen per level
         })
     },
-    
+
     staff: {
         id: 'staff',
         name: 'Staff Mastery',
-        proficiency: 'blunt',
+        proficiency: 'melee',
         description: 'Versatile weapons favoring sweeping attacks.',
         getBonuses: (level) => ({
             damageMultiplier: 1 + (level * SKILL_CONFIG.specialtyBonusPerLevel),
             aoeBonus: level * 0.5  // +0.5% AoE damage per level
         })
     },
-    
+
     unarmed: {
         id: 'unarmed',
         name: 'Unarmed Combat',
-        proficiency: 'blunt',
+        proficiency: 'melee',
         description: 'Fighting with fists favoring speed and combos.',
         getBonuses: (level) => ({
-            // Higher scaling since base damage is lower
-            damageMultiplier: 1 + (level * 0.03),  // +3% per level
+            damageMultiplier: 1 + (level * SKILL_CONFIG.specialtyBonusPerLevel),  // Normalized to +5%
             attackSpeed: level * 0.5,              // +0.5% attack speed per level
             comboChance: level * 0.4               // +0.4% combo chance per level
         })
     },
-    
+
     shield: {
         id: 'shield',
         name: 'Shield Mastery',
-        proficiency: 'blunt',
+        proficiency: 'melee',
         description: 'Defensive equipment used offensively for bashing and charging.',
         getBonuses: (level) => ({
             damageMultiplier: 1 + (level * SKILL_CONFIG.specialtyBonusPerLevel),
-            blockChance: level * 0.6,    // +0.6% block per level
             knockbackChance: level * 0.4 // +0.4% knockback per level
         })
     },
@@ -281,7 +240,7 @@ const SPECIALTIES = {
         description: 'Chain magic favoring multiple targets.',
         getBonuses: (level) => ({
             damageMultiplier: 1 + (level * SKILL_CONFIG.specialtyBonusPerLevel),
-            chainTargets: Math.floor(level / 20),  // +1 chain target at 20, 40, 60
+            chainTargets: level >= 24 ? 3 : (level >= 16 ? 2 : (level >= 8 ? 1 : 0)),  // +1 chain at 8, 16, 24
             chainDamageRetention: level * 0.3      // +0.3% damage retained per chain
         })
     },
@@ -393,79 +352,6 @@ const SPECIALTIES = {
             critChance: level * 0.5,      // +0.5% crit per level
             critDamage: level * 0.3       // +0.3% crit damage per level
         })
-    },
-    
-    crossbow: {
-        id: 'crossbow',
-        name: 'Crossbow Mastery',
-        proficiency: 'ranged',
-        description: 'Mechanical weapons favoring penetration.',
-        getBonuses: (level) => ({
-            damageMultiplier: 1 + (level * SKILL_CONFIG.specialtyBonusPerLevel),
-            armorPenetration: level * 0.7, // +0.7% armor pen per level
-            pierceChance: level * 0.4      // +0.4% pierce chance per level
-        })
-    },
-    
-    throwing: {
-        id: 'throwing',
-        name: 'Throwing Mastery',
-        proficiency: 'ranged',
-        description: 'Thrown weapons favoring area coverage.',
-        getBonuses: (level) => ({
-            damageMultiplier: 1 + (level * SKILL_CONFIG.specialtyBonusPerLevel),
-            projectileCount: Math.floor(level / 25),  // +1 projectile at 25, 50
-            spreadAngle: level * 0.3                  // +0.3% cone width per level
-        })
-    },
-    
-    // === EXPERTISE SPECIALTIES ===
-    traps: {
-        id: 'traps',
-        name: 'Trap Mastery',
-        proficiency: 'expertise',
-        description: 'Placed devices that trigger on enemy contact.',
-        getBonuses: (level) => ({
-            effectivenessMultiplier: 1 + (level * SKILL_CONFIG.specialtyBonusPerLevel),
-            trapDamage: level * 0.5,      // +0.5% trap damage per level
-            maxTraps: 3 + Math.floor(level / 20)  // +1 max trap at 20, 40, 60
-        })
-    },
-    
-    potions: {
-        id: 'potions',
-        name: 'Alchemy',
-        proficiency: 'expertise',
-        description: 'Throwable concoctions with various effects.',
-        getBonuses: (level) => ({
-            effectivenessMultiplier: 1 + (level * SKILL_CONFIG.specialtyBonusPerLevel),
-            potionDamage: level * 0.5,    // +0.5% potion damage per level
-            aoeRadius: level * 0.3        // +0.3% AoE radius per level
-        })
-    },
-    
-    lockpicking: {
-        id: 'lockpicking',
-        name: 'Lockpicking',
-        proficiency: 'expertise',
-        description: 'Finding and exploiting weaknesses.',
-        getBonuses: (level) => ({
-            effectivenessMultiplier: 1 + (level * SKILL_CONFIG.specialtyBonusPerLevel),
-            vulnerabilityBonus: 25 + (level * 0.5),  // Base 25% + 0.5% per level
-            markDuration: 8 + (level * 0.1)          // Base 8s + 0.1s per level
-        })
-    },
-    
-    tinkering: {
-        id: 'tinkering',
-        name: 'Tinkering',
-        proficiency: 'expertise',
-        description: 'Constructing mechanical devices.',
-        getBonuses: (level) => ({
-            effectivenessMultiplier: 1 + (level * SKILL_CONFIG.specialtyBonusPerLevel),
-            turretDamage: level * 0.5,    // +0.5% turret damage per level
-            turretDuration: 15 + (level * 0.2)  // Base 15s + 0.2s per level
-        })
     }
 };
 
@@ -479,7 +365,7 @@ const ACTIONS = {
         id: 'blade_dancer',
         name: 'Blade Dancer',
         specialty: 'sword',
-        proficiency: 'blade',
+        proficiency: 'melee',
         description: 'Strike twice in rapid succession.',
         cooldown: SKILL_CONFIG.defaultCooldown,
         type: 'damage',
@@ -501,7 +387,7 @@ const ACTIONS = {
         id: 'arterial_strike',
         name: 'Arterial Strike',
         specialty: 'knife',
-        proficiency: 'blade',
+        proficiency: 'melee',
         description: 'A precise cut that causes bleeding.',
         cooldown: SKILL_CONFIG.defaultCooldown,
         type: 'dot',
@@ -532,7 +418,7 @@ const ACTIONS = {
         id: 'cleaving_blow',
         name: 'Cleaving Blow',
         specialty: 'axe',
-        proficiency: 'blade',
+        proficiency: 'melee',
         description: 'A devastating strike that sunders armor.',
         cooldown: SKILL_CONFIG.defaultCooldown,
         type: 'damage',
@@ -555,7 +441,7 @@ const ACTIONS = {
         id: 'impaling_thrust',
         name: 'Impaling Thrust',
         specialty: 'polearm',
-        proficiency: 'blade',
+        proficiency: 'melee',
         description: 'A lunging thrust that pierces through enemies in a line.',
         cooldown: SKILL_CONFIG.defaultCooldown,
         type: 'aoe',
@@ -583,7 +469,7 @@ const ACTIONS = {
         id: 'skull_crack',
         name: 'Skull Crack',
         specialty: 'mace',
-        proficiency: 'blunt',
+        proficiency: 'melee',
         description: 'A crushing blow that stuns the target.',
         cooldown: SKILL_CONFIG.defaultCooldown,
         type: 'cc',
@@ -608,7 +494,7 @@ const ACTIONS = {
         id: 'sweeping_arc',
         name: 'Sweeping Arc',
         specialty: 'staff',
-        proficiency: 'blunt',
+        proficiency: 'melee',
         description: 'A wide sweep that hits all adjacent enemies.',
         cooldown: SKILL_CONFIG.defaultCooldown,
         type: 'aoe',
@@ -635,7 +521,7 @@ const ACTIONS = {
         id: 'flurry_of_blows',
         name: 'Flurry of Blows',
         specialty: 'unarmed',
-        proficiency: 'blunt',
+        proficiency: 'melee',
         description: 'A rapid combination of punches and kicks.',
         cooldown: SKILL_CONFIG.defaultCooldown,
         type: 'damage',
@@ -657,7 +543,7 @@ const ACTIONS = {
         id: 'shield_charge',
         name: 'Shield Charge',
         specialty: 'shield',
-        proficiency: 'blunt',
+        proficiency: 'melee',
         description: 'Rush forward and slam into the target.',
         cooldown: SKILL_CONFIG.defaultCooldown,
         type: 'mobility',
@@ -812,182 +698,6 @@ const ACTIONS = {
                 totalDamage: damage
             };
         }
-    },
-    
-    piercing_bolt: {
-        id: 'piercing_bolt',
-        name: 'Piercing Bolt',
-        specialty: 'crossbow',
-        proficiency: 'ranged',
-        description: 'A bolt that punches through armor and enemies.',
-        cooldown: SKILL_CONFIG.defaultCooldown,
-        type: 'aoe',
-        mechanics: {
-            damageMultiplier: 1.3,   // 130% per enemy
-            armorPenetration: 0.75,  // Ignores 75% armor
-            maxTargets: 2,           // Pierces to hit enemy behind
-        },
-        execute: function(user, targets, actionDamage) {
-            const damage = Math.floor(actionDamage * this.mechanics.damageMultiplier);
-            const results = targets.slice(0, this.mechanics.maxTargets).map(target => ({
-                target,
-                damage,
-                armorPenetration: this.mechanics.armorPenetration
-            }));
-            return {
-                type: 'pierce',
-                results,
-                totalDamage: results.reduce((sum, r) => sum + r.damage, 0)
-            };
-        }
-    },
-    
-    fan_of_knives: {
-        id: 'fan_of_knives',
-        name: 'Fan of Knives',
-        specialty: 'throwing',
-        proficiency: 'ranged',
-        description: 'Hurl projectiles in a wide cone.',
-        cooldown: SKILL_CONFIG.defaultCooldown,
-        type: 'aoe',
-        mechanics: {
-            damageMultiplier: 0.8,   // 80% per enemy
-            coneAngle: 90,           // 90 degree cone
-            range: 3,
-            maxTargets: 5,
-        },
-        execute: function(user, targets, actionDamage) {
-            const damage = Math.floor(actionDamage * this.mechanics.damageMultiplier);
-            const results = targets.slice(0, this.mechanics.maxTargets).map(target => ({
-                target,
-                damage
-            }));
-            return {
-                type: 'cone_aoe',
-                results,
-                totalDamage: results.reduce((sum, r) => sum + r.damage, 0)
-            };
-        }
-    },
-    
-    // === EXPERTISE ACTIONS ===
-    spike_trap: {
-        id: 'spike_trap',
-        name: 'Spike Trap',
-        specialty: 'traps',
-        proficiency: 'expertise',
-        requiresWeapon: false,  // Can use while holding any weapon
-        description: 'Deploy a trap that damages and slows enemies.',
-        cooldown: SKILL_CONFIG.defaultCooldown,
-        type: 'utility',
-        mechanics: {
-            baseDamage: 50,
-            slowPercent: 0.5,     // 50% slow
-            slowDuration: 3000,   // 3 seconds
-            maxTraps: 3,
-        },
-        execute: function(user, position, specialtyLevel) {
-            const damage = Math.floor(this.mechanics.baseDamage * (1 + (specialtyLevel - 5) * SKILL_CONFIG.actionScalingPerLevel));
-            return {
-                type: 'placed_trap',
-                position,
-                damage,
-                slow: {
-                    percent: this.mechanics.slowPercent,
-                    duration: this.mechanics.slowDuration
-                },
-                maxTraps: this.mechanics.maxTraps
-            };
-        }
-    },
-    
-    volatile_flask: {
-        id: 'volatile_flask',
-        name: 'Volatile Flask',
-        specialty: 'potions',
-        proficiency: 'expertise',
-        requiresWeapon: false,
-        description: 'Throw an explosive concoction.',
-        cooldown: SKILL_CONFIG.defaultCooldown,
-        type: 'utility',
-        mechanics: {
-            baseDamage: 40,
-            range: 4,
-            aoeRadius: 1,  // 3x3 area
-        },
-        execute: function(user, position, specialtyLevel, targets) {
-            const damage = Math.floor(this.mechanics.baseDamage * (1 + (specialtyLevel - 5) * SKILL_CONFIG.actionScalingPerLevel));
-            const results = targets.map(target => ({
-                target,
-                damage
-            }));
-            return {
-                type: 'thrown_aoe',
-                position,
-                results,
-                totalDamage: results.reduce((sum, r) => sum + r.damage, 0)
-            };
-        }
-    },
-    
-    expose_weakness: {
-        id: 'expose_weakness',
-        name: 'Expose Weakness',
-        specialty: 'lockpicking',
-        proficiency: 'expertise',
-        requiresWeapon: false,
-        description: 'Mark a target to take increased damage.',
-        cooldown: SKILL_CONFIG.defaultCooldown,
-        type: 'debuff',
-        mechanics: {
-            baseDamageAmp: 0.25,   // +25% damage taken
-            scalingPerLevel: 0.005, // +0.5% per level above 5
-            duration: 8000,        // 8 seconds
-        },
-        execute: function(user, target, specialtyLevel) {
-            const damageAmp = this.mechanics.baseDamageAmp + ((specialtyLevel - 5) * this.mechanics.scalingPerLevel);
-            return {
-                type: 'debuff',
-                target,
-                mark: {
-                    damageAmplification: damageAmp,
-                    duration: this.mechanics.duration
-                }
-            };
-        }
-    },
-    
-    deploy_turret: {
-        id: 'deploy_turret',
-        name: 'Deploy Turret',
-        specialty: 'tinkering',
-        proficiency: 'expertise',
-        requiresWeapon: false,
-        description: 'Construct a turret that attacks enemies.',
-        cooldown: SKILL_CONFIG.defaultCooldown,
-        type: 'summon',
-        mechanics: {
-            baseDamage: 15,
-            attackInterval: 2000,  // Attack every 2 seconds
-            duration: 15000,       // 15 seconds
-            turretHp: 30,
-            maxTurrets: 1,
-        },
-        execute: function(user, position, specialtyLevel) {
-            const damage = Math.floor(this.mechanics.baseDamage * (1 + (specialtyLevel - 5) * SKILL_CONFIG.actionScalingPerLevel));
-            const duration = this.mechanics.duration + ((specialtyLevel - 5) * 200); // +0.2s per level
-            return {
-                type: 'summon',
-                position,
-                turret: {
-                    damage,
-                    attackInterval: this.mechanics.attackInterval,
-                    duration,
-                    hp: this.mechanics.turretHp
-                },
-                maxTurrets: this.mechanics.maxTurrets
-            };
-        }
     }
 };
 
@@ -1020,7 +730,7 @@ function getProficiencyForSpecialty(specialtyId) {
  */
 function getSpecialtiesForProficiency(proficiencyId) {
     const prof = PROFICIENCIES[proficiencyId];
-    return prof ? (prof.specializations || []) : [];
+    return prof ? (prof.specialties || []) : [];
 }
 
 // ============================================================================
@@ -1028,20 +738,28 @@ function getSpecialtiesForProficiency(proficiencyId) {
 // ============================================================================
 
 /**
- * Calculate XP required for next level
- * Uses: 100 * level^1.5 curve
+ * Piecewise XP curve:
+ * - Levels 1-5: Fast linear ramp to quickly unlock weapon action
+ * - Levels 6-30: Power curve for meaningful progression
  */
 function getXpForNextLevel(currentLevel) {
-    return Math.floor(100 * Math.pow(currentLevel + 1, 1.5));
+    if (currentLevel < SKILL_CONFIG.xpEarlyThreshold) {
+        // Levels 0->1 through 4->5: 50, 75, 100, 125, 150
+        return SKILL_CONFIG.xpEarlyBase * (currentLevel + 2);
+    }
+    // Levels 5->6 through 29->30: steep power curve
+    return Math.floor(
+        SKILL_CONFIG.xpLateMultiplier * Math.pow(currentLevel + 1, SKILL_CONFIG.xpLateExponent)
+    );
 }
 
 /**
- * Award skill XP when enemy is killed
- * Splits XP between proficiency (40%) and specialty (60%)
- * 
+ * Award skill XP when damage is dealt.
+ * XP goes to both proficiency and specialty independently (no splitting).
+ *
  * @param {Object} player - Player object with skills
  * @param {string} specialtyId - The specialty of the weapon used (e.g., 'knife')
- * @param {number} xpAmount - Total XP to award
+ * @param {number} xpAmount - Total XP to award (goes to both prof and spec)
  */
 function awardSkillXp(player, specialtyId, xpAmount) {
     if (!player) {
@@ -1064,17 +782,14 @@ function awardSkillXp(player, specialtyId, xpAmount) {
 
     const proficiencyId = specialty.proficiency;
 
-    // Calculate XP split
-    const profXp = Math.floor(xpAmount * SKILL_CONFIG.xpSplitProficiency);
-    const specXp = Math.floor(xpAmount * SKILL_CONFIG.xpSplitSpecialty);
-
-    console.log(`[SkillXP] ${xpAmount} XP -> ${proficiencyId}: +${profXp}, ${normalizedSpecialtyId}: +${specXp}`);
+    // XP goes to BOTH proficiency AND specialty (no split)
+    console.log(`[SkillXP] ${xpAmount} XP -> ${proficiencyId}: +${xpAmount}, ${normalizedSpecialtyId}: +${xpAmount}`);
 
     // Award proficiency XP
-    addProficiencyXp(player, proficiencyId, profXp);
+    addProficiencyXp(player, proficiencyId, xpAmount);
 
     // Award specialty XP
-    addSpecialtyXp(player, normalizedSpecialtyId, specXp);
+    addSpecialtyXp(player, normalizedSpecialtyId, xpAmount);
 }
 
 /**
@@ -1217,49 +932,33 @@ function useAction(player, actionId, target) {
         console.log(`Cannot use action: ${check.reason}`);
         return null;
     }
-    
+
     const action = ACTIONS[actionId];
-    const specialtyLevel = player.skills.specialties[action.specialty].level;
-    const proficiencyLevel = player.skills.proficiencies[action.proficiency].level;
-    
+    const specialtyLevel = player.skills.specialties[action.specialty]?.level || 0;
+    const proficiencyLevel = player.skills.proficiencies[action.proficiency]?.level || 0;
+
     // Calculate action damage
     const actionDamage = calculateActionDamage(player, action, specialtyLevel, proficiencyLevel);
-    
+
     // Execute the action
-    let result;
-    if (action.proficiency === 'expertise') {
-        // Expertise actions have different execute signatures
-        result = action.execute(player, target, specialtyLevel);
-    } else {
-        result = action.execute(player, target, actionDamage);
-    }
-    
+    const result = action.execute(player, target, actionDamage);
+
     // Start cooldown
     player.skills.actionCooldowns[actionId] = action.cooldown;
-    
+
     console.log(`Used ${action.name}!`, result);
-    
+
     return result;
 }
 
 /**
- * Calculate damage for a weapon-based action
+ * Calculate damage for a weapon-based action.
+ * Uses the new additive skill multiplier.
  */
 function calculateActionDamage(player, action, specialtyLevel, proficiencyLevel) {
-    // Get base weapon damage
-    const weapon = player.equipped?.MAIN;
-    const baseWeaponDamage = weapon?.damage || 10;  // Default if no weapon
-    
-    // Apply proficiency bonus
-    const profBonus = 1 + (proficiencyLevel * SKILL_CONFIG.proficiencyBonusPerLevel);
-    
-    // Apply specialty bonus
-    const specBonus = 1 + (specialtyLevel * SKILL_CONFIG.specialtyBonusPerLevel);
-    
-    // Apply action scaling (levels above 5)
-    const actionScaling = 1 + ((specialtyLevel - SKILL_CONFIG.actionUnlockLevel) * SKILL_CONFIG.actionScalingPerLevel);
-    
-    return Math.floor(baseWeaponDamage * profBonus * specBonus * actionScaling);
+    const baseWeaponDamage = player.equipped?.MAIN?.damage || 10;
+    const skillMultiplier = getSkillDamageMultiplier(player, action.proficiency, specialtyLevel);
+    return Math.floor(baseWeaponDamage * skillMultiplier * (action.mechanics?.damageMultiplier || 1));
 }
 
 /**
@@ -1283,13 +982,13 @@ function updateActionCooldowns(player, deltaTime) {
 // ============================================================================
 
 /**
- * Get total damage multiplier from proficiency and specialization
- * Uses MULTIPLICATIVE formula: (1 + ProfLevel × 0.02) × (1 + SpecLevel × 0.02)
- * Max at 100/100: (1 + 2.0) × (1 + 2.0) = 9.0x damage
+ * ADDITIVE damage multiplier from skills.
+ * Max: 1 + (30 x 0.05) + (30 x 0.05) = 4.0x
  *
- * @param {Object} player - Player object with skills
- * @param {string} proficiencyId - The proficiency type (melee, ranged, magic)
- * @param {number} specLevel - Optional specialization level (default 0)
+ * @param {Object} player
+ * @param {string} proficiencyId - 'melee', 'ranged', or 'magic'
+ * @param {number} specLevel - current specialty level
+ * @returns {number} multiplier (1.0 to 4.0)
  */
 function getSkillDamageMultiplier(player, proficiencyId, specLevel = 0) {
     if (!player.skills) return 1;
@@ -1298,12 +997,10 @@ function getSkillDamageMultiplier(player, proficiencyId, specLevel = 0) {
     const mappedProfId = LEGACY_PROFICIENCY_MAP[proficiencyId] || proficiencyId;
 
     const profLevel = player.skills.proficiencies[mappedProfId]?.level || 0;
+    const profBonus = profLevel * SKILL_CONFIG.proficiencyBonusPerLevel;
+    const specBonus = specLevel * SKILL_CONFIG.specialtyBonusPerLevel;
 
-    // Multiplicative formula
-    const profMult = 1 + (profLevel * SKILL_CONFIG.proficiencyBonusPerLevel);
-    const specMult = 1 + (specLevel * SKILL_CONFIG.specializationBonusPerLevel);
-
-    return profMult * specMult;
+    return 1 + profBonus + specBonus;
 }
 
 /**
@@ -1325,25 +1022,6 @@ function getRangedDamageMultiplier(player) {
  */
 function getMagicDamageMultiplier(player) {
     return getSkillDamageMultiplier(player, 'magic');
-}
-
-/**
- * Get damage reduction from defense proficiency
- * @returns {number} Damage reduction as decimal (0-0.20 at level 100)
- */
-function getDefenseDamageReduction(player) {
-    if (!player.skills) return 0;
-    const defLevel = player.skills.proficiencies.defense?.level || 0;
-    return defLevel * 0.002; // 0.2% per level, max 20% at level 100
-}
-
-/**
- * Get bonus HP from vitality proficiency
- */
-function getVitalityBonusHp(player) {
-    if (!player.skills) return 0;
-    const vitLevel = player.skills.proficiencies.vitality?.level || 0;
-    return vitLevel * SKILL_CONFIG.vitalityHpPerLevel;
 }
 
 /**
@@ -1373,8 +1051,7 @@ function getSpecialtyBonuses(player, specialtyId) {
 // ============================================================================
 
 /**
- * Initialize player skills from persistentState (or create fresh if none exists)
- * Skills are PERMANENT and stored in persistentState, never lost on death
+ * Initialize player skills - always starts fresh (skills reset each run)
  */
 function initializePlayerSkills(player) {
     if (!player) {
@@ -1382,108 +1059,90 @@ function initializePlayerSkills(player) {
         return;
     }
 
-    // Check for saved skills in persistentState
-    if (typeof persistentState !== 'undefined' && persistentState.skills) {
-        // Load saved skills
-        player.skills = JSON.parse(JSON.stringify(persistentState.skills));
-        console.log('✓ Player skills loaded from persistentState');
-    } else {
-        // Create fresh skills (new save)
-        player.skills = createFreshSkills();
-        console.log('✓ Player skills initialized (fresh)');
-    }
+    // Always create fresh skills - skills don't persist across deaths
+    player.skills = createFreshSkills();
+    console.log('✓ Player skills initialized (fresh run)');
 
-    // Ensure actionCooldowns exists (might be missing from old saves)
+    // Ensure actionCooldowns exists
     if (!player.skills.actionCooldowns) {
         player.skills.actionCooldowns = {};
     }
 
-    // Always reset action cooldowns (session-specific)
+    // Reset action cooldowns
     for (const actionId in ACTIONS) {
         player.skills.actionCooldowns[actionId] = 0;
     }
-
-    // Sync back to persistentState
-    saveSkillsToPersistentState(player);
 }
 
 /**
  * Create fresh skills structure for new saves
  */
 function createFreshSkills() {
-    const skills = {
-        // New Soul & Body proficiencies
+    return {
         proficiencies: {
-            melee: { level: 0, xp: 0, xpToNext: 100 },
-            ranged: { level: 0, xp: 0, xpToNext: 100 },
-            magic: { level: 0, xp: 0, xpToNext: 100 },
-            defense: { level: 0, xp: 0, xpToNext: 100 },
-            vitality: { level: 0, xp: 0, xpToNext: 100 }
+            melee:  { level: 0, xp: 0, xpToNext: getXpForNextLevel(0) },
+            ranged: { level: 0, xp: 0, xpToNext: getXpForNextLevel(0) },
+            magic:  { level: 0, xp: 0, xpToNext: getXpForNextLevel(0) },
+            // defense and vitality REMOVED
         },
-        // Specializations (unlock slots at prof level 25, 50, 75, 100)
-        specializations: {
-            melee: [],    // Each entry: { type: 'blade', level: 0, xp: 0, xpToNext: 100 }
-            ranged: [],
-            magic: [],
-            defense: [],
-            vitality: []
+        specialties: {
+            // Melee (8)
+            sword:    { level: 0, xp: 0, xpToNext: getXpForNextLevel(0), unlocked: false },
+            knife:    { level: 0, xp: 0, xpToNext: getXpForNextLevel(0), unlocked: false },
+            axe:      { level: 0, xp: 0, xpToNext: getXpForNextLevel(0), unlocked: false },
+            polearm:  { level: 0, xp: 0, xpToNext: getXpForNextLevel(0), unlocked: false },
+            mace:     { level: 0, xp: 0, xpToNext: getXpForNextLevel(0), unlocked: false },
+            staff:    { level: 0, xp: 0, xpToNext: getXpForNextLevel(0), unlocked: false },
+            unarmed:  { level: 1, xp: 0, xpToNext: getXpForNextLevel(1), unlocked: true },
+            shield:   { level: 0, xp: 0, xpToNext: getXpForNextLevel(0), unlocked: false },
+            // Magic (11)
+            fire:       { level: 0, xp: 0, xpToNext: getXpForNextLevel(0), unlocked: false },
+            ice:        { level: 0, xp: 0, xpToNext: getXpForNextLevel(0), unlocked: false },
+            lightning:  { level: 0, xp: 0, xpToNext: getXpForNextLevel(0), unlocked: false },
+            necromancy: { level: 0, xp: 0, xpToNext: getXpForNextLevel(0), unlocked: false },
+            water:      { level: 0, xp: 0, xpToNext: getXpForNextLevel(0), unlocked: false },
+            earth:      { level: 0, xp: 0, xpToNext: getXpForNextLevel(0), unlocked: false },
+            nature:     { level: 0, xp: 0, xpToNext: getXpForNextLevel(0), unlocked: false },
+            dark:       { level: 0, xp: 0, xpToNext: getXpForNextLevel(0), unlocked: false },
+            holy:       { level: 0, xp: 0, xpToNext: getXpForNextLevel(0), unlocked: false },
+            arcane:     { level: 0, xp: 0, xpToNext: getXpForNextLevel(0), unlocked: false },
+            death:      { level: 0, xp: 0, xpToNext: getXpForNextLevel(0), unlocked: false },
+            // Ranged (1)
+            bow:      { level: 0, xp: 0, xpToNext: getXpForNextLevel(0), unlocked: false },
+            // Expertise REMOVED (traps, potions, lockpicking, tinkering)
         },
-        // Legacy specialties for backwards compatibility
-        specialties: {},
         unlockedActions: [],
         actionCooldowns: {}
     };
-
-    // Initialize legacy specialties for backwards compatibility
-    for (const specId in SPECIALTIES) {
-        skills.specialties[specId] = {
-            level: 0,
-            xp: 0,
-            xpToNext: getXpForNextLevel(0),
-            unlocked: false
-        };
-    }
-
-    // Unarmed starts unlocked
-    if (skills.specialties.unarmed) {
-        skills.specialties.unarmed.level = 1;
-        skills.specialties.unarmed.unlocked = true;
-    }
-
-    return skills;
 }
 
 /**
- * Save skills to persistentState (call after any skill change)
+ * Save skills to persistentState - NO-OP
+ * Skills no longer persist across deaths. This function exists for backwards compatibility.
  */
 function saveSkillsToPersistentState(player) {
-    if (!player || !player.skills) return;
-    if (typeof persistentState === 'undefined') return;
-
-    // Deep copy skills to persistentState (excluding cooldowns)
-    const skillsToSave = {
-        proficiencies: JSON.parse(JSON.stringify(player.skills.proficiencies)),
-        specializations: JSON.parse(JSON.stringify(player.skills.specializations || {})),
-        specialties: JSON.parse(JSON.stringify(player.skills.specialties)),
-        unlockedActions: [...player.skills.unlockedActions]
-    };
-
-    persistentState.skills = skillsToSave;
+    // Skills don't persist - intentional no-op
+    // Keeping function signature so existing calls don't break
 }
 
 /**
- * Reset skills on death - DOES NOTHING in Soul & Body model
- * Skills are permanent and never lost. This function exists for backwards compatibility.
+ * Reset skills on death - ALL skills reset to level 0
+ * Skills only persist during a single run.
  */
 function resetPlayerSkills(player) {
-    // In Soul & Body model, skills NEVER reset on death
-    // Only action cooldowns reset
-    if (player?.skills?.actionCooldowns) {
+    if (!player) return;
+
+    // Reset all proficiencies to level 0
+    player.skills = createFreshSkills();
+
+    // Reset action cooldowns
+    if (player.skills?.actionCooldowns) {
         for (const actionId in player.skills.actionCooldowns) {
             player.skills.actionCooldowns[actionId] = 0;
         }
     }
-    console.log('[Soul & Body] Skills preserved on death (action cooldowns reset)');
+
+    console.log('[Skills] All skills reset on death');
 }
 
 // ============================================================================
@@ -1499,7 +1158,6 @@ function awardMeleeXp(player, damageDealt) {
     if (!player?.skills) return;
     const xp = Math.max(1, Math.floor(damageDealt * 0.5)); // 0.5 XP per damage
     addProficiencyXp(player, 'melee', xp);
-    saveSkillsToPersistentState(player);
 }
 
 /**
@@ -1511,7 +1169,6 @@ function awardRangedXp(player, damageDealt) {
     if (!player?.skills) return;
     const xp = Math.max(1, Math.floor(damageDealt * 0.5));
     addProficiencyXp(player, 'ranged', xp);
-    saveSkillsToPersistentState(player);
 }
 
 /**
@@ -1523,33 +1180,6 @@ function awardMagicXp(player, damageDealt) {
     if (!player?.skills) return;
     const xp = Math.max(1, Math.floor(damageDealt * 0.5));
     addProficiencyXp(player, 'magic', xp);
-    saveSkillsToPersistentState(player);
-}
-
-/**
- * Award Defense proficiency XP (called when taking damage)
- * @param {Object} player - Player object
- * @param {number} damageTaken - Amount of damage taken
- */
-function awardDefenseXp(player, damageTaken) {
-    if (!player?.skills) return;
-    const xp = Math.max(1, Math.floor(damageTaken * 0.3)); // 0.3 XP per damage taken
-    addProficiencyXp(player, 'defense', xp);
-    saveSkillsToPersistentState(player);
-}
-
-/**
- * Award Vitality proficiency XP (called ONLY on effective healing)
- * Only HP actually restored counts - overheal does NOT give XP
- * @param {Object} player - Player object
- * @param {number} effectiveHealing - Actual HP restored (not raw heal amount)
- */
-function awardVitalityXp(player, effectiveHealing) {
-    if (!player?.skills) return;
-    if (effectiveHealing <= 0) return; // No XP for 0 or negative healing
-    const xp = Math.max(1, Math.floor(effectiveHealing * 0.5)); // 0.5 XP per HP restored
-    addProficiencyXp(player, 'vitality', xp);
-    saveSkillsToPersistentState(player);
 }
 
 // ============================================================================
@@ -1594,7 +1224,7 @@ function debugGrantXp(player, specialtyId, amount) {
 }
 
 // ============================================================================
-// EXPORTS (Soul & Body Model)
+// EXPORTS
 // ============================================================================
 
 // Make everything globally available
@@ -1613,24 +1243,20 @@ window.awardSkillXp = awardSkillXp;
 window.addProficiencyXp = addProficiencyXp;
 window.addSpecialtyXp = addSpecialtyXp;
 
-// Soul & Body XP functions
+// XP award functions (damage-based)
 window.awardMeleeXp = awardMeleeXp;
 window.awardRangedXp = awardRangedXp;
 window.awardMagicXp = awardMagicXp;
-window.awardDefenseXp = awardDefenseXp;
-window.awardVitalityXp = awardVitalityXp;
 
 window.canUseAction = canUseAction;
 window.useAction = useAction;
 window.updateActionCooldowns = updateActionCooldowns;
 
-// Soul & Body bonus calculation
+// Bonus calculation
 window.getSkillDamageMultiplier = getSkillDamageMultiplier;
 window.getMeleeDamageMultiplier = getMeleeDamageMultiplier;
 window.getRangedDamageMultiplier = getRangedDamageMultiplier;
 window.getMagicDamageMultiplier = getMagicDamageMultiplier;
-window.getDefenseDamageReduction = getDefenseDamageReduction;
-window.getVitalityBonusHp = getVitalityBonusHp;
 window.getSpecialtyBonuses = getSpecialtyBonuses;
 
 // Initialization & persistence
@@ -1642,36 +1268,33 @@ window.saveSkillsToPersistentState = saveSkillsToPersistentState;
 window.debugPrintSkills = debugPrintSkills;
 window.debugGrantXp = debugGrantXp;
 
-console.log('âœ“ Skills system loaded');
-console.log(`  ${Object.keys(PROFICIENCIES).length} proficiencies`);
+console.log('Skills system loaded');
+console.log(`  ${Object.keys(PROFICIENCIES).length} proficiencies: melee, ranged, magic`);
 console.log(`  ${Object.keys(SPECIALTIES).length} specialties`);
 console.log(`  ${Object.keys(ACTIONS).length} actions`);
 
 // ============================================================================
-console.log('✓ Skills system loaded (Soul & Body Model)');
-console.log(`  ${Object.keys(PROFICIENCIES).length} proficiencies: melee, ranged, magic, defense, vitality`);
-console.log(`  ${Object.keys(SPECIALTIES).length} legacy specialties (backwards compatible)`);// ============================================================================
-// SYSTEM MANAGER REGISTRATION - Add to end of skill-system.js
+// SYSTEM MANAGER REGISTRATION
 // ============================================================================
 
 const SkillSystemDef = {
     name: 'skill-system',
-    
+
     init(game) {
         // Initialize player skills if player exists
         if (game.player && typeof initializePlayerSkills === 'function') {
             initializePlayerSkills(game.player);
         }
     },
-    
+
     update(dt) {
         // Skill system mostly runs through skills-combat-integration
         // This handles any standalone skill updates if needed
-        
+
         // Update action cooldowns (if not handled by skills-combat)
         // Currently handled by skills-combat system at priority 55
     },
-    
+
     cleanup() {
         // Reset player skills on death/restart
         if (game.player && typeof resetPlayerSkills === 'function') {
@@ -1684,7 +1307,5 @@ const SkillSystemDef = {
 if (typeof SystemManager !== 'undefined') {
     SystemManager.register('skill-system', SkillSystemDef, 60);
 } else {
-    console.warn('⚠️ SystemManager not found - skill-system running standalone');
+    console.warn('SystemManager not found - skill-system running standalone');
 }
-
-console.log('✅ Skill system loaded (with SystemManager)');

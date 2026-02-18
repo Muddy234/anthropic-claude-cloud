@@ -55,6 +55,11 @@ const VillageSystem = {
         // Set up input handling
         this._setupInput();
 
+        // Initialize bark system for NPC ambient dialogue
+        if (typeof BarkSystem !== 'undefined') {
+            BarkSystem.init();
+        }
+
         this.initialized = true;
         console.log('[VillageSystem] Village initialized');
     },
@@ -270,6 +275,23 @@ const VillageSystem = {
         } else {
             // Fallback: set state directly
             game.state = GAME_STATES ? GAME_STATES.LOADOUT : 'loadout';
+        }
+    },
+
+    // ========================================================================
+    // UPDATE
+    // ========================================================================
+
+    /**
+     * Update village systems
+     * @param {number} dt - Delta time in ms
+     */
+    update(dt) {
+        if (!this.initialized || !villageState) return;
+
+        // Update bark system for NPC ambient dialogue
+        if (typeof BarkSystem !== 'undefined' && villageState.player && villageState.npcs) {
+            BarkSystem.update(dt, villageState.player, villageState.npcs);
         }
     },
 
