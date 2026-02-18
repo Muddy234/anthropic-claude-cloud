@@ -5,8 +5,8 @@
 const MONSTER_DATA = {
     // === VOLCANIC MONSTERS ===
     'Magma Slime': {
-        hp: 60, str: 12, agi: 5, int: 8, pDef: 15, mDef: 8,
-        xp: 25,
+        hp: 30, str: 6, agi: 5, int: 8, pDef: 15, mDef: 8,  // FODDER: HP 60→30, STR 12→6
+        xp: 15,
         element: 'fire', attack: 'Slam', attackType: 'physical', damageType: 'blunt',
         attackRange: 1, attackSpeed: 2.5,  // Slow melee attacker
         armorType: 'unarmored',  // Gelatinous, weak to blades
@@ -16,7 +16,7 @@ const MONSTER_DATA = {
             { name: 'Magma Residue', dropChance: 0.25, rarity: 'common', favorValue: 3 },
             { name: 'Hardened Slime', dropChance: 0.25, rarity: 'common', favorValue: 3 }
         ],
-        description: 'A slow, gelatinous blob of living lava.'
+        description: 'A slow, gelatinous blob of living lava. Easy to kill but watch for groups.'
     },
     'Obsidian Golem': {
         hp: 105, str: 18, agi: 3, int: 4, pDef: 20, mDef: 5,
@@ -47,8 +47,8 @@ const MONSTER_DATA = {
         description: 'A floating ball of fire. Fast and deadly with magic, but dies in one hit.'
     },
     'Flame Bat': {
-        hp: 40, str: 10, agi: 20, int: 2, pDef: 4, mDef: 4,
-        xp: 30,
+        hp: 25, str: 12, agi: 20, int: 2, pDef: 4, mDef: 4,  // GLASS CANNON: HP 40→25, STR 10→12
+        xp: 35,
         element: 'fire', attack: 'Singe Bite', attackType: 'physical', damageType: 'pierce',
         attackRange: 1, attackSpeed: 1.2,  // Very fast melee attacker
         armorType: 'hide',  // Leathery bat skin
@@ -58,11 +58,11 @@ const MONSTER_DATA = {
             { name: 'Guano', dropChance: 0.25, rarity: 'common', favorValue: 3 },
             { name: 'Small Fang', dropChance: 0.25, rarity: 'common', favorValue: 3 }
         ],
-        description: 'A frantic flying pest. Moves twice per second, making it hard to escape.'
+        description: 'A frantic flying menace. Fragile but attacks relentlessly - prioritize it!'
     },
     'Ash Walker': {
-        hp: 75, str: 14, agi: 6, int: 5, pDef: 8, mDef: 12,
-        xp: 30,
+        hp: 90, str: 12, agi: 6, int: 5, pDef: 8, mDef: 12,  // TANK: HP 75→90, STR 14→12
+        xp: 35,
         element: 'dark', attack: 'Choke', attackType: 'physical', damageType: 'blunt',
         attackRange: 1, attackSpeed: 2.2,  // Medium-slow melee
         armorType: 'bone',  // Reanimated corpse with skeletal structure
@@ -72,11 +72,11 @@ const MONSTER_DATA = {
             { name: 'Bone Fragment', dropChance: 0.25, rarity: 'common', favorValue: 3 },
             { name: 'Cursed Ring', dropChance: 0.25, rarity: 'uncommon', favorValue: 15 }
         ],
-        description: 'A reanimated corpse covered in volcanic ash. Resistant to magic.'
+        description: 'A durable undead covered in volcanic ash. Soaks damage but lacks punch.'
     },
     'Salamander': {
-        hp: 55, str: 12, agi: 12, int: 10, pDef: 10, mDef: 10,
-        xp: 35,
+        hp: 30, str: 6, agi: 12, int: 10, pDef: 10, mDef: 10,  // FODDER: HP 55→30, STR 12→6
+        xp: 18,
         element: 'nature', attack: 'Tail Whip', attackType: 'physical', damageType: 'blunt',
         attackRange: 1, attackSpeed: 1.8,  // Balanced melee
         armorType: 'scaled',  // Reptilian scales
@@ -86,7 +86,7 @@ const MONSTER_DATA = {
             { name: 'Reptile Eye', dropChance: 0.25, rarity: 'common', favorValue: 3 },
             { name: 'Raw Meat', dropChance: 0.25, rarity: 'common', favorValue: 3 }
         ],
-        description: 'A four-legged reptile with glowing red scales. Balanced stats.'
+        description: 'A small reptile with glowing red scales. Common and easily dispatched.'
     },
     'Pyro Cultist': {
         hp: 50, str: 6, agi: 10, int: 16, pDef: 5, mDef: 8,
@@ -131,8 +131,8 @@ const MONSTER_DATA = {
         description: 'A rock-like creature that ambushes prey. High defense, low speed.'
     },
     'Mushroom Sprite': {
-        hp: 35, str: 5, agi: 8, int: 14, pDef: 4, mDef: 12,
-        xp: 28,
+        hp: 20, str: 5, agi: 8, int: 8, pDef: 4, mDef: 12,  // FODDER: HP 35→20, INT 14→8
+        xp: 12,
         element: 'nature', attack: 'Spore Cloud', attackType: 'magic', damageType: 'magic',
         attackRange: 3, attackSpeed: 2.2,  // Medium range AOE caster
         armorType: 'unarmored',  // Soft fungal body
@@ -141,7 +141,7 @@ const MONSTER_DATA = {
             { name: 'Glowing Spore', dropChance: 0.04, rarity: 'rare', favorValue: 40 },
             { name: 'Mushroom Cap', dropChance: 0.30, rarity: 'common', favorValue: 3 }
         ],
-        description: 'A sentient fungus that releases toxic spores.'
+        description: 'A small sentient fungus. Weak but can be annoying in groups.'
     },
     'Crystal Spider': {
         hp: 45, str: 11, agi: 14, int: 6, pDef: 8, mDef: 10,
@@ -174,8 +174,8 @@ const MONSTER_DATA = {
         description: 'An undead warrior animated by dark magic.'
     },
     'Phantom': {
-        hp: 40, str: 4, agi: 12, int: 16, pDef: 2, mDef: 18,
-        xp: 38,
+        hp: 25, str: 4, agi: 12, int: 20, pDef: 2, mDef: 18,  // GLASS CANNON: HP 40→25, INT 16→20
+        xp: 42,
         element: 'death', attack: 'Soul Drain', attackType: 'magic', damageType: 'magic',
         attackRange: 3, attackSpeed: 2.0,  // Medium range life drainer
         armorType: 'ethereal',  // Incorporeal ghost
@@ -184,7 +184,7 @@ const MONSTER_DATA = {
             { name: 'Ectoplasm', dropChance: 0.05, rarity: 'rare', favorValue: 45 },
             { name: 'Spirit Dust', dropChance: 0.25, rarity: 'common', favorValue: 4 }
         ],
-        description: 'A ghostly apparition that drains life force.'
+        description: 'A deadly apparition that rapidly drains life. Kill it before it kills you.'
     },
     'Bone Golem': {
         hp: 120, str: 20, agi: 3, int: 2, pDef: 16, mDef: 8,
@@ -203,8 +203,8 @@ const MONSTER_DATA = {
 
     // === AQUATIC MONSTERS ===
     'Deep Crawler': {
-        hp: 55, str: 12, agi: 10, int: 4, pDef: 12, mDef: 6,
-        xp: 30,
+        hp: 85, str: 18, agi: 10, int: 4, pDef: 12, mDef: 6,  // BRUISER: HP 55→85, STR 12→18
+        xp: 48,
         element: 'water', attack: 'Pincer Strike', attackType: 'physical', damageType: 'pierce',
         attackRange: 1, attackSpeed: 1.6,  // Medium-fast melee
         armorType: 'scaled',  // Crustacean shell/exoskeleton
@@ -213,11 +213,11 @@ const MONSTER_DATA = {
             { name: 'Crustacean Shell', dropChance: 0.04, rarity: 'rare', favorValue: 38 },
             { name: 'Pincer', dropChance: 0.25, rarity: 'common', favorValue: 4 }
         ],
-        description: 'A large crustacean adapted to dark caves.'
+        description: 'A massive armored crustacean. Powerful pincers and thick shell.'
     },
     'Tide Serpent': {
-        hp: 65, str: 14, agi: 14, int: 8, pDef: 8, mDef: 10,
-        xp: 40,
+        hp: 90, str: 16, agi: 14, int: 8, pDef: 8, mDef: 10,  // BRUISER: HP 65→90, STR 14→16
+        xp: 50,
         element: 'water', attack: 'Aqua Fang', attackType: 'physical', damageType: 'pierce',
         attackRange: 1, attackSpeed: 1.4,  // Fast melee striker
         armorType: 'scaled',  // Snake scales
@@ -226,7 +226,7 @@ const MONSTER_DATA = {
             { name: 'Serpent Scale', dropChance: 0.04, rarity: 'rare', favorValue: 42 },
             { name: 'Aqua Fang', dropChance: 0.20, rarity: 'uncommon', favorValue: 12 }
         ],
-        description: 'A swift water snake with venomous fangs.'
+        description: 'A large, aggressive water serpent. Fast, tough, and hits hard.'
     },
 
     // === SHADOW MONSTERS ===
@@ -244,8 +244,8 @@ const MONSTER_DATA = {
         description: 'A predator that hunts from the darkness. Extremely fast.'
     },
     'Void Touched': {
-        hp: 70, str: 10, agi: 8, int: 18, pDef: 8, mDef: 16,
-        xp: 48,
+        hp: 95, str: 10, agi: 8, int: 18, pDef: 8, mDef: 16,  // BRUISER: HP 70→95
+        xp: 55,
         element: 'dark', attack: 'Void Bolt', attackType: 'magic', damageType: 'magic',
         attackRange: 4, attackSpeed: 1.8,  // Ranged void caster
         armorType: 'ethereal',  // Void-corrupted being
@@ -254,12 +254,12 @@ const MONSTER_DATA = {
             { name: 'Void Crystal', dropChance: 0.03, rarity: 'epic', favorValue: 120 },
             { name: 'Shadow Essence', dropChance: 0.20, rarity: 'uncommon', favorValue: 15 }
         ],
-        description: 'A being corrupted by void energy. Powerful magic attacks.'
+        description: 'A powerful void-corrupted being. Durable and deals heavy magic damage.'
     },
 
     // === ICE MONSTERS ===
     'Frost Elemental': {
-        hp: 55, str: 6, agi: 10, int: 18, pDef: 4, mDef: 18,
+        hp: 30, str: 6, agi: 10, int: 18, pDef: 4, mDef: 18,  // GLASS CANNON: HP 55→30
         xp: 45,
         element: 'ice', attack: 'Frost Bolt', attackType: 'magic', damageType: 'magic',
         attackRange: 4, attackSpeed: 1.6,  // Ethereal caster
@@ -270,7 +270,7 @@ const MONSTER_DATA = {
             { name: 'Ice Shard', dropChance: 0.25, rarity: 'common', favorValue: 4 },
             { name: 'Frost Essence', dropChance: 0.20, rarity: 'uncommon', favorValue: 12 }
         ],
-        description: 'A sentient manifestation of pure cold. Casts powerful ice magic.'
+        description: 'A fragile manifestation of pure cold. Devastating magic but shatters easily.'
     },
     'Ice Golem': {
         hp: 130, str: 20, agi: 3, int: 4, pDef: 22, mDef: 12,
@@ -287,8 +287,8 @@ const MONSTER_DATA = {
         description: 'A massive construct of ancient ice. Incredibly durable and slow.'
     },
     'Frozen Husk': {
-        hp: 60, str: 14, agi: 6, int: 4, pDef: 10, mDef: 8,
-        xp: 32,
+        hp: 85, str: 11, agi: 6, int: 4, pDef: 10, mDef: 8,  // TANK: HP 60→85, STR 14→11
+        xp: 38,
         element: 'ice', attack: 'Chilling Grasp', attackType: 'physical', damageType: 'blade',
         attackRange: 1, attackSpeed: 2.0,  // Undead melee attacker
         elite: false, moveInterval: 2, aggression: 3, spawnWeight: 6,
@@ -298,7 +298,7 @@ const MONSTER_DATA = {
             { name: 'Bone Fragment', dropChance: 0.30, rarity: 'common', favorValue: 2 },
             { name: 'Ice Shard', dropChance: 0.20, rarity: 'common', favorValue: 3 }
         ],
-        description: 'A frozen corpse animated by bitter cold. Chills on contact.'
+        description: 'A resilient frozen corpse. Takes a beating but hits softly.'
     },
     'Blizzard Spirit': {
         hp: 35, str: 4, agi: 20, int: 14, pDef: 2, mDef: 14,
@@ -313,6 +313,113 @@ const MONSTER_DATA = {
             { name: 'Spirit Dust', dropChance: 0.25, rarity: 'common', favorValue: 4 }
         ],
         description: 'A swift winter spirit. Moves like the wind and freezes all it touches.'
+    },
+
+    // === NEW: COMBAT VARIETY ENEMIES ===
+    // These enemies showcase the new timing profiles and special mechanics
+
+    'Shadow Imp': {
+        hp: 30, str: 10, agi: 20, int: 6, pDef: 3, mDef: 6,
+        xp: 28,
+        element: 'dark', attack: 'Quick Slash', attackType: 'physical', damageType: 'blade',
+        attackRange: 1, attackSpeed: 0.8,  // Very fast attacks - SWIFT timing profile
+        armorType: 'hide',
+        elite: false, moveInterval: 1, aggression: 5, spawnWeight: 5,
+        loot: [
+            { name: 'Shadow Essence', dropChance: 0.04, rarity: 'rare', favorValue: 40 },
+            { name: 'Dark Cloth', dropChance: 0.25, rarity: 'common', favorValue: 4 }
+        ],
+        description: 'A swift demonic pest. Attacks with minimal warning - requires quick reflexes!'
+    },
+
+    'Temple Sentinel': {
+        hp: 90, str: 16, agi: 6, int: 8, pDef: 16, mDef: 12,
+        xp: 50,
+        element: 'holy', attack: 'Shield Bash', attackType: 'physical', damageType: 'blunt',
+        attackRange: 1, attackSpeed: 2.2,
+        armorType: 'plate',
+        hasShield: true,  // SHIELD MECHANIC - blocks frontal attacks
+        elite: false, moveInterval: 2, aggression: 2, spawnWeight: 3,
+        loot: [
+            { name: 'Temple Shield Fragment', dropChance: 0.04, rarity: 'rare', favorValue: 55 },
+            { name: 'Holy Metal', dropChance: 0.20, rarity: 'uncommon', favorValue: 18 },
+            { name: 'Stone Chunk', dropChance: 0.25, rarity: 'common', favorValue: 3 }
+        ],
+        description: 'An ancient temple guardian with a shield. Flanking or shield-breaking required!'
+    },
+
+    'Stone Guardian': {
+        hp: 150, str: 35, agi: 2, int: 4, pDef: 25, mDef: 8,  // BRUISER: STR 28→35
+        xp: 75,
+        element: 'earth', attack: 'Crushing Blow', attackType: 'physical', damageType: 'blunt',
+        attackRange: 1, attackSpeed: 3.5,  // Very slow - HEAVY timing profile (long telegraph)
+        armorType: 'stone',
+        elite: false, moveInterval: 4, aggression: 2, spawnWeight: 2,
+        loot: [
+            { name: 'Guardian Core', dropChance: 0.03, rarity: 'epic', favorValue: 90 },
+            { name: 'Enchanted Stone', dropChance: 0.20, rarity: 'uncommon', favorValue: 20 },
+            { name: 'Stone Chunk', dropChance: 0.30, rarity: 'common', favorValue: 4 }
+        ],
+        description: 'A massive stone construct. Slow but devastating - every hit counts!'
+    },
+
+    'Demon Knight': {
+        hp: 120, str: 27, agi: 10, int: 10, pDef: 18, mDef: 14,  // BRUISER: STR 22→27
+        xp: 80,
+        element: 'dark', attack: 'Charge Strike', attackType: 'physical', damageType: 'blade',
+        attackRange: 1, attackSpeed: 2.5,  // CHARGING timing profile - rushes at player
+        armorType: 'plate',
+        elite: false, moveInterval: 2, aggression: 4, spawnWeight: 2,
+        loot: [
+            { name: 'Demon Steel', dropChance: 0.04, rarity: 'epic', favorValue: 85 },
+            { name: 'Infernal Blade Fragment', dropChance: 0.15, rarity: 'rare', favorValue: 45 },
+            { name: 'Dark Cloth', dropChance: 0.25, rarity: 'uncommon', favorValue: 12 }
+        ],
+        description: 'A brutal demonic warrior. Tough, hard-hitting, and relentless.'
+    },
+
+    'Giant Spider': {
+        hp: 85, str: 18, agi: 12, int: 6, pDef: 10, mDef: 8,
+        xp: 48,
+        element: 'nature', attack: 'Sweeping Legs', attackType: 'physical', damageType: 'pierce',
+        attackRange: 1, attackSpeed: 2.0,  // SWEEPING timing profile - wide arc attack
+        armorType: 'hide',
+        elite: false, moveInterval: 2, aggression: 3, spawnWeight: 4,
+        loot: [
+            { name: 'Spider Silk', dropChance: 0.05, rarity: 'rare', favorValue: 50 },
+            { name: 'Venom Gland', dropChance: 0.20, rarity: 'uncommon', favorValue: 15 },
+            { name: 'Chitin Plate', dropChance: 0.25, rarity: 'common', favorValue: 5 }
+        ],
+        description: 'A massive spider with sweeping leg attacks. Wide attack arc - hard to dodge!'
+    },
+
+    'Shield Bearer': {
+        hp: 90, str: 12, agi: 8, int: 6, pDef: 14, mDef: 10,  // TANK: HP 70→90
+        xp: 42,
+        element: 'physical', attack: 'Shield Thrust', attackType: 'physical', damageType: 'blunt',
+        attackRange: 1, attackSpeed: 2.0,
+        armorType: 'mail',
+        hasShield: true,  // SHIELD MECHANIC
+        elite: false, moveInterval: 2, aggression: 2, spawnWeight: 5,
+        loot: [
+            { name: 'Battered Shield', dropChance: 0.04, rarity: 'uncommon', favorValue: 25 },
+            { name: 'Iron Scrap', dropChance: 0.25, rarity: 'common', favorValue: 4 }
+        ],
+        description: 'A heavily armored soldier. Durable but slow - flank or outlast it.'
+    },
+
+    'Flame Sprite': {
+        hp: 25, str: 8, agi: 22, int: 10, pDef: 2, mDef: 8,
+        xp: 25,
+        element: 'fire', attack: 'Ember Touch', attackType: 'magic', damageType: 'fire',
+        attackRange: 1, attackSpeed: 0.6,  // Extremely fast - SWIFT timing
+        armorType: 'ethereal',
+        elite: false, moveInterval: 1, aggression: 5, spawnWeight: 6,
+        loot: [
+            { name: 'Fire Mote', dropChance: 0.04, rarity: 'rare', favorValue: 35 },
+            { name: 'Ember', dropChance: 0.30, rarity: 'common', favorValue: 3 }
+        ],
+        description: 'A tiny fire spirit. Incredibly fast attacks but very fragile!'
     }
 };
 
@@ -351,25 +458,9 @@ function rollMonsterLoot(monsterName) {
     return null;
 }
 
-// Get monsters by element
-function getMonstersByElement(element) {
-    return Object.entries(MONSTER_DATA)
-        .filter(([name, data]) => data.element === element)
-        .map(([name]) => name);
-}
-
-// Get monsters by attack type
-function getMonstersByAttackType(attackType) {
-    return Object.entries(MONSTER_DATA)
-        .filter(([name, data]) => data.attackType === attackType)
-        .map(([name]) => name);
-}
-
 // Export
 window.MONSTER_DATA = MONSTER_DATA;
 window.getRandomMonster = getRandomMonster;
 window.rollMonsterLoot = rollMonsterLoot;
-window.getMonstersByElement = getMonstersByElement;
-window.getMonstersByAttackType = getMonstersByAttackType;
 
 console.log('[Monsters] Loaded', Object.keys(MONSTER_DATA).length, 'monsters');
