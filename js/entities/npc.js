@@ -621,7 +621,7 @@ const NPCSystem = {
         // Grant rewards
         const rewards = quest.rewards;
         if (rewards.gold) {
-            game.gold = (game.gold || 0) + rewards.gold;
+            game.player.gold = (game.player.gold || 0) + rewards.gold;
             addMessage(`Received ${rewards.gold} gold`);
         }
 

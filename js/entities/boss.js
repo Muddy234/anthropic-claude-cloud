@@ -1964,7 +1964,7 @@ const BossSystem = {
         // Drop loot
         if (boss.loot) {
             if (boss.loot.bonus?.gold) {
-                game.gold += boss.loot.bonus.gold;
+                game.player.gold += boss.loot.bonus.gold;
             }
             if (boss.loot.bonus?.xp && game.player) {
                 // Apply XP

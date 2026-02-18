@@ -34,6 +34,7 @@
     <script src="js/data/elements.js"></script>
     <script src="js/data/element-matrix.js"></script>
     <script src="js/data/monsters-data.js"></script>
+    <script src="js/data/monster-tiers.js"></script>        <!-- Monster tier definitions -->
     <script src="js/data/ability-repository.js"></script>
     <script src="js/data/quest-items.js"></script>
     <script src="js/data/items.js"></script>
@@ -63,13 +64,16 @@
     <!-- UTILS: Helper functions (no registration) -->
     <!-- ==================== -->
     <script src="js/utils/message-log.js"></script>
+    <script src="js/utils/room-utils.js"></script>       <!-- Room finding utilities -->
+    <script src="js/utils/geometry-utils.js"></script>   <!-- Hit detection for ability shapes -->
+    <script src="js/utils/helpers.js"></script>          <!-- General utility functions -->
     <script src="js/systems/movement-master.js"></script>            <!-- Consolidated movement system -->
-    <!-- Consolidated into movement-master.js -->
-    <!-- <script src="js/utils/Collision.js"></script> -->
-    <!-- <script src="js/utils/movement-utils.js"></script> -->
-    <!-- <script src="js/utils/pathfinding.js"></script> -->
+    <script src="js/config/combat-config.js"></script>            <!-- Combat configuration (stamina, hitstop, kill streak) -->
+    <script src="js/config/enemy-patterns-config.js"></script>    <!-- Enemy attack patterns and pack tactics -->
     <script src="js/systems/combat-master.js"></script>           <!-- Consolidated combat system -->
-    <!-- <script src="js/utils/damage-calculator.js"></script> --> <!-- Consolidated into combat-master.js -->
+    <script src="js/systems/stamina-system.js"></script>          <!-- Stamina resource management -->
+    <script src="js/systems/time-effects.js"></script>            <!-- Time slow/stop effects -->
+    <script src="js/systems/kill-streak-system.js"></script>      <!-- Kill streak tracking -->
     <script src="js/utils/stat-system.js"></script>
 
     <!-- ==================== -->
@@ -97,10 +101,13 @@
     <!-- ==================== -->
     <!-- GENERATION: Map building (no registration) -->
     <!-- ==================== -->
+    <script src="js/generation/seeded-rng.js"></script>          <!-- Seeded RNG (Mulberry32) -->
     <script src="js/generation/chamber-generator.js"></script>
 
     <!-- Blob-based dungeon system -->
     <script src="js/generation/dungeon-generator.js"></script>
+    <script src="js/generation/enemy-factory.js"></script>       <!-- Unified enemy creation -->
+    <script src="js/generation/enemy-spawner.js"></script>       <!-- Enemy spawning logic -->
     <script src="js/generation/dungeon-integration.js"></script>
 
     <!-- NEW: Extraction system generation -->
@@ -121,11 +128,37 @@
     <!-- RENDERING: Display (no registration) -->
     <!-- ==================== -->
     <script src="js/ui/ui-design-system.js"></script>
+    <script src="js/ui/tooltip-manager.js"></script>             <!-- Centralized tooltip system -->
+    <script src="js/ui/health-bar-utils.js"></script>            <!-- Health bar rendering variants -->
+
+    <!-- Procedural tile rendering (floors 3+) - must load before ui/tile-renderer.js -->
+    <script src="js/config/tile-theme-config.js"></script>       <!-- Theme-to-tile mappings -->
+    <script src="js/rendering/tile-renderer.js"></script>        <!-- Procedural pixel-art tiles -->
+
     <script src="js/ui/tile-renderer.js"></script>
     <script src="js/ui/monster-animations.js"></script>
     <script src="js/ui/sprite-loader.js"></script>
+
+    <!-- Pixel sprite rendering system (code-defined sprites, no external images) -->
+    <script src="js/rendering/sprite-renderer.js"></script>
+    <script src="js/rendering/sprite-animations.js"></script>
+    <script src="js/rendering/sprite-integration.js"></script>
+
+    <!-- Player pixel sprite system (layered equipment rendering) -->
+    <script src="js/config/player-sprite-config.js"></script>
+    <script src="js/rendering/player-sprites.js"></script>
+    <script src="js/rendering/player-equipment-sprites.js"></script>
+    <script src="js/rendering/player-sprite-animations.js"></script>
+    <script src="js/rendering/player-sprite-renderer.js"></script>
+
+    <!-- Pixel-based attack effect system -->
+    <script src="js/rendering/effect-sprites.js"></script>
+    <script src="js/rendering/effect-animations.js"></script>
+    <script src="js/rendering/effect-renderer.js"></script>
+    <script src="js/rendering/effect-animator.js"></script>
+    <script src="js/effects/ability-effects-data.js"></script>  <!-- Enemy ability animation configs -->
+
     <script src="js/ui/enemy-renderer.js"></script>
-    <!-- <script src="js/ui/enemy-movement-updater.js"></script> --> <!-- Consolidated into movement-master.js -->
     <script src="js/ui/renderer.js"></script>
     <script src="js/ui/ui-renderer.js"></script>
     <script src="js/ui/skills-ui.js"></script>
@@ -134,6 +167,8 @@
     <!-- NEW: Modern UI components (icon sidebar, unit frames, mini-map) -->
     <script src="js/ui/icon-sidebar.js"></script>
     <script src="js/ui/unit-frames.js"></script>
+    <script src="js/ui/kill-streak-ui.js"></script>               <!-- Kill streak display -->
+    <script src="js/ui/combat-log-ui.js"></script>                <!-- Combat log message system -->
     <script src="js/ui/mini-map.js"></script>
     <script src="js/ui/character-overlay.js"></script>
     <script src="js/ui/map-overlay.js"></script>
@@ -169,8 +204,10 @@
     <script src="js/systems/vision-system.js"></script>             <!-- Priority 5 (Fog of War) -->
     <script src="js/systems/input-handler.js"></script>             <!-- Priority 10 -->
     <script src="js/systems/dodge-system.js"></script>              <!-- Priority 25: Active defense (Issue #7) -->
-    <script src="js/systems/advanced-enemy-system.js"></script>
-    <!-- <script src="js/systems/pokemon-movement.js"></script> --> <!-- Consolidated into movement-master.js -->
+    <script src="js/systems/spell-system.js"></script>             <!-- Priority 24: Spell system (Dash/Heal/Shield) -->
+    <script src="js/systems/monster-social-system.js"></script>     <!-- Monster social behaviors -->
+    <script src="js/systems/enemy-ai.js"></script>                 <!-- Enemy AI state machine -->
+    <script src="js/systems/animation-controller.js"></script>     <!-- Shared animation state -->
     <script src="js/systems/player-animation.js"></script>          <!-- Priority 25 -->
     <script src="js/systems/noise-system.js"></script>              <!-- Priority 30 -->
     <script src="js/systems/hazard-system.js"></script>             <!-- Priority 35 -->
@@ -180,24 +217,18 @@
     <script src="js/systems/environmental-meter-system.js"></script><!-- Priority 37 -->
     <script src="js/systems/spawn-point-system.js"></script>        <!-- Priority 38 -->
     <script src="js/systems/enemy-ability-system.js"></script>      <!-- Priority 38 (enemy abilities) -->
+    <script src="js/systems/ability-projectile-system.js"></script> <!-- Homing/tracking projectiles -->
+    <script src="js/systems/lingering-hazards.js"></script>         <!-- Lingering poison clouds, hazard zones -->
 
     <script src="js/systems/monster-animation-system.js"></script>  <!-- Priority 43 -->
-    <!-- <script src="js/systems/combat-system.js"></script> -->    <!-- Consolidated into combat-master.js -->
-    <!-- <script src="js/systems/projectile-system.js"></script> --> <!-- Consolidated into combat-master.js -->
     <script src="js/effects/melee-slash-effect.js"></script>        <!-- Code-based melee attack effects -->
     <script src="js/effects/monster-attack-effects.js"></script>    <!-- Monster magic/ranged attack effects -->
     <script src="js/effects/village-atmosphere.js"></script>        <!-- Village world state atmosphere -->
     <script src="js/effects/particle-system.js"></script>          <!-- Particle canvas layer for fire, magic, etc. -->
     <script src="js/systems/combat-effect-system.js"></script>      <!-- Priority 51: Combat visual effects -->
-    <!-- Consolidated into combat-master.js -->
-    <!-- <script src="js/systems/active-combat.js"></script> -->
-    <!-- <script src="js/systems/combat-enhancements.js"></script> -->
-    <!-- <script src="js/systems/mouse-attack-system.js"></script> --> <!-- Consolidated into combat-master.js -->
-    <!-- <script src="js/systems/skills-combat-integration.js"></script> --> <!-- Consolidated into combat-master.js -->
-    <!-- <script src="js/systems/status-effect-system.js"></script> -->     <!-- Consolidated into combat-master.js -->
+    <script src="js/systems/skills-combat-integration.js"></script>
     <script src="js/systems/skill-system.js"></script>              <!-- Priority 60 -->
     <script src="js/systems/boon-system.js"></script>               <!-- Priority 61: Soul & Body boons -->
-    <!-- <script src="js/systems/boon-combat-integration.js"></script> --> <!-- Consolidated into combat-master.js -->
     <script src="js/systems/inventory-system.js"></script>          <!-- Priority 65 -->
     <script src="js/systems/quest-item-system.js"></script>         <!-- Priority 66 (quest items) -->
     <script src="js/systems/loot-system.js"></script>               <!-- Priority 70 -->
