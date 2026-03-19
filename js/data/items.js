@@ -355,20 +355,14 @@ const itemEffects = {
     'heal': (player, value) => {
         const healed = Math.min(value, player.maxHp - player.hp);
         player.hp += healed;
-        // Soul & Body: Award Vitality XP for effective healing only
-        if (healed > 0 && typeof awardVitalityXp === 'function') {
-            awardVitalityXp(player, healed);
-        }
+        // Vitality XP removed - HP scaling is now handled by floor progression (per skill-system-implementation.md)
         return `Restored ${healed} HP`;
     },
     'healPercent': (player, value) => {
         const healAmount = Math.floor(player.maxHp * value);
         const healed = Math.min(healAmount, player.maxHp - player.hp);
         player.hp += healed;
-        // Soul & Body: Award Vitality XP for effective healing only
-        if (healed > 0 && typeof awardVitalityXp === 'function') {
-            awardVitalityXp(player, healed);
-        }
+        // Vitality XP removed - HP scaling is now handled by floor progression (per skill-system-implementation.md)
         return `Restored ${healed} HP (${Math.floor(value * 100)}%)`;
     },
     'healOverTime': (player, value, duration) => {

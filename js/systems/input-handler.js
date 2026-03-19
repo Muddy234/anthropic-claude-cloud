@@ -118,6 +118,16 @@ window.addEventListener('keydown', e => {
         return;
     }
 
+    // Victory - return to village
+    if (e.key === 'Enter' && game.state === 'victory') {
+        if (typeof returnToVillage === 'function') {
+            returnToVillage();
+        } else {
+            game.state = 'menu';
+        }
+        return;
+    }
+
     // Trigger shift (debug)
     if (e.key === 'p' || e.key === 'P') {
         if (game.state === 'playing' && !game.shiftActive) {
@@ -150,9 +160,46 @@ window.addEventListener('keydown', e => {
         return;
     }
 
+    // Pause toggle
+    if (e.key === 'Escape' && game.state === 'playing') {
+        game.state = 'paused';
+        return;
+    }
+    if (e.key === 'Escape' && game.state === 'paused') {
+        game.state = 'playing';
+        return;
+    }
+
+    // Pause menu navigation
+    if (game.state === 'paused') {
+        if (e.key === 'ArrowUp' || e.key === 'w') {
+            window._pauseMenuIndex = Math.max(0, (window._pauseMenuIndex || 0) - 1);
+        }
+        if (e.key === 'ArrowDown' || e.key === 's') {
+            window._pauseMenuIndex = Math.min(2, (window._pauseMenuIndex || 0) + 1);
+        }
+        if (e.key === 'Enter') {
+            const idx = window._pauseMenuIndex || 0;
+            if (idx === 0) { game.state = 'playing'; }
+            else if (idx === 1) { game.state = 'settings'; }
+            else if (idx === 2) {
+                if (typeof SessionManager !== 'undefined') {
+                    SessionManager.playerDeath(game.player?.gridX || 0, game.player?.gridY || 0);
+                }
+                if (typeof returnToVillage === 'function') {
+                    returnToVillage();
+                } else if (typeof restartGame === 'function') {
+                    restartGame();
+                }
+            }
+            window._pauseMenuIndex = 0;
+        }
+        return;
+    }
+
     // Playing state - hotkeys and movement
     if (game.state === 'playing') {
-        // SPELL ACTIVATION (Space key) - Dash/Heal/Shield based on loadout selection
+        // DASH ACTIVATION (Space key) - Always triggers dash via SpellSystem/DodgeSystem
         if (e.key === ' ') {
             e.preventDefault();
             // Prevent key repeat from triggering multiple times
@@ -175,22 +222,67 @@ window.addEventListener('keydown', e => {
             return;
         }
 
-        // Action hotkeys (3-4) for consumables
-        // Attacks are triggered by left-click only (uses combo system: 1, 2, special)
-        if (['3', '4'].includes(e.key)) {
+        // SPELL SLOTS (Keys 1-4) - Cast spell from loadout slots
+        if (['1', '2', '3', '4'].includes(e.key)) {
             e.preventDefault();
+            if (e.repeat) return;
             // Clear this key from movement state to prevent conflicts
             keys[e.key] = false;
 
-            const keyNum = parseInt(e.key);
+            const slotIndex = parseInt(e.key) - 1; // 0-3
 
-            // Hotkeys 3-4: Consumables (use existing system)
-            if (typeof handleActiveCombatHotkey === 'function') {
-                handleActiveCombatHotkey(keyNum, game.player);
-            } else if (typeof handleActionHotkey === 'function') {
-                handleActionHotkey(keyNum, game.player);
+            if (typeof SpellSystem !== 'undefined' && SpellSystem.initialized) {
+                SpellSystem.castSlot(slotIndex);
             }
             return;
+        }
+
+        // CONSUMABLE (Key 5) - Use assigned consumable
+        if (e.key === '5') {
+            e.preventDefault();
+            if (e.repeat) return;
+            keys[e.key] = false;
+
+            if (typeof handleActiveCombatHotkey === 'function') {
+                handleActiveCombatHotkey(1, game.player);
+            } else if (typeof handleActionHotkey === 'function') {
+                handleActionHotkey(1, game.player);
+            }
+            return;
+        }
+
+        // WEAPON ACTION - Main hand (Q key)
+        if (e.key === 'q' || e.key === 'Q') {
+            e.preventDefault();
+            if (e.repeat) return;
+
+            if (typeof handleWeaponAction === 'function') {
+                handleWeaponAction(1, game.player);
+            } else if (typeof handleActiveCombatHotkey === 'function') {
+                handleActiveCombatHotkey('Q', game.player);
+            }
+            return;
+        }
+
+        // WEAPON ACTION - Off hand (E key)
+        // Only override E for weapon action when in combat or no interactable nearby
+        if (e.key === 'e' || e.key === 'E') {
+            // Check if player is in combat or there's no interaction target
+            const inCombat = game.player?.inCombat || game.player?.combat?.isInCombat;
+            const hasInteractable = _checkNearbyInteractable();
+
+            if (inCombat || !hasInteractable) {
+                e.preventDefault();
+                if (e.repeat) return;
+
+                if (typeof handleWeaponAction === 'function') {
+                    handleWeaponAction(2, game.player);
+                } else if (typeof handleActiveCombatHotkey === 'function') {
+                    handleActiveCombatHotkey('E', game.player);
+                }
+                return;
+            }
+            // If not in combat and interactable nearby, fall through to default E behavior
         }
 
         // Open inventory (blocked during combat)
@@ -245,22 +337,8 @@ window.addEventListener('keydown', e => {
             }
         }
 
-        // Torch toggle (T key) - Also checks for extraction interaction
+        // Torch toggle (T key)
         if (e.key === 't' || e.key === 'T') {
-            // First check if player is on an extraction point
-            let onExtractionPoint = false;
-
-            if (typeof ExtractionSystem !== 'undefined' && ExtractionSystem.initialized) {
-                const point = ExtractionSystem.getPointAtPlayer();
-                if (point && point.isActive()) {
-                    // Player is on extraction point - extract instead of torch toggle
-                    console.log('[Input] Extraction point found, attempting extract...');
-                    ExtractionSystem.tryExtract(point);
-                    return;
-                }
-            }
-
-            // Not on extraction point - toggle torch
             if (typeof toggleTorch === 'function') {
                 toggleTorch();
             }
@@ -525,20 +603,6 @@ function checkTileInteractions(player) {
         }
     } else {
         game.descentPromptShown = false;
-    }
-
-    // Extraction point interaction
-    if (typeof ExtractionSystem !== 'undefined' && ExtractionSystem.initialized) {
-        const point = ExtractionSystem.getPointAtPlayer();
-        if (point && point.isActive()) {
-            // Show extraction prompt
-            if (!game.extractionPromptShown) {
-                addMessage("Press [T] to extract to the surface!", 'info');
-                game.extractionPromptShown = true;
-            }
-        } else {
-            game.extractionPromptShown = false;
-        }
     }
 
     // Merchant interaction
@@ -1036,6 +1100,35 @@ if (typeof SystemManager !== 'undefined') {
 // ============================================================================
 // EXPORTS
 // ============================================================================
+
+/**
+ * Check if there is an interactable entity near the player (NPC, chest, etc.)
+ * Used to decide whether E key should be weapon action or interaction
+ * @returns {boolean} True if a nearby interactable exists
+ */
+function _checkNearbyInteractable() {
+    if (!game?.player) return false;
+    const px = Math.floor(game.player.gridX);
+    const py = Math.floor(game.player.gridY);
+
+    // Check for NPCs within 1 tile
+    if (game.npcs) {
+        for (const npc of game.npcs) {
+            if (!npc) continue;
+            const dx = Math.abs(Math.floor(npc.gridX || npc.x || 0) - px);
+            const dy = Math.abs(Math.floor(npc.gridY || npc.y || 0) - py);
+            if (dx <= 1 && dy <= 1) return true;
+        }
+    }
+
+    // Check for village buildings / interactable tiles
+    const tile = game.map?.[py]?.[px];
+    if (tile && (tile.type === 'shop' || tile.type === 'npc' || tile.type === 'chest' || tile.type === 'shrine' || tile.interactable)) {
+        return true;
+    }
+
+    return false;
+}
 
 window.onPlayerHit = onPlayerHit;
 // contextMenu and inspectPopup are exported by right-click-init.js

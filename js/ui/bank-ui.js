@@ -1,5 +1,5 @@
 // === js/ui/bank-ui.js ===
-// SURVIVAL EXTRACTION UPDATE: Bank interface for deposits/withdrawals
+// Bank interface for deposits/withdrawals
 
 // ============================================================================
 // BANK UI
@@ -346,7 +346,7 @@ const BankUI = {
 
         // Check bank capacity
         const bankItems = persistentState?.bank?.items || [];
-        const bankCapacity = persistentState?.bank?.capacity || 50;
+        const bankCapacity = persistentState?.bank?.capacity || 30;
 
         if (bankItems.length >= bankCapacity) {
             this._showMessage('Bank is full!', 'error');
@@ -440,75 +440,197 @@ const BankUI = {
     },
 
     /**
-     * Render panel background
+     * Render panel background - CotDG Vault Aesthetic
      * @private
      */
     _renderPanel(ctx, x, y) {
-        // Shadow
-        ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
-        ctx.fillRect(x + 5, y + 5, this.PANEL_WIDTH, this.PANEL_HEIGHT);
+        // Get design system colors
+        const colors = typeof UI_COLORS !== 'undefined' ? UI_COLORS : {};
+        const frameGold = colors.frameGold || '#b8860b';
+        const frameGoldBright = colors.frameGoldBright || '#daa520';
+        const frameGoldDark = colors.frameGoldDark || '#8b6914';
+        const templeStoneDark = colors.templeStoneDark || '#1a1816';
 
-        // Background
-        ctx.fillStyle = '#1a1a2e';
+        ctx.save();
+
+        // Heavy shadow (vault door weight)
+        ctx.shadowColor = 'rgba(0, 0, 0, 0.7)';
+        ctx.shadowBlur = 20;
+        ctx.shadowOffsetY = 8;
+
+        // Main vault door background (iron/stone)
+        const bgGrad = ctx.createLinearGradient(x, y, x, y + this.PANEL_HEIGHT);
+        bgGrad.addColorStop(0, '#252220');
+        bgGrad.addColorStop(0.1, '#1a1816');
+        bgGrad.addColorStop(0.9, '#0d0b0a');
+        bgGrad.addColorStop(1, '#050404');
+        ctx.fillStyle = bgGrad;
         ctx.fillRect(x, y, this.PANEL_WIDTH, this.PANEL_HEIGHT);
 
-        // Border
-        ctx.strokeStyle = '#FFD700';
-        ctx.lineWidth = 3;
-        ctx.strokeRect(x, y, this.PANEL_WIDTH, this.PANEL_HEIGHT);
+        ctx.shadowBlur = 0;
+        ctx.shadowOffsetY = 0;
 
-        // Title
-        ctx.font = 'bold 28px Arial';
+        // Vault rivets/studs along edges
+        ctx.fillStyle = '#4a4540';
+        const rivetSize = 8;
+        const rivetSpacing = 50;
+        for (let rx = x + 25; rx < x + this.PANEL_WIDTH - 20; rx += rivetSpacing) {
+            // Top row
+            ctx.beginPath();
+            ctx.arc(rx, y + 15, rivetSize / 2, 0, Math.PI * 2);
+            ctx.fill();
+            // Bottom row
+            ctx.beginPath();
+            ctx.arc(rx, y + this.PANEL_HEIGHT - 15, rivetSize / 2, 0, Math.PI * 2);
+            ctx.fill();
+        }
+        // Rivet highlights
+        ctx.fillStyle = '#6a6560';
+        for (let rx = x + 25; rx < x + this.PANEL_WIDTH - 20; rx += rivetSpacing) {
+            ctx.beginPath();
+            ctx.arc(rx - 1, y + 14, 2, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.beginPath();
+            ctx.arc(rx - 1, y + this.PANEL_HEIGHT - 16, 2, 0, Math.PI * 2);
+            ctx.fill();
+        }
+
+        // Use design system temple frame if available
+        if (typeof drawTempleFrame === 'function') {
+            drawTempleFrame(ctx, x, y, this.PANEL_WIDTH, this.PANEL_HEIGHT, {
+                cornerSize: 24, borderWidth: 5, pattern: true
+            });
+        } else {
+            // Heavy gold border (vault trim)
+            const frameGrad = ctx.createLinearGradient(x, y, x + this.PANEL_WIDTH, y + this.PANEL_HEIGHT);
+            frameGrad.addColorStop(0, frameGoldBright);
+            frameGrad.addColorStop(0.25, frameGold);
+            frameGrad.addColorStop(0.5, frameGoldDark);
+            frameGrad.addColorStop(0.75, frameGold);
+            frameGrad.addColorStop(1, frameGoldBright);
+            ctx.strokeStyle = frameGrad;
+            ctx.lineWidth = 5;
+            ctx.strokeRect(x, y, this.PANEL_WIDTH, this.PANEL_HEIGHT);
+        }
+
+        // Add ornate corners if available
+        if (typeof drawOrnateCorners === 'function') {
+            drawOrnateCorners(ctx, x, y, this.PANEL_WIDTH, this.PANEL_HEIGHT, { size: 22 });
+        }
+
+        // Title with vault emblem
+        ctx.font = 'bold 26px serif';
         ctx.textAlign = 'center';
-        ctx.fillStyle = '#FFD700';
-        ctx.fillText('THE VAULT', x + this.PANEL_WIDTH / 2, y + 35);
+
+        // Title glow effect
+        ctx.shadowColor = frameGold;
+        ctx.shadowBlur = 8;
+        ctx.fillStyle = frameGoldBright;
+        ctx.fillText('THE VAULT', x + this.PANEL_WIDTH / 2, y + 38);
+        ctx.shadowBlur = 0;
+
+        // Decorative lines under title
+        ctx.strokeStyle = frameGoldDark;
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(x + this.PANEL_WIDTH / 2 - 100, y + 46);
+        ctx.lineTo(x + this.PANEL_WIDTH / 2 + 100, y + 46);
+        ctx.stroke();
+
+        // Small vault lock symbol in center
+        ctx.fillStyle = frameGold;
+        ctx.beginPath();
+        ctx.arc(x + this.PANEL_WIDTH / 2, y + 46, 5, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = templeStoneDark;
+        ctx.beginPath();
+        ctx.arc(x + this.PANEL_WIDTH / 2, y + 46, 2, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.restore();
     },
 
     /**
-     * Render tab buttons
+     * Render tab buttons - Stone Tablet Style
      * @private
      */
     _renderTabs(ctx, panelX, panelY) {
+        // Get design system colors
+        const colors = typeof UI_COLORS !== 'undefined' ? UI_COLORS : {};
+        const frameGold = colors.frameGold || '#b8860b';
+        const frameGoldBright = colors.frameGoldBright || '#daa520';
+        const frameGoldDark = colors.frameGoldDark || '#8b6914';
+
         const tabWidth = 150;
-        const tabHeight = 35;
+        const tabHeight = 38;
         const startX = panelX + 20;
-        const tabY = panelY + 50;
+        const tabY = panelY + 55;
         const tabsFocused = this.focusArea === 'tabs';
 
         this.TABS.forEach((tab, index) => {
-            const tabX = startX + index * (tabWidth + 10);
+            const tabX = startX + index * (tabWidth + 15);
             const isSelected = index === this.selectedTab;
             const isFocused = tabsFocused && isSelected;
 
-            // Tab background
-            if (isSelected) {
-                const grad = ctx.createLinearGradient(tabX, tabY, tabX, tabY + tabHeight);
-                grad.addColorStop(0, '#FFD700');
-                grad.addColorStop(1, '#B8860B');
-                ctx.fillStyle = grad;
+            // Use design system stone button if available
+            if (typeof drawStoneButton === 'function') {
+                drawStoneButton(ctx, tabX, tabY, tabWidth, tabHeight, tab, {
+                    selected: isSelected,
+                    focused: isFocused,
+                    icon: index === 0 ? '🏛' : '📦'
+                });
             } else {
-                ctx.fillStyle = '#2a2a4e';
+                // Stone tablet background
+                const tabGrad = ctx.createLinearGradient(tabX, tabY, tabX, tabY + tabHeight);
+                if (isSelected) {
+                    tabGrad.addColorStop(0, '#3a3530');
+                    tabGrad.addColorStop(0.5, '#2a2520');
+                    tabGrad.addColorStop(1, '#1a1510');
+                } else {
+                    tabGrad.addColorStop(0, '#252220');
+                    tabGrad.addColorStop(0.5, '#1a1816');
+                    tabGrad.addColorStop(1, '#0d0b0a');
+                }
+                ctx.fillStyle = tabGrad;
+                ctx.fillRect(tabX, tabY, tabWidth, tabHeight);
+
+                // Tab border
+                ctx.strokeStyle = isFocused ? '#ffffff' : (isSelected ? frameGoldBright : frameGoldDark);
+                ctx.lineWidth = isFocused ? 3 : 2;
+                ctx.strokeRect(tabX, tabY, tabWidth, tabHeight);
+
+                // Corner accents
+                if (isSelected) {
+                    ctx.fillStyle = frameGold;
+                    // Top-left
+                    ctx.fillRect(tabX, tabY, 6, 2);
+                    ctx.fillRect(tabX, tabY, 2, 6);
+                    // Top-right
+                    ctx.fillRect(tabX + tabWidth - 6, tabY, 6, 2);
+                    ctx.fillRect(tabX + tabWidth - 2, tabY, 2, 6);
+                    // Bottom-left
+                    ctx.fillRect(tabX, tabY + tabHeight - 2, 6, 2);
+                    ctx.fillRect(tabX, tabY + tabHeight - 6, 2, 6);
+                    // Bottom-right
+                    ctx.fillRect(tabX + tabWidth - 6, tabY + tabHeight - 2, 6, 2);
+                    ctx.fillRect(tabX + tabWidth - 2, tabY + tabHeight - 6, 2, 6);
+                }
+
+                // Tab text
+                ctx.font = isSelected ? 'bold 14px serif' : '14px serif';
+                ctx.textAlign = 'center';
+                ctx.fillStyle = isSelected ? frameGoldBright : (colors.textMuted || '#706850');
+                ctx.fillText(tab, tabX + tabWidth / 2, tabY + 24);
             }
-            ctx.fillRect(tabX, tabY, tabWidth, tabHeight);
 
-            // Tab border - white when focused
-            ctx.strokeStyle = isFocused ? '#FFF' : (isSelected ? '#FFD700' : '#4a4a6a');
-            ctx.lineWidth = isFocused ? 3 : 2;
-            ctx.strokeRect(tabX, tabY, tabWidth, tabHeight);
-
-            // Tab text
-            ctx.font = 'bold 14px Arial';
-            ctx.textAlign = 'center';
-            ctx.fillStyle = isSelected ? '#000' : '#AAA';
-            ctx.fillText(tab, tabX + tabWidth / 2, tabY + 23);
-
-            // Item count
+            // Item count (below tab)
             const items = index === 0 ?
                 (persistentState?.bank?.items || []) :
                 (game?.player?.inventory || []);
-            ctx.font = '12px Arial';
-            ctx.fillStyle = isSelected ? '#333' : '#666';
-            ctx.fillText(`(${items.length})`, tabX + tabWidth / 2, tabY + tabHeight + 12);
+            ctx.font = '11px monospace';
+            ctx.textAlign = 'center';
+            ctx.fillStyle = isSelected ? frameGold : (colors.textMuted || '#706850');
+            ctx.fillText(`(${items.length})`, tabX + tabWidth / 2, tabY + tabHeight + 14);
         });
     },
 
@@ -679,30 +801,63 @@ const BankUI = {
     },
 
     /**
-     * Render close button
+     * Render close button - Stone Button Style
      * @private
      */
     _renderCloseButton(ctx, panelX, panelY) {
-        const btnX = panelX + this.PANEL_WIDTH - 120;
-        const btnY = panelY + this.PANEL_HEIGHT - 50;
-        const btnW = 100;
-        const btnH = 35;
+        const colors = typeof UI_COLORS !== 'undefined' ? UI_COLORS : {};
+        const frameGold = colors.frameGold || '#b8860b';
+        const frameGoldBright = colors.frameGoldBright || '#daa520';
+
+        const btnX = panelX + this.PANEL_WIDTH - 130;
+        const btnY = panelY + this.PANEL_HEIGHT - 55;
+        const btnW = 110;
+        const btnH = 40;
         const isFocused = this.focusArea === 'buttons';
 
-        // Button background
-        ctx.fillStyle = isFocused ? '#ff6b6b' : '#e74c3c';
-        ctx.fillRect(btnX, btnY, btnW, btnH);
+        // Use design system stone button if available
+        if (typeof drawStoneButton === 'function') {
+            drawStoneButton(ctx, btnX, btnY, btnW, btnH, 'CLOSE', {
+                selected: false, focused: isFocused, danger: true
+            });
+        } else {
+            // Stone button background with danger tint
+            const btnGrad = ctx.createLinearGradient(btnX, btnY, btnX, btnY + btnH);
+            if (isFocused) {
+                btnGrad.addColorStop(0, '#5a2020');
+                btnGrad.addColorStop(0.5, '#4a1a1a');
+                btnGrad.addColorStop(1, '#3a1010');
+            } else {
+                btnGrad.addColorStop(0, '#3a2020');
+                btnGrad.addColorStop(0.5, '#2a1515');
+                btnGrad.addColorStop(1, '#1a0a0a');
+            }
+            ctx.fillStyle = btnGrad;
+            ctx.fillRect(btnX, btnY, btnW, btnH);
 
-        // Button border
-        ctx.strokeStyle = isFocused ? '#fff' : '#c0392b';
-        ctx.lineWidth = isFocused ? 2 : 1;
-        ctx.strokeRect(btnX, btnY, btnW, btnH);
+            // Button border
+            ctx.strokeStyle = isFocused ? '#ff6b6b' : '#a82828';
+            ctx.lineWidth = isFocused ? 3 : 2;
+            ctx.strokeRect(btnX, btnY, btnW, btnH);
 
-        // Button text
-        ctx.font = 'bold 14px Arial';
-        ctx.textAlign = 'center';
-        ctx.fillStyle = '#fff';
-        ctx.fillText('CLOSE', btnX + btnW / 2, btnY + 23);
+            // Corner gold accents
+            ctx.fillStyle = frameGold;
+            const cs = 4;
+            ctx.fillRect(btnX, btnY, cs, 2);
+            ctx.fillRect(btnX, btnY, 2, cs);
+            ctx.fillRect(btnX + btnW - cs, btnY, cs, 2);
+            ctx.fillRect(btnX + btnW - 2, btnY, 2, cs);
+            ctx.fillRect(btnX, btnY + btnH - 2, cs, 2);
+            ctx.fillRect(btnX, btnY + btnH - cs, 2, cs);
+            ctx.fillRect(btnX + btnW - cs, btnY + btnH - 2, cs, 2);
+            ctx.fillRect(btnX + btnW - 2, btnY + btnH - cs, 2, cs);
+
+            // Button text
+            ctx.font = 'bold 14px serif';
+            ctx.textAlign = 'center';
+            ctx.fillStyle = isFocused ? '#ff8888' : '#cc6666';
+            ctx.fillText('CLOSE', btnX + btnW / 2, btnY + 26);
+        }
     },
 
     /**

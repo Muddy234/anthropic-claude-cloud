@@ -1,5 +1,5 @@
 // === js/data/quests.js ===
-// SURVIVAL EXTRACTION UPDATE: Quest definitions
+// Quest definitions
 
 // ============================================================================
 // QUEST DATA
@@ -16,9 +16,9 @@ const QUEST_DATA = {
         name: 'First Steps Into Darkness',
         type: 'main',
         giver: 'elder',
-        description: 'The Elder has asked you to prove yourself by completing your first successful extraction from Floor 1.',
+        description: 'The Elder has asked you to prove yourself by surviving to Floor 2 of the Chasm.',
         objectives: [
-            { type: 'extract', floor: 1, count: 1, current: 0, description: 'Extract from Floor 1' }
+            { type: 'reach_floor', floor: 2, current: 0, description: 'Reach Floor 2' }
         ],
         rewards: {
             gold: 50,
@@ -27,7 +27,7 @@ const QUEST_DATA = {
         },
         dialogue: {
             start: 'The Chasm awaits, young delver. Enter, gather what you can, and return alive. That is all I ask for now.',
-            progress: 'You have not yet returned from the depths. The extraction shafts are your lifeline.',
+            progress: 'You have not yet ventured deep enough. Push forward to Floor 2.',
             complete: 'You survived! The Chasm has claimed many who did not return. You show promise.'
         },
         prerequisite: null,
@@ -39,10 +39,9 @@ const QUEST_DATA = {
         name: 'Deeper Into the Abyss',
         type: 'main',
         giver: 'elder',
-        description: 'Reach Floor 3 of the Chasm and extract successfully.',
+        description: 'Reach Floor 3 of the Chasm and survive the journey.',
         objectives: [
-            { type: 'reach_floor', floor: 3, current: 0, description: 'Reach Floor 3' },
-            { type: 'extract', minFloor: 3, count: 1, current: 0, description: 'Extract from Floor 3 or deeper' }
+            { type: 'reach_floor', floor: 3, current: 0, description: 'Reach Floor 3' }
         ],
         rewards: {
             gold: 150,
@@ -63,19 +62,18 @@ const QUEST_DATA = {
         name: 'The First Guardian',
         type: 'main',
         giver: 'expedition_master',
-        description: 'Defeat the Floor 1 Guardian to unlock the first shortcut.',
+        description: 'Defeat the Floor 1 Guardian to prove your strength.',
         objectives: [
             { type: 'defeat_guardian', floor: 1, count: 1, current: 0, description: 'Defeat Floor 1 Guardian' }
         ],
         rewards: {
             gold: 200,
-            items: [{ id: 'guardian_heart', count: 1 }],
-            unlocks: ['shortcut_floor_2']
+            items: [{ id: 'guardian_heart', count: 1 }]
         },
         dialogue: {
-            start: 'Each floor has a Guardian - a powerful creature that protects the way down. Defeat the first, and I can establish a shortcut.',
+            start: 'Each floor has a Guardian - a powerful creature that protects the way down. Defeat the first, and you will earn great honor.',
             progress: 'The Guardian still lives. It will appear when you delve deep enough.',
-            complete: 'The Guardian has fallen! I\'ll prepare the shortcut immediately.'
+            complete: 'The Guardian has fallen! You have proven yourself worthy.'
         },
         prerequisite: 'intro_deeper',
         repeatable: false
@@ -288,7 +286,6 @@ const QUEST_DATA = {
 // ============================================================================
 
 const QUEST_OBJECTIVE_TYPES = {
-    extract: 'Successfully extract from the dungeon',
     reach_floor: 'Reach a specific floor',
     defeat_guardian: 'Defeat a floor guardian',
     collect: 'Collect specific items',

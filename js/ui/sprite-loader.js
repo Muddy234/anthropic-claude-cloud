@@ -34,9 +34,11 @@ const SPRITE_LOADER_STATUS = {
 const SPRITE_LOADER_CONFIG = {
     MAX_RETRIES: 3,              // Number of retry attempts
     RETRY_DELAY_MS: 500,         // Delay between retries
-    FALLBACK_SIZE: 32,           // Size of fallback sprite
+    FALLBACK_SIZE: 32,           // Size of fallback sprite (matches 32x32 sprite design)
+    SPRITE_SIZE: 32,             // Expected sprite size (32x32 for new sprites)
     FALLBACK_COLOR1: '#FF00FF',  // Magenta for checkerboard
-    FALLBACK_COLOR2: '#000000'   // Black for checkerboard
+    FALLBACK_COLOR2: '#000000',  // Black for checkerboard
+    DEFAULT_BASE_PATH: 'assets/sprites'  // Default path for sprite images
 };
 
 /**

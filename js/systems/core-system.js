@@ -1,5 +1,5 @@
 // === js/systems/core-system.js ===
-// SURVIVAL EXTRACTION UPDATE: The Core encounter management
+// The Core encounter management
 
 // ============================================================================
 // CORE SYSTEM
@@ -137,6 +137,9 @@ const CoreSystem = {
             persistentState.stats.coreClearTime = this.encounterTime;
             persistentState.stats.coreClearDate = Date.now();
         }
+
+        // Auto-save on victory
+        if (typeof SaveManager !== 'undefined') SaveManager.save();
 
         this.endEncounter(true);
     },

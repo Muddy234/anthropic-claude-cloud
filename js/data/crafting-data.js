@@ -1,5 +1,5 @@
 // === js/data/crafting-data.js ===
-// SURVIVAL EXTRACTION UPDATE: Crafting recipes and requirements
+// Crafting recipes and requirements
 
 // ============================================================================
 // CRAFTING CATEGORIES
@@ -858,30 +858,6 @@ const CRAFTING_RECIPES = {
         prerequisite: 'guardian_floor_1',
         batchCraft: true,
         maxBatch: 5
-    },
-
-    escape_rope: {
-        id: 'escape_rope',
-        name: 'Escape Rope',
-        category: 'consumables',
-        tier: 2,
-        description: 'Instantly teleport to the nearest extraction point',
-        materials: [
-            { id: 'shadow_thread', count: 5 },
-            { id: 'crystal_shard', count: 3 }
-        ],
-        goldCost: 100,
-        craftTime: 3,
-        result: {
-            type: 'consumable',
-            name: 'Escape Rope',
-            effect: 'teleport_extraction',
-            stackable: true,
-            maxStack: 3
-        },
-        prerequisite: 'guardian_floor_1',
-        batchCraft: true,
-        maxBatch: 3
     },
 
     revival_crystal: {

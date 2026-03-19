@@ -277,36 +277,6 @@ const RARITY_CONFIG = {
 };
 
 // ============================================================================
-// EXTRACTION SYSTEM (Survival Extraction Update)
-// ============================================================================
-
-const EXTRACTION_CONFIG = {
-    // Shafts per floor (scales slightly with floor)
-    shaftsPerFloor: {
-        1: 3, 2: 3, 3: 3,
-        4: 4, 5: 4, 6: 4
-    },
-
-    // Floor duration before all shafts collapse (12 minutes)
-    floorDuration: 720000,
-
-    // Collapse schedule as percentage of floor duration
-    // First at 40%, second at 65%, third at 83%, fourth at 92%
-    collapseSchedule: [0.40, 0.65, 0.83, 0.92],
-
-    // Warning timing (milliseconds before collapse)
-    warningDuration: 20000,
-    warningStages: {
-        rumble: 20000,    // First warning at 20s
-        debris: 10000,    // Visual debris at 10s
-        critical: 5000    // Critical shake at 5s
-    },
-
-    // Interaction
-    interactionRadius: 2.0  // Tiles from shaft to interact (increased for easier use)
-};
-
-// ============================================================================
 // VILLAGE HUB
 // ============================================================================
 
@@ -368,95 +338,6 @@ const BANKING_CONFIG = {
 };
 
 // ============================================================================
-// DEGRADATION SYSTEM
-// ============================================================================
-//
-// The degradation system creates risk/reward tension through two mechanics:
-//
-// ## VILLAGE DEGRADATION
-// The village degrades when the player fails runs (dies without extraction).
-// Successful extractions heal the village. This creates visual feedback and
-// NPC dialogue changes to reflect the player's overall performance.
-//
-// Village Degradation Levels:
-//   Level 0 (Thriving): Progress 0-29  - Village is healthy, NPCs optimistic
-//   Level 1 (Damaged):  Progress 30-59 - Some buildings damaged, NPCs worried
-//   Level 2 (Ruined):   Progress 60+   - Major damage, NPCs desperate
-//
-// Degradation Changes:
-//   - Failed run (death): +10 progress
-//   - Successful extraction: -5 base, -2 per floor depth
-//   - Materials can also restore the village
-//
-// ## FLOOR DEGRADATION
-// Each floor degrades separately based on how many times it's been extracted.
-// This encourages pushing deeper rather than farming early floors.
-//
-// Floor Quality Multiplier:
-//   - Starts at 1.0 (100% loot quality)
-//   - Each extraction: -0.15 (15% reduction)
-//   - Minimum: 0.40 (40% floor - loot never goes below this)
-//
-// Effects of Floor Degradation:
-//   - Reduced stack sizes on materials
-//   - Chance to downgrade item rarity when quality < 70%
-//   - Visual cues (floor appears more "picked over")
-//
-// ## RESTORATION
-// Village can be restored using materials:
-//   - Chasm Iron: 1 point per unit
-//   - Emberstone: 2 points per unit
-//   - Living Crystal: 5 points per unit
-//   - Void Metal: 10 points per unit
-//   - Primordial Essence: 25 points per unit
-//
-// Floor degradation is PERMANENT and cannot be restored.
-//
-// ============================================================================
-
-const DEGRADATION_CONFIG = {
-    // ========================================================================
-    // VILLAGE DEGRADATION
-    // ========================================================================
-
-    // Village visual/NPC stages based on deepest floor reached (cosmetic only)
-    stages: {
-        1: { floors: [1, 2], description: 'Peaceful' },
-        2: { floors: [3, 4], description: 'Smoke on Horizon' },
-        3: { floors: [5, 6], description: 'Ash Falling' },
-        4: { floors: ['core'], description: 'Final Hour' }
-    },
-
-    // Progress thresholds for village degradation levels
-    // Level 0: 0-29, Level 1: 30-59, Level 2: 60+
-    degradationThresholds: [30, 60],
-
-    // Progress added on failed run (death without extraction)
-    failedRunPenalty: 10,
-
-    // Progress removed on successful extraction
-    extractionRecovery: 5,
-
-    // Bonus recovery per floor depth (floor 1 = 0 bonus, floor 6 = 10 bonus)
-    deepExtractionBonus: 2,
-
-    // ========================================================================
-    // FLOOR DEGRADATION
-    // ========================================================================
-
-    // Quality reduction per extraction from a floor (15% per extraction)
-    floorDegradationRate: 0.15,
-
-    // Minimum floor quality (floor never goes below 40%)
-    floorMinQuality: 0.40,
-
-    // Legacy aliases for backwards compatibility
-    stepReduction: 0.15,
-    minimum: 0.40,
-    baseRate: 1.0
-};
-
-// ============================================================================
 // FLOOR TIERS
 // ============================================================================
 
@@ -487,7 +368,7 @@ const FLOOR_TIER_CONFIG = {
 
 const QUEST_CONFIG = {
     maxActive: 5,
-    types: ['fetch', 'improvement', 'rescue', 'lore'],
+    types: ['fetch', 'improvement', 'lore'],
 
     // Quest availability check interval (ms)
     checkInterval: 5000
@@ -523,7 +404,6 @@ const GAME_STATES = {
 
     // Dungeon overlays
     CHEST: 'chest',
-    EXTRACTION: 'extraction',
     INVENTORY: 'inventory',
     MAP: 'map',
     SKILLS: 'skills',
@@ -572,21 +452,6 @@ const PATH_DOWN_CONFIG = {
 };
 
 // ============================================================================
-// RESCUE RUN
-// ============================================================================
-
-const RESCUE_CONFIG = {
-    // Death drop persists for one run only
-    persistsForRuns: 1,
-
-    // Visual marker on minimap
-    showOnMinimap: true,
-
-    // Interaction radius to collect
-    collectRadius: 1.0
-};
-
-// ============================================================================
 // EXPORTS
 // ============================================================================
 
@@ -617,17 +482,14 @@ window.AUDIO_CONFIG = AUDIO_CONFIG;
 window.DEBUG_CONFIG = DEBUG_CONFIG;
 window.RARITY_CONFIG = RARITY_CONFIG;
 
-// Survival Extraction Update configs
-window.EXTRACTION_CONFIG = EXTRACTION_CONFIG;
+// Game system configs
 window.VILLAGE_CONFIG = VILLAGE_CONFIG;
 window.BANKING_CONFIG = BANKING_CONFIG;
-window.DEGRADATION_CONFIG = DEGRADATION_CONFIG;
 window.FLOOR_TIER_CONFIG = FLOOR_TIER_CONFIG;
 window.QUEST_CONFIG = QUEST_CONFIG;
 window.SAVE_CONFIG = SAVE_CONFIG;
 window.GAME_STATES = GAME_STATES;
 window.MINIBOSS_CONFIG = MINIBOSS_CONFIG;
 window.PATH_DOWN_CONFIG = PATH_DOWN_CONFIG;
-window.RESCUE_CONFIG = RESCUE_CONFIG;
 
-console.log('[Constants] Game configuration loaded (Survival Extraction v1)');
+console.log('[Constants] Game configuration loaded');

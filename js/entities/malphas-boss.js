@@ -157,7 +157,7 @@ const MalphasBoss = {
 
         // Trigger ENDGAME state if not already
         if (typeof WorldStateSystem !== 'undefined') {
-            WorldStateSystem.checkFloorEntryProgression(10);
+            WorldStateSystem.checkFloorDescentProgression(10);
         }
 
         return this.entity;
@@ -664,6 +664,15 @@ const MalphasBoss = {
             setTimeout(() => addMessage('The volcano shudders... and sleeps.', 'story'), 4000);
             setTimeout(() => addMessage('Oakhaven is saved.', 'story'), 6000);
         }
+
+        // Trigger victory state after messages
+        setTimeout(() => {
+            if (typeof SessionManager !== 'undefined') {
+                SessionManager.coreCompleted();
+            } else {
+                game.state = 'victory';
+            }
+        }, 7000);
     },
 
     // ========================================================================

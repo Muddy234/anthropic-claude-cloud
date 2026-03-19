@@ -236,20 +236,7 @@ const MUSIC_TRACKS = {
         loopEnd: null,
         fadeIn: 0,
         fadeOut: 2.0,
-        tags: ['sting', 'victory', 'extraction']
-    },
-
-    extraction_success: {
-        id: 'extraction_success',
-        name: 'Safe Return',
-        path: 'assets/audio/music/stings/extraction_success.ogg',
-        bpm: 90,
-        duration: 6,
-        loopStart: null,
-        loopEnd: null,
-        fadeIn: 0,
-        fadeOut: 1.0,
-        tags: ['sting', 'extraction', 'success']
+        tags: ['sting', 'victory']
     },
 
     level_up_fanfare: {
@@ -302,8 +289,7 @@ const MUSIC_TRACKS = {
 
         // Game states
         'gameover': 'gameover',
-        'victory': 'victory',
-        'extraction': 'extraction_success'
+        'victory': 'victory'
     }
 };
 

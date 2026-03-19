@@ -244,7 +244,10 @@ function moveEnemy(enemy) {
         // Check for player collision (start combat)
         if (game.player && nx === game.player.gridX && ny === game.player.gridY) {
             if (typeof engageCombat === 'function') {
-                engageCombat(enemy, game.player);
+                // Engage both sides so player.combat.currentTarget is set
+                // This allows proper disengagement when enemy dies
+                engageCombat(game.player, enemy);  // Player engages enemy
+                engageCombat(enemy, game.player);  // Enemy engages player
             }
             return;
         }

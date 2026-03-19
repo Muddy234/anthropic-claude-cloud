@@ -329,33 +329,6 @@ const AUDIO_DEFINITIONS = {
         // --------------------------------------------------------------------
         // ENVIRONMENT
         // --------------------------------------------------------------------
-        extraction_hum: {
-            id: 'extraction_hum',
-            path: 'assets/audio/sfx/environment/extraction_hum.ogg',
-            volume: 0.4,
-            pitchVariation: 0,
-            priority: 'LOW',
-            category: 'ambient',
-            cooldown: 0
-        },
-        extraction_activate: {
-            id: 'extraction_activate',
-            path: 'assets/audio/sfx/environment/extraction_activate.ogg',
-            volume: 0.8,
-            pitchVariation: 0,
-            priority: 'HIGH',
-            category: 'ambient',
-            cooldown: 500
-        },
-        extraction_success: {
-            id: 'extraction_success',
-            path: 'assets/audio/sfx/environment/extraction_success.ogg',
-            volume: 1.0,
-            pitchVariation: 0,
-            priority: 'CRITICAL',
-            category: 'ambient',
-            cooldown: 1000
-        },
         shaft_warning: {
             id: 'shaft_warning',
             path: 'assets/audio/sfx/environment/shaft_warning.ogg',
@@ -440,6 +413,348 @@ const AUDIO_DEFINITIONS = {
             priority: 'HIGH',
             category: 'combat',
             cooldown: 100
+        },
+
+        // --------------------------------------------------------------------
+        // ENEMY ABILITY SOUNDS - Telegraph (Buildup) Sounds
+        // --------------------------------------------------------------------
+        ability_melee_charge: {
+            id: 'ability_melee_charge',
+            path: 'assets/audio/sfx/abilities/melee_charge.ogg',
+            volume: 0.6,
+            pitchVariation: 0.1,
+            priority: 'HIGH',
+            category: 'combat',
+            cooldown: 100
+        },
+        ability_claw_charge: {
+            id: 'ability_claw_charge',
+            path: 'assets/audio/sfx/abilities/claw_charge.ogg',
+            volume: 0.6,
+            pitchVariation: 0.1,
+            priority: 'HIGH',
+            category: 'combat',
+            cooldown: 100
+        },
+        ability_bite_charge: {
+            id: 'ability_bite_charge',
+            path: 'assets/audio/sfx/abilities/bite_charge.ogg',
+            volume: 0.6,
+            pitchVariation: 0.1,
+            priority: 'HIGH',
+            category: 'combat',
+            cooldown: 100
+        },
+        ability_whoosh_charge: {
+            id: 'ability_whoosh_charge',
+            path: 'assets/audio/sfx/abilities/whoosh_charge.ogg',
+            volume: 0.5,
+            pitchVariation: 0.1,
+            priority: 'HIGH',
+            category: 'combat',
+            cooldown: 100
+        },
+        ability_heavy_charge: {
+            id: 'ability_heavy_charge',
+            path: 'assets/audio/sfx/abilities/heavy_charge.ogg',
+            volume: 0.7,
+            pitchVariation: 0.05,
+            priority: 'HIGH',
+            category: 'combat',
+            cooldown: 100
+        },
+        ability_slam_charge: {
+            id: 'ability_slam_charge',
+            path: 'assets/audio/sfx/abilities/slam_charge.ogg',
+            volume: 0.7,
+            pitchVariation: 0.1,
+            priority: 'HIGH',
+            category: 'combat',
+            cooldown: 100
+        },
+        ability_heavy_slam_charge: {
+            id: 'ability_heavy_slam_charge',
+            path: 'assets/audio/sfx/abilities/heavy_slam_charge.ogg',
+            volume: 0.8,
+            pitchVariation: 0.05,
+            priority: 'HIGH',
+            category: 'combat',
+            cooldown: 100
+        },
+        ability_stomp_charge: {
+            id: 'ability_stomp_charge',
+            path: 'assets/audio/sfx/abilities/stomp_charge.ogg',
+            volume: 0.6,
+            pitchVariation: 0.1,
+            priority: 'HIGH',
+            category: 'combat',
+            cooldown: 100
+        },
+        ability_pounce_charge: {
+            id: 'ability_pounce_charge',
+            path: 'assets/audio/sfx/abilities/pounce_charge.ogg',
+            volume: 0.6,
+            pitchVariation: 0.1,
+            priority: 'HIGH',
+            category: 'combat',
+            cooldown: 100
+        },
+        ability_charge_windup: {
+            id: 'ability_charge_windup',
+            path: 'assets/audio/sfx/abilities/charge_windup.ogg',
+            volume: 0.7,
+            pitchVariation: 0.05,
+            priority: 'HIGH',
+            category: 'combat',
+            cooldown: 100
+        },
+        ability_lunge_charge: {
+            id: 'ability_lunge_charge',
+            path: 'assets/audio/sfx/abilities/lunge_charge.ogg',
+            volume: 0.5,
+            pitchVariation: 0.1,
+            priority: 'HIGH',
+            category: 'combat',
+            cooldown: 100
+        },
+        ability_breath_inhale: {
+            id: 'ability_breath_inhale',
+            path: 'assets/audio/sfx/abilities/breath_inhale.ogg',
+            volume: 0.6,
+            pitchVariation: 0.1,
+            priority: 'HIGH',
+            category: 'combat',
+            cooldown: 100
+        },
+        ability_projectile_charge: {
+            id: 'ability_projectile_charge',
+            path: 'assets/audio/sfx/abilities/projectile_charge.ogg',
+            volume: 0.6,
+            pitchVariation: 0.1,
+            priority: 'HIGH',
+            category: 'combat',
+            cooldown: 100
+        },
+        ability_web_charge: {
+            id: 'ability_web_charge',
+            path: 'assets/audio/sfx/abilities/web_charge.ogg',
+            volume: 0.5,
+            pitchVariation: 0.1,
+            priority: 'HIGH',
+            category: 'combat',
+            cooldown: 100
+        },
+        ability_drain_charge: {
+            id: 'ability_drain_charge',
+            path: 'assets/audio/sfx/abilities/drain_charge.ogg',
+            volume: 0.6,
+            pitchVariation: 0.1,
+            priority: 'HIGH',
+            category: 'combat',
+            cooldown: 100
+        },
+        ability_beam_charge: {
+            id: 'ability_beam_charge',
+            path: 'assets/audio/sfx/abilities/beam_charge.ogg',
+            volume: 0.7,
+            pitchVariation: 0.05,
+            priority: 'HIGH',
+            category: 'combat',
+            cooldown: 100
+        },
+
+        // --------------------------------------------------------------------
+        // ENEMY ABILITY SOUNDS - Impact Sounds
+        // --------------------------------------------------------------------
+        ability_melee_hit: {
+            id: 'ability_melee_hit',
+            path: 'assets/audio/sfx/abilities/melee_hit.ogg',
+            volume: 0.8,
+            pitchVariation: 0.15,
+            priority: 'HIGH',
+            category: 'combat',
+            cooldown: 50
+        },
+        ability_claw_hit: {
+            id: 'ability_claw_hit',
+            path: 'assets/audio/sfx/abilities/claw_hit.ogg',
+            volume: 0.8,
+            pitchVariation: 0.15,
+            priority: 'HIGH',
+            category: 'combat',
+            cooldown: 50
+        },
+        ability_bite_hit: {
+            id: 'ability_bite_hit',
+            path: 'assets/audio/sfx/abilities/bite_hit.ogg',
+            volume: 0.8,
+            pitchVariation: 0.15,
+            priority: 'HIGH',
+            category: 'combat',
+            cooldown: 50
+        },
+        ability_whoosh_hit: {
+            id: 'ability_whoosh_hit',
+            path: 'assets/audio/sfx/abilities/whoosh_hit.ogg',
+            volume: 0.7,
+            pitchVariation: 0.15,
+            priority: 'HIGH',
+            category: 'combat',
+            cooldown: 50
+        },
+        ability_heavy_hit: {
+            id: 'ability_heavy_hit',
+            path: 'assets/audio/sfx/abilities/heavy_hit.ogg',
+            volume: 0.9,
+            pitchVariation: 0.1,
+            priority: 'HIGH',
+            category: 'combat',
+            cooldown: 50
+        },
+        ability_slam_impact: {
+            id: 'ability_slam_impact',
+            path: 'assets/audio/sfx/abilities/slam_impact.ogg',
+            volume: 0.9,
+            pitchVariation: 0.1,
+            priority: 'HIGH',
+            category: 'combat',
+            cooldown: 50
+        },
+        ability_heavy_slam_impact: {
+            id: 'ability_heavy_slam_impact',
+            path: 'assets/audio/sfx/abilities/heavy_slam_impact.ogg',
+            volume: 1.0,
+            pitchVariation: 0.05,
+            priority: 'HIGH',
+            category: 'combat',
+            cooldown: 50
+        },
+        ability_stomp_impact: {
+            id: 'ability_stomp_impact',
+            path: 'assets/audio/sfx/abilities/stomp_impact.ogg',
+            volume: 0.7,
+            pitchVariation: 0.15,
+            priority: 'HIGH',
+            category: 'combat',
+            cooldown: 50
+        },
+        ability_pounce_land: {
+            id: 'ability_pounce_land',
+            path: 'assets/audio/sfx/abilities/pounce_land.ogg',
+            volume: 0.8,
+            pitchVariation: 0.1,
+            priority: 'HIGH',
+            category: 'combat',
+            cooldown: 50
+        },
+        ability_charge_hit: {
+            id: 'ability_charge_hit',
+            path: 'assets/audio/sfx/abilities/charge_hit.ogg',
+            volume: 0.9,
+            pitchVariation: 0.1,
+            priority: 'HIGH',
+            category: 'combat',
+            cooldown: 50
+        },
+        ability_charge_heavy_hit: {
+            id: 'ability_charge_heavy_hit',
+            path: 'assets/audio/sfx/abilities/charge_heavy_hit.ogg',
+            volume: 1.0,
+            pitchVariation: 0.05,
+            priority: 'HIGH',
+            category: 'combat',
+            cooldown: 50
+        },
+        ability_lunge_hit: {
+            id: 'ability_lunge_hit',
+            path: 'assets/audio/sfx/abilities/lunge_hit.ogg',
+            volume: 0.7,
+            pitchVariation: 0.15,
+            priority: 'HIGH',
+            category: 'combat',
+            cooldown: 50
+        },
+        ability_projectile_impact: {
+            id: 'ability_projectile_impact',
+            path: 'assets/audio/sfx/abilities/projectile_impact.ogg',
+            volume: 0.7,
+            pitchVariation: 0.15,
+            priority: 'HIGH',
+            category: 'combat',
+            cooldown: 50
+        },
+        ability_web_hit: {
+            id: 'ability_web_hit',
+            path: 'assets/audio/sfx/abilities/web_hit.ogg',
+            volume: 0.6,
+            pitchVariation: 0.1,
+            priority: 'HIGH',
+            category: 'combat',
+            cooldown: 50
+        },
+
+        // --------------------------------------------------------------------
+        // ENEMY ABILITY SOUNDS - Channeled/Looping Sounds
+        // --------------------------------------------------------------------
+        ability_fire_breath_loop: {
+            id: 'ability_fire_breath_loop',
+            path: 'assets/audio/sfx/abilities/fire_breath_loop.ogg',
+            volume: 0.7,
+            pitchVariation: 0,
+            priority: 'HIGH',
+            category: 'combat',
+            cooldown: 0,
+            loop: true
+        },
+        ability_frost_breath_loop: {
+            id: 'ability_frost_breath_loop',
+            path: 'assets/audio/sfx/abilities/frost_breath_loop.ogg',
+            volume: 0.7,
+            pitchVariation: 0,
+            priority: 'HIGH',
+            category: 'combat',
+            cooldown: 0,
+            loop: true
+        },
+        ability_poison_cloud_loop: {
+            id: 'ability_poison_cloud_loop',
+            path: 'assets/audio/sfx/abilities/poison_cloud_loop.ogg',
+            volume: 0.6,
+            pitchVariation: 0,
+            priority: 'HIGH',
+            category: 'combat',
+            cooldown: 0,
+            loop: true
+        },
+        ability_breath_loop: {
+            id: 'ability_breath_loop',
+            path: 'assets/audio/sfx/abilities/breath_loop.ogg',
+            volume: 0.7,
+            pitchVariation: 0,
+            priority: 'HIGH',
+            category: 'combat',
+            cooldown: 0,
+            loop: true
+        },
+        ability_drain_loop: {
+            id: 'ability_drain_loop',
+            path: 'assets/audio/sfx/abilities/drain_loop.ogg',
+            volume: 0.6,
+            pitchVariation: 0,
+            priority: 'HIGH',
+            category: 'combat',
+            cooldown: 0,
+            loop: true
+        },
+        ability_beam_loop: {
+            id: 'ability_beam_loop',
+            path: 'assets/audio/sfx/abilities/beam_loop.ogg',
+            volume: 0.7,
+            pitchVariation: 0,
+            priority: 'HIGH',
+            category: 'combat',
+            cooldown: 0,
+            loop: true
         },
         skill_ready: {
             id: 'skill_ready',

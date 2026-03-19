@@ -1,0 +1,3029 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Sprite Forge — Pixel String Editor v3</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&family=Space+Grotesk:wght@400;600;700&display=swap');
+
+  :root {
+    --bg-dark: #e8e8ec;
+    --bg-panel: #f2f2f5;
+    --bg-panel-alt: #e0e0e5;
+    --bg-hover: #d4d4da;
+    --border: #c0c0c8;
+    --border-bright: #a8a8b4;
+    --text: #2a2a34;
+    --text-dim: #6a6a78;
+    --text-bright: #1a1a24;
+    --accent: #d85520;
+    --accent-hover: #e86a35;
+    --accent-dim: #f0d5c8;
+    --grid-line: #c8c8d0;
+    --danger: #c43a3a;
+    --success: #2a9e4a;
+    --mono: 'JetBrains Mono', monospace;
+    --sans: 'Space Grotesk', sans-serif;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: var(--bg-dark);
+    color: var(--text);
+    font-family: var(--sans);
+    font-size: 13px;
+    overflow: hidden;
+    height: 100vh;
+    user-select: none;
+  }
+
+  .app {
+    display: grid;
+    grid-template-columns: 220px 1fr 300px;
+    grid-template-rows: 48px 1fr 36px;
+    height: 100vh;
+    gap: 1px;
+    background: var(--border);
+  }
+
+  .header {
+    grid-column: 1 / -1;
+    background: var(--bg-panel);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 16px;
+    border-bottom: 1px solid var(--border);
+  }
+  .header-title {
+    font-family: var(--mono);
+    font-weight: 700;
+    font-size: 15px;
+    color: var(--accent);
+    letter-spacing: 1px;
+    text-transform: uppercase;
+  }
+  .header-title span { color: var(--text-dim); font-weight: 400; }
+  .header-actions { display: flex; gap: 8px; align-items: center; }
+
+  .left-panel, .right-panel {
+    background: var(--bg-panel);
+    overflow-y: auto;
+    padding: 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+  }
+
+  .canvas-area {
+    background: var(--bg-dark);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+    overflow: auto;
+  }
+
+  .status-bar {
+    grid-column: 1 / -1;
+    background: var(--bg-panel);
+    display: flex;
+    align-items: center;
+    padding: 0 16px;
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--text-dim);
+    gap: 24px;
+    border-top: 1px solid var(--border);
+  }
+  .status-bar .hl { color: var(--accent); }
+
+  .panel-section { display: flex; flex-direction: column; gap: 8px; }
+  .panel-label {
+    font-family: var(--mono);
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 1.5px;
+    color: var(--text-dim);
+    padding-bottom: 4px;
+    border-bottom: 1px solid var(--border);
+  }
+  .separator { height: 1px; background: var(--border); margin: 2px 0; }
+
+  .btn {
+    background: var(--bg-panel-alt);
+    border: 1px solid var(--border);
+    color: var(--text);
+    font-family: var(--mono);
+    font-size: 11px;
+    padding: 6px 12px;
+    cursor: pointer;
+    border-radius: 3px;
+    transition: all 0.15s;
+    white-space: nowrap;
+  }
+  .btn:hover { background: var(--bg-hover); border-color: var(--border-bright); }
+  .btn.active { background: var(--accent-dim); border-color: var(--accent); color: var(--accent); }
+  .btn.accent { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .btn.accent:hover { background: var(--accent-hover); }
+  .btn.danger { border-color: var(--danger); color: var(--danger); }
+  .btn.danger:hover { background: var(--danger); color: #fff; }
+  .btn.small { padding: 3px 8px; font-size: 10px; }
+  .btn-row { display: flex; gap: 4px; flex-wrap: wrap; }
+
+  .tool-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px; }
+  .tool-btn {
+    background: var(--bg-panel-alt);
+    border: 1px solid var(--border);
+    color: var(--text);
+    font-size: 16px;
+    padding: 6px;
+    cursor: pointer;
+    border-radius: 3px;
+    transition: all 0.15s;
+    text-align: center;
+    line-height: 1;
+  }
+  .tool-btn:hover { background: var(--bg-hover); }
+  .tool-btn.active { background: var(--accent-dim); border-color: var(--accent); color: var(--accent); }
+  .tool-btn .label { font-size: 9px; font-family: var(--mono); margin-top: 2px; display: block; color: var(--text-dim); }
+
+  .palette-grid { display: grid; grid-template-columns: repeat(6, 1fr); gap: 3px; }
+  .palette-swatch {
+    aspect-ratio: 1;
+    border: 2px solid var(--border);
+    border-radius: 3px;
+    cursor: pointer;
+    position: relative;
+    transition: all 0.15s;
+  }
+  .palette-swatch:hover { border-color: var(--text-dim); transform: scale(1.1); }
+  .palette-swatch.active { border-color: var(--accent); box-shadow: 0 0 6px rgba(232,101,46,0.4); }
+  .palette-swatch .char {
+    position: absolute; inset: 0;
+    display: flex; align-items: center; justify-content: center;
+    font-family: var(--mono); font-size: 10px; font-weight: 700;
+    color: #fff; text-shadow: 0 1px 3px rgba(0,0,0,0.9), 0 0 2px rgba(0,0,0,0.7);
+  }
+
+  .color-edit-row { display: flex; gap: 6px; align-items: center; }
+  .color-edit-row input[type="color"] {
+    width: 44px; height: 32px; border: 1px solid var(--border);
+    background: none; cursor: pointer; border-radius: 3px; padding: 0;
+  }
+  .color-edit-row input[type="text"] {
+    flex: 1; background: var(--bg-dark); border: 1px solid var(--border);
+    color: var(--text); font-family: var(--mono); font-size: 11px;
+    padding: 4px 6px; border-radius: 3px;
+  }
+
+  .size-inputs { display: flex; gap: 6px; align-items: center; }
+  .size-inputs input {
+    width: 50px; background: var(--bg-dark); border: 1px solid var(--border);
+    color: var(--text); font-family: var(--mono); font-size: 12px;
+    padding: 4px 6px; border-radius: 3px; text-align: center;
+  }
+  .size-inputs span { color: var(--text-dim); font-family: var(--mono); font-size: 12px; }
+  .preset-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 4px; }
+
+  .layer-list { display: flex; flex-direction: column; gap: 3px; }
+  .layer-item {
+    display: flex; align-items: center; gap: 6px;
+    padding: 6px 8px; border-radius: 4px;
+    border: 1px solid var(--border);
+    background: var(--bg-dark);
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+  .layer-item:hover { border-color: var(--border-bright); }
+  .layer-item.active { border-color: var(--accent); background: rgba(232,101,46,0.08); }
+  .layer-item .color-dot {
+    width: 10px; height: 10px; border-radius: 50%;
+    flex-shrink: 0; border: 1px solid rgba(0,0,0,0.15);
+  }
+  .layer-item .layer-name {
+    flex: 1; font-family: var(--mono); font-size: 11px;
+    color: var(--text); overflow: hidden; text-overflow: ellipsis;
+  }
+  .layer-item .layer-info { font-family: var(--mono); font-size: 9px; color: var(--text-dim); }
+  .layer-item .vis-toggle {
+    cursor: pointer; font-size: 13px; opacity: 0.4;
+    transition: opacity 0.15s; flex-shrink: 0;
+  }
+  .layer-item .vis-toggle.on { opacity: 1; }
+  .layer-item .solo-toggle {
+    cursor: pointer; font-family: var(--mono); font-size: 9px;
+    color: var(--text-dim); padding: 1px 4px; border-radius: 2px;
+    border: 1px solid transparent; transition: all 0.15s; flex-shrink: 0;
+  }
+  .layer-item .solo-toggle:hover { border-color: var(--border-bright); }
+  .layer-item .solo-toggle.on { color: var(--accent); border-color: var(--accent); }
+
+  .opacity-row {
+    display: flex; align-items: center; gap: 8px;
+    font-family: var(--mono); font-size: 10px; color: var(--text-dim);
+  }
+  .opacity-row input[type="range"] { flex: 1; accent-color: var(--accent); }
+  .opacity-row span { min-width: 30px; text-align: right; }
+
+  .tab-bar { display: flex; gap: 2px; margin-bottom: 4px; }
+  .tab-btn {
+    flex: 1; background: var(--bg-dark); border: 1px solid var(--border);
+    color: var(--text-dim); font-family: var(--mono); font-size: 10px;
+    padding: 5px 4px; cursor: pointer; border-radius: 3px 3px 0 0;
+    text-transform: uppercase; letter-spacing: 0.5px;
+  }
+  .tab-btn.active { background: var(--bg-panel-alt); color: var(--accent); border-bottom-color: var(--bg-panel-alt); }
+  .tab-content { display: none; }
+  .tab-content.active { display: flex; flex-direction: column; gap: 10px; }
+
+  .string-output {
+    width: 100%; min-height: 60px; max-height: 120px;
+    background: var(--bg-dark); border: 1px solid var(--border);
+    color: var(--accent); font-family: var(--mono); font-size: 10px;
+    padding: 8px; border-radius: 3px; resize: vertical;
+    word-break: break-all; line-height: 1.4;
+  }
+
+  .preview-box {
+    background: #d0d0d8; border: 1px solid var(--border);
+    border-radius: 3px; display: flex; align-items: center;
+    justify-content: center; padding: 12px; min-height: 80px;
+  }
+  .preview-canvas { image-rendering: pixelated; border: 1px solid var(--border); }
+
+  .layer-export-item {
+    background: var(--bg-dark);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 8px;
+    display: flex; flex-direction: column; gap: 4px;
+  }
+  .layer-export-header { display: flex; justify-content: space-between; align-items: center; }
+  .layer-export-header .name { font-family: var(--mono); font-size: 11px; font-weight: 600; color: var(--text-bright); }
+  .layer-export-header .dims { font-family: var(--mono); font-size: 9px; color: var(--text-dim); }
+  .layer-export-string {
+    width: 100%; height: 48px;
+    background: var(--bg-panel); border: 1px solid var(--border);
+    color: var(--accent); font-family: var(--mono); font-size: 9px;
+    padding: 4px 6px; border-radius: 2px; resize: none;
+    word-break: break-all; line-height: 1.3;
+  }
+  .layer-export-btns { display: flex; gap: 4px; }
+
+  .zoom-controls { display: flex; align-items: center; gap: 4px; }
+  .zoom-controls span { font-family: var(--mono); font-size: 11px; color: var(--text-dim); min-width: 40px; text-align: center; }
+
+  .toggle-row {
+    display: flex; align-items: center; gap: 8px;
+    font-family: var(--mono); font-size: 11px; color: var(--text-dim); cursor: pointer;
+  }
+  .toggle-row input { accent-color: var(--accent); }
+
+  .frame-strip { display: flex; gap: 4px; overflow-x: auto; padding: 4px 0; }
+  .frame-thumb {
+    width: 40px; height: 40px; border: 2px solid var(--border);
+    border-radius: 3px; cursor: pointer; image-rendering: pixelated;
+    flex-shrink: 0; background: #d0d0d8;
+  }
+  .frame-thumb:hover { border-color: var(--text-dim); }
+  .frame-thumb.active { border-color: var(--accent); }
+  .anim-controls { display: flex; gap: 4px; align-items: center; }
+  .anim-controls input[type="range"] { flex: 1; accent-color: var(--accent); }
+
+  /* PNG IMPORT MODAL */
+  .modal-overlay {
+    display: none;
+    position: fixed; inset: 0;
+    background: rgba(0,0,0,0.35);
+    z-index: 100;
+    align-items: center; justify-content: center;
+  }
+  .modal-overlay.open { display: flex; }
+  .modal {
+    background: var(--bg-panel);
+    border: 1px solid var(--border-bright);
+    border-radius: 8px;
+    padding: 20px;
+    max-width: 480px;
+    width: 90%;
+    display: flex; flex-direction: column; gap: 14px;
+  }
+  .modal-title {
+    font-family: var(--mono); font-weight: 700; font-size: 14px;
+    color: var(--accent); text-transform: uppercase; letter-spacing: 1px;
+  }
+  .modal-row {
+    display: flex; gap: 12px; align-items: flex-start;
+  }
+  .modal-preview {
+    border: 1px solid var(--border); border-radius: 4px;
+    background: #d0d0d8; padding: 8px; display: flex;
+    align-items: center; justify-content: center; min-height: 120px;
+  }
+  .modal-preview canvas { image-rendering: pixelated; max-width: 100%; }
+  .modal-options { display: flex; flex-direction: column; gap: 8px; flex: 1; }
+  .modal-options label {
+    font-family: var(--mono); font-size: 11px; color: var(--text-dim);
+    display: flex; align-items: center; gap: 6px; cursor: pointer;
+  }
+  .modal-options select, .modal-options input[type="number"] {
+    background: var(--bg-dark); border: 1px solid var(--border);
+    color: var(--text); font-family: var(--mono); font-size: 11px;
+    padding: 4px 6px; border-radius: 3px;
+  }
+  .modal-info {
+    font-family: var(--mono); font-size: 10px; color: var(--text-dim);
+    line-height: 1.5;
+  }
+  .modal-btns { display: flex; gap: 8px; justify-content: flex-end; }
+
+  /* UPLOAD AREA */
+  .upload-zone {
+    border: 2px dashed var(--border-bright);
+    border-radius: 6px;
+    padding: 16px 12px;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.2s;
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--text-dim);
+  }
+  .upload-zone:hover {
+    border-color: var(--accent);
+    background: rgba(232,101,46,0.05);
+    color: var(--accent);
+  }
+  .upload-zone .icon { font-size: 24px; margin-bottom: 4px; }
+
+  /* DIRECTION BAR */
+  .direction-bar {
+    display: flex; gap: 3px; padding: 6px 0;
+  }
+  .direction-bar .dir-btn {
+    flex: 1;
+    background: var(--bg-dark);
+    border: 1px solid var(--border);
+    color: var(--text-dim);
+    font-family: var(--mono);
+    font-size: 10px;
+    padding: 6px 4px;
+    cursor: pointer;
+    border-radius: 3px;
+    text-align: center;
+    transition: all 0.15s;
+    position: relative;
+  }
+  .direction-bar .dir-btn:hover { border-color: var(--border-bright); color: var(--text); }
+  .direction-bar .dir-btn.active {
+    background: var(--accent-dim); border-color: var(--accent); color: var(--accent); font-weight: 600;
+  }
+  .direction-bar .dir-btn .dir-dot {
+    display: inline-block; width: 6px; height: 6px; border-radius: 50%;
+    margin-right: 3px; vertical-align: middle;
+  }
+  .direction-bar .dir-btn .dir-dot.empty { background: var(--border); }
+  .direction-bar .dir-btn .dir-dot.has-data { background: var(--success); }
+  .direction-setup {
+    background: var(--bg-dark); border: 1px solid var(--border); border-radius: 4px;
+    padding: 10px; text-align: center;
+  }
+  .direction-setup .hint {
+    font-family: var(--mono); font-size: 10px; color: var(--text-dim);
+    line-height: 1.5; margin-bottom: 8px;
+  }
+
+  ::-webkit-scrollbar { width: 6px; height: 6px; }
+  ::-webkit-scrollbar-track { background: var(--bg-panel); }
+  ::-webkit-scrollbar-thumb { background: var(--border-bright); border-radius: 3px; }
+  ::-webkit-scrollbar-thumb:hover { background: var(--text-dim); }
+
+  @keyframes fadeOut { 0% { opacity: 1; } 70% { opacity: 1; } 100% { opacity: 0; } }
+</style>
+</head>
+<body>
+
+<div class="app">
+  <!-- HEADER -->
+  <div class="header">
+    <div class="header-title">Sprite Forge <span>/ v3</span> <span id="dirIndicator" style="display:none;margin-left:8px;font-size:12px;color:var(--success)"></span></div>
+    <div class="header-actions">
+      <div class="zoom-controls">
+        <button class="btn small" onclick="setZoom(-1)">−</button>
+        <span id="zoomLevel">12x</span>
+        <button class="btn small" onclick="setZoom(1)">+</button>
+        <button class="btn small" onclick="autoZoom();render()" title="Fit to screen">⊞</button>
+      </div>
+      <button class="btn" onclick="undo()" title="Ctrl+Z">↩ Undo</button>
+      <button class="btn" onclick="redo()" title="Ctrl+Y">↪ Redo</button>
+      <button class="btn danger" onclick="clearActiveLayer()">Clear Layer</button>
+    </div>
+  </div>
+
+  <!-- LEFT PANEL -->
+  <div class="left-panel">
+    <div class="panel-section">
+      <div class="panel-label">Canvas Size</div>
+      <div class="size-inputs">
+        <input type="number" id="gridW" value="32" min="1" max="128">
+        <span>×</span>
+        <input type="number" id="gridH" value="32" min="1" max="128">
+        <button class="btn small accent" onclick="resizeGrid()">Set</button>
+      </div>
+      <div class="preset-grid">
+        <button class="btn small" onclick="setPresetSize(32,32)">32×32</button>
+        <button class="btn small" onclick="setPresetSize(64,64)">64×64</button>
+      </div>
+    </div>
+
+    <div class="separator"></div>
+
+    <div class="panel-section">
+      <div class="panel-label">Tools</div>
+      <div class="tool-grid">
+        <div class="tool-btn active" data-tool="paint" onclick="setTool('paint')" title="W">✏️<span class="label">Paint</span></div>
+        <div class="tool-btn" data-tool="erase" onclick="setTool('erase')" title="E">🧹<span class="label">Erase</span></div>
+        <div class="tool-btn" data-tool="pick" onclick="setTool('pick')" title="Q">💉<span class="label">Pick</span></div>
+        <div class="tool-btn" data-tool="fill" onclick="setTool('fill')" title="G">🪣<span class="label">Fill</span></div>
+        <div class="tool-btn" data-tool="line" onclick="setTool('line')" title="L">📏<span class="label">Line</span></div>
+        <div class="tool-btn" data-tool="rect" onclick="setTool('rect')" title="R">⬜<span class="label">Rect</span></div>
+        <div class="tool-btn" data-tool="mirror" onclick="setTool('mirror')" title="X">🪞<span class="label">Mirror</span></div>
+        <div class="tool-btn" data-tool="sample" onclick="setTool('sample')" title="S">📋<span class="label">Sample</span></div>
+      </div>
+      <div style="font-family:var(--mono);font-size:9px;color:var(--text-dim);margin-top:2px">
+        Left-click: draw / Right-click: erase (any tool)<br>
+        Ctrl+scroll: zoom / +−: zoom / 0: fit
+      </div>
+    </div>
+
+    <div class="separator"></div>
+
+    <div class="panel-section">
+      <div class="panel-label">Transform (Active Layer)</div>
+      <div class="btn-row">
+        <button class="btn small" onclick="flipHorizontal()" title="Flip horizontally">↔ Flip H</button>
+        <button class="btn small" onclick="flipVertical()" title="Flip vertically">↕ Flip V</button>
+        <button class="btn small" onclick="rotateCW()" title="Rotate 90° clockwise">⟳ Rot 90</button>
+      </div>
+      <div class="btn-row" style="margin-top:2px">
+        <button class="btn small" onclick="flipAllHorizontal()" title="Flip all layers horizontally">↔ Flip All H</button>
+        <button class="btn small" onclick="flipAllVertical()" title="Flip all layers vertically">↕ Flip All V</button>
+      </div>
+    </div>
+
+    <div class="separator"></div>
+
+    <div class="panel-section">
+      <div class="panel-label">Palette</div>
+      <div class="palette-grid" id="paletteGrid"></div>
+      <div class="color-edit-row">
+        <input type="color" id="colorPicker" value="#e8652e" oninput="pickAnyColor(this.value)">
+        <input type="text" id="charInput" maxlength="1" value="" placeholder="chr" style="width:32px">
+        <button class="btn small" onclick="addPaletteColor()">+</button>
+        <button class="btn small danger" onclick="removePaletteColor()">−</button>
+      </div>
+      <div style="font-family:var(--mono);font-size:9px;color:var(--text-dim);margin-top:2px">
+        Pick any color — auto-adds to palette
+      </div>
+      <div class="panel-label" style="margin-top:8px">Color Guide</div>
+      <div id="colorGuide" style="
+        background:var(--bg-dark); border:1px solid var(--border); border-radius:3px;
+        padding:6px 8px; font-family:var(--mono); font-size:10px; line-height:1.7;
+        max-height:120px; overflow-y:auto; color:var(--text);
+      "></div>
+    </div>
+
+    <div class="separator"></div>
+
+    <!-- PNG UPLOAD -->
+    <div class="panel-section">
+      <div class="panel-label">Image Import</div>
+      <div class="upload-zone" onclick="document.getElementById('pngInput').click()">
+        <div class="icon">🖼️</div>
+        Upload PNG to active layer
+      </div>
+      <input type="file" id="pngInput" accept="image/*" style="display:none" onchange="handleImageUpload(this)">
+    </div>
+
+    <div class="separator"></div>
+
+    <!-- TEXT IMPORT -->
+    <div class="panel-section">
+      <div class="panel-label">Text Import</div>
+      <textarea class="string-output" id="quickImportInput" placeholder="Paste sprite object, string, or JSON..." style="min-height:70px;max-height:140px"></textarea>
+      <div class="btn-row">
+        <button class="btn small accent" onclick="quickImportSpriteObject()">Import Sprite</button>
+        <button class="btn small" onclick="quickImportRaw()">Raw → Layer</button>
+      </div>
+    </div>
+
+    <div class="separator"></div>
+
+    <div class="panel-section">
+      <div class="panel-label">Display</div>
+      <label class="toggle-row"><input type="checkbox" id="showGrid" checked onchange="render()"> Grid lines</label>
+      <label class="toggle-row"><input type="checkbox" id="showOtherLayers" checked onchange="render()"> Show other layers</label>
+      <label class="toggle-row" id="guideToggleRow" style="display:none"><input type="checkbox" id="showDirGuide" checked onchange="render()"> Direction guide (down view)</label>
+      <div class="opacity-row">
+        <span>Other layer opacity:</span>
+        <input type="range" id="otherOpacity" min="5" max="80" value="25" oninput="render()">
+        <span id="opacityVal">25%</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- CANVAS AREA -->
+  <div class="canvas-area" id="canvasArea">
+    <div id="gridWrapper" style="position:relative;border:2px solid var(--border-bright);background:#c8c8d0;">
+      <canvas id="gridCanvas" style="display:block;image-rendering:pixelated;cursor:crosshair"></canvas>
+    </div>
+  </div>
+
+  <!-- RIGHT PANEL -->
+  <div class="right-panel">
+    <!-- DIRECTIONS -->
+    <div class="panel-section" id="directionSection">
+      <div class="panel-label">Directions</div>
+      <div id="directionContent">
+        <div class="direction-setup">
+          <div class="hint">
+            Draw your ↓ Down (front-facing) sprite first,<br>then create a direction set to add Up &amp; Left views.
+          </div>
+          <button class="btn small accent" onclick="createDirectionSet()">Create Direction Set</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="separator"></div>
+
+    <div class="panel-section">
+      <div class="panel-label">Layers</div>
+      <div class="btn-row">
+        <button class="btn small accent" onclick="addLayer()">+ Add Layer</button>
+        <button class="btn small" onclick="duplicateLayer()">Dup</button>
+        <button class="btn small danger" onclick="deleteLayer()">Del</button>
+        <button class="btn small" onclick="mergeDown()">Merge ↓</button>
+      </div>
+      <div class="layer-list" id="layerList"></div>
+      <div class="btn-row" style="margin-top:2px">
+        <button class="btn small" onclick="moveLayerUp()">↑ Up</button>
+        <button class="btn small" onclick="moveLayerDown()">↓ Down</button>
+        <button class="btn small" onclick="renameLayer()">✎ Rename</button>
+      </div>
+      <!-- LAYER OFFSET CONTROLS -->
+      <div style="margin-top:6px;padding:6px 8px;background:var(--bg-dark);border:1px solid var(--border);border-radius:4px;">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;">
+          <span style="font-family:var(--mono);font-size:9px;text-transform:uppercase;letter-spacing:1px;color:var(--text-dim)">Layer Offset</span>
+          <span id="offsetDisplay" style="font-family:var(--mono);font-size:11px;color:var(--accent);">0, 0</span>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:3px;max-width:120px;margin:0 auto;">
+          <span></span>
+          <button class="btn small" onclick="nudgeOffset(0,-1)" title="Shift+↑" style="padding:3px 0;">↑</button>
+          <span></span>
+          <button class="btn small" onclick="nudgeOffset(-1,0)" title="Shift+←" style="padding:3px 0;">←</button>
+          <button class="btn small" onclick="resetOffset()" title="Reset offset" style="padding:3px 0;font-size:9px;">●</button>
+          <button class="btn small" onclick="nudgeOffset(1,0)" title="Shift+→" style="padding:3px 0;">→</button>
+          <span></span>
+          <button class="btn small" onclick="nudgeOffset(0,1)" title="Shift+↓" style="padding:3px 0;">↓</button>
+          <span></span>
+        </div>
+        <div style="display:flex;gap:4px;margin-top:4px;">
+          <button class="btn small" onclick="resetAllOffsets()" style="flex:1;font-size:9px;">Reset All Offsets</button>
+        </div>
+        <div style="font-family:var(--mono);font-size:8px;color:var(--text-dim);margin-top:3px;text-align:center">
+          Shift+Arrow keys to nudge
+        </div>
+      </div>
+    </div>
+
+    <div class="separator"></div>
+
+    <div class="tab-bar">
+      <div class="tab-btn active" onclick="switchTab('preview')">Preview</div>
+      <div class="tab-btn" onclick="switchTab('export')">Export</div>
+      <div class="tab-btn" onclick="switchTab('animation')">Anim</div>
+    </div>
+
+    <!-- PREVIEW TAB -->
+    <div class="tab-content active" id="tab-preview">
+      <div class="panel-section">
+        <div class="panel-label">Composite (all visible layers)</div>
+        <div class="preview-box">
+          <canvas class="preview-canvas" id="compositePreview"></canvas>
+        </div>
+      </div>
+      <div class="panel-section">
+        <div class="panel-label">Active Layer Only</div>
+        <div class="preview-box">
+          <canvas class="preview-canvas" id="layerPreview"></canvas>
+        </div>
+      </div>
+    </div>
+
+    <!-- EXPORT TAB -->
+    <div class="tab-content" id="tab-export">
+      <div class="panel-section" id="dirExportSection" style="display:none">
+        <div class="panel-label">Direction Set Export</div>
+        <div class="btn-row">
+          <button class="btn accent" onclick="exportDirectionSet()">📋 All Directions (Game Format)</button>
+        </div>
+        <div style="font-family:var(--mono);font-size:9px;color:var(--text-dim);margin-top:3px">
+          Exports all 3 directions + mirrored right as a single object
+        </div>
+      </div>
+      <div class="separator" id="dirExportSep" style="display:none"></div>
+      <div class="panel-section">
+        <div class="panel-label">Export All Layers (Sprite Objects)</div>
+        <div class="btn-row">
+          <button class="btn accent" onclick="exportAllLayersSpriteObjects()">📋 Copy All Layers</button>
+          <button class="btn" onclick="exportFullJSON()">📋 Editor JSON</button>
+        </div>
+      </div>
+      <div class="separator"></div>
+      <div class="panel-section">
+        <div class="panel-label">Per-Layer Export</div>
+        <div id="layerExports"></div>
+      </div>
+      <div class="separator"></div>
+      <div class="panel-section">
+        <div class="panel-label">Composite (all visible)</div>
+        <div class="btn-row">
+          <button class="btn accent" onclick="exportSpriteObject()">📋 Composite Sprite Object</button>
+        </div>
+      </div>
+      <div class="separator"></div>
+      <div class="panel-section">
+        <div class="panel-label">Import</div>
+        <textarea class="string-output" id="importInput" placeholder="Paste string, JSON, or sprite object (const SPRITE = { pixels: [...], palette: {...} })..." style="min-height:80px"></textarea>
+        <div class="btn-row">
+          <button class="btn accent" onclick="importSpriteObject()">Import Sprite</button>
+          <button class="btn" onclick="importToActiveLayer()">Raw → Layer</button>
+          <button class="btn" onclick="importFullJSON()">Import Editor JSON</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ANIMATION TAB -->
+    <div class="tab-content" id="tab-animation">
+      <div class="panel-section">
+        <div class="panel-label">Animation Presets</div>
+        <div style="font-family:var(--mono);font-size:9px;color:var(--text-dim);margin-bottom:4px">
+          Auto-generate frames using layer offsets.<br>
+          Name layers "Left Leg", "Right Arm", etc. for smarter results.
+        </div>
+        <div class="btn-row">
+          <button class="btn small accent" onclick="generateWalkCycle()">🚶 Walk Cycle</button>
+          <button class="btn small accent" onclick="generateAttack()">⚔️ Attack</button>
+        </div>
+      </div>
+      <div class="separator"></div>
+      <div class="panel-section">
+        <div class="panel-label">Frames</div>
+        <div class="btn-row">
+          <button class="btn small accent" onclick="addFrame()">+ Frame</button>
+          <button class="btn small" onclick="dupFrame()">Dup</button>
+          <button class="btn small danger" onclick="removeFrame()">Del</button>
+        </div>
+        <div class="btn-row" style="margin-top:2px">
+          <button class="btn small" onclick="copyLayerToFrame()" title="Copy active layer from current frame to another frame">📋 Copy Layer → Frame</button>
+        </div>
+        <div class="frame-strip" id="frameStrip"></div>
+      </div>
+      <div class="panel-section">
+        <div class="panel-label">Playback</div>
+        <div class="anim-controls">
+          <button class="btn small" id="playBtn" onclick="togglePlay()">▶ Play</button>
+          <input type="range" id="fpsSlider" min="1" max="24" value="6" oninput="updateFPS()">
+          <span style="font-family:var(--mono);font-size:11px;color:var(--text-dim)" id="fpsLabel">6fps</span>
+        </div>
+        <label class="toggle-row" style="margin-top:4px"><input type="checkbox" id="pingPong"> Ping-pong (1→2→3→2→1)</label>
+      </div>
+      <div class="panel-section">
+        <div class="panel-label">Onion Skin</div>
+        <label class="toggle-row"><input type="checkbox" id="onionPrev" onchange="render()"> Previous frame</label>
+        <label class="toggle-row"><input type="checkbox" id="onionNext" onchange="render()"> Next frame</label>
+        <label class="toggle-row"><input type="checkbox" id="ghostFrame1" onchange="render()"> Ghost frame 1 (idle ref)</label>
+      </div>
+      <div class="panel-section">
+        <div class="panel-label">Animation Preview</div>
+        <div class="preview-box">
+          <canvas class="preview-canvas" id="animCanvas"></canvas>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- STATUS BAR -->
+  <div class="status-bar">
+    <span id="coordStatus">X: — Y: —</span>
+    <span id="charStatus">Char: —</span>
+    <span>Size: <span class="hl" id="sizeStatus">32×32</span></span>
+    <span>Layer: <span class="hl" id="activeLayerStatus">—</span></span>
+    <span>Pixels: <span class="hl" id="pixelCount">0</span></span>
+    <span>Tool: <span class="hl" id="toolStatus">paint</span></span>
+    <span id="dirStatus" style="display:none">Dir: <span class="hl" id="dirStatusLabel">down</span></span>
+    <span>Offset: <span class="hl" id="offsetStatus">0,0</span></span>
+    <span id="frameStatus">Frame: 1/1</span>
+  </div>
+</div>
+
+<!-- PNG IMPORT MODAL -->
+<div class="modal-overlay" id="importModal">
+  <div class="modal">
+    <div class="modal-title">🖼️ Image Import</div>
+    <div class="modal-row">
+      <div class="modal-preview">
+        <canvas id="importPreviewCanvas" style="image-rendering:pixelated;max-width:200px;max-height:200px"></canvas>
+      </div>
+      <div class="modal-options">
+        <label>
+          Palette mode:
+          <select id="importPaletteMode">
+            <option value="match">Match to existing palette</option>
+            <option value="generate">Generate new palette</option>
+          </select>
+        </label>
+        <label>
+          Max colors (generate):
+          <input type="number" id="importMaxColors" value="16" min="2" max="36">
+        </label>
+        <label>
+          Transparency threshold:
+          <input type="number" id="importAlphaThreshold" value="128" min="0" max="255">
+        </label>
+        <label>
+          <input type="checkbox" id="importResize" checked> Resize to canvas (${gridW}×${gridH})
+        </label>
+        <div class="modal-info" id="importInfo">Select an image to preview</div>
+      </div>
+    </div>
+    <div class="modal-btns">
+      <button class="btn" onclick="closeImportModal()">Cancel</button>
+      <button class="btn accent" onclick="applyImageImport()">Apply to Layer</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ============================================
+// CORE STATE
+// ============================================
+let gridW = 32, gridH = 32;
+let pixelSize = 12;
+let currentTool = 'paint';
+let selectedPaletteChar = 'R';
+let isDrawing = false;
+let isErasing = false; // right-click erase state
+let toolStart = null;
+let toolPreview = null;
+let undoStack = [];
+let redoStack = [];
+const maxUndo = 40;
+
+const LAYER_COLORS = [
+  '#888888', '#e8652e', '#3a7ac4', '#3ac463', '#c4823a',
+  '#8a3ac4', '#c43a3a', '#e8c43a', '#3ad4d4', '#ff69b4',
+];
+
+let layers = [];
+let activeLayerIdx = 0;
+
+let frames = [];
+let currentFrame = 0;
+let isPlaying = false;
+let playInterval = null;
+let fps = 6;
+let pingPong = false;
+let pingPongDir = 1;
+
+// Direction set state
+let directions = null; // null = single sprite, else { down: {...}, up: {...}, left: {...} }
+let currentDirection = 'down';
+const DIRECTION_LABELS = { down: '↓ Down (Front)', up: '↑ Up (Back)', left: '← Left (Side)' };
+const DIRECTION_KEYS = ['down', 'up', 'left'];
+
+let palette = {
+  '.': 'transparent',
+  'K': '#1a1a2e', 'D': '#2d2d44', 'G': '#4a4a5e', 'L': '#8888a0',
+  'W': '#c8c8d8', 'R': '#c43a3a', 'O': '#e8652e', 'Y': '#e8c43a',
+  'N': '#3ac463', 'B': '#3a7ac4', 'P': '#8a3ac4', 'S': '#c4823a',
+  'F': '#7a5a3a', 'T': '#d4a574', 'M': '#ff69b4', 'C': '#3ad4d4',
+  'E': '#f0e68c', 'X': '#ffffff',
+};
+
+// Image import state
+let pendingImageData = null;
+
+// ============================================
+// INIT
+// ============================================
+function init() {
+  layers = [{
+    name: 'Layer 1',
+    data: makeEmptyGrid(),
+    visible: true,
+    solo: false,
+    offsetX: 0, offsetY: 0,
+    color: LAYER_COLORS[0],
+  }];
+  activeLayerIdx = 0;
+  frames = [cloneAllLayers()];
+  currentFrame = 0;
+  buildPalette();
+  buildLayerUI();
+  render();
+  updateAllOutputs();
+  updateFrameStrip();
+  bindEvents();
+}
+
+function makeEmptyGrid() {
+  const g = [];
+  for (let y = 0; y < gridH; y++) {
+    g[y] = [];
+    for (let x = 0; x < gridW; x++) g[y][x] = '.';
+  }
+  return g;
+}
+
+function cloneGrid(g) { return g.map(row => [...row]); }
+
+function cloneAllLayers() {
+  return layers.map(l => ({
+    name: l.name, data: cloneGrid(l.data),
+    visible: l.visible, solo: l.solo, color: l.color,
+    offsetX: l.offsetX || 0, offsetY: l.offsetY || 0,
+  }));
+}
+
+function restoreAllLayers(snapshot) {
+  layers = snapshot.map(l => ({
+    name: l.name, data: cloneGrid(l.data),
+    visible: l.visible, solo: l.solo, color: l.color,
+    offsetX: l.offsetX || 0, offsetY: l.offsetY || 0,
+  }));
+  if (activeLayerIdx >= layers.length) activeLayerIdx = layers.length - 1;
+}
+
+function activeLayer() { return layers[activeLayerIdx]; }
+
+// ============================================
+// RENDER
+// ============================================
+function render() {
+  const canvas = document.getElementById('gridCanvas');
+  const showGridLines = document.getElementById('showGrid').checked;
+  const showOthers = document.getElementById('showOtherLayers').checked;
+  const otherOpacity = parseInt(document.getElementById('otherOpacity').value) / 100;
+  document.getElementById('opacityVal').textContent = Math.round(otherOpacity * 100) + '%';
+
+  const totalW = gridW * pixelSize;
+  const totalH = gridH * pixelSize;
+  canvas.width = totalW;
+  canvas.height = totalH;
+  canvas.style.width = totalW + 'px';
+  canvas.style.height = totalH + 'px';
+
+  const ctx = canvas.getContext('2d');
+  ctx.clearRect(0, 0, totalW, totalH);
+
+  // Checkerboard bg
+  for (let y = 0; y < gridH; y++) {
+    for (let x = 0; x < gridW; x++) {
+      ctx.fillStyle = (x + y) % 2 === 0 ? '#d0d0d8' : '#c4c4cc';
+      ctx.fillRect(x * pixelSize, y * pixelSize, pixelSize, pixelSize);
+    }
+  }
+
+  // Onion skin - previous
+  if (document.getElementById('onionPrev')?.checked && frames.length > 1) {
+    const prevIdx = (currentFrame - 1 + frames.length) % frames.length;
+    ctx.globalAlpha = 0.15;
+    drawCompositeFromSnapshot(ctx, frames[prevIdx], '#ff6666');
+    ctx.globalAlpha = 1;
+  }
+
+  // Direction guide overlay (show down view as proportion guide)
+  if (directions && currentDirection !== 'down' && document.getElementById('showDirGuide')?.checked) {
+    const guide = getDirectionGuideComposite();
+    if (guide) {
+      ctx.globalAlpha = 0.12;
+      for (let y = 0; y < gridH; y++)
+        for (let x = 0; x < gridW; x++) {
+          const ch = guide[y]?.[x];
+          if (ch && ch !== '.') {
+            ctx.fillStyle = '#6688aa';
+            ctx.fillRect(x * pixelSize, y * pixelSize, pixelSize, pixelSize);
+          }
+        }
+      ctx.globalAlpha = 1;
+    }
+  }
+
+  const hasSolo = layers.some(l => l.solo);
+
+  // Other layers
+  if (showOthers) {
+    for (let i = 0; i < layers.length; i++) {
+      if (i === activeLayerIdx) continue;
+      const l = layers[i];
+      if (!(hasSolo ? l.solo : l.visible)) continue;
+      ctx.globalAlpha = otherOpacity;
+      drawLayerPixels(ctx, l.data, l.offsetX || 0, l.offsetY || 0);
+      ctx.globalAlpha = 1;
+    }
+  }
+
+  // Active layer
+  const al = activeLayer();
+  if (al && (hasSolo ? al.solo || !hasSolo : al.visible)) {
+    drawLayerPixels(ctx, al.data, al.offsetX || 0, al.offsetY || 0);
+  }
+
+  // Tool preview
+  if (toolPreview) {
+    ctx.globalAlpha = 0.5;
+    const color = palette[selectedPaletteChar] || '#ff00ff';
+    for (const [px, py] of toolPreview) {
+      ctx.fillStyle = color;
+      ctx.fillRect(px * pixelSize, py * pixelSize, pixelSize, pixelSize);
+    }
+    ctx.globalAlpha = 1;
+  }
+
+  // Grid lines
+  if (showGridLines) {
+    ctx.strokeStyle = '#a8a8b4';
+    ctx.lineWidth = 0.5;
+    for (let x = 0; x <= gridW; x++) {
+      ctx.beginPath(); ctx.moveTo(x * pixelSize + 0.5, 0); ctx.lineTo(x * pixelSize + 0.5, totalH); ctx.stroke();
+    }
+    for (let y = 0; y <= gridH; y++) {
+      ctx.beginPath(); ctx.moveTo(0, y * pixelSize + 0.5); ctx.lineTo(totalW, y * pixelSize + 0.5); ctx.stroke();
+    }
+  }
+
+  // Onion skin - next
+  if (document.getElementById('onionNext')?.checked && frames.length > 1) {
+    const nextIdx = (currentFrame + 1) % frames.length;
+    ctx.globalAlpha = 0.15;
+    drawCompositeFromSnapshot(ctx, frames[nextIdx], '#6666ff');
+    ctx.globalAlpha = 1;
+  }
+
+  // Ghost frame 1 (idle reference)
+  if (document.getElementById('ghostFrame1')?.checked && frames.length > 1 && currentFrame !== 0) {
+    ctx.globalAlpha = 0.12;
+    drawCompositeFromSnapshot(ctx, frames[0], '#44cc44');
+    ctx.globalAlpha = 1;
+  }
+
+  updatePreviews();
+}
+
+function drawLayerPixels(ctx, data, dx = 0, dy = 0) {
+  for (let y = 0; y < gridH; y++)
+    for (let x = 0; x < gridW; x++) {
+      const ch = data[y]?.[x];
+      if (ch && ch !== '.') {
+        const px = x + dx, py = y + dy;
+        if (px >= 0 && px < gridW && py >= 0 && py < gridH) {
+          ctx.fillStyle = palette[ch] || '#ff00ff';
+          ctx.fillRect(px * pixelSize, py * pixelSize, pixelSize, pixelSize);
+        }
+      }
+    }
+}
+
+function drawCompositeFromSnapshot(ctx, snapshot, tint) {
+  for (const l of snapshot) {
+    if (!l.visible) continue;
+    const dx = l.offsetX || 0, dy = l.offsetY || 0;
+    for (let y = 0; y < gridH; y++)
+      for (let x = 0; x < gridW; x++) {
+        const ch = l.data[y]?.[x];
+        if (ch && ch !== '.') {
+          const px = x + dx, py = y + dy;
+          if (px >= 0 && px < gridW && py >= 0 && py < gridH) {
+            ctx.fillStyle = tint || palette[ch] || '#ff00ff';
+            ctx.fillRect(px * pixelSize, py * pixelSize, pixelSize, pixelSize);
+          }
+        }
+      }
+  }
+}
+
+function updatePreviews() {
+  const comp = buildComposite();
+  drawPreview('compositePreview', comp, 4);
+  const al = activeLayer();
+  if (al) drawPreview('layerPreview', applyOffsetToGrid(al.data, al.offsetX || 0, al.offsetY || 0), 4);
+  let filled = 0;
+  if (al) {
+    for (let y = 0; y < gridH; y++)
+      for (let x = 0; x < gridW; x++)
+        if (al.data[y]?.[x] && al.data[y][x] !== '.') filled++;
+  }
+  document.getElementById('pixelCount').textContent = filled;
+  document.getElementById('activeLayerStatus').textContent = al ? al.name : '—';
+  updateOffsetDisplay();
+}
+
+function buildComposite() {
+  const result = makeEmptyGrid();
+  const hasSolo = layers.some(l => l.solo);
+  for (const l of layers) {
+    if (!(hasSolo ? l.solo : l.visible)) continue;
+    const dx = l.offsetX || 0, dy = l.offsetY || 0;
+    for (let y = 0; y < gridH; y++)
+      for (let x = 0; x < gridW; x++) {
+        const ch = l.data[y]?.[x];
+        if (ch && ch !== '.') {
+          const nx = x + dx, ny = y + dy;
+          if (nx >= 0 && nx < gridW && ny >= 0 && ny < gridH)
+            result[ny][nx] = ch;
+        }
+      }
+  }
+  return result;
+}
+
+function drawPreview(canvasId, data, scale) {
+  const canvas = document.getElementById(canvasId);
+  if (!canvas) return;
+  canvas.width = gridW * scale;
+  canvas.height = gridH * scale;
+  canvas.style.width = (gridW * scale) + 'px';
+  canvas.style.height = (gridH * scale) + 'px';
+  const ctx = canvas.getContext('2d');
+  ctx.imageSmoothingEnabled = false;
+  ctx.fillStyle = '#c8c8d0';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  for (let y = 0; y < gridH; y++)
+    for (let x = 0; x < gridW; x++) {
+      const ch = data[y]?.[x];
+      if (ch && ch !== '.') {
+        ctx.fillStyle = palette[ch] || '#ff00ff';
+        ctx.fillRect(x * scale, y * scale, scale, scale);
+      }
+    }
+}
+
+// ============================================
+// LAYER UI
+// ============================================
+function buildLayerUI() {
+  const container = document.getElementById('layerList');
+  container.innerHTML = '';
+  for (let i = layers.length - 1; i >= 0; i--) {
+    const l = layers[i];
+    const ox = l.offsetX || 0, oy = l.offsetY || 0;
+    const offsetTag = (ox || oy) ? `<span style="font-family:var(--mono);font-size:8px;color:var(--accent);margin-left:2px">${ox},${oy}</span>` : '';
+    const item = document.createElement('div');
+    item.className = 'layer-item' + (i === activeLayerIdx ? ' active' : '');
+    item.innerHTML = `
+      <span class="vis-toggle ${l.visible ? 'on' : ''}" onclick="event.stopPropagation();toggleVis(${i})" title="Visibility">👁</span>
+      <span class="solo-toggle ${l.solo ? 'on' : ''}" onclick="event.stopPropagation();toggleSolo(${i})" title="Solo">S</span>
+      <span class="color-dot" style="background:${l.color}"></span>
+      <span class="layer-name">${l.name}${offsetTag}</span>
+      <span class="layer-info">${countPixels(l.data)}px</span>
+    `;
+    item.onclick = () => selectLayer(i);
+    container.appendChild(item);
+  }
+}
+
+function countPixels(data) {
+  let c = 0;
+  for (let y = 0; y < gridH; y++)
+    for (let x = 0; x < gridW; x++)
+      if (data[y]?.[x] && data[y][x] !== '.') c++;
+  return c;
+}
+
+function selectLayer(idx) { activeLayerIdx = idx; buildLayerUI(); render(); updateAllOutputs(); }
+function toggleVis(idx) { layers[idx].visible = !layers[idx].visible; buildLayerUI(); render(); }
+function toggleSolo(idx) { layers[idx].solo = !layers[idx].solo; buildLayerUI(); render(); }
+
+function addLayer() {
+  layers.push({
+    name: 'Layer ' + (layers.length + 1),
+    data: makeEmptyGrid(), visible: true, solo: false,
+    offsetX: 0, offsetY: 0,
+    color: LAYER_COLORS[layers.length % LAYER_COLORS.length],
+  });
+  activeLayerIdx = layers.length - 1;
+  buildLayerUI(); render();
+}
+
+function duplicateLayer() {
+  const src = activeLayer(); if (!src) return;
+  layers.splice(activeLayerIdx + 1, 0, {
+    name: src.name + ' copy', data: cloneGrid(src.data),
+    visible: true, solo: false, color: src.color,
+    offsetX: src.offsetX || 0, offsetY: src.offsetY || 0,
+  });
+  activeLayerIdx++;
+  buildLayerUI(); render();
+}
+
+function deleteLayer() {
+  if (layers.length <= 1) return;
+  layers.splice(activeLayerIdx, 1);
+  if (activeLayerIdx >= layers.length) activeLayerIdx = layers.length - 1;
+  buildLayerUI(); render(); updateAllOutputs();
+}
+
+function moveLayerUp() {
+  if (activeLayerIdx >= layers.length - 1) return;
+  [layers[activeLayerIdx], layers[activeLayerIdx + 1]] = [layers[activeLayerIdx + 1], layers[activeLayerIdx]];
+  activeLayerIdx++; buildLayerUI(); render();
+}
+
+function moveLayerDown() {
+  if (activeLayerIdx <= 0) return;
+  [layers[activeLayerIdx], layers[activeLayerIdx - 1]] = [layers[activeLayerIdx - 1], layers[activeLayerIdx]];
+  activeLayerIdx--; buildLayerUI(); render();
+}
+
+function renameLayer() {
+  const l = activeLayer(); if (!l) return;
+  const name = prompt('Layer name:', l.name);
+  if (name && name.trim()) { l.name = name.trim(); buildLayerUI(); updateAllOutputs(); }
+}
+
+function mergeDown() {
+  if (activeLayerIdx <= 0) return;
+  const src = layers[activeLayerIdx], target = layers[activeLayerIdx - 1];
+  saveUndo();
+  for (let y = 0; y < gridH; y++)
+    for (let x = 0; x < gridW; x++) {
+      const ch = src.data[y]?.[x];
+      if (ch && ch !== '.') target.data[y][x] = ch;
+    }
+  layers.splice(activeLayerIdx, 1);
+  activeLayerIdx--;
+  buildLayerUI(); render(); updateAllOutputs();
+}
+
+function clearActiveLayer() {
+  saveUndo();
+  const l = activeLayer();
+  if (l) l.data = makeEmptyGrid();
+  render(); updateAllOutputs();
+}
+
+// ============================================
+// TRANSFORMS
+// ============================================
+function flipLayerData(data) {
+  // Horizontal flip (mirror left↔right)
+  return data.map(row => [...row].reverse());
+}
+
+function flipLayerDataVertical(data) {
+  return [...data].reverse().map(row => [...row]);
+}
+
+function rotateLayerDataCW(data) {
+  // 90° clockwise — only works cleanly on square grids
+  const h = data.length, w = data[0]?.length || 0;
+  const result = [];
+  for (let y = 0; y < w; y++) {
+    result[y] = [];
+    for (let x = 0; x < h; x++) {
+      result[y][x] = data[h - 1 - x]?.[y] || '.';
+    }
+  }
+  return result;
+}
+
+function flipHorizontal() {
+  const al = activeLayer(); if (!al) return;
+  saveUndo();
+  al.data = flipLayerData(al.data);
+  render(); updateAllOutputs();
+  showToast(`Flipped "${al.name}" horizontally`);
+}
+
+function flipVertical() {
+  const al = activeLayer(); if (!al) return;
+  saveUndo();
+  al.data = flipLayerDataVertical(al.data);
+  render(); updateAllOutputs();
+  showToast(`Flipped "${al.name}" vertically`);
+}
+
+function rotateCW() {
+  if (gridW !== gridH) {
+    showToast('Rotate requires square canvas (' + gridW + '×' + gridH + ')');
+    return;
+  }
+  const al = activeLayer(); if (!al) return;
+  saveUndo();
+  al.data = rotateLayerDataCW(al.data);
+  render(); updateAllOutputs();
+  showToast(`Rotated "${al.name}" 90° CW`);
+}
+
+function flipAllHorizontal() {
+  saveUndo();
+  for (const l of layers) l.data = flipLayerData(l.data);
+  render(); updateAllOutputs();
+  showToast('Flipped all layers horizontally');
+}
+
+function flipAllVertical() {
+  saveUndo();
+  for (const l of layers) l.data = flipLayerDataVertical(l.data);
+  render(); updateAllOutputs();
+  showToast('Flipped all layers vertically');
+}
+
+// ============================================
+// INTERACTION — LEFT CLICK DRAW, RIGHT CLICK ERASE
+// ============================================
+function bindEvents() {
+  const canvas = document.getElementById('gridCanvas');
+
+  // Prevent right-click context menu on canvas
+  canvas.addEventListener('contextmenu', (e) => e.preventDefault());
+
+  // Ctrl+Scroll wheel zoom on canvas area, regular scroll pans
+  const canvasArea = document.getElementById('canvasArea');
+  canvasArea.addEventListener('wheel', (e) => {
+    if (e.ctrlKey || e.metaKey) {
+      e.preventDefault();
+      const delta = e.deltaY < 0 ? 1 : -1;
+      setZoom(delta);
+    }
+    // Without ctrl, default scroll behavior pans the canvas area
+  }, { passive: false });
+
+  canvas.addEventListener('mousedown', (e) => {
+    e.preventDefault();
+    const pos = getGridPos(e);
+    if (!pos) return;
+
+    isDrawing = true;
+    isErasing = (e.button === 2); // right-click = erase
+
+    if (!isErasing && (currentTool === 'line' || currentTool === 'rect')) {
+      toolStart = pos;
+      toolPreview = [[pos.x, pos.y]];
+      return;
+    }
+
+    saveUndo();
+    applyToolAt(pos.x, pos.y, isErasing);
+    render();
+    updateAllOutputs();
+  });
+
+  canvas.addEventListener('mousemove', (e) => {
+    const pos = getGridPos(e);
+    if (pos) {
+      document.getElementById('coordStatus').textContent = `X: ${pos.x} Y: ${pos.y}`;
+      const al = activeLayer();
+      document.getElementById('charStatus').textContent = `Char: ${al?.data[pos.y]?.[pos.x] || '.'}`;
+    }
+    if (!isDrawing || !pos) return;
+
+    if (!isErasing && currentTool === 'line' && toolStart) {
+      toolPreview = getLinePoints(toolStart.x, toolStart.y, pos.x, pos.y);
+      render(); return;
+    }
+    if (!isErasing && currentTool === 'rect' && toolStart) {
+      toolPreview = getRectPoints(toolStart.x, toolStart.y, pos.x, pos.y);
+      render(); return;
+    }
+
+    applyToolAt(pos.x, pos.y, isErasing);
+    render();
+    updateAllOutputs();
+  });
+
+  canvas.addEventListener('mouseup', (e) => {
+    if (isDrawing && !isErasing && (currentTool === 'line' || currentTool === 'rect') && toolStart) {
+      const pos = getGridPos(e);
+      if (pos) {
+        saveUndo();
+        const points = currentTool === 'line'
+          ? getLinePoints(toolStart.x, toolStart.y, pos.x, pos.y)
+          : getRectPoints(toolStart.x, toolStart.y, pos.x, pos.y);
+        const al = activeLayer();
+        if (al) {
+          for (const [px, py] of points) {
+            if (px >= 0 && px < gridW && py >= 0 && py < gridH)
+              al.data[py][px] = selectedPaletteChar;
+          }
+        }
+        render(); updateAllOutputs();
+      }
+      toolStart = null; toolPreview = null;
+    }
+    isDrawing = false;
+    isErasing = false;
+  });
+
+  canvas.addEventListener('mouseleave', () => {
+    isDrawing = false; isErasing = false;
+    toolStart = null; toolPreview = null;
+    render();
+  });
+
+  document.addEventListener('keydown', (e) => {
+    if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+    if ((e.ctrlKey || e.metaKey) && e.key === 'z') { e.preventDefault(); undo(); }
+    if ((e.ctrlKey || e.metaKey) && e.key === 'y') { e.preventDefault(); redo(); }
+    if (e.key === 'w') setTool('paint');
+    if (e.key === 'e') setTool('erase');
+    if (e.key === 'q') setTool('pick');
+    if (e.key === 'g') setTool('fill');
+    if (e.key === 'l') setTool('line');
+    if (e.key === 'r' && !e.ctrlKey) setTool('rect');
+    if (e.key === 'x') setTool('mirror');
+    if (e.key === 's' && !e.ctrlKey && !e.metaKey) setTool('sample');
+    // Zoom shortcuts
+    if (e.key === '=' || e.key === '+') { e.preventDefault(); setZoom(1); }
+    if (e.key === '-' || e.key === '_') { e.preventDefault(); setZoom(-1); }
+    if (e.key === '0' && !e.ctrlKey) { e.preventDefault(); autoZoom(); render(); }
+    if (e.key >= '1' && e.key <= '9') {
+      const idx = parseInt(e.key) - 1;
+      if (idx < layers.length) selectLayer(idx);
+    }
+    // Shift+Arrow: nudge active layer offset
+    if (e.shiftKey && e.key === 'ArrowLeft')  { e.preventDefault(); nudgeOffset(-1, 0); }
+    if (e.shiftKey && e.key === 'ArrowRight') { e.preventDefault(); nudgeOffset(1, 0); }
+    if (e.shiftKey && e.key === 'ArrowUp')    { e.preventDefault(); nudgeOffset(0, -1); }
+    if (e.shiftKey && e.key === 'ArrowDown')  { e.preventDefault(); nudgeOffset(0, 1); }
+  });
+}
+
+function getGridPos(e) {
+  const canvas = document.getElementById('gridCanvas');
+  const rect = canvas.getBoundingClientRect();
+  const x = Math.floor((e.clientX - rect.left) / pixelSize);
+  const y = Math.floor((e.clientY - rect.top) / pixelSize);
+  if (x < 0 || x >= gridW || y < 0 || y >= gridH) return null;
+  return { x, y };
+}
+
+// Unified tool application — eraseMode overrides to erase regardless of tool
+function applyToolAt(x, y, eraseMode) {
+  if (x < 0 || x >= gridW || y < 0 || y >= gridH) return;
+  const al = activeLayer();
+  if (!al) return;
+
+  // Right-click always erases, with mirror support
+  if (eraseMode) {
+    al.data[y][x] = '.';
+    // If mirror tool is active, erase the mirror side too
+    if (currentTool === 'mirror') {
+      const mx = gridW - 1 - x;
+      if (mx >= 0 && mx < gridW) al.data[y][mx] = '.';
+    }
+    return;
+  }
+
+  // Left-click uses selected tool
+  switch (currentTool) {
+    case 'paint':
+      al.data[y][x] = selectedPaletteChar;
+      break;
+    case 'erase':
+      al.data[y][x] = '.';
+      break;
+    case 'pick':
+      for (let i = layers.length - 1; i >= 0; i--) {
+        if (!layers[i].visible) continue;
+        const ch = layers[i].data[y]?.[x];
+        if (ch && ch !== '.') { selectedPaletteChar = ch; buildPalette(); return; }
+      }
+      break;
+    case 'fill':
+      floodFill(al.data, x, y, al.data[y][x], selectedPaletteChar);
+      break;
+    case 'mirror':
+      al.data[y][x] = selectedPaletteChar;
+      const mx = gridW - 1 - x;
+      if (mx >= 0 && mx < gridW) al.data[y][mx] = selectedPaletteChar;
+      break;
+    case 'sample':
+      for (let i = layers.length - 1; i >= 0; i--) {
+        if (i === activeLayerIdx) continue;
+        if (!layers[i].visible) continue;
+        const ch = layers[i].data[y]?.[x];
+        if (ch && ch !== '.') { al.data[y][x] = ch; return; }
+      }
+      break;
+  }
+}
+
+function floodFill(data, x, y, target, replacement) {
+  if (target === replacement) return;
+  if (x < 0 || x >= gridW || y < 0 || y >= gridH) return;
+  if (data[y][x] !== target) return;
+  const stack = [[x, y]];
+  while (stack.length) {
+    const [cx, cy] = stack.pop();
+    if (cx < 0 || cx >= gridW || cy < 0 || cy >= gridH) continue;
+    if (data[cy][cx] !== target) continue;
+    data[cy][cx] = replacement;
+    stack.push([cx+1,cy],[cx-1,cy],[cx,cy+1],[cx,cy-1]);
+  }
+}
+
+function getLinePoints(x0, y0, x1, y1) {
+  const points = [];
+  const dx = Math.abs(x1-x0), dy = Math.abs(y1-y0);
+  const sx = x0<x1?1:-1, sy = y0<y1?1:-1;
+  let err = dx-dy, cx = x0, cy = y0;
+  while (true) {
+    points.push([cx,cy]);
+    if (cx===x1 && cy===y1) break;
+    const e2 = 2*err;
+    if (e2 > -dy) { err-=dy; cx+=sx; }
+    if (e2 < dx) { err+=dx; cy+=sy; }
+  }
+  return points;
+}
+
+function getRectPoints(x0, y0, x1, y1) {
+  const points = [];
+  const minX=Math.min(x0,x1), maxX=Math.max(x0,x1);
+  const minY=Math.min(y0,y1), maxY=Math.max(y0,y1);
+  for (let x=minX;x<=maxX;x++) { points.push([x,minY],[x,maxY]); }
+  for (let y=minY+1;y<maxY;y++) { points.push([minX,y],[maxX,y]); }
+  return points;
+}
+
+// ============================================
+// TOOLS & PALETTE
+// ============================================
+function setTool(tool) {
+  currentTool = tool;
+  document.querySelectorAll('.tool-btn').forEach(b => b.classList.toggle('active', b.dataset.tool === tool));
+  document.getElementById('toolStatus').textContent = tool;
+}
+
+function buildPalette() {
+  const container = document.getElementById('paletteGrid');
+  container.innerHTML = '';
+  for (const [ch, color] of Object.entries(palette)) {
+    if (ch === '.') continue;
+    const swatch = document.createElement('div');
+    swatch.className = 'palette-swatch' + (ch === selectedPaletteChar ? ' active' : '');
+    swatch.style.background = color;
+    swatch.innerHTML = `<span class="char">${ch}</span>`;
+    swatch.title = `${ch} — ${color}`;
+    swatch.onclick = () => {
+      selectedPaletteChar = ch;
+      document.getElementById('colorPicker').value = color.startsWith('#') ? color : '#000000';
+      document.getElementById('charInput').value = ch;
+      buildPalette();
+    };
+    container.appendChild(swatch);
+  }
+  buildColorGuide();
+}
+
+function buildColorGuide() {
+  const guide = document.getElementById('colorGuide');
+  if (!guide) return;
+  let html = '';
+  for (const [ch, color] of Object.entries(palette)) {
+    if (ch === '.' || color === 'transparent') continue;
+    const hex = color.toUpperCase();
+    html += `<div style="display:flex;align-items:center;gap:6px;">`;
+    html += `<span style="display:inline-block;width:10px;height:10px;background:${color};border:1px solid rgba(0,0,0,0.2);border-radius:2px;flex-shrink:0;"></span>`;
+    html += `<span style="color:var(--accent)">'${ch}'</span>: <span style="color:var(--text-dim)">'${hex}'</span>`;
+    html += `</div>`;
+  }
+  guide.innerHTML = html || '<span style="color:var(--text-dim)">No colors defined</span>';
+}
+
+function addPaletteColor() {
+  const ch = document.getElementById('charInput').value.trim();
+  const color = document.getElementById('colorPicker').value;
+  if (!ch || ch === '.') return;
+  palette[ch] = color;
+  selectedPaletteChar = ch;
+  buildPalette(); render();
+}
+
+function removePaletteColor() {
+  if (selectedPaletteChar === '.') return;
+  delete palette[selectedPaletteChar];
+  selectedPaletteChar = Object.keys(palette).find(k => k !== '.') || '.';
+  buildPalette(); render();
+}
+
+function updateCurrentColor(hex) {
+  const ch = document.getElementById('charInput').value.trim();
+  if (ch && ch !== '.' && palette[ch]) { palette[ch] = hex; buildPalette(); render(); }
+}
+
+function pickAnyColor(hex) {
+  hex = hex.toLowerCase();
+
+  // 1. Check if an existing palette entry is very close (within threshold)
+  for (const [ch, color] of Object.entries(palette)) {
+    if (ch === '.' || color === 'transparent') continue;
+    if (color.toLowerCase() === hex) {
+      // Exact match — select it
+      selectedPaletteChar = ch;
+      document.getElementById('charInput').value = ch;
+      buildPalette();
+      return;
+    }
+  }
+
+  // 2. Check for close match (distance < 15)
+  const [r, g, b] = hexToRgb(hex);
+  for (const [ch, color] of Object.entries(palette)) {
+    if (ch === '.' || color === 'transparent') continue;
+    const [pr, pg, pb] = hexToRgb(color);
+    if (colorDistance(r, g, b, pr, pg, pb) < 15) {
+      selectedPaletteChar = ch;
+      document.getElementById('charInput').value = ch;
+      buildPalette();
+      return;
+    }
+  }
+
+  // 3. No match — auto-assign a character and add it
+  const charPool = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*';
+  const usedChars = new Set(Object.keys(palette));
+  let newChar = null;
+
+  // If char input has a value, try to use that first
+  const manualChar = document.getElementById('charInput').value.trim();
+  if (manualChar && manualChar !== '.' && !usedChars.has(manualChar)) {
+    newChar = manualChar;
+  } else {
+    for (const c of charPool) {
+      if (!usedChars.has(c)) { newChar = c; break; }
+    }
+  }
+
+  if (newChar) {
+    palette[newChar] = hex;
+    selectedPaletteChar = newChar;
+    document.getElementById('charInput').value = newChar;
+    buildPalette(); render();
+  } else {
+    showToast('Palette full! Remove a color first.');
+  }
+}
+
+// ============================================
+// UNDO / REDO
+// ============================================
+function saveUndo() {
+  undoStack.push(cloneAllLayers());
+  if (undoStack.length > maxUndo) undoStack.shift();
+  redoStack = [];
+}
+
+function undo() {
+  if (!undoStack.length) return;
+  redoStack.push(cloneAllLayers());
+  restoreAllLayers(undoStack.pop());
+  buildLayerUI(); render(); updateAllOutputs();
+}
+
+function redo() {
+  if (!redoStack.length) return;
+  undoStack.push(cloneAllLayers());
+  restoreAllLayers(redoStack.pop());
+  buildLayerUI(); render(); updateAllOutputs();
+}
+
+// ============================================
+// GRID SIZE
+// ============================================
+function resizeGrid() {
+  const newW = parseInt(document.getElementById('gridW').value) || 32;
+  const newH = parseInt(document.getElementById('gridH').value) || 32;
+  saveUndo();
+  gridW = Math.max(1, Math.min(128, newW));
+  gridH = Math.max(1, Math.min(128, newH));
+  for (const l of layers) {
+    const old = l.data;
+    l.data = makeEmptyGrid();
+    for (let y = 0; y < Math.min(gridH, old.length); y++)
+      for (let x = 0; x < Math.min(gridW, (old[y]||[]).length); x++)
+        l.data[y][x] = old[y][x];
+  }
+  frames = [cloneAllLayers()]; currentFrame = 0;
+  document.getElementById('sizeStatus').textContent = `${gridW}×${gridH}`;
+  autoZoom(); buildLayerUI(); render(); updateAllOutputs(); updateFrameStrip();
+}
+
+function setPresetSize(w, h) {
+  document.getElementById('gridW').value = w;
+  document.getElementById('gridH').value = h;
+  resizeGrid();
+}
+
+function autoZoom() {
+  const area = document.getElementById('canvasArea');
+  const maxW = area.clientWidth - 40;
+  const maxH = area.clientHeight - 40;
+  pixelSize = Math.max(1, Math.min(48, Math.floor(Math.min(maxW / gridW, maxH / gridH))));
+  document.getElementById('zoomLevel').textContent = pixelSize + 'x';
+}
+
+function setZoom(delta) {
+  // Finer steps at low zoom, coarser at high zoom
+  let step;
+  if (pixelSize <= 4) step = 1;
+  else if (pixelSize <= 12) step = 2;
+  else if (pixelSize <= 24) step = 4;
+  else step = 6;
+  pixelSize = Math.max(1, Math.min(64, pixelSize + delta * step));
+  document.getElementById('zoomLevel').textContent = pixelSize + 'x';
+  render();
+}
+
+function setZoomLevel(level) {
+  pixelSize = Math.max(1, Math.min(64, level));
+  document.getElementById('zoomLevel').textContent = pixelSize + 'x';
+  render();
+}
+
+// ============================================
+// PNG IMPORT
+// ============================================
+function handleImageUpload(input) {
+  const file = input.files[0];
+  if (!file) return;
+
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    const img = new Image();
+    img.onload = () => {
+      pendingImageData = img;
+      showImportModal(img);
+    };
+    img.src = e.target.result;
+  };
+  reader.readAsDataURL(file);
+  // Reset so same file can be selected again
+  input.value = '';
+}
+
+function showImportModal(img) {
+  document.getElementById('importModal').classList.add('open');
+  document.getElementById('importInfo').textContent =
+    `Original: ${img.width}×${img.height} → Canvas: ${gridW}×${gridH}`;
+
+  // Draw preview
+  const previewCanvas = document.getElementById('importPreviewCanvas');
+  const scale = Math.min(200 / gridW, 200 / gridH, 6);
+  previewCanvas.width = gridW * scale;
+  previewCanvas.height = gridH * scale;
+  previewCanvas.style.width = previewCanvas.width + 'px';
+  previewCanvas.style.height = previewCanvas.height + 'px';
+
+  // Draw downscaled
+  const tmpCanvas = document.createElement('canvas');
+  tmpCanvas.width = gridW;
+  tmpCanvas.height = gridH;
+  const tmpCtx = tmpCanvas.getContext('2d');
+  tmpCtx.imageSmoothingEnabled = false;
+  tmpCtx.drawImage(img, 0, 0, gridW, gridH);
+
+  const pCtx = previewCanvas.getContext('2d');
+  pCtx.imageSmoothingEnabled = false;
+  pCtx.drawImage(tmpCanvas, 0, 0, previewCanvas.width, previewCanvas.height);
+}
+
+function closeImportModal() {
+  document.getElementById('importModal').classList.remove('open');
+  pendingImageData = null;
+}
+
+function applyImageImport() {
+  if (!pendingImageData) return;
+
+  const img = pendingImageData;
+  const mode = document.getElementById('importPaletteMode').value;
+  const maxColors = parseInt(document.getElementById('importMaxColors').value) || 16;
+  const alphaThreshold = parseInt(document.getElementById('importAlphaThreshold').value) || 128;
+
+  // Draw image to canvas at grid size with WHITE background
+  // (prevents premultiplied alpha from shifting colors toward black)
+  const tmpCanvas = document.createElement('canvas');
+  tmpCanvas.width = gridW;
+  tmpCanvas.height = gridH;
+  const tmpCtx = tmpCanvas.getContext('2d', { willReadFrequently: true });
+  tmpCtx.fillStyle = '#ffffff';
+  tmpCtx.fillRect(0, 0, gridW, gridH);
+  tmpCtx.imageSmoothingEnabled = false;
+  tmpCtx.drawImage(img, 0, 0, gridW, gridH);
+
+  // Also draw WITHOUT background to get true alpha channel
+  const alphaCanvas = document.createElement('canvas');
+  alphaCanvas.width = gridW;
+  alphaCanvas.height = gridH;
+  const alphaCtx = alphaCanvas.getContext('2d', { willReadFrequently: true });
+  alphaCtx.imageSmoothingEnabled = false;
+  alphaCtx.drawImage(img, 0, 0, gridW, gridH);
+  const alphaData = alphaCtx.getImageData(0, 0, gridW, gridH).data;
+
+  // Get color data from white-backed canvas (accurate RGB)
+  const imageData = tmpCtx.getImageData(0, 0, gridW, gridH);
+  const pixels = imageData.data;
+
+  saveUndo();
+
+  if (mode === 'generate') {
+    // Clear existing palette for fresh generation
+    const oldTransparent = palette['.'];
+    for (const key of Object.keys(palette)) delete palette[key];
+    palette['.'] = oldTransparent || 'transparent';
+
+    // Extract colors using white-backed RGB but alpha-canvas alpha
+    const colors = [];
+    const seen = new Set();
+    for (let i = 0; i < gridW * gridH; i++) {
+      const a = alphaData[i * 4 + 3];
+      if (a < alphaThreshold) continue;
+      const r = pixels[i*4], g = pixels[i*4+1], b = pixels[i*4+2];
+      const key = `${r},${g},${b}`;
+      if (!seen.has(key)) { seen.add(key); colors.push([r, g, b]); }
+    }
+
+    const quantized = medianCut(colors, maxColors);
+    const charPool = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+
+    // Assign chars to quantized colors
+    const colorToChar = new Map();
+    quantized.forEach((color, idx) => {
+      if (idx < charPool.length) {
+        const ch = charPool[idx];
+        const hex = rgbToHex(color[0], color[1], color[2]);
+        palette[ch] = hex;
+        colorToChar.set(colorKey(color), ch);
+      }
+    });
+
+    // Map pixels to palette
+    const al = activeLayer();
+    for (let y = 0; y < gridH; y++) {
+      for (let x = 0; x < gridW; x++) {
+        const idx = y * gridW + x;
+        const a = alphaData[idx * 4 + 3];
+        if (a < alphaThreshold) { al.data[y][x] = '.'; continue; }
+        const r = pixels[idx*4], g = pixels[idx*4+1], b = pixels[idx*4+2];
+        const closest = findClosestInList(r, g, b, quantized);
+        const ch = colorToChar.get(colorKey(closest));
+        al.data[y][x] = ch || '.';
+      }
+    }
+
+    buildPalette();
+  } else {
+    // Match to existing palette
+    const al = activeLayer();
+    for (let y = 0; y < gridH; y++) {
+      for (let x = 0; x < gridW; x++) {
+        const idx = y * gridW + x;
+        const a = alphaData[idx * 4 + 3];
+        if (a < alphaThreshold) { al.data[y][x] = '.'; continue; }
+        const r = pixels[idx*4], g = pixels[idx*4+1], b = pixels[idx*4+2];
+        al.data[y][x] = findClosestPaletteChar(r, g, b);
+      }
+    }
+  }
+
+  closeImportModal();
+  buildLayerUI(); render(); updateAllOutputs();
+  showToast('Image imported to ' + activeLayer().name);
+}
+
+// Color utility functions
+function rgbToHex(r, g, b) {
+  return '#' + [r,g,b].map(v => v.toString(16).padStart(2,'0')).join('');
+}
+
+function hexToRgb(hex) {
+  const m = hex.match(/^#?([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i);
+  if (!m) return [0,0,0];
+  return [parseInt(m[1],16), parseInt(m[2],16), parseInt(m[3],16)];
+}
+
+function colorDistance(r1,g1,b1, r2,g2,b2) {
+  return Math.sqrt((r1-r2)**2 + (g1-g2)**2 + (b1-b2)**2);
+}
+
+function colorDistanceHex(hex1, hex2) {
+  if (!hex1 || !hex2 || hex1 === 'transparent' || hex2 === 'transparent') return Infinity;
+  const [r1,g1,b1] = hexToRgb(hex1);
+  const [r2,g2,b2] = hexToRgb(hex2);
+  return colorDistance(r1,g1,b1, r2,g2,b2);
+}
+
+function colorKey(rgb) { return `${rgb[0]},${rgb[1]},${rgb[2]}`; }
+
+function findClosestPaletteChar(r, g, b) {
+  let bestChar = '.';
+  let bestDist = Infinity;
+  for (const [ch, hex] of Object.entries(palette)) {
+    if (ch === '.' || hex === 'transparent') continue;
+    const [pr, pg, pb] = hexToRgb(hex);
+    const d = colorDistance(r,g,b, pr,pg,pb);
+    if (d < bestDist) { bestDist = d; bestChar = ch; }
+  }
+  return bestChar;
+}
+
+function findClosestInList(r, g, b, list) {
+  let best = list[0];
+  let bestDist = Infinity;
+  for (const c of list) {
+    const d = colorDistance(r,g,b, c[0],c[1],c[2]);
+    if (d < bestDist) { bestDist = d; best = c; }
+  }
+  return best;
+}
+
+function extractUniqueColors(pixels, w, h, alphaThreshold) {
+  const colors = [];
+  const seen = new Set();
+  for (let i = 0; i < w * h * 4; i += 4) {
+    if (pixels[i+3] < alphaThreshold) continue;
+    const key = `${pixels[i]},${pixels[i+1]},${pixels[i+2]}`;
+    if (!seen.has(key)) {
+      seen.add(key);
+      colors.push([pixels[i], pixels[i+1], pixels[i+2]]);
+    }
+  }
+  return colors;
+}
+
+// Simple median cut quantization
+function medianCut(colors, maxColors) {
+  if (colors.length <= maxColors) return colors;
+
+  let buckets = [colors];
+
+  while (buckets.length < maxColors) {
+    // Find bucket with greatest range
+    let bestIdx = 0;
+    let bestRange = -1;
+    for (let i = 0; i < buckets.length; i++) {
+      if (buckets[i].length <= 1) continue;
+      const range = getBucketRange(buckets[i]);
+      if (range.maxRange > bestRange) { bestRange = range.maxRange; bestIdx = i; }
+    }
+
+    if (bestRange <= 0) break;
+
+    const bucket = buckets[bestIdx];
+    const range = getBucketRange(bucket);
+
+    // Sort by channel with greatest range
+    bucket.sort((a, b) => a[range.channel] - b[range.channel]);
+    const mid = Math.floor(bucket.length / 2);
+
+    buckets.splice(bestIdx, 1, bucket.slice(0, mid), bucket.slice(mid));
+  }
+
+  // Average each bucket
+  return buckets.map(bucket => {
+    if (bucket.length === 0) return [0,0,0];
+    const avg = [0,0,0];
+    for (const c of bucket) { avg[0] += c[0]; avg[1] += c[1]; avg[2] += c[2]; }
+    return [Math.round(avg[0]/bucket.length), Math.round(avg[1]/bucket.length), Math.round(avg[2]/bucket.length)];
+  });
+}
+
+function getBucketRange(bucket) {
+  let minR=255,maxR=0, minG=255,maxG=0, minB=255,maxB=0;
+  for (const c of bucket) {
+    minR=Math.min(minR,c[0]); maxR=Math.max(maxR,c[0]);
+    minG=Math.min(minG,c[1]); maxG=Math.max(maxG,c[1]);
+    minB=Math.min(minB,c[2]); maxB=Math.max(maxB,c[2]);
+  }
+  const ranges = [maxR-minR, maxG-minG, maxB-minB];
+  const maxRange = Math.max(...ranges);
+  return { channel: ranges.indexOf(maxRange), maxRange };
+}
+
+// ============================================
+// EXPORT / IMPORT
+// ============================================
+function gridToString(data) {
+  let s = '';
+  for (let y = 0; y < gridH; y++)
+    for (let x = 0; x < gridW; x++)
+      s += data[y]?.[x] || '.';
+  return s;
+}
+
+function gridToRows(data) {
+  let s = '';
+  for (let y = 0; y < gridH; y++) {
+    for (let x = 0; x < gridW; x++) s += data[y]?.[x] || '.';
+    s += '\n';
+  }
+  return s.trim();
+}
+
+function stringToGrid(str) {
+  const g = makeEmptyGrid();
+  const clean = str.replace(/[\n\r\s]/g, '');
+  for (let i = 0; i < clean.length && i < gridW * gridH; i++)
+    g[Math.floor(i / gridW)][i % gridW] = clean[i];
+  return g;
+}
+
+function getBoundingBox(data) {
+  let minX=gridW, minY=gridH, maxX=-1, maxY=-1;
+  for (let y = 0; y < gridH; y++)
+    for (let x = 0; x < gridW; x++)
+      if (data[y]?.[x] && data[y][x] !== '.') {
+        minX=Math.min(minX,x); minY=Math.min(minY,y);
+        maxX=Math.max(maxX,x); maxY=Math.max(maxY,y);
+      }
+  if (maxX === -1) return null;
+  return { minX, minY, maxX, maxY, width: maxX-minX+1, height: maxY-minY+1 };
+}
+
+function getCroppedString(data) {
+  const bb = getBoundingBox(data);
+  if (!bb) return { string: '', width: 0, height: 0, offsetX: 0, offsetY: 0 };
+  let s = '';
+  for (let y = bb.minY; y <= bb.maxY; y++)
+    for (let x = bb.minX; x <= bb.maxX; x++)
+      s += data[y]?.[x] || '.';
+  return { string: s, width: bb.width, height: bb.height, offsetX: bb.minX, offsetY: bb.minY };
+}
+
+function updateAllOutputs() {
+  const comp = buildComposite();
+  const compEl = document.getElementById('compositeString');
+  if (compEl) compEl.value = gridToString(comp);
+  updateLayerExports();
+  frames[currentFrame] = cloneAllLayers();
+}
+
+function updateLayerExports() {
+  const container = document.getElementById('layerExports');
+  container.innerHTML = '';
+  layers.forEach((l, idx) => {
+    const hasPixels = countPixels(l.data) > 0;
+    const item = document.createElement('div');
+    item.className = 'layer-export-item';
+    item.innerHTML = `
+      <div class="layer-export-header">
+        <span class="name" style="color:${l.color}">${l.name}</span>
+        <span class="dims">${hasPixels ? countPixels(l.data) + 'px' : 'empty'}</span>
+      </div>
+      <div class="layer-export-btns">
+        <button class="btn small accent" onclick="copyLayerSpriteObject(${idx})">📋 Sprite Object</button>
+      </div>
+    `;
+    container.appendChild(item);
+  });
+}
+
+function layerToSpriteObjectString(idx) {
+  const l = layers[idx];
+  const data = l.data;
+
+  // Collect palette chars used across ALL layers (unified palette)
+  const usedChars = new Set();
+  for (const layer of layers) {
+    for (let y = 0; y < gridH; y++)
+      for (let x = 0; x < gridW; x++) {
+        const ch = layer.data[y]?.[x];
+        if (ch && ch !== '.') usedChars.add(ch);
+      }
+  }
+
+  const usedPalette = {};
+  for (const ch of usedChars) {
+    if (palette[ch] && palette[ch] !== 'transparent') usedPalette[ch] = palette[ch];
+  }
+
+  // Build pixel rows with offset baked in
+  const rows = [];
+  const dx = l.offsetX || 0, dy = l.offsetY || 0;
+  for (let y = 0; y < gridH; y++) {
+    let row = '';
+    for (let x = 0; x < gridW; x++) {
+      const srcX = x - dx, srcY = y - dy;
+      if (srcX >= 0 && srcX < gridW && srcY >= 0 && srcY < gridH)
+        row += data[srcY]?.[srcX] || '.';
+      else
+        row += '.';
+    }
+    rows.push(row);
+  }
+
+  // Format variable name from layer name
+  const varName = 'BASE_DOWN_' + l.name.toUpperCase().replace(/\s+/g, '_');
+
+  let output = `const ${varName} = {\n`;
+  output += `    pixels: [\n`;
+  rows.forEach((row) => {
+    output += `        "${row}",\n`;
+  });
+  output += `    ],\n`;
+  output += `    palette: {\n`;
+  const paletteEntries = Object.entries(usedPalette);
+  paletteEntries.forEach(([ch, hex]) => {
+    output += `        '${ch}': '${hex}',\n`;
+  });
+  output += `    }\n`;
+  output += `};\n`;
+  output += `if (typeof window !== 'undefined') window.${varName} = ${varName};`;
+
+  return output;
+}
+
+function copyLayerSpriteObject(idx) {
+  const output = layerToSpriteObjectString(idx);
+  navigator.clipboard.writeText(output).then(() => showToast(`${layers[idx].name} sprite object copied!`));
+}
+
+function exportAllLayersSpriteObjects() {
+  let allOutput = '';
+  for (let i = 0; i < layers.length; i++) {
+    if (countPixels(layers[i].data) === 0) continue; // skip empty layers
+    if (allOutput) allOutput += '\n\n';
+    allOutput += layerToSpriteObjectString(i);
+  }
+  navigator.clipboard.writeText(allOutput).then(() => showToast('All layer sprite objects copied!'));
+}
+
+function copyCompositeString() {
+  navigator.clipboard.writeText(document.getElementById('compositeString')?.value || '').then(() => showToast('Composite copied!'));
+}
+
+function copyCompositeRows() {
+  navigator.clipboard.writeText(gridToRows(buildComposite())).then(() => showToast('Rows copied!'));
+}
+
+function exportFullJSON() {
+  const data = {
+    width: gridW, height: gridH, palette: { ...palette },
+    layers: layers.map(l => {
+      const c = getCroppedString(l.data);
+      return { name:l.name, color:l.color, offsetX: l.offsetX || 0, offsetY: l.offsetY || 0,
+        fullData:gridToString(l.data),
+        croppedData:c.string, croppedWidth:c.width, croppedHeight:c.height, offsetX:c.offsetX, offsetY:c.offsetY };
+    }),
+    frames: frames.map(snap => snap.map(l => ({ name:l.name, data:gridToString(l.data) }))),
+  };
+  navigator.clipboard.writeText(JSON.stringify(data, null, 2)).then(() => showToast('Full JSON copied!'));
+}
+
+function exportSpriteObject() {
+  const comp = buildComposite();
+
+  const usedChars = new Set();
+  for (let y = 0; y < gridH; y++)
+    for (let x = 0; x < gridW; x++) {
+      const ch = comp[y]?.[x];
+      if (ch && ch !== '.') usedChars.add(ch);
+    }
+
+  const usedPalette = {};
+  for (const ch of usedChars) {
+    if (palette[ch] && palette[ch] !== 'transparent') usedPalette[ch] = palette[ch];
+  }
+
+  const rows = [];
+  for (let y = 0; y < gridH; y++) {
+    let row = '';
+    for (let x = 0; x < gridW; x++) row += comp[y]?.[x] || '.';
+    rows.push(row);
+  }
+
+  const varName = 'BASE_DOWN_COMPOSITE';
+
+  let output = `const ${varName} = {\n`;
+  output += `    pixels: [\n`;
+  rows.forEach((row) => {
+    output += `        "${row}",\n`;
+  });
+  output += `    ],\n`;
+  output += `    palette: {\n`;
+  const paletteEntries = Object.entries(usedPalette);
+  paletteEntries.forEach(([ch, hex]) => {
+    output += `        '${ch}': '${hex}',\n`;
+  });
+  output += `    }\n`;
+  output += `};\n`;
+  output += `if (typeof window !== 'undefined') window.${varName} = ${varName};`;
+
+  navigator.clipboard.writeText(output).then(() => showToast('Composite sprite object copied!'));
+}
+
+// Quick import from left panel textarea
+function quickImportSpriteObject() {
+  const val = document.getElementById('quickImportInput').value;
+  if (!val.trim()) return;
+  document.getElementById('importInput').value = val;
+  importSpriteObject();
+  document.getElementById('quickImportInput').value = '';
+}
+
+function quickImportRaw() {
+  const val = document.getElementById('quickImportInput').value;
+  if (!val.trim()) return;
+  document.getElementById('importInput').value = val;
+  importToActiveLayer();
+  document.getElementById('quickImportInput').value = '';
+}
+
+function importSpriteObject() {
+  let raw = document.getElementById('importInput').value;
+  if (!raw.trim()) return;
+
+  try {
+    let cleaned = raw.trim();
+
+    // FRAGMENT DETECTION: Check if input looks like raw pixel rows (starts with quotes/strings)
+    // Handle pasted fragments like: "..HHH..", "..HHH..", ], palette: { ... }
+    const looksLikeRows = /^\s*"[.A-Za-z0-9]{2,}"/.test(cleaned);
+    const hasPixelRows = /"\.*[A-Za-z0-9].*"/.test(cleaned);
+
+    if (looksLikeRows && hasPixelRows) {
+      // Extract all quoted row strings
+      const rowMatches = cleaned.match(/"([^"]+)"/g);
+      if (rowMatches && rowMatches.length > 0) {
+        const rows = rowMatches.map(m => m.replace(/"/g, ''));
+
+        // Check if there's a palette section after the rows
+        let fragmentPalette = {};
+        // First try: closed palette block { ... }
+        let paletteMatch = cleaned.match(/palette\s*:\s*\{([^}]+)\}/);
+        // Second try: unclosed palette block (pasted without closing brace)
+        if (!paletteMatch) {
+          paletteMatch = cleaned.match(/palette\s*:\s*\{([\s\S]+)$/);
+        }
+        if (paletteMatch) {
+          const entries = paletteMatch[1].matchAll(/['"](.)['"]\s*:\s*['"]([^'"]+)['"]/g);
+          for (const m of entries) {
+            fragmentPalette[m[1]] = m[2];
+          }
+        }
+        // Third try: scan entire input for 'X': '#XXXXXX' patterns (catches any format)
+        if (Object.keys(fragmentPalette).length === 0) {
+          const allEntries = cleaned.matchAll(/['"](.)['"]\s*:\s*['"](\#[0-9a-fA-F]{3,8})['"]/g);
+          for (const m of allEntries) {
+            fragmentPalette[m[1]] = m[2];
+          }
+        }
+
+        // Build a synthetic sprite object
+        const synth = {
+          pixels: rows,
+          palette: fragmentPalette,
+          width: rows[0]?.length || 32,
+          height: rows.length,
+        };
+
+        // Apply it
+        saveUndo();
+
+        if (synth.width && synth.height) {
+          gridW = synth.width;
+          gridH = synth.height;
+          document.getElementById('gridW').value = gridW;
+          document.getElementById('gridH').value = gridH;
+          document.getElementById('sizeStatus').textContent = `${gridW}×${gridH}`;
+          for (const l of layers) {
+            const old = l.data;
+            l.data = makeEmptyGrid();
+            for (let y = 0; y < Math.min(gridH, old.length); y++)
+              for (let x = 0; x < Math.min(gridW, (old[y]||[]).length); x++)
+                l.data[y][x] = old[y][x];
+          }
+        }
+
+        if (Object.keys(synth.palette).length > 0) {
+          // Clear old palette and replace with imported palette
+          const oldTransparent = palette['.'];
+          for (const key of Object.keys(palette)) delete palette[key];
+          palette['.'] = oldTransparent || 'transparent';
+          for (const [ch, hex] of Object.entries(synth.palette))
+            palette[ch] = hex;
+          buildPalette();
+        }
+
+        const al = activeLayer();
+        if (!al) return;
+        al.data = makeEmptyGrid();
+        for (let y = 0; y < Math.min(gridH, synth.pixels.length); y++) {
+          const row = synth.pixels[y];
+          for (let x = 0; x < Math.min(gridW, row.length); x++)
+            al.data[y][x] = row[x];
+        }
+
+        autoZoom();
+        buildLayerUI(); render(); updateAllOutputs();
+        const palCount = Object.keys(synth.palette).length;
+        showToast(`Imported: ${synth.pixels.length} rows, ${palCount} colors to ${al.name}`);
+        return;
+      }
+    }
+
+    // FULL OBJECT PARSING: Strip JS variable declaration
+    cleaned = cleaned.replace(/^(?:export\s+)?(?:const|let|var)\s+\w+\s*=\s*/, '');
+    cleaned = cleaned.replace(/;\s*$/, '');
+
+    // Convert JS object notation to valid JSON
+    cleaned = cleaned.replace(/'([^'\\]*(?:\\.[^'\\]*)*)'/g, '"$1"');
+    cleaned = cleaned.replace(/(\{|\,)\s*([a-zA-Z_]\w*)\s*:/g, '$1"$2":');
+    cleaned = cleaned.replace(/,\s*([}\]])/g, '$1');
+
+    const data = JSON.parse(cleaned);
+
+    if (!data.pixels && !data.directions) {
+      showToast('No pixels or directions found in sprite object');
+      return;
+    }
+
+    saveUndo();
+
+    if (data.width && data.height) {
+      gridW = data.width;
+      gridH = data.height;
+      document.getElementById('gridW').value = gridW;
+      document.getElementById('gridH').value = gridH;
+      document.getElementById('sizeStatus').textContent = `${gridW}×${gridH}`;
+      for (const l of layers) {
+        const old = l.data;
+        l.data = makeEmptyGrid();
+        for (let y = 0; y < Math.min(gridH, old.length); y++)
+          for (let x = 0; x < Math.min(gridW, (old[y]||[]).length); x++)
+            l.data[y][x] = old[y][x];
+      }
+    }
+
+    if (data.palette) {
+      // Clear old palette and replace with imported palette
+      const oldTransparent = palette['.'];
+      for (const key of Object.keys(palette)) delete palette[key];
+      palette['.'] = oldTransparent || 'transparent';
+      for (const [ch, hex] of Object.entries(data.palette))
+        palette[ch] = hex;
+      buildPalette();
+    }
+
+    if (data.pixels && Array.isArray(data.pixels)) {
+      const al = activeLayer();
+      if (!al) return;
+      al.data = makeEmptyGrid();
+      for (let y = 0; y < Math.min(gridH, data.pixels.length); y++) {
+        const row = data.pixels[y];
+        if (typeof row === 'string') {
+          for (let x = 0; x < Math.min(gridW, row.length); x++)
+            al.data[y][x] = row[x];
+        }
+      }
+      autoZoom();
+      buildLayerUI(); render(); updateAllOutputs();
+      showToast(`Sprite "${data.name || 'unknown'}" imported to ${activeLayer().name}`);
+      return;
+    }
+
+    if (data.directions) {
+      const firstDir = Object.keys(data.directions)[0];
+      const parts = data.directions[firstDir];
+      if (!parts) { showToast('No direction data found'); return; }
+      const partNames = Object.keys(parts);
+      while (layers.length < partNames.length) {
+        layers.push({
+          name: 'Layer ' + (layers.length + 1),
+          data: makeEmptyGrid(), visible: true, solo: false,
+          offsetX: 0, offsetY: 0,
+          color: LAYER_COLORS[layers.length % LAYER_COLORS.length],
+        });
+      }
+      partNames.forEach((partName, idx) => {
+        const part = parts[partName];
+        layers[idx].name = partName;
+        layers[idx].data = makeEmptyGrid();
+        if (part.pixels && Array.isArray(part.pixels)) {
+          for (let y = 0; y < Math.min(gridH, part.pixels.length); y++) {
+            const row = part.pixels[y];
+            if (typeof row === 'string') {
+              for (let x = 0; x < Math.min(gridW, row.length); x++)
+                layers[idx].data[y][x] = row[x];
+            }
+          }
+        }
+        if (part.palette) {
+          for (const [ch, hex] of Object.entries(part.palette))
+            palette[ch] = hex;
+        }
+      });
+      activeLayerIdx = 0;
+      autoZoom();
+      buildPalette(); buildLayerUI(); render(); updateAllOutputs();
+      showToast(`Sprite "${data.name || 'unknown'}" — ${partNames.length} parts imported (${firstDir})`);
+      return;
+    }
+
+  } catch (e) {
+    showToast('Parse error: ' + e.message);
+    console.error('Import error:', e);
+  }
+}
+
+function importToActiveLayer() {
+  const str = document.getElementById('importInput').value;
+  if (!str.trim()) return;
+  saveUndo();
+  const al = activeLayer(); if (!al) return;
+  al.data = stringToGrid(str);
+  buildLayerUI(); render(); updateAllOutputs();
+  showToast('Imported to ' + al.name);
+}
+
+function importFullJSON() {
+  const raw = document.getElementById('importInput').value;
+  if (!raw.trim()) return;
+  try {
+    const data = JSON.parse(raw);
+    saveUndo();
+    if (data.width) {
+      gridW = data.width; gridH = data.height;
+      document.getElementById('gridW').value = gridW;
+      document.getElementById('gridH').value = gridH;
+      document.getElementById('sizeStatus').textContent = `${gridW}×${gridH}`;
+    }
+    if (data.palette) {
+      const oldTransparent = palette['.'];
+      for (const key of Object.keys(palette)) delete palette[key];
+      palette['.'] = oldTransparent || 'transparent';
+      Object.assign(palette, data.palette);
+    }
+    if (data.layers) {
+      layers = data.layers.map((ld, i) => ({
+        name: ld.name || `Layer ${i+1}`, data: stringToGrid(ld.fullData || ld.data || ''),
+        visible: true, solo: false, color: ld.color || LAYER_COLORS[i % LAYER_COLORS.length],
+        offsetX: ld.offsetX || 0, offsetY: ld.offsetY || 0,
+      }));
+      activeLayerIdx = 0;
+    }
+    if (data.frames?.length) {
+      frames = data.frames.map(snap => Array.isArray(snap) ? snap.map((fl, i) => ({
+        name: fl.name || `Layer ${i+1}`, data: stringToGrid(fl.data || ''),
+        visible: true, solo: false, color: layers[i]?.color || LAYER_COLORS[i % LAYER_COLORS.length],
+      })) : cloneAllLayers());
+      currentFrame = 0;
+    } else { frames = [cloneAllLayers()]; currentFrame = 0; }
+    autoZoom(); buildPalette(); buildLayerUI(); render(); updateAllOutputs(); updateFrameStrip();
+    showToast('JSON imported!');
+  } catch (e) { showToast('Invalid JSON: ' + e.message); }
+}
+
+// ============================================
+// LAYER OFFSETS
+// ============================================
+function applyOffsetToGrid(data, dx, dy) {
+  const result = makeEmptyGrid();
+  for (let y = 0; y < gridH; y++)
+    for (let x = 0; x < gridW; x++) {
+      const ch = data[y]?.[x];
+      if (ch && ch !== '.') {
+        const nx = x + dx, ny = y + dy;
+        if (nx >= 0 && nx < gridW && ny >= 0 && ny < gridH)
+          result[ny][nx] = ch;
+      }
+    }
+  return result;
+}
+
+function nudgeOffset(dx, dy) {
+  const al = activeLayer(); if (!al) return;
+  al.offsetX = (al.offsetX || 0) + dx;
+  al.offsetY = (al.offsetY || 0) + dy;
+  buildLayerUI(); render(); updateAllOutputs();
+}
+
+function resetOffset() {
+  const al = activeLayer(); if (!al) return;
+  al.offsetX = 0; al.offsetY = 0;
+  buildLayerUI(); render(); updateAllOutputs();
+  showToast(`Reset offset on "${al.name}"`);
+}
+
+function resetAllOffsets() {
+  for (const l of layers) { l.offsetX = 0; l.offsetY = 0; }
+  buildLayerUI(); render(); updateAllOutputs();
+  showToast('Reset all layer offsets');
+}
+
+function updateOffsetDisplay() {
+  const al = activeLayer();
+  const ox = al ? (al.offsetX || 0) : 0;
+  const oy = al ? (al.offsetY || 0) : 0;
+  const txt = `${ox}, ${oy}`;
+  const el = document.getElementById('offsetDisplay');
+  if (el) el.textContent = txt;
+  const st = document.getElementById('offsetStatus');
+  if (st) st.textContent = `${ox},${oy}`;
+}
+
+// ============================================
+// DIRECTION SET
+// ============================================
+function createDirectionSet() {
+  // Check there's something drawn
+  const hasPixels = layers.some(l => countPixels(l.data) > 0);
+  if (!hasPixels) {
+    showToast('Draw your down (front) sprite first');
+    return;
+  }
+
+  // Save current state as "down"
+  directions = {
+    down: {
+      layers: cloneAllLayers(),
+      frames: frames.map(f => f.map(l => ({
+        name: l.name, data: cloneGrid(l.data),
+        visible: l.visible, solo: l.solo, color: l.color,
+        offsetX: l.offsetX || 0, offsetY: l.offsetY || 0,
+      }))),
+    },
+    up: {
+      layers: layers.map(l => ({
+        name: l.name, data: makeEmptyGrid(),
+        visible: true, solo: false, color: l.color,
+        offsetX: 0, offsetY: 0,
+      })),
+      frames: null,
+    },
+    left: {
+      layers: layers.map(l => ({
+        name: l.name, data: makeEmptyGrid(),
+        visible: true, solo: false, color: l.color,
+        offsetX: 0, offsetY: 0,
+      })),
+      frames: null,
+    },
+  };
+  // Init frames for up/left
+  for (const dir of ['up', 'left']) {
+    directions[dir].frames = [directions[dir].layers.map(l => ({
+      name: l.name, data: cloneGrid(l.data),
+      visible: l.visible, solo: l.solo, color: l.color,
+      offsetX: l.offsetX || 0, offsetY: l.offsetY || 0,
+    }))];
+  }
+
+  currentDirection = 'down';
+  buildDirectionUI();
+  document.getElementById('guideToggleRow').style.display = '';
+  document.getElementById('dirExportSection').style.display = '';
+  document.getElementById('dirExportSep').style.display = '';
+  showToast('Direction set created — switch to Up or Left to draw other views');
+}
+
+function saveCurrentDirection() {
+  if (!directions) return;
+  // Save frames (which include current layers via the frame system)
+  frames[currentFrame] = cloneAllLayers();
+  directions[currentDirection] = {
+    layers: cloneAllLayers(),
+    frames: frames.map(f => f.map(l => ({
+      name: l.name, data: cloneGrid(l.data),
+      visible: l.visible, solo: l.solo, color: l.color,
+      offsetX: l.offsetX || 0, offsetY: l.offsetY || 0,
+    }))),
+  };
+}
+
+function loadDirection(dir) {
+  const d = directions[dir];
+  if (!d) return;
+  layers = d.layers.map(l => ({
+    name: l.name, data: cloneGrid(l.data),
+    visible: l.visible, solo: l.solo, color: l.color,
+    offsetX: l.offsetX || 0, offsetY: l.offsetY || 0,
+  }));
+  activeLayerIdx = Math.min(activeLayerIdx, layers.length - 1);
+  frames = d.frames.map(f => f.map(l => ({
+    name: l.name, data: cloneGrid(l.data),
+    visible: l.visible, solo: l.solo, color: l.color,
+    offsetX: l.offsetX || 0, offsetY: l.offsetY || 0,
+  })));
+  currentFrame = 0;
+}
+
+function switchDirection(dir) {
+  if (dir === currentDirection) return;
+  if (!directions) return;
+
+  // Stop playback
+  if (isPlaying) togglePlay();
+
+  saveCurrentDirection();
+  currentDirection = dir;
+  loadDirection(dir);
+  buildDirectionUI();
+  buildLayerUI();
+  render();
+  updateAllOutputs();
+  updateFrameStrip();
+  updateFrameStatus();
+  showToast(`Switched to ${DIRECTION_LABELS[dir]}`);
+}
+
+function directionHasData(dir) {
+  if (!directions || !directions[dir]) return false;
+  return directions[dir].layers.some(l => countPixels(l.data) > 0);
+}
+
+function buildDirectionUI() {
+  const container = document.getElementById('directionContent');
+  if (!directions) {
+    container.innerHTML = `
+      <div class="direction-setup">
+        <div class="hint">
+          Draw your ↓ Down (front-facing) sprite first,<br>then create a direction set to add Up &amp; Left views.
+        </div>
+        <button class="btn small accent" onclick="createDirectionSet()">Create Direction Set</button>
+      </div>`;
+    return;
+  }
+
+  let html = '<div class="direction-bar">';
+  for (const dir of DIRECTION_KEYS) {
+    const active = dir === currentDirection ? ' active' : '';
+    const hasData = directionHasData(dir);
+    const dotClass = hasData ? 'has-data' : 'empty';
+    const label = dir === 'down' ? '↓ Down' : dir === 'up' ? '↑ Up' : '← Left';
+    html += `<div class="dir-btn${active}" onclick="switchDirection('${dir}')">
+      <span class="dir-dot ${dotClass}"></span>${label}
+    </div>`;
+  }
+  html += '</div>';
+  html += `<div style="display:flex;gap:4px;margin-top:4px;">
+    <button class="btn small" onclick="copyDirectionFrom()" style="flex:1;font-size:9px">Copy From Direction…</button>
+  </div>`;
+  html += `<div style="font-family:var(--mono);font-size:8px;color:var(--text-dim);margin-top:3px;text-align:center">
+    <span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--success);vertical-align:middle"></span> has pixel data &nbsp;
+    <span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--border);vertical-align:middle"></span> empty
+  </div>`;
+  container.innerHTML = html;
+
+  // Update header indicator
+  const ind = document.getElementById('dirIndicator');
+  if (ind) {
+    ind.style.display = '';
+    ind.textContent = '[ ' + DIRECTION_LABELS[currentDirection] + ' ]';
+  }
+  // Update status bar
+  const ds = document.getElementById('dirStatus');
+  if (ds) ds.style.display = '';
+  const dl = document.getElementById('dirStatusLabel');
+  if (dl) dl.textContent = currentDirection;
+}
+
+function copyDirectionFrom() {
+  if (!directions) return;
+  const otherDirs = DIRECTION_KEYS.filter(d => d !== currentDirection && directionHasData(d));
+  if (otherDirs.length === 0) {
+    showToast('No other directions have data to copy');
+    return;
+  }
+  const choices = otherDirs.map(d => DIRECTION_LABELS[d]).join(', ');
+  const input = prompt(`Copy layers from which direction?\nAvailable: ${choices}\n\nType: down, up, or left`);
+  if (!input) return;
+  const srcDir = input.trim().toLowerCase();
+  if (!DIRECTION_KEYS.includes(srcDir) || srcDir === currentDirection) {
+    showToast('Invalid direction');
+    return;
+  }
+  if (!directionHasData(srcDir)) {
+    showToast(`${DIRECTION_LABELS[srcDir]} has no data`);
+    return;
+  }
+
+  saveUndo();
+  const src = directions[srcDir];
+  // Copy layer structure and data
+  layers = src.layers.map(l => ({
+    name: l.name, data: cloneGrid(l.data),
+    visible: l.visible, solo: l.solo, color: l.color,
+    offsetX: l.offsetX || 0, offsetY: l.offsetY || 0,
+  }));
+  activeLayerIdx = Math.min(activeLayerIdx, layers.length - 1);
+  frames = [cloneAllLayers()];
+  currentFrame = 0;
+  buildLayerUI(); render(); updateAllOutputs(); updateFrameStrip(); updateFrameStatus();
+  showToast(`Copied from ${DIRECTION_LABELS[srcDir]} — edit to create your ${DIRECTION_LABELS[currentDirection]} view`);
+}
+
+function getDirectionGuideComposite() {
+  if (!directions || !directions.down) return null;
+  // Build composite from the down direction's layers
+  const result = makeEmptyGrid();
+  for (const l of directions.down.layers) {
+    if (!l.visible) continue;
+    const dx = l.offsetX || 0, dy = l.offsetY || 0;
+    for (let y = 0; y < gridH; y++)
+      for (let x = 0; x < gridW; x++) {
+        const ch = l.data[y]?.[x];
+        if (ch && ch !== '.') {
+          const nx = x + dx, ny = y + dy;
+          if (nx >= 0 && nx < gridW && ny >= 0 && ny < gridH)
+            result[ny][nx] = ch;
+        }
+      }
+  }
+  return result;
+}
+
+function exportDirectionSet() {
+  if (!directions) { showToast('Create a direction set first'); return; }
+
+  saveCurrentDirection();
+
+  const allUsedChars = new Set();
+  for (const dir of DIRECTION_KEYS) {
+    if (!directions[dir]) continue;
+    for (const l of directions[dir].layers) {
+      for (let y = 0; y < gridH; y++)
+        for (let x = 0; x < gridW; x++) {
+          const ch = l.data[y]?.[x];
+          if (ch && ch !== '.') allUsedChars.add(ch);
+        }
+    }
+  }
+  const usedPalette = {};
+  for (const ch of allUsedChars) {
+    if (palette[ch] && palette[ch] !== 'transparent') usedPalette[ch] = palette[ch];
+  }
+
+  // Build per-direction, per-layer sprite data
+  const buildDirData = (dir) => {
+    if (!directions[dir]) return {};
+    const parts = {};
+    for (const l of directions[dir].layers) {
+      if (countPixels(l.data) === 0) continue;
+      const dx = l.offsetX || 0, dy = l.offsetY || 0;
+      const rows = [];
+      for (let y = 0; y < gridH; y++) {
+        let row = '';
+        for (let x = 0; x < gridW; x++) {
+          const srcX = x - dx, srcY = y - dy;
+          if (srcX >= 0 && srcX < gridW && srcY >= 0 && srcY < gridH)
+            row += l.data[srcY]?.[srcX] || '.';
+          else
+            row += '.';
+        }
+        rows.push(row);
+      }
+      parts[l.name] = { pixels: rows, palette: usedPalette };
+    }
+    return parts;
+  };
+
+  // Build mirrored "right" from "left"
+  const buildMirroredData = (dir) => {
+    if (!directions[dir]) return {};
+    const parts = {};
+    for (const l of directions[dir].layers) {
+      if (countPixels(l.data) === 0) continue;
+      const flipped = flipLayerData(l.data);
+      const dx = -(l.offsetX || 0), dy = l.offsetY || 0;
+      const rows = [];
+      for (let y = 0; y < gridH; y++) {
+        let row = '';
+        for (let x = 0; x < gridW; x++) {
+          const srcX = x - dx, srcY = y - dy;
+          if (srcX >= 0 && srcX < gridW && srcY >= 0 && srcY < gridH)
+            row += flipped[srcY]?.[srcX] || '.';
+          else
+            row += '.';
+        }
+        rows.push(row);
+      }
+      parts[l.name] = { pixels: rows, palette: usedPalette };
+    }
+    return parts;
+  };
+
+  const name = prompt('Sprite name (e.g. "player", "skeleton"):', 'sprite') || 'sprite';
+  const varName = name.toUpperCase().replace(/[^A-Z0-9]/g, '_');
+
+  const output = {
+    name: name,
+    width: gridW,
+    height: gridH,
+    palette: usedPalette,
+    directions: {
+      down: buildDirData('down'),
+      up: buildDirData('up'),
+      left: buildDirData('left'),
+      right: buildMirroredData('left'),
+    }
+  };
+
+  const jsonStr = `const SPRITE_${varName} = ${JSON.stringify(output, null, 2)};\nif (typeof window !== 'undefined') window.SPRITE_${varName} = SPRITE_${varName};`;
+  navigator.clipboard.writeText(jsonStr).then(() =>
+    showToast(`Direction set "${name}" copied — 4 directions (right mirrored from left)`)
+  );
+}
+
+// ============================================
+// ANIMATION PRESETS
+// ============================================
+function generateWalkCycle() {
+  if (layers.every(l => countPixels(l.data) === 0)) {
+    showToast('Draw your sprite first, then generate a walk cycle');
+    return;
+  }
+
+  saveUndo();
+
+  // Save current state as the base idle pose (all offsets zeroed)
+  for (const l of layers) { l.offsetX = 0; l.offsetY = 0; }
+
+  // Walk cycle: 4 frames
+  // Frame 1: contact left (neutral)
+  // Frame 2: passing (bob up 1px)
+  // Frame 3: contact right (neutral)
+  // Frame 4: passing (bob up 1px)
+  const walkPatterns = [
+    { label: 'Contact L',  allY: 0 },
+    { label: 'Passing',    allY: -1 },
+    { label: 'Contact R',  allY: 0 },
+    { label: 'Passing',    allY: -1 },
+  ];
+
+  // Detect layers with "leg" or "arm" in name for alternating offsets
+  const legLayers = [];
+  const armLayers = [];
+  layers.forEach((l, i) => {
+    const name = l.name.toLowerCase();
+    if (name.includes('leg') || name.includes('foot') || name.includes('feet'))
+      legLayers.push({ idx: i, isLeft: name.includes('left') || name.includes(' l') });
+    if (name.includes('arm') || name.includes('hand'))
+      armLayers.push({ idx: i, isLeft: name.includes('left') || name.includes(' l') });
+  });
+
+  frames = walkPatterns.map((pattern, frameIdx) => {
+    const snapshot = cloneAllLayers();
+    // Apply body bob to all layers
+    for (const l of snapshot) {
+      l.offsetY = pattern.allY;
+    }
+
+    // Alternate legs if detected
+    for (const leg of legLayers) {
+      const isForward = leg.isLeft ? (frameIdx === 0 || frameIdx === 1) : (frameIdx === 2 || frameIdx === 3);
+      snapshot[leg.idx].offsetX = isForward ? 1 : -1;
+      snapshot[leg.idx].offsetY = pattern.allY + (isForward ? -1 : 1);
+    }
+
+    // Subtle arm swing (opposite to legs)
+    for (const arm of armLayers) {
+      const isForward = arm.isLeft ? (frameIdx === 2 || frameIdx === 3) : (frameIdx === 0 || frameIdx === 1);
+      snapshot[arm.idx].offsetY = pattern.allY + (isForward ? -1 : 0);
+    }
+
+    return snapshot;
+  });
+
+  currentFrame = 0;
+  restoreAllLayers(frames[0]);
+  buildLayerUI(); render(); updateAllOutputs(); updateFrameStrip(); updateFrameStatus();
+
+  const hint = legLayers.length > 0
+    ? `Walk cycle generated (4 frames) — leg layers detected!`
+    : `Walk cycle generated (4 frames) — tip: name layers with "Left Leg"/"Right Leg" for limb animation`;
+  showToast(hint);
+}
+
+function generateAttack() {
+  if (layers.every(l => countPixels(l.data) === 0)) {
+    showToast('Draw your sprite first, then generate an attack');
+    return;
+  }
+
+  saveUndo();
+
+  // Reset offsets to neutral
+  for (const l of layers) { l.offsetX = 0; l.offsetY = 0; }
+
+  // Attack: 4 frames
+  // Frame 1: idle (neutral)
+  // Frame 2: wind-up (active layer pulls back, body leans back)
+  // Frame 3: strike (active layer swings forward)
+  // Frame 4: recover (back to neutral)
+
+  // Detect arm/weapon layers
+  const activeIdx = activeLayerIdx;
+  let weaponIdx = -1;
+  let armIdx = -1;
+  layers.forEach((l, i) => {
+    const name = l.name.toLowerCase();
+    if (name.includes('weapon') || name.includes('sword') || name.includes('right arm')) weaponIdx = i;
+    if (name.includes('arm') && !name.includes('left') && armIdx === -1) armIdx = i;
+  });
+
+  // Default: use active layer as the "swing" layer if no weapon/arm detected
+  const swingIdx = weaponIdx >= 0 ? weaponIdx : (armIdx >= 0 ? armIdx : activeIdx);
+
+  const attackPatterns = [
+    { label: 'Idle',     swing: { x: 0, y: 0 },  body: { x: 0, y: 0 } },
+    { label: 'Wind-up',  swing: { x: -2, y: -1 }, body: { x: -1, y: 0 } },
+    { label: 'Strike',   swing: { x: 2, y: 1 },   body: { x: 1, y: 0 } },
+    { label: 'Recover',  swing: { x: 0, y: 0 },   body: { x: 0, y: 0 } },
+  ];
+
+  frames = attackPatterns.map(pattern => {
+    const snapshot = cloneAllLayers();
+    // Body lean
+    for (const l of snapshot) {
+      l.offsetX = pattern.body.x;
+      l.offsetY = pattern.body.y;
+    }
+    // Swing layer gets extra offset
+    snapshot[swingIdx].offsetX = pattern.swing.x;
+    snapshot[swingIdx].offsetY = pattern.swing.y;
+    return snapshot;
+  });
+
+  currentFrame = 0;
+  restoreAllLayers(frames[0]);
+  buildLayerUI(); render(); updateAllOutputs(); updateFrameStrip(); updateFrameStatus();
+
+  const swingName = layers[swingIdx]?.name || 'active layer';
+  showToast(`Attack generated (4 frames) — "${swingName}" is the swing layer`);
+}
+
+// ============================================
+// ANIMATION
+// ============================================
+function copyLayerToFrame() {
+  if (frames.length <= 1) {
+    showToast('Add more frames first');
+    return;
+  }
+  const targetStr = prompt(`Copy "${activeLayer()?.name}" from frame ${currentFrame + 1} to frame # (1-${frames.length}):`);
+  if (!targetStr) return;
+  const target = parseInt(targetStr) - 1;
+  if (isNaN(target) || target < 0 || target >= frames.length || target === currentFrame) {
+    showToast('Invalid frame number');
+    return;
+  }
+  // Save current frame state
+  frames[currentFrame] = cloneAllLayers();
+  // Copy just the active layer (data + offset) to the target frame
+  const srcLayer = frames[currentFrame][activeLayerIdx];
+  frames[target][activeLayerIdx] = {
+    ...frames[target][activeLayerIdx],
+    data: cloneGrid(srcLayer.data),
+    offsetX: srcLayer.offsetX || 0,
+    offsetY: srcLayer.offsetY || 0,
+  };
+  updateFrameStrip();
+  showToast(`"${activeLayer()?.name}" copied to frame ${target + 1}`);
+}
+
+function addFrame() {
+  frames[currentFrame] = cloneAllLayers();
+  frames.push(cloneAllLayers());
+  currentFrame = frames.length - 1;
+  updateFrameStrip(); updateFrameStatus();
+}
+
+function dupFrame() {
+  frames[currentFrame] = cloneAllLayers();
+  frames.splice(currentFrame + 1, 0, cloneAllLayers());
+  currentFrame++;
+  updateFrameStrip(); updateFrameStatus();
+}
+
+function removeFrame() {
+  if (frames.length <= 1) return;
+  frames.splice(currentFrame, 1);
+  if (currentFrame >= frames.length) currentFrame = frames.length - 1;
+  restoreAllLayers(frames[currentFrame]);
+  buildLayerUI(); render(); updateAllOutputs(); updateFrameStrip(); updateFrameStatus();
+}
+
+function switchFrame(idx) {
+  frames[currentFrame] = cloneAllLayers();
+  currentFrame = idx;
+  restoreAllLayers(frames[currentFrame]);
+  buildLayerUI(); render(); updateAllOutputs(); updateFrameStrip(); updateFrameStatus();
+}
+
+function updateFrameStrip() {
+  const strip = document.getElementById('frameStrip');
+  strip.innerHTML = '';
+  frames.forEach((snap, idx) => {
+    const thumb = document.createElement('canvas');
+    thumb.className = 'frame-thumb' + (idx === currentFrame ? ' active' : '');
+    thumb.width = gridW; thumb.height = gridH;
+    thumb.style.width = '40px'; thumb.style.height = '40px';
+    const ctx = thumb.getContext('2d');
+    ctx.imageSmoothingEnabled = false;
+    for (const l of snap) {
+      if (!l.visible) continue;
+      const dx = l.offsetX || 0, dy = l.offsetY || 0;
+      for (let y = 0; y < gridH; y++)
+        for (let x = 0; x < gridW; x++) {
+          const ch = l.data[y]?.[x];
+          if (ch && ch !== '.') {
+            const px = x + dx, py = y + dy;
+            if (px >= 0 && px < gridW && py >= 0 && py < gridH) {
+              ctx.fillStyle = palette[ch] || '#ff00ff';
+              ctx.fillRect(px, py, 1, 1);
+            }
+          }
+        }
+    }
+    thumb.onclick = () => switchFrame(idx);
+    strip.appendChild(thumb);
+  });
+}
+
+function updateFrameStatus() {
+  document.getElementById('frameStatus').textContent = `Frame: ${currentFrame+1}/${frames.length}`;
+}
+
+function togglePlay() {
+  isPlaying = !isPlaying;
+  document.getElementById('playBtn').textContent = isPlaying ? '⏸ Pause' : '▶ Play';
+  if (isPlaying) {
+    pingPongDir = 1;
+    playInterval = setInterval(() => {
+      frames[currentFrame] = cloneAllLayers();
+      const pp = document.getElementById('pingPong')?.checked;
+      if (pp && frames.length > 1) {
+        currentFrame += pingPongDir;
+        if (currentFrame >= frames.length - 1) { currentFrame = frames.length - 1; pingPongDir = -1; }
+        if (currentFrame <= 0) { currentFrame = 0; pingPongDir = 1; }
+      } else {
+        currentFrame = (currentFrame + 1) % frames.length;
+      }
+      restoreAllLayers(frames[currentFrame]);
+      buildLayerUI(); render(); updateFrameStrip(); updateFrameStatus();
+      drawPreview('animCanvas', buildComposite(), 3);
+    }, 1000 / fps);
+  } else { clearInterval(playInterval); }
+}
+
+function updateFPS() {
+  fps = parseInt(document.getElementById('fpsSlider').value);
+  document.getElementById('fpsLabel').textContent = fps + 'fps';
+  if (isPlaying) { clearInterval(playInterval); isPlaying = false; togglePlay(); }
+}
+
+// ============================================
+// TABS
+// ============================================
+function switchTab(tab) {
+  document.querySelectorAll('.tab-btn').forEach(b => {
+    const match = tab === 'preview' ? 'preview' : tab === 'export' ? 'export' : 'anim';
+    b.classList.toggle('active', b.textContent.toLowerCase().includes(match));
+  });
+  document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+  document.getElementById('tab-' + tab).classList.add('active');
+  if (tab === 'export') updateLayerExports();
+}
+
+// ============================================
+// TOAST
+// ============================================
+function showToast(msg) {
+  const existing = document.querySelector('.toast');
+  if (existing) existing.remove();
+  const toast = document.createElement('div');
+  toast.className = 'toast';
+  toast.textContent = msg;
+  toast.style.cssText = `position:fixed;bottom:52px;left:50%;transform:translateX(-50%);
+    background:var(--accent);color:#fff;padding:8px 20px;border-radius:4px;
+    font-family:var(--mono);font-size:12px;z-index:1000;animation:fadeOut 1.5s ease forwards;`;
+  document.body.appendChild(toast);
+  setTimeout(() => toast.remove(), 1500);
+}
+
+// ============================================
+// INIT
+// ============================================
+window.addEventListener('load', () => { init(); autoZoom(); render(); });
+window.addEventListener('resize', () => { autoZoom(); render(); });
+</script>
+</body>
+</html>

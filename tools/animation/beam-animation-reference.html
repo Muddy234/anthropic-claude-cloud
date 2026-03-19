@@ -1,0 +1,1966 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>beam abilities — Animation Implementation Reference</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&family=Space+Grotesk:wght@400;500;600;700&display=swap');
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  :root {
+    --bg: #0a0a0f;
+    --surface: #12121a;
+    --surface2: #1a1a26;
+    --border: #2a2a3a;
+    --text: #e0e0e8;
+    --text-dim: #8888a0;
+    --accent: #ffaa00;
+    --accent2: #ff6b35;
+    --danger: #ff4444;
+    --success: #2ecc71;
+    --blue: #74b9ff;
+    --purple: #a29bfe;
+  }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Space Grotesk', sans-serif;
+    line-height: 1.6;
+    padding: 2rem;
+    max-width: 1400px;
+    margin: 0 auto;
+  }
+
+  h1 {
+    font-size: 2.2rem;
+    font-weight: 700;
+    margin-bottom: 0.25rem;
+    background: linear-gradient(135deg, var(--accent), var(--accent2));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+
+  h1 span {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 1.4rem;
+  }
+
+  .subtitle {
+    color: var(--text-dim);
+    font-size: 1rem;
+    margin-bottom: 2.5rem;
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 1.5rem;
+  }
+
+  h2 {
+    font-size: 1.3rem;
+    font-weight: 600;
+    margin-top: 2.5rem;
+    margin-bottom: 1rem;
+    color: var(--accent);
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+
+  h2 .phase-num {
+    background: var(--accent);
+    color: var(--bg);
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.85rem;
+    font-weight: 700;
+    flex-shrink: 0;
+  }
+
+  h3 {
+    font-size: 1rem;
+    font-weight: 600;
+    margin: 1.5rem 0 0.75rem;
+    color: var(--blue);
+  }
+
+  p, li {
+    color: var(--text);
+    font-size: 0.92rem;
+    margin-bottom: 0.5rem;
+  }
+
+  ul { padding-left: 1.25rem; margin-bottom: 1rem; }
+  li { margin-bottom: 0.35rem; }
+
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 1.5rem;
+    margin: 1rem 0;
+  }
+
+  .callout {
+    background: var(--surface2);
+    border-left: 3px solid var(--accent);
+    padding: 1rem 1.25rem;
+    margin: 1rem 0;
+    border-radius: 0 6px 6px 0;
+    font-size: 0.9rem;
+  }
+
+  .callout.warn {
+    border-left-color: var(--danger);
+  }
+
+  .callout strong {
+    color: var(--accent);
+  }
+
+  .callout.warn strong {
+    color: var(--danger);
+  }
+
+  /* ── CANVAS AREA ── */
+  .demo-area {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 1.5rem;
+    margin: 1.5rem 0;
+  }
+
+  .demo-area canvas {
+    display: block;
+    margin: 0 auto;
+    image-rendering: pixelated;
+    image-rendering: crisp-edges;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    background: #08080c;
+  }
+
+  .demo-controls {
+    display: flex;
+    gap: 0.75rem;
+    justify-content: center;
+    margin-top: 1rem;
+    flex-wrap: wrap;
+  }
+
+  .demo-controls button {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.8rem;
+    padding: 0.5rem 1.25rem;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    background: var(--surface2);
+    color: var(--text);
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+
+  .demo-controls button:hover {
+    border-color: var(--accent);
+    color: var(--accent);
+  }
+
+  .demo-controls button.active {
+    background: var(--accent);
+    color: var(--bg);
+    border-color: var(--accent);
+  }
+
+  .phase-label {
+    text-align: center;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.85rem;
+    color: var(--text-dim);
+    margin-top: 0.5rem;
+    min-height: 1.4em;
+  }
+
+  /* ── CODE BLOCKS ── */
+  pre {
+    background: #0d0d14;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 1.25rem;
+    overflow-x: auto;
+    margin: 1rem 0;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.78rem;
+    line-height: 1.55;
+    color: #c8c8d8;
+  }
+
+  .kw { color: #c792ea; }
+  .str { color: #c3e88d; }
+  .num { color: #f78c6c; }
+  .cm { color: #546e7a; font-style: italic; }
+  .fn { color: #82aaff; }
+  .prop { color: #f07178; }
+  .op { color: #89ddff; }
+
+  /* ── TIMELINE ── */
+  .timeline {
+    display: flex;
+    gap: 0;
+    margin: 1.5rem 0;
+    border-radius: 6px;
+    overflow: hidden;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.75rem;
+  }
+
+  .timeline-seg {
+    padding: 0.75rem 0.5rem;
+    text-align: center;
+    color: var(--bg);
+    font-weight: 600;
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.2rem;
+  }
+
+  .timeline-seg .t-label { font-size: 0.65rem; opacity: 0.7; }
+
+  .t-telegraph { background: var(--accent); }
+  .t-channel { background: var(--purple); }
+  .t-resolve { background: var(--danger); }
+  .t-recovery { background: var(--success); }
+  .t-idle { background: var(--border); color: var(--text-dim); }
+
+  /* ── SPRITE GRID ── */
+  .sprite-grid-container {
+    display: flex;
+    gap: 1.5rem;
+    flex-wrap: wrap;
+    justify-content: center;
+    margin: 1rem 0;
+  }
+
+  .sprite-frame {
+    text-align: center;
+  }
+
+  .sprite-frame canvas {
+    image-rendering: pixelated;
+    image-rendering: crisp-edges;
+    border: 1px solid var(--border);
+    border-radius: 3px;
+    background: #08080c;
+  }
+
+  .sprite-frame .frame-label {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.7rem;
+    color: var(--text-dim);
+    margin-top: 0.3rem;
+  }
+
+  /* ── SPLIT LAYOUT ── */
+  .split {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1.5rem;
+    margin: 1rem 0;
+  }
+
+  @media (max-width: 900px) {
+    .split { grid-template-columns: 1fr; }
+  }
+
+  .tag {
+    display: inline-block;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.7rem;
+    padding: 0.15rem 0.5rem;
+    border-radius: 3px;
+    font-weight: 600;
+  }
+
+  .tag-telegraph { background: rgba(255,170,0,0.2); color: var(--accent); }
+  .tag-channel { background: rgba(162,155,254,0.2); color: var(--purple); }
+  .tag-resolve { background: rgba(255,68,68,0.2); color: var(--danger); }
+  .tag-recovery { background: rgba(46,204,113,0.2); color: var(--success); }
+  .tag-idle { background: rgba(136,136,160,0.15); color: var(--text-dim); }
+
+  /* ── ABILITY TABS ── */
+  .ability-tabs {
+    display: flex;
+    gap: 0;
+    margin-bottom: 0;
+  }
+  .ability-tab {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.85rem;
+    padding: 0.6rem 1.5rem;
+    border: 1px solid var(--border);
+    border-bottom: none;
+    border-radius: 6px 6px 0 0;
+    background: var(--surface2);
+    color: var(--text-dim);
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+  .ability-tab:hover { color: var(--text); }
+  .ability-tab.active {
+    background: var(--surface);
+    color: var(--accent);
+    border-color: var(--border);
+  }
+  .ability-tab.active-drain {
+    background: var(--surface);
+    color: #88FF88;
+    border-color: var(--border);
+  }
+  .ability-tab.active-void {
+    background: var(--surface);
+    color: #aa66ff;
+    border-color: var(--border);
+  }
+  .tab-content {
+    border: 1px solid var(--border);
+    border-radius: 0 8px 8px 8px;
+    background: var(--surface);
+    padding: 1.5rem;
+  }
+
+  /* ── COMPARISON TABLE ── */
+  .compare-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.85rem;
+    margin: 1rem 0;
+  }
+  .compare-table th, .compare-table td {
+    padding: 0.6rem 1rem;
+    border: 1px solid var(--border);
+    text-align: left;
+  }
+  .compare-table th {
+    background: var(--surface2);
+    color: var(--accent);
+    font-weight: 600;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.78rem;
+  }
+  .compare-table td {
+    background: var(--surface);
+  }
+  .compare-table td:first-child {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.78rem;
+    color: var(--blue);
+    white-space: nowrap;
+  }
+</style>
+</head>
+<body>
+
+<h1>Ability Animation Reference: <span>beam abilities</span></h1>
+<p class="subtitle">
+  Complete implementation guide for beam-type abilities — covering <strong>life_drain</strong> (static tether) and <strong>void_beam</strong> (sustained tracking beam).
+  These abilities introduce a new <em>channel</em> phase and beam rendering system not present in ground_slam or melee_swing.
+</p>
+
+<!-- ════════════════════════════════════════════ -->
+<h2><span class="phase-num">0</span> What are beam abilities?</h2>
+
+<p>Beam abilities connect two points with a continuous visual — a line from the caster to a target point. Unlike ground_slam (radial area) or melee_swing (directional arc), beams are <em>linear</em> and can <em>persist over time</em>. This reference covers two beam variants that share the same rendering system but behave very differently:</p>
+
+<div class="split">
+  <div class="card">
+    <h3 style="color:#88FF88;">life_drain — Static Tether</h3>
+    <p><strong>Used by:</strong> Shade Leech (primary), Hollow Wraith (secondary)</p>
+    <p><strong>Shape:</strong> Thin beam (0.3 tiles wide), 4 tile range</p>
+    <p><strong>Damage:</strong> 12–18 base (scaled by tier)</p>
+    <p><strong>Telegraph:</strong> 600ms</p>
+    <p><strong>Channel:</strong> ~200ms (brief resolve, not sustained)</p>
+    <p><strong>Cooldown:</strong> 4000ms</p>
+    <p><strong>Special:</strong> Heals caster for 50% of damage dealt</p>
+    <p><strong>Tracking:</strong> None — direction locks at telegraph start</p>
+    <p style="margin-top:0.75rem; color: #88FF88;"><strong>The player experience:</strong> A pulsing dashed line flickers between the enemy and your position. You have 600ms to sidestep. If it connects, green energy particles stream from you toward the enemy — you take damage and the enemy heals. The beam is thin and short-ranged, so staying mobile keeps you safe.</p>
+  </div>
+  <div class="card">
+    <h3 style="color:#aa66ff;">void_beam — Sustained Tracking Beam</h3>
+    <p><strong>Used by:</strong> Void Sentinel (primary), Abyssal Mage (signature)</p>
+    <p><strong>Shape:</strong> Wide beam (1 tile wide), 15 tile range</p>
+    <p><strong>Damage:</strong> 8 per tick (every 400ms during channel)</p>
+    <p><strong>Telegraph:</strong> 1500ms</p>
+    <p><strong>Channel:</strong> 2000ms sustained (the beam stays active)</p>
+    <p><strong>Cooldown:</strong> 8000ms</p>
+    <p><strong>Special:</strong> Slow tracking — beam rotates up to 30°/sec toward player</p>
+    <p><strong>Tracking:</strong> Slow rotation during channel phase</p>
+    <p style="margin-top:0.75rem; color: #aa66ff;"><strong>The player experience:</strong> A wide purple line charges up from the enemy, growing brighter over 1.5 seconds. Then a massive beam fires and stays active for 2 seconds, slowly sweeping to follow you. You can't just sidestep once — you need to keep circling. The beam deals damage every tick you're inside it. Dark particles spray at the beam's end point and the screen shakes for the full duration.</p>
+  </div>
+</div>
+
+<div class="callout">
+  <strong>Why two abilities in one reference?</strong> life_drain and void_beam share the same underlying beam rendering system — a line between two points with configurable width, particles, and tracking. Building the renderer for one gives you the other nearly for free. The difference is in the <em>data</em>: width, duration, tracking speed, particle direction, and feedback effects. This reference shows how one system serves both.
+</div>
+
+<h3>Side-by-side comparison</h3>
+<table class="compare-table">
+  <tr><th>Property</th><th style="color:#88FF88;">life_drain</th><th style="color:#aa66ff;">void_beam</th></tr>
+  <tr><td>telegraph type</td><td>beam_telegraph (dashed, pulsing)</td><td>beam_telegraph (solid, charging)</td></tr>
+  <tr><td>width</td><td>0.3 tiles (thin tether)</td><td>1.0 tile (wide beam)</td></tr>
+  <tr><td>range</td><td>4 tiles</td><td>15 tiles</td></tr>
+  <tr><td>telegraph duration</td><td>600ms</td><td>1500ms</td></tr>
+  <tr><td>channel duration</td><td>~200ms (instant resolve)</td><td>2000ms (sustained)</td></tr>
+  <tr><td>direction lock</td><td>Yes (captured once)</td><td>Partial (30°/sec tracking)</td></tr>
+  <tr><td>particle flow</td><td>Target → Caster (drain)</td><td>Spray at terminus (impact)</td></tr>
+  <tr><td>caster feedback</td><td>Green heal pulse ring</td><td>None</td></tr>
+  <tr><td>camera effect</td><td>Subtle nudge toward caster on hit</td><td>Sustained low-intensity shake</td></tr>
+  <tr><td>hit detection</td><td>Point-to-point tether</td><td>isInsideBeam() rectangle check</td></tr>
+</table>
+
+<!-- ════════════════════════════════════════════ -->
+<h2><span class="phase-num">1</span> The Animation Lifecycle</h2>
+
+<p>Beam abilities introduce a new phase that ground_slam and melee_swing don't have: the <strong>channel</strong> phase. For life_drain, the channel is a brief visual-only resolve (~200ms). For void_beam, the channel is a sustained 2-second window where the beam is active and dealing damage continuously.</p>
+
+<h3 style="color:#88FF88;">life_drain lifecycle</h3>
+<div class="timeline">
+  <div class="timeline-seg t-telegraph" style="flex:0.6;">
+    TELEGRAPH<br>
+    <span class="t-label">600ms</span>
+  </div>
+  <div class="timeline-seg t-channel" style="flex:0.2;">
+    CHANNEL<br>
+    <span class="t-label">~200ms</span>
+  </div>
+  <div class="timeline-seg t-recovery" style="flex:0.5;">
+    RECOVERY<br>
+    <span class="t-label">500ms</span>
+  </div>
+  <div class="timeline-seg t-idle" style="flex:2.8;">
+    IDLE (cooldown ticking)<br>
+    <span class="t-label">~2700ms remaining</span>
+  </div>
+</div>
+
+<h3 style="color:#aa66ff;">void_beam lifecycle</h3>
+<div class="timeline">
+  <div class="timeline-seg t-telegraph" style="flex:1.5;">
+    TELEGRAPH<br>
+    <span class="t-label">1500ms</span>
+  </div>
+  <div class="timeline-seg t-channel" style="flex:2.0;">
+    CHANNEL (sustained)<br>
+    <span class="t-label">2000ms</span>
+  </div>
+  <div class="timeline-seg t-recovery" style="flex:0.8;">
+    RECOVERY<br>
+    <span class="t-label">800ms</span>
+  </div>
+  <div class="timeline-seg t-idle" style="flex:3.7;">
+    IDLE (cooldown ticking)<br>
+    <span class="t-label">~3700ms remaining</span>
+  </div>
+</div>
+
+<div class="split">
+  <div class="card">
+    <h3><span class="tag tag-telegraph">TELEGRAPH</span> The beam charges up</h3>
+    <ul>
+      <li><strong>life_drain (600ms):</strong> A <strong>dashed pulsing line</strong> appears from the caster toward the target's captured position. The dashes shimmer in/out. Thin and subtle — easy to miss if you're not watching.</li>
+      <li><strong>void_beam (1500ms):</strong> A <strong>solid line grows in intensity</strong> from the caster toward max range. Starts dim, grows brighter and wider. The charging effect makes it obvious something devastating is coming.</li>
+      <li>Both types lock direction when the telegraph starts (life_drain is permanent, void_beam allows slow tracking once the channel begins)</li>
+      <li>The telegraph line extends from the caster's center to either the target point (life_drain) or max range (void_beam)</li>
+    </ul>
+  </div>
+  <div class="card">
+    <h3><span class="tag tag-channel">CHANNEL</span> The beam fires / persists</h3>
+    <ul>
+      <li><strong>life_drain (~200ms):</strong> The beam briefly <strong>solidifies</strong> — bright core with glow. Energy particles flow <strong>from the hit point back to the caster</strong>. Caster pulses green (heal feedback). Then it fades. Damage is dealt once, instantly.</li>
+      <li><strong>void_beam (2000ms):</strong> The beam stays active for 2 full seconds. A bright inner core with wide outer glow. <strong>Slowly rotates</strong> toward the player (30°/sec max). Damage ticks every 400ms to anyone inside the beam. Particles spray at the beam terminus. Screen shakes continuously.</li>
+      <li>This phase is where beam abilities differ most from ground_slam — the effect <em>persists</em> instead of resolving instantly</li>
+    </ul>
+  </div>
+</div>
+<div class="split">
+  <div class="card">
+    <h3><span class="tag tag-recovery">RECOVERY</span> The punish window</h3>
+    <ul>
+      <li><strong>life_drain (500ms):</strong> The caster staggers slightly, spent from channeling. Takes 1.15x damage. The player can rush in for a punish, but the window is moderate.</li>
+      <li><strong>void_beam (800ms):</strong> The caster is exhausted — hunched, visibly drained. Takes <strong>1.35x damage</strong> (the highest punish multiplier of any ability). This rewards the player for surviving the full beam.</li>
+      <li>Both enemies are immobile and cannot start new abilities during recovery</li>
+    </ul>
+  </div>
+  <div class="card">
+    <h3><span class="tag tag-idle">IDLE</span> Cooldown period</h3>
+    <ul>
+      <li><strong>life_drain (~2700ms remaining):</strong> Moderate cooldown — the enemy uses this often to sustain itself. Expect it every 4 seconds.</li>
+      <li><strong>void_beam (~3700ms remaining):</strong> Long cooldown — this is a signature ability, not a spammable attack. The player gets a long breather between beams.</li>
+      <li>Both enemies return to normal AI behavior, repositioning and using other abilities while the cooldown ticks</li>
+    </ul>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════════ -->
+<h2><span class="phase-num">2</span> Live Animation Preview</h2>
+
+<p>Two interactive demos below — one for each beam type. Click the buttons to play the full cycle or view individual phases. The caster is on the left; the target zone is on the right.</p>
+
+<div class="ability-tabs" id="abilityTabs">
+  <div class="ability-tab active-drain" id="tabDrain" onclick="switchDemo('drain')">life_drain</div>
+  <div class="ability-tab" id="tabVoid" onclick="switchDemo('void')">void_beam</div>
+</div>
+
+<div class="demo-area" style="border-top-left-radius: 0;">
+  <canvas id="demoCanvas" width="480" height="260"></canvas>
+  <div class="phase-label" id="phaseLabel">Click a button to start</div>
+  <div class="demo-controls">
+    <button onclick="playFullCycle()">▶ Full Cycle</button>
+    <button onclick="showPhase('telegraph')">Telegraph</button>
+    <button onclick="showPhase('channel')">Channel</button>
+    <button onclick="showPhase('recovery')">Recovery</button>
+    <button onclick="stopAnim()">⏹ Stop</button>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════════ -->
+<h2><span class="phase-num">3</span> Sprite Frames (What to Draw)</h2>
+
+<p>Beam abilities have different visual components than area or melee attacks. Instead of shapes on the floor, you're drawing <em>lines connecting two points</em> with effects layered on top.</p>
+
+<h3>A. Telegraph Frames (beam indicator — drawn below entities)</h3>
+<p>For life_drain: a pulsing dashed line. For void_beam: a solid line growing in intensity. Both extend from the caster toward the target.</p>
+<div id="telegraphFrames" class="sprite-grid-container"></div>
+
+<h3>B. Channel Frames (active beam — drawn above entities)</h3>
+<p>For life_drain: a brief bright tether with a core glow. For void_beam: a sustained wide beam with inner core and outer glow. The beam connects caster to target/terminus.</p>
+<div id="channelFrames" class="sprite-grid-container"></div>
+
+<h3>C. Particle Frames (energy flow / terminus spray)</h3>
+<p>For life_drain: small green orbs flowing FROM target TO caster (reverse). For void_beam: dark purple sparks spraying outward at the beam's end point.</p>
+<div id="particleFrames" class="sprite-grid-container"></div>
+
+<h3>D. Caster Feedback (life_drain only — heal pulse)</h3>
+<p>A green ring expanding outward from the caster when drain damage connects. Brief flash, 300ms duration.</p>
+<div id="feedbackFrames" class="sprite-grid-container"></div>
+
+<!-- ════════════════════════════════════════════ -->
+<h2><span class="phase-num">4</span> JavaScript Implementation</h2>
+
+<p>Beam abilities need three new things the existing system doesn't have: <strong>beam rendering</strong> (drawing a line between two points), a <strong>channel phase</strong> (the effect persists and deals damage over time), and <strong>beam hit detection</strong> (checking if a player is inside a rectangle, not a circle or arc).</p>
+
+<h3>Part A — The Data: Define what each beam ability looks like</h3>
+<p>These go in <code>effect-sprites.js</code> alongside ground_slam and melee_swing entries.</p>
+
+<pre><span class="cm">// ─── effect-sprites.js (add to ABILITY_EFFECTS) ───</span>
+<span class="cm">// Beam abilities introduce two new types:</span>
+<span class="cm">//   telegraph: 'beam_telegraph' — line from caster to target/max range</span>
+<span class="cm">//   channel:  'beam_channel'   — sustained beam with hit detection</span>
+
+ABILITY_EFFECTS.life_drain <span class="op">=</span> {
+
+  <span class="cm">// ── TELEGRAPH: dashed pulsing tether line ──</span>
+  telegraph: {
+    <span class="prop">type</span>: <span class="str">'beam_telegraph'</span>,
+    <span class="prop">color</span>: <span class="str">'#88FF88'</span>,              <span class="cm">// Green (life/nature theme)</span>
+    <span class="prop">borderColor</span>: <span class="str">'#44AA44'</span>,        <span class="cm">// Darker green edge</span>
+    <span class="prop">width</span>: <span class="num">0.3</span>,                    <span class="cm">// 0.3 tiles wide (thin tether)</span>
+    <span class="prop">maxRange</span>: <span class="num">4</span>,                   <span class="cm">// 4 tiles — MUST match ability range</span>
+    <span class="prop">style</span>: <span class="str">'dashed'</span>,               <span class="cm">// Dashed line (not solid)</span>
+    <span class="prop">dashLength</span>: <span class="num">8</span>,                 <span class="cm">// Pixel length of each dash</span>
+    <span class="prop">dashGap</span>: <span class="num">6</span>,                    <span class="cm">// Pixel gap between dashes</span>
+    <span class="prop">pulseRate</span>: <span class="num">200</span>,                <span class="cm">// 200ms between pulse cycles</span>
+    <span class="prop">fillOpacity</span>: <span class="num">0.3</span>,              <span class="cm">// Dim — life_drain is subtle</span>
+    <span class="prop">lockDirection</span>: <span class="kw">true</span>,           <span class="cm">// Direction captured once, never updates</span>
+    <span class="prop">directed</span>: <span class="kw">true</span>,                <span class="cm">// Needs a direction angle</span>
+  },
+
+  <span class="cm">// ── CHANNEL: brief bright tether resolve ──</span>
+  channel: {
+    <span class="prop">type</span>: <span class="str">'beam_channel'</span>,
+    <span class="prop">duration</span>: <span class="num">200</span>,                 <span class="cm">// Brief — not sustained like void_beam</span>
+    <span class="prop">color</span>: <span class="str">'#44FF44'</span>,               <span class="cm">// Bright green beam</span>
+    <span class="prop">coreColor</span>: <span class="str">'#FFFFFF'</span>,           <span class="cm">// White inner core</span>
+    <span class="prop">width</span>: <span class="num">0.3</span>,                    <span class="cm">// Same width as telegraph</span>
+    <span class="prop">coreWidth</span>: <span class="num">0.1</span>,                <span class="cm">// Thin bright center</span>
+    <span class="prop">glowRadius</span>: <span class="num">0.5</span>,               <span class="cm">// Faint glow around the beam</span>
+    <span class="prop">glowColor</span>: <span class="str">'#88FF8833'</span>,        <span class="cm">// Transparent green glow</span>
+    <span class="prop">trackingSpeed</span>: <span class="num">0</span>,              <span class="cm">// 0 = no tracking (static)</span>
+    <span class="prop">particleFlow</span>: <span class="str">'reverse'</span>,       <span class="cm">// Particles flow FROM target TO caster</span>
+  },
+
+  <span class="cm">// ── PARTICLES: green energy orbs flowing to caster ──</span>
+  particles: {
+    <span class="prop">count</span>: <span class="num">8</span>,
+    <span class="prop">sprite</span>: {
+      <span class="prop">width</span>: <span class="num">3</span>, <span class="prop">height</span>: <span class="num">3</span>,
+      <span class="prop">pixels</span>: [<span class="str">'.G.'</span>, <span class="str">'GGG'</span>, <span class="str">'.G.'</span>],    <span class="cm">// Diamond — energy orb</span>
+      <span class="prop">palette</span>: { <span class="str">'G'</span>: <span class="str">'#88FF88'</span> }
+    },
+    <span class="prop">spawnMode</span>: <span class="str">'along_beam'</span>,          <span class="cm">// Spawn along the beam's length</span>
+    <span class="prop">flowDirection</span>: <span class="str">'reverse'</span>,        <span class="cm">// Move from target toward caster</span>
+    <span class="prop">flowSpeed</span>: <span class="num">180</span>,                  <span class="cm">// Pixels/sec — visible movement</span>
+    <span class="prop">spawnRate</span>: <span class="num">50</span>,                   <span class="cm">// Spawn a new particle every 50ms</span>
+    <span class="prop">lifetime</span>: <span class="num">400</span>,
+    <span class="prop">fadeOut</span>: <span class="num">0.3</span>,
+    <span class="prop">sway</span>: <span class="num">4</span>,                         <span class="cm">// ±4px perpendicular sway (organic feel)</span>
+  },
+
+  <span class="cm">// ── CASTER FEEDBACK: heal pulse ──</span>
+  casterFeedback: {
+    <span class="prop">type</span>: <span class="str">'heal_pulse'</span>,
+    <span class="prop">color</span>: <span class="str">'#88FF88'</span>,
+    <span class="prop">startRadius</span>: <span class="num">0.2</span>,               <span class="cm">// Ring starts small on caster</span>
+    <span class="prop">endRadius</span>: <span class="num">1.2</span>,                 <span class="cm">// Expands to 1.2 tiles</span>
+    <span class="prop">duration</span>: <span class="num">300</span>,                  <span class="cm">// 300ms pulse</span>
+    <span class="prop">ringWidth</span>: <span class="num">2</span>,
+    <span class="prop">fadeStart</span>: <span class="num">0.4</span>,
+  },
+
+  <span class="cm">// ── CAMERA: subtle nudge on hit ──</span>
+  camera: {
+    <span class="prop">onHit</span>: {
+      <span class="prop">type</span>: <span class="str">'screenNudge'</span>,
+      <span class="prop">intensity</span>: <span class="num">1.5</span>,
+      <span class="prop">duration</span>: <span class="num">80</span>,
+      <span class="prop">direction</span>: <span class="str">'toward_caster'</span>,   <span class="cm">// Nudge in the direction of the drain</span>
+    }
+  },
+
+  <span class="cm">// ── AUDIO ──</span>
+  audio: {
+    <span class="prop">telegraph</span>: <span class="str">'sfx_drain_charge'</span>,       <span class="cm">// Eerie humming buildup</span>
+    <span class="prop">channel</span>: <span class="str">'sfx_drain_connect'</span>,        <span class="cm">// Wet siphon sound</span>
+    <span class="prop">heal</span>: <span class="str">'sfx_heal_pulse'</span>,              <span class="cm">// Gentle chime on caster heal</span>
+  }
+};
+
+
+ABILITY_EFFECTS.void_beam <span class="op">=</span> {
+
+  <span class="cm">// ── TELEGRAPH: solid charging line, growing intensity ──</span>
+  telegraph: {
+    <span class="prop">type</span>: <span class="str">'beam_telegraph'</span>,
+    <span class="prop">color</span>: <span class="str">'#8844AA'</span>,              <span class="cm">// Dark purple</span>
+    <span class="prop">borderColor</span>: <span class="str">'#6622AA'</span>,        <span class="cm">// Deep violet border</span>
+    <span class="prop">width</span>: <span class="num">1.0</span>,                    <span class="cm">// 1 tile wide — this is a BIG beam</span>
+    <span class="prop">maxRange</span>: <span class="num">15</span>,                  <span class="cm">// 15 tiles — nearly screen-wide</span>
+    <span class="prop">style</span>: <span class="str">'solid'</span>,                <span class="cm">// Solid line (not dashed)</span>
+    <span class="prop">chargeIntensity</span>: <span class="kw">true</span>,         <span class="cm">// Opacity grows from 0.1 → 0.5 over telegraph</span>
+    <span class="prop">startOpacity</span>: <span class="num">0.1</span>,             <span class="cm">// Barely visible at start</span>
+    <span class="prop">endOpacity</span>: <span class="num">0.5</span>,               <span class="cm">// Half-opaque at full charge</span>
+    <span class="prop">fillOpacity</span>: <span class="num">0.15</span>,             <span class="cm">// Background fill opacity</span>
+    <span class="prop">lockDirection</span>: <span class="kw">false</span>,           <span class="cm">// Direction CAN update (but doesn't during telegraph)</span>
+    <span class="prop">directed</span>: <span class="kw">true</span>,
+  },
+
+  <span class="cm">// ── CHANNEL: sustained wide beam with tracking ──</span>
+  channel: {
+    <span class="prop">type</span>: <span class="str">'beam_channel'</span>,
+    <span class="prop">duration</span>: <span class="num">2000</span>,                <span class="cm">// 2 full seconds — sustained damage</span>
+    <span class="prop">color</span>: <span class="str">'#6622AA'</span>,              <span class="cm">// Deep purple outer beam</span>
+    <span class="prop">coreColor</span>: <span class="str">'#FF44FF'</span>,          <span class="cm">// Hot magenta inner core</span>
+    <span class="prop">width</span>: <span class="num">1.0</span>,                    <span class="cm">// 1 tile wide</span>
+    <span class="prop">coreWidth</span>: <span class="num">0.3</span>,                <span class="cm">// Core is 30% of beam width</span>
+    <span class="prop">glowRadius</span>: <span class="num">1.5</span>,               <span class="cm">// Large glow aura around beam</span>
+    <span class="prop">glowColor</span>: <span class="str">'#6622AA22'</span>,        <span class="cm">// Very transparent purple haze</span>
+    <span class="prop">trackingSpeed</span>: <span class="num">30</span>,             <span class="cm">// 30 degrees/sec — the beam slowly follows the player</span>
+    <span class="prop">tickInterval</span>: <span class="num">400</span>,             <span class="cm">// Damage every 400ms during channel</span>
+    <span class="prop">particleFlow</span>: <span class="str">'forward'</span>,       <span class="cm">// Particles spray at the far end</span>
+    <span class="prop">flicker</span>: {                    <span class="cm">// Beam width oscillates slightly</span>
+      <span class="prop">amount</span>: <span class="num">0.08</span>,                <span class="cm">// ±8% width variation</span>
+      <span class="prop">speed</span>: <span class="num">12</span>,                   <span class="cm">// 12 cycles/sec — fast shimmer</span>
+    }
+  },
+
+  <span class="cm">// ── PARTICLES: void sparks at beam terminus ──</span>
+  particles: {
+    <span class="prop">count</span>: <span class="num">4</span>,                      <span class="cm">// Per spawn burst (spawns every tick)</span>
+    <span class="prop">sprite</span>: {
+      <span class="prop">width</span>: <span class="num">2</span>, <span class="prop">height</span>: <span class="num">2</span>,
+      <span class="prop">pixels</span>: [<span class="str">'VV'</span>, <span class="str">'VV'</span>],
+      <span class="prop">palette</span>: { <span class="str">'V'</span>: <span class="str">'#9944CC'</span> }   <span class="cm">// Dark purple sparks</span>
+    },
+    <span class="prop">spawnMode</span>: <span class="str">'beam_terminus'</span>,      <span class="cm">// Spawn at the far end of the beam</span>
+    <span class="prop">spawnRate</span>: <span class="num">80</span>,                   <span class="cm">// Every 80ms during channel</span>
+    <span class="prop">velocity</span>: {
+      <span class="prop">radialRange</span>: [<span class="num">30</span>, <span class="num">80</span>],        <span class="cm">// Spray outward from terminus</span>
+      <span class="prop">tangentialRange</span>: [<span class="num">-40</span>, <span class="num">40</span>],
+    },
+    <span class="prop">gravity</span>: <span class="num">80</span>,                    <span class="cm">// Light gravity — sparks linger</span>
+    <span class="prop">lifetime</span>: <span class="num">500</span>,
+    <span class="prop">fadeOut</span>: <span class="num">0.4</span>,
+  },
+
+  <span class="cm">// ── CAMERA: sustained shake during channel ──</span>
+  camera: {
+    <span class="prop">duringTelegraph</span>: {
+      <span class="prop">type</span>: <span class="str">'sustained_rumble'</span>,
+      <span class="prop">intensity</span>: <span class="num">0.5</span>,              <span class="cm">// Very light — just a vibration</span>
+      <span class="prop">growWithCharge</span>: <span class="kw">true</span>,         <span class="cm">// Gets stronger as telegraph progresses</span>
+    },
+    <span class="prop">duringChannel</span>: {
+      <span class="prop">type</span>: <span class="str">'sustained_shake'</span>,
+      <span class="prop">intensity</span>: <span class="num">1.5</span>,              <span class="cm">// Low but constant — the screen trembles</span>
+    },
+  },
+
+  <span class="cm">// ── AUDIO ──</span>
+  audio: {
+    <span class="prop">telegraph</span>: <span class="str">'sfx_void_charge'</span>,        <span class="cm">// Deep bass buildup, rising pitch</span>
+    <span class="prop">channel</span>: <span class="str">'sfx_void_beam_loop'</span>,       <span class="cm">// Sustained crackling hum (loops for 2s)</span>
+    <span class="prop">channelEnd</span>: <span class="str">'sfx_void_dissipate'</span>,    <span class="cm">// Fizzle-out when beam ends</span>
+  }
+};</pre>
+
+<div class="callout">
+  <strong>The key architectural addition:</strong> The <code>channel</code> block is new. ground_slam and melee_swing have telegraph → instant resolve → recovery. Beam abilities have telegraph → <strong>channel (sustained)</strong> → recovery. The channel phase is where the beam is visually active and dealing damage. For life_drain, the channel is short (200ms, effectively instant). For void_beam, the channel is the main event — 2 seconds of sustained damage and tracking.
+</div>
+
+<h3>Part B — The Controller: New channel phase and beam tracking</h3>
+<p>The EffectAnimator needs a <code>'channel'</code> phase and logic for beam tracking (rotating toward the player over time).</p>
+
+<pre><span class="cm">// ─── effect-animator.js (additions for beam abilities) ───</span>
+
+<span class="fn">startEffect</span>(abilityId, x, y, telegraphMs, radius, direction) {
+  <span class="cm">// ... existing setup (same as ground_slam / melee_swing) ...</span>
+
+  <span class="kw">const</span> config <span class="op">=</span> ABILITY_EFFECTS[abilityId];
+
+  <span class="kw">this</span>.activeEffects.<span class="fn">set</span>(id, {
+    <span class="cm">// ... existing fields ...</span>
+    id, abilityId, config, x, y, radius, direction,
+    phase: <span class="str">'telegraph'</span>,
+    phaseTimer: <span class="num">0</span>,
+    telegraphDuration: telegraphMs,
+    particles: [],
+
+    <span class="cm">// ════ NEW: Beam-specific state ════</span>
+    beamDirection: direction <span class="op">||</span> <span class="num">0</span>,   <span class="cm">// Current beam angle (may update during channel)</span>
+    beamEndX: <span class="num">0</span>,                     <span class="cm">// Computed end point (world coords)</span>
+    beamEndY: <span class="num">0</span>,                     <span class="cm">// Updated every frame for tracking beams</span>
+    casterX: x,                     <span class="cm">// Caster position (may update if caster moves)</span>
+    casterY: y,
+    halfWidth: <span class="num">0</span>,                    <span class="cm">// Half beam width in world units (for hit detection)</span>
+    channelTickTimer: <span class="num">0</span>,             <span class="cm">// Tracks time since last damage tick</span>
+    particleSpawnTimer: <span class="num">0</span>,           <span class="cm">// Tracks time since last particle spawn</span>
+  });
+
+  <span class="cm">// Compute initial beam end point</span>
+  <span class="kw">this</span>.<span class="fn">updateBeamEndPoint</span>(<span class="kw">this</span>.activeEffects.<span class="fn">get</span>(id));
+
+  <span class="kw">return</span> id;
+},
+
+<span class="cm">/**
+ * Update loop — modified to handle the 'channel' phase.
+ */</span>
+<span class="fn">update</span>(deltaTime) {
+  <span class="kw">for</span> (<span class="kw">const</span> [id, effect] <span class="kw">of</span> <span class="kw">this</span>.activeEffects) {
+    effect.phaseTimer <span class="op">+=</span> deltaTime;
+
+    <span class="kw">switch</span> (effect.phase) {
+
+      <span class="kw">case</span> <span class="str">'telegraph'</span>:
+        <span class="cm">// Same as before — wait for resolve() call from ability system</span>
+        <span class="kw">break</span>;
+
+      <span class="kw">case</span> <span class="str">'channel'</span>:  <span class="cm">// ════ NEW PHASE ════</span>
+        <span class="kw">const</span> chCfg <span class="op">=</span> effect.config.channel;
+
+        <span class="cm">// ── Tracking: slowly rotate beam toward current target ──</span>
+        <span class="kw">if</span> (chCfg.trackingSpeed <span class="op">></span> <span class="num">0</span>) {
+          <span class="kw">this</span>.<span class="fn">updateBeamTracking</span>(effect, deltaTime);
+        }
+
+        <span class="cm">// ── Update beam end point ──</span>
+        <span class="kw">this</span>.<span class="fn">updateBeamEndPoint</span>(effect);
+
+        <span class="cm">// ── Spawn particles continuously ──</span>
+        effect.particleSpawnTimer <span class="op">+=</span> deltaTime;
+        <span class="kw">const</span> spawnRate <span class="op">=</span> effect.config.particles?.spawnRate <span class="op">||</span> <span class="num">100</span>;
+        <span class="kw">while</span> (effect.particleSpawnTimer <span class="op">>=</span> spawnRate) {
+          <span class="kw">this</span>.<span class="fn">spawnBeamParticles</span>(effect);
+          effect.particleSpawnTimer <span class="op">-=</span> spawnRate;
+        }
+
+        <span class="cm">// ── Update existing particles ──</span>
+        <span class="kw">this</span>.<span class="fn">updateParticles</span>(effect, deltaTime);
+
+        <span class="cm">// ── Damage ticks (for sustained beams) ──</span>
+        <span class="kw">if</span> (chCfg.tickInterval) {
+          effect.channelTickTimer <span class="op">+=</span> deltaTime;
+          <span class="kw">if</span> (effect.channelTickTimer <span class="op">>=</span> chCfg.tickInterval) {
+            effect.channelTickTimer <span class="op">-=</span> chCfg.tickInterval;
+            <span class="cm">// Emit a 'beam_tick' event for the ability system to handle</span>
+            EventBus.<span class="fn">emit</span>(<span class="str">'beam_tick'</span>, { effectId: id, effect });
+          }
+        }
+
+        <span class="cm">// ── End channel when duration expires ──</span>
+        <span class="kw">if</span> (effect.phaseTimer <span class="op">>=</span> chCfg.duration) {
+          effect.phase <span class="op">=</span> <span class="str">'fading'</span>;
+          effect.phaseTimer <span class="op">=</span> <span class="num">0</span>;
+        }
+        <span class="kw">break</span>;
+
+      <span class="kw">case</span> <span class="str">'fading'</span>:   <span class="cm">// Brief fade-out after channel ends</span>
+        <span class="kw">this</span>.<span class="fn">updateParticles</span>(effect, deltaTime);
+        <span class="kw">if</span> (effect.phaseTimer <span class="op">>=</span> <span class="num">300</span> <span class="op">&&</span> effect.particles.<span class="fn">every</span>(p <span class="op">=></span> p.life <span class="op"><=</span> <span class="num">0</span>)) {
+          effect.phase <span class="op">=</span> <span class="str">'done'</span>;
+        }
+        <span class="kw">break</span>;
+
+      <span class="kw">case</span> <span class="str">'impact'</span>:  <span class="cm">// Existing (for non-beam abilities)</span>
+        <span class="cm">// ... unchanged ...</span>
+        <span class="kw">break</span>;
+
+      <span class="kw">case</span> <span class="str">'done'</span>:
+        <span class="kw">this</span>.activeEffects.<span class="fn">delete</span>(id);
+        <span class="kw">break</span>;
+    }
+  }
+},
+
+<span class="cm">/**
+ * Resolve for beam abilities — transitions telegraph → channel.
+ * For life_drain: deals instant damage, starts brief channel visual.
+ * For void_beam: starts sustained channel with tracking.
+ */</span>
+<span class="fn">resolve</span>(effectId) {
+  <span class="kw">const</span> effect <span class="op">=</span> <span class="kw">this</span>.activeEffects.<span class="fn">get</span>(effectId);
+  <span class="kw">if</span> (!effect) <span class="kw">return</span>;
+
+  <span class="cm">// If this ability has a channel phase, go there instead of 'impact'</span>
+  <span class="kw">if</span> (effect.config.channel) {
+    effect.phase <span class="op">=</span> <span class="str">'channel'</span>;
+    effect.phaseTimer <span class="op">=</span> <span class="num">0</span>;
+    effect.channelTickTimer <span class="op">=</span> <span class="num">0</span>;
+    effect.particleSpawnTimer <span class="op">=</span> <span class="num">0</span>;
+    effect.halfWidth <span class="op">=</span> (effect.config.channel.width <span class="op">/</span> <span class="num">2</span>) <span class="op">*</span> TILE_SIZE;
+
+    <span class="cm">// Start sustained camera effects</span>
+    <span class="kw">if</span> (effect.config.camera?.duringChannel) {
+      Camera.<span class="fn">startSustainedShake</span>(
+        effect.config.camera.duringChannel.intensity,
+        effect.config.channel.duration
+      );
+    }
+
+    <span class="cm">// Play channel audio (may loop)</span>
+    <span class="kw">if</span> (effect.config.audio?.channel) {
+      AudioManager.<span class="fn">play</span>(effect.config.audio.channel, { loop: <span class="kw">true</span> });
+    }
+
+    <span class="cm">// Caster feedback (life_drain heal pulse)</span>
+    <span class="kw">if</span> (effect.config.casterFeedback) {
+      <span class="kw">this</span>.<span class="fn">startCasterFeedback</span>(effect);
+    }
+  } <span class="kw">else</span> {
+    <span class="cm">// Non-beam abilities: existing resolve behavior</span>
+    effect.phase <span class="op">=</span> <span class="str">'impact'</span>;
+    effect.phaseTimer <span class="op">=</span> <span class="num">0</span>;
+    <span class="kw">this</span>.<span class="fn">spawnParticles</span>(effect);
+  }
+},
+
+<span class="cm">// ── Beam tracking: rotate toward current target ──</span>
+
+<span class="fn">updateBeamTracking</span>(effect, dt) {
+  <span class="kw">const</span> trackSpeed <span class="op">=</span> effect.config.channel.trackingSpeed;  <span class="cm">// degrees/sec</span>
+  <span class="kw">const</span> maxRotation <span class="op">=</span> (trackSpeed <span class="op">*</span> Math.PI <span class="op">/</span> <span class="num">180</span>) <span class="op">*</span> (dt <span class="op">/</span> <span class="num">1000</span>);  <span class="cm">// radians this frame</span>
+
+  <span class="cm">// Get current target position from ability system</span>
+  <span class="kw">const</span> target <span class="op">=</span> EnemyAbilitySystem.<span class="fn">getCurrentTarget</span>(effect.abilityId);
+  <span class="kw">if</span> (!target) <span class="kw">return</span>;
+
+  <span class="cm">// Desired angle toward target</span>
+  <span class="kw">const</span> desiredAngle <span class="op">=</span> Math.<span class="fn">atan2</span>(
+    target.worldY <span class="op">-</span> effect.casterY,
+    target.worldX <span class="op">-</span> effect.casterX
+  );
+
+  <span class="cm">// Compute shortest angular difference</span>
+  <span class="kw">let</span> angleDiff <span class="op">=</span> desiredAngle <span class="op">-</span> effect.beamDirection;
+
+  <span class="cm">// Normalize to [-π, π]</span>
+  <span class="kw">while</span> (angleDiff <span class="op">></span> Math.PI) angleDiff <span class="op">-=</span> Math.PI <span class="op">*</span> <span class="num">2</span>;
+  <span class="kw">while</span> (angleDiff <span class="op"><</span> -Math.PI) angleDiff <span class="op">+=</span> Math.PI <span class="op">*</span> <span class="num">2</span>;
+
+  <span class="cm">// Clamp rotation to max speed</span>
+  <span class="kw">const</span> rotation <span class="op">=</span> Math.<span class="fn">sign</span>(angleDiff) <span class="op">*</span> Math.<span class="fn">min</span>(Math.<span class="fn">abs</span>(angleDiff), maxRotation);
+  effect.beamDirection <span class="op">+=</span> rotation;
+},
+
+<span class="cm">// ── Compute beam end point from direction + range ──</span>
+
+<span class="fn">updateBeamEndPoint</span>(effect) {
+  <span class="kw">const</span> range <span class="op">=</span> (effect.config.telegraph?.maxRange <span class="op">||</span> effect.radius) <span class="op">*</span> TILE_SIZE;
+  effect.beamEndX <span class="op">=</span> effect.casterX <span class="op">+</span> Math.<span class="fn">cos</span>(effect.beamDirection) <span class="op">*</span> range;
+  effect.beamEndY <span class="op">=</span> effect.casterY <span class="op">+</span> Math.<span class="fn">sin</span>(effect.beamDirection) <span class="op">*</span> range;
+},
+
+<span class="cm">// ── Spawn beam particles (along beam or at terminus) ──</span>
+
+<span class="fn">spawnBeamParticles</span>(effect) {
+  <span class="kw">const</span> cfg <span class="op">=</span> effect.config.particles;
+  <span class="kw">if</span> (!cfg) <span class="kw">return</span>;
+
+  <span class="kw">if</span> (cfg.spawnMode <span class="op">===</span> <span class="str">'along_beam'</span>) {
+    <span class="cm">// Spawn along the beam line, particles flow toward caster</span>
+    <span class="kw">const</span> t <span class="op">=</span> <span class="num">0.3</span> <span class="op">+</span> Math.<span class="fn">random</span>() <span class="op">*</span> <span class="num">0.7</span>;  <span class="cm">// Bias toward target end</span>
+    <span class="kw">const</span> bx <span class="op">=</span> effect.casterX <span class="op">+</span> (effect.beamEndX <span class="op">-</span> effect.casterX) <span class="op">*</span> t;
+    <span class="kw">const</span> by <span class="op">=</span> effect.casterY <span class="op">+</span> (effect.beamEndY <span class="op">-</span> effect.casterY) <span class="op">*</span> t;
+
+    <span class="cm">// Perpendicular sway</span>
+    <span class="kw">const</span> perpAngle <span class="op">=</span> effect.beamDirection <span class="op">+</span> Math.PI <span class="op">/</span> <span class="num">2</span>;
+    <span class="kw">const</span> sway <span class="op">=</span> (Math.<span class="fn">random</span>() <span class="op">-</span> <span class="num">0.5</span>) <span class="op">*</span> <span class="num">2</span> <span class="op">*</span> (cfg.sway <span class="op">||</span> <span class="num">0</span>);
+
+    <span class="cm">// Velocity: toward caster (reverse flow)</span>
+    <span class="kw">const</span> towardCaster <span class="op">=</span> effect.beamDirection <span class="op">+</span> Math.PI;
+    <span class="kw">const</span> speed <span class="op">=</span> cfg.flowSpeed <span class="op">||</span> <span class="num">100</span>;
+
+    effect.particles.<span class="fn">push</span>({
+      x: bx <span class="op">+</span> Math.<span class="fn">cos</span>(perpAngle) <span class="op">*</span> sway,
+      y: by <span class="op">+</span> Math.<span class="fn">sin</span>(perpAngle) <span class="op">*</span> sway,
+      vx: Math.<span class="fn">cos</span>(towardCaster) <span class="op">*</span> speed,
+      vy: Math.<span class="fn">sin</span>(towardCaster) <span class="op">*</span> speed,
+      life: cfg.lifetime,
+      maxLife: cfg.lifetime,
+      sprite: cfg.sprite,
+    });
+  }
+
+  <span class="kw">else if</span> (cfg.spawnMode <span class="op">===</span> <span class="str">'beam_terminus'</span>) {
+    <span class="cm">// Spawn at the far end, spray outward</span>
+    <span class="kw">for</span> (<span class="kw">let</span> i <span class="op">=</span> <span class="num">0</span>; i <span class="op"><</span> (cfg.count <span class="op">||</span> <span class="num">3</span>); i<span class="op">++</span>) {
+      <span class="kw">const</span> angle <span class="op">=</span> effect.beamDirection <span class="op">+</span> (Math.<span class="fn">random</span>() <span class="op">-</span> <span class="num">0.5</span>) <span class="op">*</span> Math.PI;
+      <span class="kw">const</span> radial <span class="op">=</span> cfg.velocity.radialRange[<span class="num">0</span>]
+        <span class="op">+</span> Math.<span class="fn">random</span>() <span class="op">*</span> (cfg.velocity.radialRange[<span class="num">1</span>] <span class="op">-</span> cfg.velocity.radialRange[<span class="num">0</span>]);
+      <span class="kw">const</span> tangent <span class="op">=</span> cfg.velocity.tangentialRange[<span class="num">0</span>]
+        <span class="op">+</span> Math.<span class="fn">random</span>() <span class="op">*</span> (cfg.velocity.tangentialRange[<span class="num">1</span>] <span class="op">-</span> cfg.velocity.tangentialRange[<span class="num">0</span>]);
+
+      effect.particles.<span class="fn">push</span>({
+        x: effect.beamEndX <span class="op">+</span> (Math.<span class="fn">random</span>() <span class="op">-</span> <span class="num">0.5</span>) <span class="op">*</span> <span class="num">6</span>,
+        y: effect.beamEndY <span class="op">+</span> (Math.<span class="fn">random</span>() <span class="op">-</span> <span class="num">0.5</span>) <span class="op">*</span> <span class="num">6</span>,
+        vx: Math.<span class="fn">cos</span>(angle) <span class="op">*</span> radial <span class="op">+</span> Math.<span class="fn">cos</span>(angle <span class="op">+</span> Math.PI<span class="op">/</span><span class="num">2</span>) <span class="op">*</span> tangent,
+        vy: Math.<span class="fn">sin</span>(angle) <span class="op">*</span> radial <span class="op">+</span> Math.<span class="fn">sin</span>(angle <span class="op">+</span> Math.PI<span class="op">/</span><span class="num">2</span>) <span class="op">*</span> tangent,
+        life: cfg.lifetime,
+        maxLife: cfg.lifetime,
+        sprite: cfg.sprite,
+      });
+    }
+  }
+},
+
+<span class="cm">// ── Caster feedback (heal pulse ring) ──</span>
+
+<span class="fn">startCasterFeedback</span>(effect) {
+  <span class="kw">const</span> fb <span class="op">=</span> effect.config.casterFeedback;
+  effect.feedbackTimer <span class="op">=</span> <span class="num">0</span>;
+  effect.feedbackDuration <span class="op">=</span> fb.duration;
+  effect.feedbackActive <span class="op">=</span> <span class="kw">true</span>;
+}</pre>
+
+<h3>Part C — The Renderer: Drawing beams</h3>
+<p>The beam renderer draws a line between two world positions with configurable width, core/glow layers, and dashed/solid styles. This is called during both <code>drawGround()</code> (telegraphs) and <code>drawOverlay()</code> (active beams).</p>
+
+<pre><span class="cm">// ─── effect-renderer.js (beam rendering additions) ───</span>
+
+<span class="cm">// ── TELEGRAPH: beam_telegraph type ──</span>
+
+<span class="fn">drawTelegraph</span>(ctx, effect, camX, camY) {
+  <span class="kw">const</span> cfg <span class="op">=</span> effect.config.telegraph;
+
+  <span class="cm">// Dispatch by type (existing types + new beam type)</span>
+  <span class="kw">if</span> (cfg.type <span class="op">===</span> <span class="str">'circle_grow'</span>) { <span class="kw">this</span>.<span class="fn">drawTelegraphCircle</span>(ctx,effect,camX,camY); <span class="kw">return</span>; }
+  <span class="kw">if</span> (cfg.type <span class="op">===</span> <span class="str">'arc_fill'</span>)     { <span class="kw">this</span>.<span class="fn">drawTelegraphArc</span>(ctx,effect,camX,camY);    <span class="kw">return</span>; }
+  <span class="kw">if</span> (cfg.type <span class="op">===</span> <span class="str">'beam_telegraph'</span>) { <span class="kw">this</span>.<span class="fn">drawBeamTelegraph</span>(ctx,effect,camX,camY); <span class="kw">return</span>; }
+},
+
+<span class="fn">drawBeamTelegraph</span>(ctx, effect, camX, camY) {
+  <span class="kw">const</span> cfg <span class="op">=</span> effect.config.telegraph;
+  <span class="kw">const</span> progress <span class="op">=</span> Math.<span class="fn">min</span>(effect.phaseTimer <span class="op">/</span> effect.telegraphDuration, <span class="num">1.0</span>);
+
+  <span class="cm">// Screen coords for start (caster) and end</span>
+  <span class="kw">const</span> sx <span class="op">=</span> effect.casterX <span class="op">-</span> camX;
+  <span class="kw">const</span> sy <span class="op">=</span> effect.casterY <span class="op">-</span> camY;
+  <span class="kw">const</span> ex <span class="op">=</span> effect.beamEndX <span class="op">-</span> camX;
+  <span class="kw">const</span> ey <span class="op">=</span> effect.beamEndY <span class="op">-</span> camY;
+
+  <span class="cm">// Beam width in pixels</span>
+  <span class="kw">const</span> widthPx <span class="op">=</span> cfg.width <span class="op">*</span> TILE_SIZE;
+
+  <span class="cm">// Opacity — static or charging</span>
+  <span class="kw">let</span> alpha <span class="op">=</span> cfg.fillOpacity <span class="op">||</span> <span class="num">0.3</span>;
+  <span class="kw">if</span> (cfg.chargeIntensity) {
+    alpha <span class="op">=</span> (cfg.startOpacity <span class="op">||</span> <span class="num">0.1</span>) <span class="op">+</span>
+            ((cfg.endOpacity <span class="op">||</span> <span class="num">0.5</span>) <span class="op">-</span> (cfg.startOpacity <span class="op">||</span> <span class="num">0.1</span>)) <span class="op">*</span> progress;
+  }
+
+  ctx.<span class="fn">save</span>();
+  ctx.globalAlpha <span class="op">=</span> alpha;
+
+  <span class="kw">if</span> (cfg.style <span class="op">===</span> <span class="str">'dashed'</span>) {
+    <span class="cm">// ── Dashed pulsing line (life_drain) ──</span>
+    <span class="kw">const</span> pulse <span class="op">=</span> <span class="num">0.5</span> <span class="op">+</span> <span class="num">0.5</span> <span class="op">*</span> Math.<span class="fn">sin</span>(effect.phaseTimer <span class="op">/</span> (cfg.pulseRate <span class="op">||</span> <span class="num">200</span>) <span class="op">*</span> Math.PI);
+    ctx.globalAlpha <span class="op">=</span> alpha <span class="op">*</span> (<span class="num">0.4</span> <span class="op">+</span> pulse <span class="op">*</span> <span class="num">0.6</span>);
+
+    ctx.strokeStyle <span class="op">=</span> cfg.color;
+    ctx.lineWidth <span class="op">=</span> widthPx;
+    ctx.lineCap <span class="op">=</span> <span class="str">'round'</span>;
+    ctx.<span class="fn">setLineDash</span>([cfg.dashLength <span class="op">||</span> <span class="num">8</span>, cfg.dashGap <span class="op">||</span> <span class="num">6</span>]);
+    <span class="cm">// Animate dash offset for "flowing" effect</span>
+    ctx.lineDashOffset <span class="op">=</span> <span class="op">-</span>effect.phaseTimer <span class="op">*</span> <span class="num">0.05</span>;
+
+    ctx.<span class="fn">beginPath</span>();
+    ctx.<span class="fn">moveTo</span>(sx, sy);
+    ctx.<span class="fn">lineTo</span>(ex, ey);
+    ctx.<span class="fn">stroke</span>();
+
+    ctx.<span class="fn">setLineDash</span>([]);  <span class="cm">// Reset</span>
+  } <span class="kw">else</span> {
+    <span class="cm">// ── Solid charging line (void_beam) ──</span>
+    <span class="cm">// Outer glow</span>
+    ctx.strokeStyle <span class="op">=</span> cfg.color;
+    ctx.lineWidth <span class="op">=</span> widthPx <span class="op">+</span> <span class="num">4</span>;
+    ctx.lineCap <span class="op">=</span> <span class="str">'round'</span>;
+    ctx.globalAlpha <span class="op">=</span> alpha <span class="op">*</span> <span class="num">0.3</span>;
+    ctx.<span class="fn">beginPath</span>();
+    ctx.<span class="fn">moveTo</span>(sx, sy);
+    ctx.<span class="fn">lineTo</span>(ex, ey);
+    ctx.<span class="fn">stroke</span>();
+
+    <span class="cm">// Core line</span>
+    ctx.globalAlpha <span class="op">=</span> alpha;
+    ctx.lineWidth <span class="op">=</span> widthPx;
+    ctx.<span class="fn">beginPath</span>();
+    ctx.<span class="fn">moveTo</span>(sx, sy);
+    ctx.<span class="fn">lineTo</span>(ex, ey);
+    ctx.<span class="fn">stroke</span>();
+  }
+
+  <span class="cm">// Border edges (both styles)</span>
+  ctx.globalAlpha <span class="op">=</span> alpha <span class="op">*</span> <span class="num">0.8</span>;
+  ctx.strokeStyle <span class="op">=</span> cfg.borderColor;
+  ctx.lineWidth <span class="op">=</span> <span class="num">1</span>;
+  <span class="cm">// Draw two parallel lines along beam edges</span>
+  <span class="kw">const</span> perpX <span class="op">=</span> Math.<span class="fn">cos</span>(effect.beamDirection <span class="op">+</span> Math.PI<span class="op">/</span><span class="num">2</span>) <span class="op">*</span> widthPx<span class="op">/</span><span class="num">2</span>;
+  <span class="kw">const</span> perpY <span class="op">=</span> Math.<span class="fn">sin</span>(effect.beamDirection <span class="op">+</span> Math.PI<span class="op">/</span><span class="num">2</span>) <span class="op">*</span> widthPx<span class="op">/</span><span class="num">2</span>;
+  ctx.<span class="fn">beginPath</span>();
+  ctx.<span class="fn">moveTo</span>(sx <span class="op">+</span> perpX, sy <span class="op">+</span> perpY); ctx.<span class="fn">lineTo</span>(ex <span class="op">+</span> perpX, ey <span class="op">+</span> perpY);
+  ctx.<span class="fn">moveTo</span>(sx <span class="op">-</span> perpX, sy <span class="op">-</span> perpY); ctx.<span class="fn">lineTo</span>(ex <span class="op">-</span> perpX, ey <span class="op">-</span> perpY);
+  ctx.<span class="fn">stroke</span>();
+
+  ctx.<span class="fn">restore</span>();
+},
+
+<span class="cm">// ── CHANNEL: active beam rendering ──</span>
+
+<span class="fn">drawOverlay</span>(ctx, cameraX, cameraY) {
+  <span class="kw">for</span> (<span class="kw">const</span> [id, effect] <span class="kw">of</span> EffectAnimator.activeEffects) {
+    <span class="kw">if</span> (effect.phase <span class="op">===</span> <span class="str">'impact'</span>) {
+      <span class="kw">this</span>.<span class="fn">drawImpact</span>(ctx, effect, cameraX, cameraY);
+      <span class="kw">this</span>.<span class="fn">drawParticles</span>(ctx, effect, cameraX, cameraY);
+    }
+    <span class="kw">if</span> (effect.phase <span class="op">===</span> <span class="str">'channel'</span> <span class="op">||</span> effect.phase <span class="op">===</span> <span class="str">'fading'</span>) {    <span class="cm">// ← NEW</span>
+      <span class="kw">this</span>.<span class="fn">drawBeamChannel</span>(ctx, effect, cameraX, cameraY);
+      <span class="kw">this</span>.<span class="fn">drawParticles</span>(ctx, effect, cameraX, cameraY);
+      <span class="kw">this</span>.<span class="fn">drawCasterFeedback</span>(ctx, effect, cameraX, cameraY);
+    }
+  }
+},
+
+<span class="fn">drawBeamChannel</span>(ctx, effect, camX, camY) {
+  <span class="kw">const</span> cfg <span class="op">=</span> effect.config.channel;
+
+  <span class="kw">const</span> sx <span class="op">=</span> effect.casterX <span class="op">-</span> camX;
+  <span class="kw">const</span> sy <span class="op">=</span> effect.casterY <span class="op">-</span> camY;
+  <span class="kw">const</span> ex <span class="op">=</span> effect.beamEndX <span class="op">-</span> camX;
+  <span class="kw">const</span> ey <span class="op">=</span> effect.beamEndY <span class="op">-</span> camY;
+
+  <span class="cm">// Width with optional flicker</span>
+  <span class="kw">let</span> widthPx <span class="op">=</span> cfg.width <span class="op">*</span> TILE_SIZE;
+  <span class="kw">if</span> (cfg.flicker) {
+    <span class="kw">const</span> flick <span class="op">=</span> Math.<span class="fn">sin</span>(effect.phaseTimer <span class="op">/</span> <span class="num">1000</span> <span class="op">*</span> cfg.flicker.speed <span class="op">*</span> Math.PI <span class="op">*</span> <span class="num">2</span>);
+    widthPx <span class="op">*=</span> (<span class="num">1</span> <span class="op">+</span> flick <span class="op">*</span> cfg.flicker.amount);
+  }
+
+  <span class="cm">// Fade multiplier (beam dims during 'fading' phase)</span>
+  <span class="kw">let</span> fadeMult <span class="op">=</span> <span class="num">1.0</span>;
+  <span class="kw">if</span> (effect.phase <span class="op">===</span> <span class="str">'fading'</span>) {
+    fadeMult <span class="op">=</span> Math.<span class="fn">max</span>(<span class="num">0</span>, <span class="num">1.0</span> <span class="op">-</span> effect.phaseTimer <span class="op">/</span> <span class="num">300</span>);
+  }
+
+  ctx.<span class="fn">save</span>();
+
+  <span class="cm">// Layer 1: Outer glow</span>
+  <span class="kw">if</span> (cfg.glowRadius) {
+    ctx.globalAlpha <span class="op">=</span> <span class="num">0.15</span> <span class="op">*</span> fadeMult;
+    ctx.strokeStyle <span class="op">=</span> cfg.glowColor <span class="op">||</span> cfg.color;
+    ctx.lineWidth <span class="op">=</span> cfg.glowRadius <span class="op">*</span> TILE_SIZE <span class="op">*</span> <span class="num">2</span>;
+    ctx.lineCap <span class="op">=</span> <span class="str">'round'</span>;
+    ctx.<span class="fn">beginPath</span>();
+    ctx.<span class="fn">moveTo</span>(sx, sy); ctx.<span class="fn">lineTo</span>(ex, ey);
+    ctx.<span class="fn">stroke</span>();
+  }
+
+  <span class="cm">// Layer 2: Main beam body</span>
+  ctx.globalAlpha <span class="op">=</span> <span class="num">0.7</span> <span class="op">*</span> fadeMult;
+  ctx.strokeStyle <span class="op">=</span> cfg.color;
+  ctx.lineWidth <span class="op">=</span> widthPx;
+  ctx.lineCap <span class="op">=</span> <span class="str">'round'</span>;
+  ctx.<span class="fn">beginPath</span>();
+  ctx.<span class="fn">moveTo</span>(sx, sy); ctx.<span class="fn">lineTo</span>(ex, ey);
+  ctx.<span class="fn">stroke</span>();
+
+  <span class="cm">// Layer 3: Bright inner core</span>
+  ctx.globalAlpha <span class="op">=</span> <span class="num">0.9</span> <span class="op">*</span> fadeMult;
+  ctx.strokeStyle <span class="op">=</span> cfg.coreColor;
+  ctx.lineWidth <span class="op">=</span> (cfg.coreWidth <span class="op">||</span> <span class="num">0.15</span>) <span class="op">*</span> TILE_SIZE;
+  ctx.<span class="fn">beginPath</span>();
+  ctx.<span class="fn">moveTo</span>(sx, sy); ctx.<span class="fn">lineTo</span>(ex, ey);
+  ctx.<span class="fn">stroke</span>();
+
+  ctx.<span class="fn">restore</span>();
+},
+
+<span class="cm">// ── CASTER FEEDBACK: expanding heal ring ──</span>
+
+<span class="fn">drawCasterFeedback</span>(ctx, effect, camX, camY) {
+  <span class="kw">if</span> (!effect.feedbackActive) <span class="kw">return</span>;
+  <span class="kw">const</span> fb <span class="op">=</span> effect.config.casterFeedback;
+  <span class="kw">if</span> (!fb) <span class="kw">return</span>;
+
+  effect.feedbackTimer <span class="op">+=</span> <span class="num">0</span>;  <span class="cm">// Timer updated in main update loop</span>
+  <span class="kw">const</span> progress <span class="op">=</span> Math.<span class="fn">min</span>(effect.feedbackTimer <span class="op">/</span> fb.duration, <span class="num">1.0</span>);
+  <span class="kw">if</span> (progress <span class="op">>=</span> <span class="num">1.0</span>) { effect.feedbackActive <span class="op">=</span> <span class="kw">false</span>; <span class="kw">return</span>; }
+
+  <span class="kw">const</span> radius <span class="op">=</span> (fb.startRadius <span class="op">+</span> (fb.endRadius <span class="op">-</span> fb.startRadius) <span class="op">*</span> progress) <span class="op">*</span> TILE_SIZE;
+  <span class="kw">const</span> alpha <span class="op">=</span> progress <span class="op">></span> fb.fadeStart ? <span class="num">1.0</span> <span class="op">-</span> ((progress <span class="op">-</span> fb.fadeStart) <span class="op">/</span> (<span class="num">1.0</span> <span class="op">-</span> fb.fadeStart)) : <span class="num">1.0</span>;
+
+  <span class="kw">const</span> cx <span class="op">=</span> effect.casterX <span class="op">-</span> camX;
+  <span class="kw">const</span> cy <span class="op">=</span> effect.casterY <span class="op">-</span> camY;
+
+  ctx.<span class="fn">save</span>();
+  ctx.globalAlpha <span class="op">=</span> alpha <span class="op">*</span> <span class="num">0.7</span>;
+  ctx.strokeStyle <span class="op">=</span> fb.color;
+  ctx.lineWidth <span class="op">=</span> fb.ringWidth;
+  ctx.<span class="fn">beginPath</span>();
+  ctx.<span class="fn">arc</span>(cx, cy, radius, <span class="num">0</span>, Math.PI <span class="op">*</span> <span class="num">2</span>);
+  ctx.<span class="fn">stroke</span>();
+  ctx.<span class="fn">restore</span>();
+}</pre>
+
+<h3>Part D — Hit Detection: <code>isInsideBeam()</code></h3>
+<p>This is the core collision check for beam abilities. Instead of a simple circle radius check, beams need a <strong>point-to-line-segment distance</strong> test. This function is called by the ability system during the channel phase to determine if a player is inside the beam.</p>
+
+<pre><span class="cm">// ─── In enemy-ability-system.js ───</span>
+<span class="cm">// Called during beam_tick events to check if the player is inside the beam.</span>
+<span class="cm">// Uses perpendicular distance from the player to the beam line segment.</span>
+<span class="cm">//</span>
+<span class="cm">// How it works:</span>
+<span class="cm">//   1. Project the player position onto the beam line</span>
+<span class="cm">//   2. Clamp t to [0,1] so we only check the actual beam segment</span>
+<span class="cm">//   3. Find the nearest point on the segment</span>
+<span class="cm">//   4. If the distance to that point is less than half the beam width, hit!</span>
+
+<span class="fn">isInsideBeam</span>(px, py, effect) {
+  <span class="cm">// Get beam line segment endpoints</span>
+  <span class="kw">const</span> x1 <span class="op">=</span> effect.casterX;
+  <span class="kw">const</span> y1 <span class="op">=</span> effect.casterY;
+  <span class="kw">const</span> x2 <span class="op">=</span> effect.beamEndX;
+  <span class="kw">const</span> y2 <span class="op">=</span> effect.beamEndY;
+
+  <span class="cm">// Length of beam segment squared (avoid sqrt)</span>
+  <span class="kw">const</span> lineLengthSq <span class="op">=</span> (x2 <span class="op">-</span> x1) <span class="op">**</span> <span class="num">2</span> <span class="op">+</span> (y2 <span class="op">-</span> y1) <span class="op">**</span> <span class="num">2</span>;
+
+  <span class="cm">// Project player position onto beam line → parameter t ∈ [0, 1]</span>
+  <span class="kw">const</span> t <span class="op">=</span> Math.<span class="fn">max</span>(<span class="num">0</span>, Math.<span class="fn">min</span>(<span class="num">1</span>,
+    ((px <span class="op">-</span> x1) <span class="op">*</span> (x2 <span class="op">-</span> x1) <span class="op">+</span> (py <span class="op">-</span> y1) <span class="op">*</span> (y2 <span class="op">-</span> y1)) <span class="op">/</span> lineLengthSq
+  ));
+
+  <span class="cm">// Nearest point on the beam segment to the player</span>
+  <span class="kw">const</span> nearestX <span class="op">=</span> x1 <span class="op">+</span> t <span class="op">*</span> (x2 <span class="op">-</span> x1);
+  <span class="kw">const</span> nearestY <span class="op">=</span> y1 <span class="op">+</span> t <span class="op">*</span> (y2 <span class="op">-</span> y1);
+
+  <span class="cm">// Distance from player to nearest point on beam</span>
+  <span class="kw">const</span> distance <span class="op">=</span> Math.<span class="fn">hypot</span>(px <span class="op">-</span> nearestX, py <span class="op">-</span> nearestY);
+
+  <span class="cm">// Hit if within half the beam width</span>
+  <span class="kw">return</span> distance <span class="op"><=</span> effect.halfWidth;
+}
+
+<span class="cm">// ── Usage in beam_tick handler ──</span>
+
+EventBus.<span class="fn">on</span>(<span class="str">'beam_tick'</span>, ({ effectId, effect }) <span class="op">=></span> {
+  <span class="cm">// Check all players against beam</span>
+  <span class="kw">for</span> (<span class="kw">const</span> player <span class="kw">of</span> playerList) {
+    <span class="kw">if</span> (<span class="kw">this</span>.<span class="fn">isInsideBeam</span>(player.worldX, player.worldY, effect)) {
+      <span class="cm">// Apply tick damage</span>
+      player.<span class="fn">takeDamage</span>(effect.tickDamage);
+    }
+  }
+});</pre>
+
+<div class="callout warn">
+  <strong>Critical — beam hit detection vs circle hit detection:</strong> For ground_slam, you check <code>distance(player, center) &lt; radius</code>. For beams, you check perpendicular distance to a <em>line segment</em>. The <code>t</code> parameter clamp to [0,1] is essential — without it, a player standing behind the caster (past the start point) or far past the beam's end would still register as "inside the beam." The segment clamp ensures only the actual beam path counts.
+</div>
+
+<h3>Part E — The Glue: Connect beam abilities to the ability system</h3>
+
+<pre><span class="cm">// ─── In enemy-ability-system.js ───</span>
+<span class="cm">// Modified executeAbility() for beam-type abilities.</span>
+<span class="cm">// The key difference: beam abilities may have a sustained channel phase</span>
+<span class="cm">// where the enemy remains locked and the beam persists.</span>
+
+<span class="fn">executeAbility</span>(enemy, target, ability, abilitySet) {
+  <span class="kw">const</span> telegraphTime <span class="op">=</span> <span class="cm">/* ... existing ... */</span>;
+  <span class="kw">const</span> recoveryTime <span class="op">=</span> ability.recoveryTime <span class="op">||</span> <span class="num">600</span>;
+  <span class="kw">const</span> effectConfig <span class="op">=</span> ABILITY_EFFECTS[ability.id];
+
+  <span class="cm">// Compute direction</span>
+  <span class="kw">let</span> direction <span class="op">=</span> <span class="kw">undefined</span>;
+  <span class="kw">if</span> (effectConfig?.telegraph?.directed) {
+    direction <span class="op">=</span> Math.<span class="fn">atan2</span>(target.worldY <span class="op">-</span> enemy.worldY, target.worldX <span class="op">-</span> enemy.worldX);
+  }
+
+  <span class="cm">// Start visual effect</span>
+  <span class="kw">const</span> effectId <span class="op">=</span> EffectAnimator.<span class="fn">startEffect</span>(
+    ability.id, enemy.worldX, enemy.worldY,
+    telegraphTime, ability.radius <span class="op">||</span> <span class="num">0</span>, direction
+  );
+  enemy._currentEffectId <span class="op">=</span> effectId;
+  <span class="kw">if</span> (direction <span class="op">!==</span> <span class="kw">undefined</span>) enemy.facingAngle <span class="op">=</span> direction;
+
+  <span class="cm">// After telegraph: resolve</span>
+  <span class="fn">setTimeout</span>(() <span class="op">=></span> {
+    <span class="cm">// ... existing safety checks (enemy alive, not stunned) ...</span>
+
+    EffectAnimator.<span class="fn">resolve</span>(effectId);
+
+    <span class="cm">// For instant-resolve beams (life_drain), deal damage now</span>
+    <span class="kw">if</span> (!effectConfig?.channel?.tickInterval) {
+      <span class="kw">this</span>.<span class="fn">resolveAbility</span>(enemy, target, ability);
+    }
+
+    <span class="cm">// ════ NEW: For sustained beams, keep enemy locked during channel ════</span>
+    <span class="kw">const</span> channelDuration <span class="op">=</span> effectConfig?.channel?.duration <span class="op">||</span> <span class="num">0</span>;
+
+    <span class="kw">if</span> (channelDuration <span class="op">></span> <span class="num">500</span>) {
+      <span class="cm">// Keep enemy in 'channeling' state for the full channel duration</span>
+      enemy.abilityState <span class="op">=</span> <span class="str">'channeling'</span>;
+
+      <span class="fn">setTimeout</span>(() <span class="op">=></span> {
+        <span class="cm">// Channel ends — stop audio, enter recovery</span>
+        <span class="kw">if</span> (effectConfig.audio?.channel) {
+          AudioManager.<span class="fn">stop</span>(effectConfig.audio.channel);
+        }
+        <span class="kw">if</span> (effectConfig.audio?.channelEnd) {
+          AudioManager.<span class="fn">play</span>(effectConfig.audio.channelEnd);
+        }
+        <span class="kw">this</span>.<span class="fn">enterRecovery</span>(enemy, recoveryTime, enemy.id);
+      }, channelDuration);
+
+    } <span class="kw">else</span> {
+      <span class="cm">// Short channel (life_drain) — go straight to recovery</span>
+      <span class="kw">this</span>.<span class="fn">enterRecovery</span>(enemy, recoveryTime, enemy.id);
+    }
+
+  }, telegraphTime);
+}</pre>
+
+<!-- ════════════════════════════════════════════ -->
+<h2><span class="phase-num">5</span> How the Render Loop Calls It</h2>
+
+<p>No structural changes to the render loop. The beam telegraph draws during <code>drawGround()</code> and the active beam + particles draw during <code>drawOverlay()</code>. The new <code>'channel'</code> and <code>'fading'</code> phases are handled by the existing overlay pass because the renderer checks for those phases alongside <code>'impact'</code>.</p>
+
+<pre><span class="cm">// ─── Main game loop (unchanged structure) ───</span>
+
+<span class="fn">update</span>(deltaTime) {
+  EnemyAbilitySystem.<span class="fn">update</span>(deltaTime);
+  EffectAnimator.<span class="fn">update</span>(deltaTime);   <span class="cm">// Now handles 'channel' phase + beam tracking</span>
+}
+
+<span class="fn">render</span>(ctx) {
+  TileRenderer.<span class="fn">draw</span>(ctx);
+  EffectRenderer.<span class="fn">drawGround</span>(ctx, camera.x, camera.y);   <span class="cm">// beam_telegraph renders here</span>
+  EntityRenderer.<span class="fn">draw</span>(ctx);
+  EffectRenderer.<span class="fn">drawOverlay</span>(ctx, camera.x, camera.y);   <span class="cm">// beam_channel + particles render here</span>
+  UIRenderer.<span class="fn">draw</span>(ctx);
+}</pre>
+
+<div class="callout">
+  <strong>Same pipeline, new types.</strong> Adding beam abilities required zero changes to the render loop structure. The <code>beam_telegraph</code> and <code>beam_channel</code> types plug into the existing dispatch. The only new structural concept is the <code>'channel'</code> phase in the EffectAnimator, which sits between telegraph and recovery. All existing abilities (ground_slam, melee_swing) continue to work unchanged because they never enter the channel phase.
+</div>
+
+<!-- ════════════════════════════════════════════ -->
+<h2><span class="phase-num">6</span> Adapting This for Other Beam / Channel Variants</h2>
+
+<p>The beam system handles any ability that connects two points or persists over time. Here's how to extend it:</p>
+
+<div class="card">
+  <h3>For lightning_bolt (instant beam, no channel):</h3>
+  <p>Set <code>channel.duration: 80</code> (nearly instant), <code>trackingSpeed: 0</code>, wide core (0.5 tiles), no glow. The visual is a bright jagged line that flashes once. Use a <code>zigzag</code> line style instead of straight — the renderer draws 4–6 random perpendicular offsets along the beam path to simulate a lightning bolt. Add a bright white flash frame at the start. Particles are bright white sparks spraying from the impact point.</p>
+</div>
+
+<div class="card">
+  <h3>For frost_ray (slow sustained beam, freezes on hit):</h3>
+  <p>Similar to void_beam: <code>channel.duration: 1500</code>, <code>trackingSpeed: 20</code> (slower tracking). Width 0.5 tiles. Ice-blue color scheme (#88CCFF core, #4488CC outer). Particles are snowflake-style sprites flowing along the beam. On sustained hit, apply a stacking slow debuff — each tick increases slow by 10%. Caster feedback: frost crystals growing on caster's hands (cosmetic sprite overlay).</p>
+</div>
+
+<div class="card">
+  <h3>For chain_lightning (multi-target beam):</h3>
+  <p>Extension of the beam system: start with one beam from caster to primary target, then on hit, spawn additional beams from the hit target to nearby secondary targets. Each chain segment is a separate beam effect with <code>duration: 100</code> and <code>zigzag</code> rendering. Chain targets are computed by the ability system, not the animation system — each segment gets its own <code>startEffect()</code> call with explicit start/end positions instead of using direction + range.</p>
+</div>
+
+<div class="card">
+  <h3>For tractor_beam (pull effect):</h3>
+  <p>Beam with gameplay effect: during channel, the target is pulled toward the caster at a rate of 1 tile/sec. Visual is similar to life_drain but with a different particle direction — particles flow from caster TO target (the energy pushes outward, but the target gets dragged in). Width 0.4 tiles, blue-white color. The ability system applies a position force on the target during each update tick, not just damage.</p>
+</div>
+
+<script>
+// ════════════════════════════════════════════
+// LIVE DEMO — beam abilities animation
+// ════════════════════════════════════════════
+
+const canvas = document.getElementById('demoCanvas');
+const ctx = canvas.getContext('2d');
+const TILE = 32;
+
+// Positions
+const CASTER_X = 90;
+const CASTER_Y = canvas.height / 2;
+
+let currentDemo = 'drain'; // 'drain' or 'void'
+let animState = null;
+let animFrame = null;
+
+// ── Demo configurations ──
+
+const DEMOS = {
+  drain: {
+    targetX: CASTER_X + 4 * TILE,
+    targetY: CASTER_Y,
+    beamWidth: 0.3 * TILE,
+    telegraphDuration: 600,
+    channelDuration: 200,
+    recoveryDuration: 500,
+    telegraphColor: '#88FF88',
+    telegraphBorderColor: '#44AA44',
+    beamColor: '#44FF44',
+    coreColor: '#FFFFFF',
+    coreWidth: 0.1 * TILE,
+    glowColor: 'rgba(136,255,136,0.12)',
+    glowRadius: 0.5 * TILE,
+    particleColor: '#88FF88',
+    particleFlowReverse: true,
+    dashed: true,
+    healPulse: true,
+    healColor: '#88FF88',
+    tracking: false,
+    casterColor: '#668866',
+    label: 'life_drain',
+  },
+  void: {
+    targetX: CASTER_X + 12 * TILE,
+    targetY: CASTER_Y,
+    beamWidth: 1.0 * TILE,
+    telegraphDuration: 1500,
+    channelDuration: 2000,
+    recoveryDuration: 800,
+    telegraphColor: '#8844AA',
+    telegraphBorderColor: '#6622AA',
+    beamColor: '#6622AA',
+    coreColor: '#FF44FF',
+    coreWidth: 0.3 * TILE,
+    glowColor: 'rgba(102,34,170,0.10)',
+    glowRadius: 1.5 * TILE,
+    particleColor: '#9944CC',
+    particleFlowReverse: false,
+    dashed: false,
+    healPulse: false,
+    tracking: true,
+    trackingSpeed: 30,
+    casterColor: '#665588',
+    label: 'void_beam',
+  }
+};
+
+function switchDemo(type) {
+  stopAnim();
+  currentDemo = type;
+  document.getElementById('tabDrain').className = 'ability-tab' + (type === 'drain' ? ' active-drain' : '');
+  document.getElementById('tabVoid').className = 'ability-tab' + (type === 'void' ? ' active-void' : '');
+  drawStatic();
+  document.getElementById('phaseLabel').textContent = `${DEMOS[type].label} — click a button to start`;
+}
+
+// ── Drawing helpers ──
+
+function drawGrid() {
+  ctx.fillStyle = '#1a1a22';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.strokeStyle = '#222230';
+  ctx.lineWidth = 1;
+  for (let x = 0; x < canvas.width; x += TILE) {
+    ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, canvas.height); ctx.stroke();
+  }
+  for (let y = 0; y < canvas.height; y += TILE) {
+    ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(canvas.width, y); ctx.stroke();
+  }
+}
+
+function drawCaster(cfg, recovery, channeling) {
+  const ex = CASTER_X;
+  const ey = CASTER_Y;
+  const bodyColor = recovery ? '#558855' : (channeling ? cfg.casterColor : '#666688');
+
+  // Body
+  ctx.fillStyle = bodyColor;
+  ctx.fillRect(ex - 10, ey - 14, 20, 24);
+  // Head
+  ctx.fillStyle = '#444466';
+  ctx.fillRect(ex - 7, ey - 20, 14, 8);
+  // Arms
+  if (channeling) {
+    // Arms extended toward target
+    ctx.fillStyle = bodyColor;
+    ctx.fillRect(ex + 10, ey - 8, 16, 6);
+    ctx.fillRect(ex + 10, ey + 2, 16, 6);
+  } else {
+    ctx.fillStyle = bodyColor;
+    ctx.fillRect(ex - 16, ey - 6, 6, 14);
+    ctx.fillRect(ex + 10, ey - 6, 6, 14);
+  }
+}
+
+function drawTargetMarker(cfg) {
+  const tx = cfg.targetX;
+  const ty = cfg.targetY;
+  // Small X marker at target
+  ctx.save();
+  ctx.globalAlpha = 0.3;
+  ctx.strokeStyle = cfg.telegraphColor;
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(tx - 6, ty - 6); ctx.lineTo(tx + 6, ty + 6);
+  ctx.moveTo(tx + 6, ty - 6); ctx.lineTo(tx - 6, ty + 6);
+  ctx.stroke();
+  ctx.restore();
+}
+
+// ── Telegraph rendering ──
+
+function drawBeamTelegraph(cfg, progress) {
+  const sx = CASTER_X;
+  const sy = CASTER_Y;
+  const beamDir = animState ? animState.beamDir : 0;
+  const range = (cfg.targetX - CASTER_X);
+  const ex = sx + Math.cos(beamDir) * range;
+  const ey = sy + Math.sin(beamDir) * range;
+
+  let alpha = 0.3;
+  if (!cfg.dashed) {
+    // Charging intensity for void_beam
+    alpha = 0.08 + 0.42 * progress;
+  }
+
+  ctx.save();
+
+  if (cfg.dashed) {
+    // Dashed pulsing line
+    const pulse = 0.5 + 0.5 * Math.sin(performance.now() / 200 * Math.PI);
+    ctx.globalAlpha = alpha * (0.4 + pulse * 0.6);
+    ctx.strokeStyle = cfg.telegraphColor;
+    ctx.lineWidth = cfg.beamWidth;
+    ctx.lineCap = 'round';
+    ctx.setLineDash([8, 6]);
+    ctx.lineDashOffset = -performance.now() * 0.05;
+    ctx.beginPath();
+    ctx.moveTo(sx, sy); ctx.lineTo(ex, ey);
+    ctx.stroke();
+    ctx.setLineDash([]);
+  } else {
+    // Solid charging line — outer glow
+    ctx.strokeStyle = cfg.telegraphColor;
+    ctx.lineWidth = cfg.beamWidth + 6;
+    ctx.lineCap = 'round';
+    ctx.globalAlpha = alpha * 0.25;
+    ctx.beginPath();
+    ctx.moveTo(sx, sy); ctx.lineTo(ex, ey);
+    ctx.stroke();
+
+    // Core
+    ctx.globalAlpha = alpha;
+    ctx.lineWidth = cfg.beamWidth;
+    ctx.beginPath();
+    ctx.moveTo(sx, sy); ctx.lineTo(ex, ey);
+    ctx.stroke();
+  }
+
+  // Border edges
+  ctx.globalAlpha = alpha * 0.6;
+  ctx.strokeStyle = cfg.telegraphBorderColor;
+  ctx.lineWidth = 1;
+  const perpX = Math.cos(beamDir + Math.PI/2) * cfg.beamWidth / 2;
+  const perpY = Math.sin(beamDir + Math.PI/2) * cfg.beamWidth / 2;
+  ctx.beginPath();
+  ctx.moveTo(sx + perpX, sy + perpY); ctx.lineTo(ex + perpX, ey + perpY);
+  ctx.moveTo(sx - perpX, sy - perpY); ctx.lineTo(ex - perpX, ey - perpY);
+  ctx.stroke();
+
+  ctx.restore();
+}
+
+// ── Channel rendering ──
+
+function drawBeamChannel(cfg, progress, fadeMult) {
+  fadeMult = fadeMult || 1.0;
+  const sx = CASTER_X;
+  const sy = CASTER_Y;
+  const beamDir = animState ? animState.beamDir : 0;
+  const range = (cfg.targetX - CASTER_X);
+  const ex = sx + Math.cos(beamDir) * range;
+  const ey = sy + Math.sin(beamDir) * range;
+
+  // Width with flicker for void_beam
+  let w = cfg.beamWidth;
+  if (!cfg.dashed) {
+    const flick = Math.sin(performance.now() / 1000 * 12 * Math.PI * 2);
+    w *= (1 + flick * 0.08);
+  }
+
+  ctx.save();
+
+  // Layer 1: Outer glow
+  ctx.globalAlpha = 0.12 * fadeMult;
+  ctx.strokeStyle = cfg.glowColor;
+  ctx.lineWidth = cfg.glowRadius * 2;
+  ctx.lineCap = 'round';
+  ctx.beginPath();
+  ctx.moveTo(sx, sy); ctx.lineTo(ex, ey);
+  ctx.stroke();
+
+  // Layer 2: Main beam
+  ctx.globalAlpha = 0.7 * fadeMult;
+  ctx.strokeStyle = cfg.beamColor;
+  ctx.lineWidth = w;
+  ctx.beginPath();
+  ctx.moveTo(sx, sy); ctx.lineTo(ex, ey);
+  ctx.stroke();
+
+  // Layer 3: Inner core
+  ctx.globalAlpha = 0.9 * fadeMult;
+  ctx.strokeStyle = cfg.coreColor;
+  ctx.lineWidth = cfg.coreWidth;
+  ctx.beginPath();
+  ctx.moveTo(sx, sy); ctx.lineTo(ex, ey);
+  ctx.stroke();
+
+  ctx.restore();
+}
+
+// ── Particles ──
+
+function spawnBeamParticles(cfg, particles) {
+  const beamDir = animState ? animState.beamDir : 0;
+  const range = cfg.targetX - CASTER_X;
+
+  if (cfg.particleFlowReverse) {
+    // life_drain: spawn along beam, flow toward caster
+    const t = 0.3 + Math.random() * 0.7;
+    const bx = CASTER_X + Math.cos(beamDir) * range * t;
+    const by = CASTER_Y + Math.sin(beamDir) * range * t;
+    const towardCaster = beamDir + Math.PI;
+    const speed = 180;
+    const perpAngle = beamDir + Math.PI / 2;
+    const sway = (Math.random() - 0.5) * 8;
+
+    particles.push({
+      x: bx + Math.cos(perpAngle) * sway,
+      y: by + Math.sin(perpAngle) * sway,
+      vx: Math.cos(towardCaster) * speed + (Math.random() - 0.5) * 10,
+      vy: Math.sin(towardCaster) * speed + (Math.random() - 0.5) * 10,
+      life: 400, maxLife: 400,
+      size: 2 + Math.random() * 2,
+      color: cfg.particleColor,
+    });
+  } else {
+    // void_beam: spray at terminus
+    const ex = CASTER_X + Math.cos(beamDir) * range;
+    const ey = CASTER_Y + Math.sin(beamDir) * range;
+    for (let i = 0; i < 3; i++) {
+      const angle = beamDir + (Math.random() - 0.5) * Math.PI;
+      const speed = 30 + Math.random() * 50;
+      particles.push({
+        x: ex + (Math.random() - 0.5) * 8,
+        y: ey + (Math.random() - 0.5) * 8,
+        vx: Math.cos(angle) * speed,
+        vy: Math.sin(angle) * speed,
+        life: 500, maxLife: 500,
+        size: 1.5 + Math.random() * 1.5,
+        color: cfg.particleColor,
+      });
+    }
+  }
+}
+
+function updateParticles(particles, dt) {
+  for (const p of particles) {
+    if (p.life <= 0) continue;
+    p.x += p.vx * (dt / 1000);
+    p.y += p.vy * (dt / 1000);
+    p.vy += 80 * (dt / 1000);
+    p.life -= dt;
+  }
+}
+
+function drawParticles(particles) {
+  for (const p of particles) {
+    if (p.life <= 0) continue;
+    const ratio = p.life / p.maxLife;
+    const alpha = ratio < 0.4 ? ratio / 0.4 : 1.0;
+    ctx.save();
+    ctx.globalAlpha = alpha;
+    ctx.fillStyle = p.color;
+    const s = Math.max(1, Math.round(p.size * ratio));
+    ctx.fillRect(p.x - s/2, p.y - s/2, s, s);
+    ctx.restore();
+  }
+}
+
+// ── Heal pulse ──
+
+function drawHealPulse(progress) {
+  if (progress >= 1) return;
+  const radius = (0.2 + 1.0 * progress) * TILE;
+  const alpha = progress > 0.4 ? 1.0 - ((progress - 0.4) / 0.6) : 1.0;
+  ctx.save();
+  ctx.globalAlpha = alpha * 0.7;
+  ctx.strokeStyle = '#88FF88';
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.arc(CASTER_X, CASTER_Y, radius, 0, Math.PI * 2);
+  ctx.stroke();
+  ctx.restore();
+}
+
+// ── Screen shake ──
+
+function getShake(timer, intensity, sustained) {
+  if (!sustained && timer > 200) return { x: 0, y: 0 };
+  const i = sustained ? intensity : intensity * (1 - timer / 200);
+  return {
+    x: (Math.random() - 0.5) * 2 * i,
+    y: (Math.random() - 0.5) * 2 * i,
+  };
+}
+
+// ── Tracking ──
+
+function updateTracking(state, cfg, dt) {
+  if (!cfg.tracking) return;
+  // Simulate player movement: target slowly oscillates vertically
+  const simTargetY = CASTER_Y + Math.sin(performance.now() / 1200) * 60;
+  const desiredAngle = Math.atan2(simTargetY - CASTER_Y, cfg.targetX - CASTER_X);
+  let diff = desiredAngle - state.beamDir;
+  while (diff > Math.PI) diff -= Math.PI * 2;
+  while (diff < -Math.PI) diff += Math.PI * 2;
+  const maxRot = (cfg.trackingSpeed * Math.PI / 180) * (dt / 1000);
+  state.beamDir += Math.sign(diff) * Math.min(Math.abs(diff), maxRot);
+}
+
+// ── Static draw ──
+
+function drawStatic() {
+  const cfg = DEMOS[currentDemo];
+  drawGrid();
+  drawTargetMarker(cfg);
+  drawCaster(cfg, false, false);
+}
+
+// ── Animation loop ──
+
+function startAnim(phases) {
+  stopAnim();
+  const cfg = DEMOS[currentDemo];
+  animState = {
+    phases,
+    phaseIndex: 0,
+    phase: phases[0],
+    timer: 0,
+    cfg,
+    particles: [],
+    beamDir: 0,
+    healPulseTimer: -1,
+    particleSpawnTimer: 0,
+    shakeTimer: 999,
+    lastTime: performance.now(),
+  };
+  animFrame = requestAnimationFrame(tick);
+}
+
+function tick(now) {
+  if (!animState) return;
+  const dt = now - animState.lastTime;
+  animState.lastTime = now;
+  animState.timer += dt;
+  animState.shakeTimer += dt;
+
+  const cfg = animState.cfg;
+  const phase = animState.phase;
+  let advance = false;
+
+  if (phase === 'telegraph' && animState.timer >= cfg.telegraphDuration) advance = true;
+  if (phase === 'channel' && animState.timer >= cfg.channelDuration) advance = true;
+  if (phase === 'recovery' && animState.timer >= cfg.recoveryDuration) advance = true;
+
+  if (advance) {
+    animState.phaseIndex++;
+    if (animState.phaseIndex >= animState.phases.length) {
+      stopAnim();
+      drawStatic();
+      document.getElementById('phaseLabel').textContent = `${cfg.label} — cycle complete`;
+      return;
+    }
+    animState.phase = animState.phases[animState.phaseIndex];
+    animState.timer = 0;
+
+    if (animState.phase === 'channel') {
+      animState.particleSpawnTimer = 0;
+      if (cfg.healPulse) animState.healPulseTimer = 0;
+      animState.shakeTimer = 0;
+    }
+  }
+
+  // Update
+  if (animState.phase === 'channel') {
+    updateTracking(animState, cfg, dt);
+
+    // Spawn particles continuously
+    animState.particleSpawnTimer += dt;
+    const rate = cfg.particleFlowReverse ? 50 : 80;
+    while (animState.particleSpawnTimer >= rate) {
+      spawnBeamParticles(cfg, animState.particles);
+      animState.particleSpawnTimer -= rate;
+    }
+  }
+  updateParticles(animState.particles, dt);
+  if (animState.healPulseTimer >= 0) animState.healPulseTimer += dt;
+
+  // Camera effects
+  let shake = { x: 0, y: 0 };
+  if (animState.phase === 'channel' && !cfg.dashed) {
+    // Sustained shake for void_beam
+    shake = getShake(0, 1.5, true);
+  }
+  if (animState.phase === 'channel' && cfg.dashed) {
+    // Brief nudge for life_drain
+    shake = getShake(animState.shakeTimer, 1.5, false);
+  }
+
+  // Draw
+  ctx.save();
+  ctx.translate(shake.x, shake.y);
+  drawGrid();
+
+  const progress = animState.phase === 'telegraph'
+    ? Math.min(animState.timer / cfg.telegraphDuration, 1.0)
+    : animState.phase === 'channel'
+    ? Math.min(animState.timer / cfg.channelDuration, 1.0)
+    : Math.min(animState.timer / cfg.recoveryDuration, 1.0);
+
+  if (animState.phase === 'telegraph') {
+    drawTargetMarker(cfg);
+    drawBeamTelegraph(cfg, progress);
+    drawCaster(cfg, false, false);
+    const remaining = Math.ceil(cfg.telegraphDuration - animState.timer);
+    document.getElementById('phaseLabel').textContent =
+      `${cfg.label} TELEGRAPH — ${remaining}ms — ${cfg.dashed ? 'dashed tether pulsing' : 'beam charging, intensity growing'}`;
+  }
+  else if (animState.phase === 'channel') {
+    const fadeMult = cfg.channelDuration <= 300
+      ? (animState.timer < cfg.channelDuration * 0.7 ? 1.0 : 1.0 - ((animState.timer - cfg.channelDuration * 0.7) / (cfg.channelDuration * 0.3)))
+      : 1.0;
+    drawCaster(cfg, false, true);
+    drawBeamChannel(cfg, progress, fadeMult);
+    drawParticles(animState.particles);
+
+    if (cfg.healPulse && animState.healPulseTimer >= 0) {
+      drawHealPulse(Math.min(animState.healPulseTimer / 300, 1.0));
+    }
+
+    const tickInfo = cfg.particleFlowReverse ? 'damage dealt, energy draining' : `ticking damage every 400ms, tracking target`;
+    document.getElementById('phaseLabel').textContent =
+      `${cfg.label} CHANNEL — ${tickInfo}`;
+  }
+  else if (animState.phase === 'recovery') {
+    drawCaster(cfg, true, false);
+    drawParticles(animState.particles);
+    const remaining = Math.ceil(cfg.recoveryDuration - animState.timer);
+    const mult = cfg.dashed ? '1.15x' : '1.35x';
+    document.getElementById('phaseLabel').textContent =
+      `${cfg.label} RECOVERY — enemy exhausted (${mult} damage) — ${remaining}ms`;
+  }
+
+  ctx.restore();
+  animFrame = requestAnimationFrame(tick);
+}
+
+function playFullCycle() { startAnim(['telegraph', 'channel', 'recovery']); }
+function showPhase(phase) { startAnim([phase]); }
+
+function stopAnim() {
+  if (animFrame) cancelAnimationFrame(animFrame);
+  animFrame = null;
+  animState = null;
+}
+
+// ── Sprite frame previews ──
+
+function drawFramePreview(containerId, frames) {
+  const container = document.getElementById(containerId);
+  container.innerHTML = '';
+  frames.forEach((frame) => {
+    const div = document.createElement('div');
+    div.className = 'sprite-frame';
+    const c = document.createElement('canvas');
+    c.width = frame.size;
+    c.height = frame.size;
+    c.style.width = (frame.size * 2) + 'px';
+    c.style.height = (frame.size * 2) + 'px';
+    const fctx = c.getContext('2d');
+    frame.draw(fctx, frame.size);
+    div.appendChild(c);
+    const label = document.createElement('div');
+    label.className = 'frame-label';
+    label.textContent = frame.label;
+    div.appendChild(label);
+    container.appendChild(div);
+  });
+}
+
+// Telegraph frames
+drawFramePreview('telegraphFrames', [
+  { size: 100, label: 'life_drain T=0ms', draw: (c, s) => {
+    c.globalAlpha = 0.2;
+    c.strokeStyle = '#88FF88'; c.lineWidth = 3; c.lineCap = 'round';
+    c.setLineDash([8, 6]);
+    c.beginPath(); c.moveTo(10, s/2); c.lineTo(s-10, s/2); c.stroke();
+    c.setLineDash([]);
+  }},
+  { size: 100, label: 'life_drain T=300ms', draw: (c, s) => {
+    c.globalAlpha = 0.45;
+    c.strokeStyle = '#88FF88'; c.lineWidth = 3; c.lineCap = 'round';
+    c.setLineDash([8, 6]); c.lineDashOffset = -4;
+    c.beginPath(); c.moveTo(10, s/2); c.lineTo(s-10, s/2); c.stroke();
+    c.setLineDash([]);
+  }},
+  { size: 100, label: 'void_beam T=0ms', draw: (c, s) => {
+    c.globalAlpha = 0.08;
+    c.strokeStyle = '#8844AA'; c.lineWidth = 12; c.lineCap = 'round';
+    c.beginPath(); c.moveTo(10, s/2); c.lineTo(s-10, s/2); c.stroke();
+  }},
+  { size: 100, label: 'void_beam T=1200ms', draw: (c, s) => {
+    c.globalAlpha = 0.15;
+    c.strokeStyle = '#8844AA'; c.lineWidth = 14; c.lineCap = 'round';
+    c.beginPath(); c.moveTo(10, s/2); c.lineTo(s-10, s/2); c.stroke();
+    c.globalAlpha = 0.4;
+    c.lineWidth = 12;
+    c.beginPath(); c.moveTo(10, s/2); c.lineTo(s-10, s/2); c.stroke();
+  }},
+]);
+
+// Channel frames
+drawFramePreview('channelFrames', [
+  { size: 100, label: 'life_drain beam', draw: (c, s) => {
+    // Glow
+    c.globalAlpha = 0.1; c.strokeStyle = '#88FF88'; c.lineWidth = 16; c.lineCap = 'round';
+    c.beginPath(); c.moveTo(10, s/2); c.lineTo(s-10, s/2); c.stroke();
+    // Body
+    c.globalAlpha = 0.7; c.strokeStyle = '#44FF44'; c.lineWidth = 4;
+    c.beginPath(); c.moveTo(10, s/2); c.lineTo(s-10, s/2); c.stroke();
+    // Core
+    c.globalAlpha = 0.9; c.strokeStyle = '#FFFFFF'; c.lineWidth = 1.5;
+    c.beginPath(); c.moveTo(10, s/2); c.lineTo(s-10, s/2); c.stroke();
+  }},
+  { size: 100, label: 'void_beam beam', draw: (c, s) => {
+    // Glow
+    c.globalAlpha = 0.08; c.strokeStyle = '#6622AA'; c.lineWidth = 40; c.lineCap = 'round';
+    c.beginPath(); c.moveTo(10, s/2); c.lineTo(s-10, s/2); c.stroke();
+    // Body
+    c.globalAlpha = 0.7; c.strokeStyle = '#6622AA'; c.lineWidth = 14;
+    c.beginPath(); c.moveTo(10, s/2); c.lineTo(s-10, s/2); c.stroke();
+    // Core
+    c.globalAlpha = 0.9; c.strokeStyle = '#FF44FF'; c.lineWidth = 4;
+    c.beginPath(); c.moveTo(10, s/2); c.lineTo(s-10, s/2); c.stroke();
+  }},
+  { size: 100, label: 'void_beam flicker', draw: (c, s) => {
+    c.globalAlpha = 0.06; c.strokeStyle = '#6622AA'; c.lineWidth = 44; c.lineCap = 'round';
+    c.beginPath(); c.moveTo(10, s/2); c.lineTo(s-10, s/2); c.stroke();
+    c.globalAlpha = 0.65; c.strokeStyle = '#6622AA'; c.lineWidth = 16;
+    c.beginPath(); c.moveTo(10, s/2); c.lineTo(s-10, s/2); c.stroke();
+    c.globalAlpha = 0.85; c.strokeStyle = '#FF44FF'; c.lineWidth = 5;
+    c.beginPath(); c.moveTo(10, s/2); c.lineTo(s-10, s/2); c.stroke();
+  }},
+]);
+
+// Particle frames
+drawFramePreview('particleFrames', [
+  { size: 100, label: 'drain: flow →caster', draw: (c, s) => {
+    const ps = [[s-20,s/2-4],[s-35,s/2+2],[s-50,s/2-1],[s-65,s/2+3],[s-80,s/2-2]];
+    ps.forEach(([x,y], i) => {
+      c.globalAlpha = 0.4 + (i / ps.length) * 0.6;
+      c.fillStyle = '#88FF88';
+      c.beginPath(); c.arc(x, y, 2.5 - i*0.3, 0, Math.PI*2); c.fill();
+    });
+    // Arrow indicating flow direction
+    c.globalAlpha = 0.3; c.strokeStyle = '#88FF88'; c.lineWidth = 1;
+    c.beginPath(); c.moveTo(s-15,s/2); c.lineTo(15,s/2); c.stroke();
+    c.beginPath(); c.moveTo(22,s/2-4); c.lineTo(15,s/2); c.lineTo(22,s/2+4); c.stroke();
+  }},
+  { size: 100, label: 'void: spray at end', draw: (c, s) => {
+    const ps = [[s-15,s/2-8],[s-18,s/2+10],[s-10,s/2-14],[s-22,s/2+5],[s-8,s/2+12],[s-25,s/2-3]];
+    ps.forEach(([x,y]) => {
+      c.globalAlpha = 0.5 + Math.random() * 0.4;
+      c.fillStyle = '#9944CC';
+      c.fillRect(x-1, y-1, 2.5, 2.5);
+    });
+    // Beam stub
+    c.globalAlpha = 0.3; c.strokeStyle = '#6622AA'; c.lineWidth = 10; c.lineCap = 'round';
+    c.beginPath(); c.moveTo(10, s/2); c.lineTo(s-20, s/2); c.stroke();
+  }},
+]);
+
+// Feedback frames
+drawFramePreview('feedbackFrames', [
+  { size: 80, label: 'Heal pulse 0ms', draw: (c, s) => {
+    c.globalAlpha = 0.7; c.strokeStyle = '#88FF88'; c.lineWidth = 2;
+    c.beginPath(); c.arc(s/2, s/2, 6, 0, Math.PI*2); c.stroke();
+  }},
+  { size: 80, label: 'Heal pulse 100ms', draw: (c, s) => {
+    c.globalAlpha = 0.6; c.strokeStyle = '#88FF88'; c.lineWidth = 2;
+    c.beginPath(); c.arc(s/2, s/2, 14, 0, Math.PI*2); c.stroke();
+  }},
+  { size: 80, label: 'Heal pulse 200ms', draw: (c, s) => {
+    c.globalAlpha = 0.35; c.strokeStyle = '#88FF88'; c.lineWidth = 1.5;
+    c.beginPath(); c.arc(s/2, s/2, 24, 0, Math.PI*2); c.stroke();
+  }},
+  { size: 80, label: 'Heal pulse 300ms', draw: (c, s) => {
+    c.globalAlpha = 0.1; c.strokeStyle = '#88FF88'; c.lineWidth = 1;
+    c.beginPath(); c.arc(s/2, s/2, 32, 0, Math.PI*2); c.stroke();
+  }},
+]);
+
+// Initial render
+drawStatic();
+</script>
+
+</body>
+</html>

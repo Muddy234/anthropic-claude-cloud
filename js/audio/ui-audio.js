@@ -340,53 +340,6 @@ const UIAudio = {
     },
 
     // ========================================================================
-    // EXTRACTION SOUNDS
-    // ========================================================================
-
-    /**
-     * Play extraction shaft warning sound
-     * @param {number} intensity - 1 (early), 2 (mid), 3 (critical)
-     */
-    playExtractionWarning(intensity = 1) {
-        if (!this.enabled || !this._canPlaySound()) return;
-
-        const soundId = `shaft_warning`;
-        const volume = 0.5 + (intensity * 0.15);
-
-        SFXSystem.play(soundId, {
-            volume,
-            category: 'ambient',
-            priority: intensity >= 3 ? 'CRITICAL' : 'HIGH'
-        });
-    },
-
-    /**
-     * Play extraction shaft collapse sound
-     */
-    playExtractionCollapse() {
-        if (!this.enabled || !this._canPlaySound()) return;
-
-        SFXSystem.play('shaft_collapse', {
-            volume: 1.0,
-            category: 'ambient',
-            priority: 'CRITICAL'
-        });
-    },
-
-    /**
-     * Play extraction success sound
-     */
-    playExtractionSuccess() {
-        if (!this.enabled || !this._canPlaySound()) return;
-
-        SFXSystem.play('extraction_success', {
-            volume: 1.0,
-            category: 'ambient',
-            priority: 'CRITICAL'
-        });
-    },
-
-    // ========================================================================
     // SHIFT SYSTEM SOUNDS
     // ========================================================================
 

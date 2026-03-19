@@ -2,6 +2,7 @@
 // MONSTER ATTACK EFFECTS - Visual effects for monster magic and ranged attacks
 // ============================================================================
 // Features:
+// - Pixel-based rendering (when EffectSprites available) OR code-based fallback
 // - Magic effect: Element-colored burst at impact point
 // - Ranged effect: Projectile trail from monster to target
 // - Particle systems for both
@@ -13,6 +14,29 @@
 
 const MonsterMagicEffect = {
     activeEffects: [],
+
+    // Whether to use pixel-based rendering (if available)
+    usePixelEffects: true,
+
+    /**
+     * Check if pixel effects system is available
+     */
+    _canUsePixelEffects() {
+        return window.EffectSprites && window.EffectAnimator && window.EffectRenderer;
+    },
+
+    /**
+     * Map attack types to pixel effect names
+     */
+    attackToPixelEffect: {
+        'fire_breath': 'fire_breath',
+        'frost_breath': 'frost_breath',
+        'poison_cloud': 'poison_cloud',
+        'homing_orb': 'homing_orb',
+        'projectile_burst': 'projectile_burst',
+        'life_drain': 'life_drain',
+        'void_beam': 'void_beam'
+    },
 
     // Element color configurations
     elementColors: {
@@ -62,19 +86,52 @@ const MonsterMagicEffect = {
             radius: options.isCrit ? 0.6 : 0.4,  // Burst radius in tiles
 
             // Particles
-            particles: []
+            particles: [],
+
+            // Pixel effect tracking
+            pixelEffectId: null,
+            pixelEffectType: options.attackType || null
         };
+
+        // Try to start pixel-based effect if available
+        if (this.usePixelEffects && this._canUsePixelEffects()) {
+            const pixelType = this.attackToPixelEffect[options.attackType] || 'homing_orb';
+            if (pixelType && window.EffectAnimator) {
+                effect.pixelEffectId = window.EffectAnimator.startProjectile(
+                    pixelType,
+                    originX,
+                    originY,
+                    targetX,
+                    targetY,
+                    200, // speed
+                    {
+                        element: element,
+                        scale: options.isCrit ? 1.3 : 1.0
+                    }
+                );
+                effect.pixelEffectType = pixelType;
+            }
+        }
 
         this.activeEffects.push(effect);
         return effect;
     },
 
     update(dt) {
+        // Update pixel effect animator if available
+        if (window.EffectAnimator) {
+            window.EffectAnimator.update(dt || 16.67);
+        }
+
         for (let i = this.activeEffects.length - 1; i >= 0; i--) {
             const effect = this.activeEffects[i];
             this.updateEffect(effect);
 
             if (effect.isFinished) {
+                // Clean up pixel effect if any
+                if (effect.pixelEffectId && window.EffectAnimator) {
+                    window.EffectAnimator.stopEffect(effect.pixelEffectId);
+                }
                 this.activeEffects.splice(i, 1);
             }
         }
@@ -165,6 +222,39 @@ const MonsterMagicEffect = {
     renderEffect(ctx, effect, camX, camY, tileSize, offsetX) {
         const colors = effect.colors;
 
+        // Try pixel-based rendering first
+        if (effect.pixelEffectId && this._canUsePixelEffects()) {
+            const frameData = window.EffectAnimator.getCurrentFrame(effect.pixelEffectId);
+            if (frameData) {
+                const screenX = (frameData.position.x - camX) * tileSize + offsetX;
+                const screenY = (frameData.position.y - camY) * tileSize;
+                const pixelScale = Math.max(2, Math.floor(tileSize / 16));
+
+                window.EffectRenderer.draw(
+                    ctx,
+                    frameData.sprite,
+                    screenX,
+                    screenY,
+                    pixelScale,
+                    {
+                        rotation: frameData.transforms.rotation,
+                        alpha: frameData.transforms.alpha,
+                        scaleX: frameData.transforms.scaleX,
+                        scaleY: frameData.transforms.scaleY,
+                        paletteMod: frameData.transforms.paletteMod,
+                        glow: true,
+                        glowColor: colors.glow
+                    }
+                );
+
+                // Still draw particles for extra flair
+                this._renderParticles(ctx, effect, camX, camY, tileSize, offsetX);
+                return;
+            }
+        }
+
+        // Fallback to code-based rendering
+
         // Draw travel orb
         if (effect.state === 'travel') {
             const progress = effect.currentFrame / effect.travelDuration;
@@ -226,6 +316,14 @@ const MonsterMagicEffect = {
         }
 
         // Draw particles
+        this._renderParticles(ctx, effect, camX, camY, tileSize, offsetX);
+    },
+
+    /**
+     * Render particles for an effect (extracted for reuse)
+     */
+    _renderParticles(ctx, effect, camX, camY, tileSize, offsetX) {
+        const colors = effect.colors;
         for (const p of effect.particles) {
             if (p.alpha <= 0) continue;
 
@@ -256,6 +354,25 @@ const MonsterMagicEffect = {
 const MonsterRangedEffect = {
     activeEffects: [],
 
+    // Whether to use pixel-based rendering (if available)
+    usePixelEffects: true,
+
+    /**
+     * Check if pixel effects system is available
+     */
+    _canUsePixelEffects() {
+        return window.EffectSprites && window.EffectAnimator && window.EffectRenderer;
+    },
+
+    /**
+     * Map attack types to pixel effect names
+     */
+    attackToPixelEffect: {
+        'web_shot': 'web_shot',
+        'projectile_single': 'projectile_single',
+        'arrow': 'projectile_single'
+    },
+
     /**
      * Create a ranged attack effect
      */
@@ -282,7 +399,11 @@ const MonsterRangedEffect = {
             isCrit: options.isCrit || false,
 
             // Trail particles
-            trail: []
+            trail: [],
+
+            // Pixel effect tracking
+            pixelEffectId: null,
+            pixelEffectType: options.attackType || null
         };
 
         // Override colors if element
@@ -291,6 +412,26 @@ const MonsterRangedEffect = {
             if (elementColors) {
                 effect.color = elementColors.primary;
                 effect.trailColor = elementColors.secondary;
+            }
+        }
+
+        // Try to start pixel-based effect if available
+        if (this.usePixelEffects && this._canUsePixelEffects()) {
+            const pixelType = this.attackToPixelEffect[options.attackType] || 'projectile_single';
+            if (pixelType && window.EffectAnimator) {
+                effect.pixelEffectId = window.EffectAnimator.startProjectile(
+                    pixelType,
+                    originX,
+                    originY,
+                    targetX,
+                    targetY,
+                    250, // speed
+                    {
+                        element: options.element,
+                        scale: options.isCrit ? 1.2 : 1.0
+                    }
+                );
+                effect.pixelEffectType = pixelType;
             }
         }
 
@@ -304,6 +445,10 @@ const MonsterRangedEffect = {
             this.updateEffect(effect);
 
             if (effect.isFinished) {
+                // Clean up pixel effect if any
+                if (effect.pixelEffectId && window.EffectAnimator) {
+                    window.EffectAnimator.stopEffect(effect.pixelEffectId);
+                }
                 this.activeEffects.splice(i, 1);
             }
         }
@@ -351,6 +496,37 @@ const MonsterRangedEffect = {
     },
 
     renderEffect(ctx, effect, camX, camY, tileSize, offsetX) {
+        // Try pixel-based rendering first
+        if (effect.pixelEffectId && this._canUsePixelEffects()) {
+            const frameData = window.EffectAnimator.getCurrentFrame(effect.pixelEffectId);
+            if (frameData) {
+                const screenX = (frameData.position.x - camX) * tileSize + offsetX;
+                const screenY = (frameData.position.y - camY) * tileSize;
+                const pixelScale = Math.max(2, Math.floor(tileSize / 16));
+
+                window.EffectRenderer.draw(
+                    ctx,
+                    frameData.sprite,
+                    screenX,
+                    screenY,
+                    pixelScale,
+                    {
+                        rotation: frameData.transforms.rotation,
+                        alpha: frameData.transforms.alpha,
+                        scaleX: frameData.transforms.scaleX,
+                        scaleY: frameData.transforms.scaleY,
+                        paletteMod: frameData.transforms.paletteMod
+                    }
+                );
+
+                // Still draw code-based trail for continuity
+                this._renderTrail(ctx, effect, camX, camY, tileSize, offsetX);
+                return;
+            }
+        }
+
+        // Fallback to code-based rendering
+
         // Draw trail
         if (effect.trail.length > 1) {
             ctx.save();
@@ -419,6 +595,36 @@ const MonsterRangedEffect = {
             ctx.fillStyle = effect.color;
             const sparkSize = 6 + (effect.isCrit ? 4 : 0);
             ctx.fillRect(screenX - sparkSize / 2, screenY - sparkSize / 2, sparkSize, sparkSize);
+            ctx.restore();
+        }
+    },
+
+    /**
+     * Render trail particles (extracted for reuse)
+     */
+    _renderTrail(ctx, effect, camX, camY, tileSize, offsetX) {
+        if (effect.trail.length > 1) {
+            ctx.save();
+            ctx.strokeStyle = effect.trailColor;
+            ctx.lineWidth = 2;
+            ctx.lineCap = 'round';
+
+            for (let i = 1; i < effect.trail.length; i++) {
+                const p1 = effect.trail[i - 1];
+                const p2 = effect.trail[i];
+
+                ctx.globalAlpha = p2.alpha * 0.6;
+                ctx.beginPath();
+                ctx.moveTo(
+                    (p1.x - camX) * tileSize + offsetX,
+                    (p1.y - camY) * tileSize
+                );
+                ctx.lineTo(
+                    (p2.x - camX) * tileSize + offsetX,
+                    (p2.y - camY) * tileSize
+                );
+                ctx.stroke();
+            }
             ctx.restore();
         }
     },

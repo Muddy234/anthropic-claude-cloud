@@ -207,9 +207,47 @@ function createPlayer() {
     };
 
     // ========================================================================
+    // STAT MODIFIER STACKS (Phase 2 - for boon/effect stat management)
+    // ========================================================================
+
+    if (typeof StatModifierStack !== 'undefined') {
+        p.statStacks = {
+            maxHp: new StatModifierStack(100),
+            damage: new StatModifierStack(0),
+            magicDamage: new StatModifierStack(0),
+            defense: new StatModifierStack(0),
+            speed: new StatModifierStack(4),
+            attackSpeed: new StatModifierStack(1.0),
+            critChance: new StatModifierStack(5),
+            critDamage: new StatModifierStack(150),
+            fireDamagePercent: new StatModifierStack(0),
+            iceDamagePercent: new StatModifierStack(0),
+            poisonDamagePercent: new StatModifierStack(0),
+            shadowDamagePercent: new StatModifierStack(0),
+            fireResist: new StatModifierStack(0),
+            iceResist: new StatModifierStack(0),
+            poisonResist: new StatModifierStack(0),
+            shadowResist: new StatModifierStack(0),
+            maxStamina: new StatModifierStack(100),
+            staminaRegenRate: new StatModifierStack(15),
+            staminaKillRefund: new StatModifierStack(25),
+            healingReceived: new StatModifierStack(100),
+            igniteChance: new StatModifierStack(0),
+            freezeChance: new StatModifierStack(0),
+            poisonChance: new StatModifierStack(0),
+            lifestealPercent: new StatModifierStack(0),
+            thornsDamage: new StatModifierStack(0),
+            goldFindPercent: new StatModifierStack(0),
+            lootRarityBonus: new StatModifierStack(0),
+            cooldownReduction: new StatModifierStack(0),
+            aoeRadiusBonus: new StatModifierStack(0)
+        };
+    }
+
+    // ========================================================================
     // INITIALIZATION
     // ========================================================================
-    
+
     // Calculate derived stats from base stats
     recalculatePlayerStats(p);
 
@@ -300,10 +338,20 @@ function recalculatePlayerStats(player) {
         totalHp = applyBoonHpBonus(totalHp);
     }
 
-    player.maxHp = totalHp;
+    // Apply StatModifierStack for maxHp if available (boons, effects, etc.)
+    if (player.statStacks?.maxHp) {
+        player.statStacks.maxHp.setBase(totalHp);
+        player.maxHp = Math.floor(player.statStacks.maxHp.compute());
+    } else {
+        player.maxHp = totalHp;
+    }
 
-    // Calculate max Stamina (simplified - base 100)
-    player.maxStamina = 100;
+    // Calculate max Stamina using modifier stack if available
+    if (player.statStacks?.maxStamina) {
+        player.maxStamina = Math.floor(player.statStacks.maxStamina.compute());
+    } else {
+        player.maxStamina = 100;
+    }
 
     // Calculate max Mana from INT (legacy system)
     const totalINT = stats.INT + bonusINT;
@@ -319,7 +367,13 @@ function recalculatePlayerStats(player) {
 
     // Crit chance from AGI (base 5% + 0.3% per AGI over 10)
     const totalAGI = stats.AGI + bonusAGI;
-    player.critChance = 5 + Math.max(0, (totalAGI - 10) * 0.3);
+    const baseCrit = 5 + Math.max(0, (totalAGI - 10) * 0.3);
+    if (player.statStacks?.critChance) {
+        player.statStacks.critChance.setBase(baseCrit);
+        player.critChance = player.statStacks.critChance.compute();
+    } else {
+        player.critChance = baseCrit;
+    }
 
     // Dodge chance from AGI (0.2% per AGI over 10)
     player.dodgeChance = Math.max(0, (totalAGI - 10) * 0.2);
@@ -404,6 +458,11 @@ function equipItem(player, itemIndex) {
         updateActionHotkeys(player);
     }
 
+    // Clear player sprite cache so equipment shows
+    if (typeof PlayerSpriteRenderer !== 'undefined') {
+        PlayerSpriteRenderer.clearCache();
+    }
+
     console.log(`[Player] Equipped ${item.name} in ${slot}`);
     return true;
 }
@@ -422,6 +481,11 @@ function unequipItem(player, slot) {
 
     if (slot === 'MAIN' && typeof updateActionHotkeys === 'function') {
         updateActionHotkeys(player);
+    }
+
+    // Clear player sprite cache so equipment change shows
+    if (typeof PlayerSpriteRenderer !== 'undefined') {
+        PlayerSpriteRenderer.clearCache();
     }
 
     console.log(`[Player] Unequipped ${item.name} from ${slot}`);
@@ -461,23 +525,22 @@ function resetPlayer() {
 }
 
 /**
- * Handle player death - Soul & Body Model
- * - Skills PERSIST (saved in persistentState)
- * - Boons are LOST (session-only)
- * - Gear is DROPPED at death location
- * - Player respawns in village with Tier 0 starter kit
+ * Handle player death - TRUE PERMADEATH
+ * Everything is lost. No death drops, no rescue runs.
+ * SessionManager wipes all persistent state.
  */
 function handlePlayerDeath() {
-    // Soul & Body: Skills are NOT reset - they persist forever
-    // resetPlayerSkills now only resets cooldowns, not skill levels
-    if (game.player.skills && typeof resetPlayerSkills === 'function') {
-        resetPlayerSkills(game.player);
+    // Capture boon summary for death screen BEFORE clearing
+    if (typeof game !== 'undefined' && game.runStats && typeof BoonSystem !== 'undefined') {
+        game.runStats.finalBoons = BoonSystem.activePlayerBoons.map(b => ({
+            name: b.name, ancestor: b.ancestor, tier: b.tier
+        }));
+        game.runStats.finalSynergies = BoonSystem.activeSynergies ? [...BoonSystem.activeSynergies] : [];
     }
 
-    // Soul & Body: Boons ARE cleared on death (session-only power)
-    if (typeof BoonSystem !== 'undefined' && BOON_CONFIG?.clearOnDeath) {
+    // Clear boons
+    if (typeof BoonSystem !== 'undefined' && typeof BOON_CONFIG !== 'undefined' && BOON_CONFIG.clearOnDeath) {
         BoonSystem.clearBoons();
-        console.log('[Death] Boons cleared (session-only)');
     }
 
     // Clear status effects
@@ -485,22 +548,9 @@ function handlePlayerDeath() {
         clearStatusEffects(game.player);
     }
 
-    // Store death drop location (for future rescue run feature)
-    if (typeof persistentState !== 'undefined') {
-        persistentState.deathDrop = {
-            floor: game.floor || 1,
-            x: game.player.gridX,
-            y: game.player.gridY,
-            equipped: JSON.parse(JSON.stringify(game.player.equipped)),
-            inventory: JSON.parse(JSON.stringify(game.player.inventory)),
-            timestamp: Date.now()
-        };
-        console.log('[Death] Gear dropped at floor', persistentState.deathDrop.floor);
-    }
-
-    // Update death stats
-    if (typeof persistentState !== 'undefined' && persistentState.stats) {
-        persistentState.stats.deaths = (persistentState.stats.deaths || 0) + 1;
+    // Invoke permadeath through SessionManager
+    if (typeof SessionManager !== 'undefined') {
+        SessionManager.playerDeath(game.player.gridX, game.player.gridY);
     }
 
     game.player.isDead = true;

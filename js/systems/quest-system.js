@@ -1,5 +1,5 @@
 // === js/systems/quest-system.js ===
-// SURVIVAL EXTRACTION UPDATE: Quest tracking and progression
+// Quest tracking and progression
 
 // ============================================================================
 // QUEST SYSTEM
@@ -250,12 +250,6 @@ const QuestSystem = {
      */
     _matchesObjective(objective, eventType, eventData) {
         switch (objective.type) {
-            case 'extract':
-                if (eventType !== 'extraction') return false;
-                if (objective.floor && eventData.floor !== objective.floor) return false;
-                if (objective.minFloor && eventData.floor < objective.minFloor) return false;
-                return true;
-
             case 'reach_floor':
                 if (eventType !== 'floor_reached') return false;
                 return eventData.floor >= objective.floor;
@@ -397,13 +391,6 @@ const QuestSystem = {
     // ========================================================================
     // EVENT HOOKS
     // ========================================================================
-
-    /**
-     * Called when player extracts
-     */
-    onExtraction(floor) {
-        this.trackProgress('extraction', { floor });
-    },
 
     /**
      * Called when player reaches a floor

@@ -39,43 +39,248 @@ const MAP_OVERLAY_CONFIG = {
 };
 
 /**
- * Draw the map overlay
+ * Draw map header with floor info - Section 7.1
+ * Shows "CARTOGRAPHIA" title with floor number and dungeon name
+ */
+function drawMapHeader(ctx, x, y, width) {
+    const headerHeight = 50;
+
+    // Get design system colors and fonts
+    const colors = typeof UI_COLORS !== 'undefined' ? UI_COLORS : {};
+    const fontFamily = typeof UI_FONT_FAMILY !== 'undefined' ? UI_FONT_FAMILY : { display: 'Georgia, serif', body: 'Georgia, serif' };
+    const gold = colors.gold || colors.frameGold || '#c9a227';
+    const textLight = colors.textPrimary || colors.textLight || '#efe4b0';
+    const goldDark = colors.goldDark || colors.frameGoldDark || '#8b6914';
+
+    // Header background
+    const gradient = ctx.createLinearGradient(x, y, x, y + headerHeight);
+    gradient.addColorStop(0, 'rgba(201, 162, 39, 0.2)');
+    gradient.addColorStop(1, 'rgba(13, 13, 13, 0.95)');
+    ctx.fillStyle = gradient;
+    ctx.fillRect(x, y, width, headerHeight);
+
+    // Title
+    ctx.fillStyle = gold;
+    ctx.font = `bold 20px ${fontFamily.display}`;
+    ctx.textAlign = 'center';
+    ctx.fillText('CARTOGRAPHIA', x + width / 2, y + 22);
+
+    // Floor indicator
+    const floorNum = game.currentFloor || 1;
+    ctx.fillStyle = textLight;
+    ctx.font = `14px ${fontFamily.body}`;
+    ctx.fillText(`Floor ${floorNum} - The Shifting Chasm`, x + width / 2, y + 42);
+
+    // Decorative line
+    ctx.strokeStyle = goldDark;
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(x + 40, y + headerHeight - 1);
+    ctx.lineTo(x + width - 40, y + headerHeight - 1);
+    ctx.stroke();
+
+    return headerHeight;
+}
+
+/**
+ * Check if a room has been explored by the player - Section 7.2
+ * @param {Object} room - Room object with x, y, width, height
+ * @returns {boolean} - True if at least one tile in the room has been explored
+ */
+function isRoomExplored(room) {
+    if (!game.exploredTiles) return false;
+
+    // Check if at least one tile in the room has been explored
+    for (let x = room.x; x < room.x + room.width; x++) {
+        for (let y = room.y; y < room.y + room.height; y++) {
+            const key = `${x},${y}`;
+            if (game.exploredTiles.has(key)) return true;
+        }
+    }
+    return false;
+}
+
+/**
+ * Draw room outlines on the map - Section 7.2
+ * Shows dashed outlines around explored rooms
+ * @param {CanvasRenderingContext2D} ctx
+ * @param {number} mapX - Map area left
+ * @param {number} mapY - Map area top
+ * @param {number} tileSize - Pixel size of each tile
+ * @param {number} offsetX - X offset for rendering
+ * @param {number} offsetY - Y offset for rendering
+ */
+function drawRoomOutlines(ctx, mapX, mapY, tileSize, offsetX, offsetY) {
+    if (!game.dungeon || !game.dungeon.rooms) return;
+
+    const fontFamily = typeof UI_FONT_FAMILY !== 'undefined' ? UI_FONT_FAMILY : { body: 'Georgia, serif' };
+
+    ctx.save();
+    ctx.strokeStyle = 'rgba(201, 162, 39, 0.3)';
+    ctx.lineWidth = 1;
+    ctx.setLineDash([4, 4]);
+
+    game.dungeon.rooms.forEach((room, index) => {
+        // Only draw if room has been discovered
+        const roomExplored = isRoomExplored(room);
+        if (!roomExplored) return;
+
+        const rx = offsetX + room.x * tileSize;
+        const ry = offsetY + room.y * tileSize;
+        const rw = room.width * tileSize;
+        const rh = room.height * tileSize;
+
+        ctx.strokeRect(rx, ry, rw, rh);
+
+        // Room number/name if special
+        if (room.type && room.type !== 'normal') {
+            ctx.fillStyle = 'rgba(201, 162, 39, 0.5)';
+            ctx.font = '10px ' + fontFamily.body;
+            ctx.textAlign = 'center';
+            ctx.fillText(room.type.toUpperCase(), rx + rw / 2, ry + rh / 2);
+        }
+    });
+
+    ctx.setLineDash([]);
+    ctx.restore();
+}
+
+/**
+ * Draw a mini star shape for the legend - Section 7.3
+ * @param {CanvasRenderingContext2D} ctx
+ * @param {number} cx - Center X
+ * @param {number} cy - Center Y
+ * @param {number} r - Outer radius
+ */
+function drawMiniStar(ctx, cx, cy, r) {
+    const points = 5;
+    const inner = r * 0.4;
+
+    ctx.beginPath();
+    for (let i = 0; i < points * 2; i++) {
+        const radius = i % 2 === 0 ? r : inner;
+        const angle = (i * Math.PI / points) - Math.PI / 2;
+        const x = cx + radius * Math.cos(angle);
+        const y = cy + radius * Math.sin(angle);
+        if (i === 0) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+    }
+    ctx.closePath();
+    ctx.fill();
+}
+
+/**
+ * Draw the map overlay - CotDG Ancient Cartography Style
  */
 function drawMapOverlay() {
     const cfg = MAP_OVERLAY_CONFIG;
 
+    // Get design system colors
+    const colors = typeof UI_COLORS !== 'undefined' ? UI_COLORS : {};
+    const frameGold = colors.frameGold || '#b8860b';
+    const frameGoldBright = colors.frameGoldBright || '#daa520';
+    const frameGoldDark = colors.frameGoldDark || '#8b6914';
+    const parchment = colors.parchmentLight || '#f5e6c8';
+    const parchmentDark = colors.parchment || '#d4c4a0';
+
     // Get panel dimensions - use nearly all available space
     const sidebarWidth = typeof SIDEBAR_CONFIG !== 'undefined' ? SIDEBAR_CONFIG.width : 70;
-    const panelPadding = 20; // Minimal padding
+    const panelPadding = 20;
     const panelX = sidebarWidth + panelPadding;
     const panelY = panelPadding;
     const panelWidth = canvas.width - sidebarWidth - panelPadding * 2;
     const panelHeight = canvas.height - panelPadding * 2;
 
-    // Background overlay (darken game area)
-    ctx.fillStyle = cfg.bgColor;
+    ctx.save();
+
+    // Background overlay (darken game area with vignette)
+    ctx.fillStyle = 'rgba(5, 5, 5, 0.92)';
     ctx.fillRect(sidebarWidth, 0, canvas.width - sidebarWidth, canvas.height);
 
-    // Panel background
-    ctx.fillStyle = cfg.panelBgColor;
+    // === PARCHMENT BACKGROUND ===
+    // Aged parchment gradient
+    const parchGrad = ctx.createLinearGradient(panelX, panelY, panelX, panelY + panelHeight);
+    parchGrad.addColorStop(0, '#2a2420');
+    parchGrad.addColorStop(0.05, '#3a3530');
+    parchGrad.addColorStop(0.95, '#2a2520');
+    parchGrad.addColorStop(1, '#1a1510');
+    ctx.fillStyle = parchGrad;
     ctx.fillRect(panelX, panelY, panelWidth, panelHeight);
 
-    // Panel border
-    ctx.strokeStyle = cfg.borderColor;
-    ctx.lineWidth = 4;
-    ctx.strokeRect(panelX, panelY, panelWidth, panelHeight);
+    // Aged paper texture (spots/stains)
+    ctx.fillStyle = 'rgba(139, 90, 43, 0.08)';
+    for (let i = 0; i < 50; i++) {
+        const spotX = panelX + Math.random() * panelWidth;
+        const spotY = panelY + Math.random() * panelHeight;
+        ctx.beginPath();
+        ctx.arc(spotX, spotY, Math.random() * 15 + 3, 0, Math.PI * 2);
+        ctx.fill();
+    }
 
-    // Title
-    ctx.fillStyle = cfg.borderColor;
-    ctx.font = 'bold 28px monospace';
-    ctx.textAlign = 'center';
-    ctx.fillText('DUNGEON MAP', panelX + panelWidth / 2, panelY + 35);
+    // === BURNED/WEATHERED EDGE EFFECT ===
+    // Dark burned edges gradient
+    const edgeSize = 40;
+    // Top edge
+    const topEdge = ctx.createLinearGradient(panelX, panelY, panelX, panelY + edgeSize);
+    topEdge.addColorStop(0, 'rgba(20, 15, 10, 0.9)');
+    topEdge.addColorStop(1, 'rgba(20, 15, 10, 0)');
+    ctx.fillStyle = topEdge;
+    ctx.fillRect(panelX, panelY, panelWidth, edgeSize);
 
-    // Map area (inside panel, below title) - maximize space
-    const mapAreaX = panelX + 10;
-    const mapAreaY = panelY + 50;
-    const mapAreaWidth = panelWidth - 20;
-    const mapAreaHeight = panelHeight - 90; // Leave room for title and controls
+    // Bottom edge
+    const bottomEdge = ctx.createLinearGradient(panelX, panelY + panelHeight - edgeSize, panelX, panelY + panelHeight);
+    bottomEdge.addColorStop(0, 'rgba(20, 15, 10, 0)');
+    bottomEdge.addColorStop(1, 'rgba(20, 15, 10, 0.9)');
+    ctx.fillStyle = bottomEdge;
+    ctx.fillRect(panelX, panelY + panelHeight - edgeSize, panelWidth, edgeSize);
+
+    // Left edge
+    const leftEdge = ctx.createLinearGradient(panelX, panelY, panelX + edgeSize, panelY);
+    leftEdge.addColorStop(0, 'rgba(20, 15, 10, 0.9)');
+    leftEdge.addColorStop(1, 'rgba(20, 15, 10, 0)');
+    ctx.fillStyle = leftEdge;
+    ctx.fillRect(panelX, panelY, edgeSize, panelHeight);
+
+    // Right edge
+    const rightEdge = ctx.createLinearGradient(panelX + panelWidth - edgeSize, panelY, panelX + panelWidth, panelY);
+    rightEdge.addColorStop(0, 'rgba(20, 15, 10, 0)');
+    rightEdge.addColorStop(1, 'rgba(20, 15, 10, 0.9)');
+    ctx.fillStyle = rightEdge;
+    ctx.fillRect(panelX + panelWidth - edgeSize, panelY, edgeSize, panelHeight);
+
+    // === ORNATE GOLD FRAME ===
+    if (typeof drawTempleFrame === 'function') {
+        drawTempleFrame(ctx, panelX, panelY, panelWidth, panelHeight, {
+            cornerSize: 24, borderWidth: 5, pattern: true
+        });
+    } else {
+        const frameGrad = ctx.createLinearGradient(panelX, panelY, panelX + panelWidth, panelY + panelHeight);
+        frameGrad.addColorStop(0, frameGoldBright);
+        frameGrad.addColorStop(0.3, frameGold);
+        frameGrad.addColorStop(0.7, frameGoldDark);
+        frameGrad.addColorStop(1, frameGold);
+        ctx.strokeStyle = frameGrad;
+        ctx.lineWidth = 5;
+        ctx.strokeRect(panelX, panelY, panelWidth, panelHeight);
+    }
+
+    // Add ornate corners
+    if (typeof drawOrnateCorners === 'function') {
+        drawOrnateCorners(ctx, panelX, panelY, panelWidth, panelHeight, { size: 22 });
+    }
+
+    // === HEADER - Using new drawMapHeader function ===
+    const headerHeight = drawMapHeader(ctx, panelX + 15, panelY + 5, panelWidth - 30);
+
+    // Map area (inside panel, below header)
+    const mapAreaX = panelX + 15;
+    const mapAreaY = panelY + 5 + headerHeight + 5;
+    const mapAreaWidth = panelWidth - 30;
+    const mapAreaHeight = panelHeight - headerHeight - 55;
+
+    // Map area background (darker for contrast)
+    ctx.fillStyle = '#0a0908';
+    ctx.fillRect(mapAreaX, mapAreaY, mapAreaWidth, mapAreaHeight);
 
     // Clip to map area
     ctx.save();
@@ -88,19 +293,96 @@ function drawMapOverlay() {
 
     ctx.restore();
 
-    // Map area border
-    ctx.strokeStyle = '#444';
+    // Map area border (gold inset)
+    ctx.strokeStyle = frameGoldDark;
     ctx.lineWidth = 2;
     ctx.strokeRect(mapAreaX, mapAreaY, mapAreaWidth, mapAreaHeight);
+
+    // Draw legend panel
+    drawMapLegend(panelX + 15, panelY + panelHeight - 38, panelWidth - 200, colors);
 
     // Draw zoom controls
     drawZoomControls(panelX, panelY, panelWidth, panelHeight);
 
-    // Instructions
-    ctx.fillStyle = '#666';
-    ctx.font = '12px monospace';
+    // Instructions (styled)
+    ctx.fillStyle = colors.textMuted || '#706850';
+    ctx.font = '11px serif';
     ctx.textAlign = 'center';
-    ctx.fillText('Scroll to zoom | Drag to pan | [ESC] or [M] Close', panelX + panelWidth / 2, panelY + panelHeight - 12);
+    ctx.fillText('Scroll to zoom | Drag to pan | [ESC] or [M] Close', panelX + panelWidth / 2, panelY + panelHeight - 10);
+
+    ctx.restore();
+}
+
+/**
+ * Draw map legend - Section 7.3 Improved Legend with shapes and better layout
+ */
+function drawMapLegend(x, y, width, colors) {
+    const fontFamily = typeof UI_FONT_FAMILY !== 'undefined' ? UI_FONT_FAMILY : { body: 'Georgia, serif' };
+    const uiColors = typeof UI_COLORS !== 'undefined' ? UI_COLORS : colors;
+    const textMuted = uiColors.textMuted || uiColors.textSecondary || '#b8a878';
+    const goldDark = uiColors.goldDark || uiColors.frameGoldDark || '#8b6914';
+
+    const legendItems = [
+        { color: '#5588ff', label: 'You', shape: 'circle' },
+        { color: '#ff4444', label: 'Enemies', shape: 'circle' },
+        { color: '#ffcc00', label: 'Loot', shape: 'diamond' },
+        { color: '#00ffcc', label: 'Exit', shape: 'square' },
+        { color: '#daa520', label: 'Shrine', shape: 'star' },
+        { color: '#666666', label: 'Unexplored', shape: 'square' }
+    ];
+
+    const legendHeight = 24;
+    const itemSpacing = width / legendItems.length;
+
+    // Background
+    ctx.fillStyle = 'rgba(13, 13, 13, 0.85)';
+    ctx.fillRect(x, y, width, legendHeight);
+
+    // Border
+    ctx.strokeStyle = goldDark;
+    ctx.lineWidth = 1;
+    ctx.strokeRect(x, y, width, legendHeight);
+
+    // Items
+    ctx.font = '10px ' + fontFamily.body;
+    ctx.textBaseline = 'middle';
+
+    legendItems.forEach((item, i) => {
+        const itemX = x + 15 + i * itemSpacing;
+        const itemY = y + legendHeight / 2;
+
+        // Shape
+        ctx.fillStyle = item.color;
+        const shapeSize = 6;
+
+        switch (item.shape) {
+            case 'circle':
+                ctx.beginPath();
+                ctx.arc(itemX, itemY, shapeSize / 2, 0, Math.PI * 2);
+                ctx.fill();
+                break;
+            case 'diamond':
+                ctx.beginPath();
+                ctx.moveTo(itemX, itemY - shapeSize / 2);
+                ctx.lineTo(itemX + shapeSize / 2, itemY);
+                ctx.lineTo(itemX, itemY + shapeSize / 2);
+                ctx.lineTo(itemX - shapeSize / 2, itemY);
+                ctx.closePath();
+                ctx.fill();
+                break;
+            case 'square':
+                ctx.fillRect(itemX - shapeSize / 2, itemY - shapeSize / 2, shapeSize, shapeSize);
+                break;
+            case 'star':
+                drawMiniStar(ctx, itemX, itemY, shapeSize / 2);
+                break;
+        }
+
+        // Label
+        ctx.fillStyle = textMuted;
+        ctx.textAlign = 'left';
+        ctx.fillText(item.label, itemX + 10, itemY);
+    });
 }
 
 /**
@@ -165,8 +447,8 @@ function drawDungeonMap(areaX, areaY, areaWidth, areaHeight) {
         }
     }
 
-    // Draw exit portal / extraction points (ALWAYS visible, even unexplored)
-    drawExitPortal(offsetX, offsetY, tileSize);
+    // Draw room outlines for explored rooms (Section 7.2)
+    drawRoomOutlines(ctx, areaX, areaY, tileSize, offsetX, offsetY);
 
     // Draw path down / descent location
     drawPathDown(offsetX, offsetY, tileSize);
@@ -226,68 +508,6 @@ function drawMapTile(x, y, size, tile) {
         ctx.strokeStyle = 'rgba(255,255,255,0.1)';
         ctx.lineWidth = 0.5;
         ctx.strokeRect(x, y, size, size);
-    }
-}
-
-/**
- * Draw extraction points on the map (replaces old exit portal)
- */
-function drawExitPortal(offsetX, offsetY, tileSize) {
-    const cfg = MAP_OVERLAY_CONFIG;
-
-    // Get extraction points from the new system
-    const extractionPoints = (typeof ExtractionSystem !== 'undefined' && ExtractionSystem.points)
-        ? ExtractionSystem.points
-        : [];
-
-    if (extractionPoints.length === 0) {
-        // Fallback: check for old exit tile (legacy support)
-        for (let y = 0; y < game.map.length; y++) {
-            for (let x = 0; x < game.map[0].length; x++) {
-                const tile = game.map[y]?.[x];
-                if (tile && tile.type === 'exit') {
-                    const screenX = offsetX + x * tileSize;
-                    const screenY = offsetY + y * tileSize;
-                    ctx.fillStyle = cfg.exitColor;
-                    ctx.fillRect(screenX, screenY, tileSize, tileSize);
-                    return;
-                }
-            }
-        }
-        return;
-    }
-
-    // Draw each extraction point
-    for (const point of extractionPoints) {
-        if (point.status === 'collapsed') continue;
-
-        const screenX = offsetX + point.x * tileSize;
-        const screenY = offsetY + point.y * tileSize;
-
-        // Color based on status
-        let color = '#00ffff';  // Cyan for active
-        if (point.status === 'warning') {
-            color = '#ffa500';  // Orange for warning
-        } else if (point.status === 'collapsing') {
-            color = '#ff4444';  // Red for collapsing
-        }
-
-        // Draw extraction point
-        ctx.fillStyle = color;
-        ctx.fillRect(screenX, screenY, tileSize, tileSize);
-
-        // Add pulsing glow effect
-        const pulse = Math.sin(Date.now() / 300) * 0.3 + 0.7;
-        ctx.strokeStyle = color.replace('ff', `${Math.floor(pulse * 255).toString(16).padStart(2, '0')}`);
-        ctx.lineWidth = 2;
-        ctx.strokeRect(screenX - 1, screenY - 1, tileSize + 2, tileSize + 2);
-
-        // Draw "T" label for extraction (T key to extract)
-        ctx.fillStyle = '#000';
-        ctx.font = `bold ${Math.max(8, tileSize - 2)}px Arial`;
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.fillText('T', screenX + tileSize / 2, screenY + tileSize / 2);
     }
 }
 
@@ -511,28 +731,32 @@ function drawMapLoot(offsetX, offsetY, tileSize, areaX, areaY, areaWidth, areaHe
 }
 
 /**
- * Draw zoom controls
+ * Draw zoom controls - CotDG Stone Button Style
  */
 function drawZoomControls(panelX, panelY, panelWidth, panelHeight) {
     const cfg = MAP_OVERLAY_CONFIG;
-    const buttonSize = 30;
-    const buttonSpacing = 10;
-    const controlsX = panelX + panelWidth - buttonSize * 2 - buttonSpacing - 15;
-    const controlsY = panelY + panelHeight - buttonSize - 35;
+    const colors = typeof UI_COLORS !== 'undefined' ? UI_COLORS : {};
+    const frameGold = colors.frameGold || '#b8860b';
+    const frameGoldBright = colors.frameGoldBright || '#daa520';
+
+    const buttonSize = 32;
+    const buttonSpacing = 8;
+    const controlsX = panelX + panelWidth - buttonSize * 2 - buttonSpacing - 20;
+    const controlsY = panelY + panelHeight - buttonSize - 32;
 
     // Zoom out button (-)
     const minusX = controlsX;
-    drawZoomButton(minusX, controlsY, buttonSize, '-', mapOverlayState.zoom > cfg.minZoom);
+    drawZoomButton(minusX, controlsY, buttonSize, '−', mapOverlayState.zoom > cfg.minZoom);
 
     // Zoom in button (+)
     const plusX = controlsX + buttonSize + buttonSpacing;
     drawZoomButton(plusX, controlsY, buttonSize, '+', mapOverlayState.zoom < cfg.maxZoom);
 
-    // Zoom level indicator
-    ctx.fillStyle = '#888';
-    ctx.font = '12px monospace';
+    // Zoom level indicator (styled)
+    ctx.fillStyle = frameGoldBright;
+    ctx.font = 'bold 12px serif';
     ctx.textAlign = 'right';
-    ctx.fillText(`${mapOverlayState.zoom.toFixed(1)}x`, controlsX - 10, controlsY + buttonSize / 2 + 4);
+    ctx.fillText(`${mapOverlayState.zoom.toFixed(1)}×`, controlsX - 12, controlsY + buttonSize / 2 + 4);
 
     // Store button positions for click detection
     mapOverlayState.zoomOutButton = { x: minusX, y: controlsY, size: buttonSize };
@@ -540,25 +764,57 @@ function drawZoomControls(panelX, panelY, panelWidth, panelHeight) {
 }
 
 /**
- * Draw a zoom button
+ * Draw a zoom button - Stone Button Style
  */
 function drawZoomButton(x, y, size, text, enabled) {
-    const cfg = MAP_OVERLAY_CONFIG;
+    const colors = typeof UI_COLORS !== 'undefined' ? UI_COLORS : {};
+    const frameGold = colors.frameGold || '#b8860b';
+    const frameGoldBright = colors.frameGoldBright || '#daa520';
+    const frameGoldDark = colors.frameGoldDark || '#8b6914';
 
-    // Button background
-    ctx.fillStyle = enabled ? cfg.buttonBgColor : '#222';
+    ctx.save();
+
+    // Button background gradient (stone)
+    const btnGrad = ctx.createLinearGradient(x, y, x, y + size);
+    if (enabled) {
+        btnGrad.addColorStop(0, '#3a3530');
+        btnGrad.addColorStop(0.5, '#2a2520');
+        btnGrad.addColorStop(1, '#1a1510');
+    } else {
+        btnGrad.addColorStop(0, '#252220');
+        btnGrad.addColorStop(0.5, '#1a1816');
+        btnGrad.addColorStop(1, '#0d0b0a');
+    }
+    ctx.fillStyle = btnGrad;
     ctx.fillRect(x, y, size, size);
 
     // Button border
-    ctx.strokeStyle = enabled ? '#555' : '#333';
+    ctx.strokeStyle = enabled ? frameGold : frameGoldDark;
     ctx.lineWidth = 2;
     ctx.strokeRect(x, y, size, size);
 
+    // Corner accents
+    if (enabled) {
+        ctx.fillStyle = frameGoldDark;
+        const cs = 4;
+        ctx.fillRect(x, y, cs, 2);
+        ctx.fillRect(x, y, 2, cs);
+        ctx.fillRect(x + size - cs, y, cs, 2);
+        ctx.fillRect(x + size - 2, y, 2, cs);
+        ctx.fillRect(x, y + size - 2, cs, 2);
+        ctx.fillRect(x, y + size - cs, 2, cs);
+        ctx.fillRect(x + size - cs, y + size - 2, cs, 2);
+        ctx.fillRect(x + size - 2, y + size - cs, 2, cs);
+    }
+
     // Button text
-    ctx.fillStyle = enabled ? cfg.buttonTextColor : '#555';
-    ctx.font = 'bold 20px monospace';
+    ctx.fillStyle = enabled ? frameGoldBright : '#555';
+    ctx.font = 'bold 20px serif';
     ctx.textAlign = 'center';
-    ctx.fillText(text, x + size / 2, y + size / 2 + 7);
+    ctx.textBaseline = 'middle';
+    ctx.fillText(text, x + size / 2, y + size / 2);
+
+    ctx.restore();
 }
 
 /**
@@ -768,5 +1024,12 @@ window.resetMapOverlayState = resetMapOverlayState;
 window.revealMap = revealMap;
 window.hideMap = hideMap;
 
-console.log('Map overlay loaded');
+// Export new helper functions (Section 7)
+window.drawMapHeader = drawMapHeader;
+window.drawRoomOutlines = drawRoomOutlines;
+window.isRoomExplored = isRoomExplored;
+window.drawMapLegend = drawMapLegend;
+window.drawMiniStar = drawMiniStar;
+
+console.log('Map overlay loaded (with Section 7 improvements)');
 console.log('  Debug: revealMap() / hideMap() available in console');

@@ -593,9 +593,7 @@ function placeExitInFarthestRoom() {
         }
     }
 
-    // SURVIVAL EXTRACTION UPDATE: Old exit system disabled
-    // Extraction points are now used instead (see ExtractionSystem)
-    // Keeping exitPosition for potential legacy compatibility
+    // Store exit position for the descent system and legacy compatibility
     game.exitPosition = { x: exitX, y: exitY };
 
     // Sync with sessionState.pathDown for the new system

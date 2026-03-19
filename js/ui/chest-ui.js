@@ -520,14 +520,14 @@ function getItemIcon(item) {
     if (item.id === 'torch' || item.name?.toLowerCase().includes('torch')) return String.fromCodePoint(0x1F525);
     if (item.type === 'consumable' || item.name?.toLowerCase().includes('potion')) return String.fromCodePoint(0x1F9EA);
 
-    // Weapon types
+    // Weapon types (sword, mace, polearm, bow, dagger, staff)
     if (item.weaponType === 'sword') return String.fromCodePoint(0x1F5E1);
     if (item.weaponType === 'mace') return String.fromCodePoint(0x1F528);
     if (item.weaponType === 'bow') return String.fromCodePoint(0x1F3F9);
-    if (item.weaponType === 'crossbow') return String.fromCodePoint(0x1F3AF);
     if (item.weaponType === 'staff') return String.fromCodePoint(0x1FA84);
     if (item.weaponType === 'polearm') return String.fromCodePoint(0x1F531);
-    if (item.weaponType === 'knife') return String.fromCodePoint(0x1F52A);
+    if (item.weaponType === 'dagger') return String.fromCodePoint(0x1F52A);
+    // crossbow and throwing weapon types removed from equipment system
 
     // Armor slots
     if (item.slot === 'HEAD') return String.fromCodePoint(0x1FA96);

@@ -1,5 +1,5 @@
 // === js/data/core-data.js ===
-// SURVIVAL EXTRACTION UPDATE: The Core - Final challenge data
+// The Core - Final challenge data
 
 // ============================================================================
 // THE CORE CONFIGURATION

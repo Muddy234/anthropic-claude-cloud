@@ -56,6 +56,12 @@ const SFXSystem = {
     /** Sounds currently being loaded */
     loading: new Set(),
 
+    /** @type {Set<string>} Sounds that failed to load - don't retry */
+    failedSounds: new Set(),
+
+    /** @type {Set<string>} Sounds we've already logged warnings for */
+    warnedSounds: new Set(),
+
     // ========================================================================
     // INITIALIZATION
     // ========================================================================
@@ -71,6 +77,8 @@ const SFXSystem = {
         this.lastPlayTime.clear();
         this.categoryCounts.clear();
         this.loading.clear();
+        this.failedSounds.clear();
+        this.warnedSounds.clear();
 
         // Preload critical sounds
         this._preloadCriticalSounds();
@@ -85,19 +93,27 @@ const SFXSystem = {
      */
     async _preloadCriticalSounds() {
         if (typeof AUDIO_DEFINITIONS === 'undefined') {
-            console.warn('[SFXSystem] AUDIO_DEFINITIONS not found, skipping preload');
+            // Silently skip if no audio definitions - audio is optional
             return;
         }
 
         const critical = AUDIO_DEFINITIONS.preload || [];
-        const promises = critical.map(soundId => this.preload(soundId));
-
-        try {
-            await Promise.all(promises);
-            console.log(`[SFXSystem] Preloaded ${critical.length} critical sounds`);
-        } catch (error) {
-            console.warn('[SFXSystem] Some sounds failed to preload:', error);
+        if (critical.length === 0) {
+            return;
         }
+
+        // Use Promise.allSettled to handle partial failures gracefully
+        const results = await Promise.allSettled(
+            critical.map(soundId => this.preload(soundId))
+        );
+
+        // Count successful loads
+        const successCount = results.filter(r => r.status === 'fulfilled' && r.value !== null).length;
+
+        if (successCount > 0) {
+            console.log(`[SFXSystem] Preloaded ${successCount}/${critical.length} sounds`);
+        }
+        // Don't log if nothing loaded - avoids spam when audio is unavailable
     },
 
     // ========================================================================
@@ -115,14 +131,30 @@ const SFXSystem = {
             return this.soundBank.get(soundId);
         }
 
+        // Already failed - don't retry
+        if (this.failedSounds.has(soundId)) {
+            return null;
+        }
+
+        // AudioManager not available?
+        if (!this.audioManager) {
+            return null;
+        }
+
         // Currently loading?
         if (this.loading.has(soundId)) {
-            // Wait for existing load
+            // Wait for existing load with timeout
             return new Promise(resolve => {
+                let attempts = 0;
+                const maxAttempts = 100; // 5 seconds max wait
                 const checkLoaded = setInterval(() => {
+                    attempts++;
                     if (this.soundBank.has(soundId)) {
                         clearInterval(checkLoaded);
                         resolve(this.soundBank.get(soundId));
+                    } else if (this.failedSounds.has(soundId) || attempts >= maxAttempts) {
+                        clearInterval(checkLoaded);
+                        resolve(null);
                     }
                 }, 50);
             });
@@ -131,7 +163,12 @@ const SFXSystem = {
         // Get definition
         const def = this._getDefinition(soundId);
         if (!def || !def.path) {
-            console.warn(`[SFXSystem] No definition found for sound: ${soundId}`);
+            // Only warn once per sound
+            if (!this.warnedSounds.has(soundId)) {
+                console.warn(`[SFXSystem] No definition found for sound: ${soundId}`);
+                this.warnedSounds.add(soundId);
+            }
+            this.failedSounds.add(soundId);
             return null;
         }
 
@@ -139,13 +176,25 @@ const SFXSystem = {
 
         try {
             const buffer = await this.audioManager.loadAudioBuffer(def.path);
-            this.soundBank.set(soundId, buffer);
             this.loading.delete(soundId);
+
+            // loadAudioBuffer now returns null on failure instead of throwing
+            if (!buffer) {
+                this.failedSounds.add(soundId);
+                return null;
+            }
+
+            this.soundBank.set(soundId, buffer);
             return buffer;
 
         } catch (error) {
-            console.error(`[SFXSystem] Failed to load sound: ${soundId}`, error);
+            // Only log each failure once
+            if (!this.warnedSounds.has(soundId)) {
+                console.warn(`[SFXSystem] Failed to load sound: ${soundId}`);
+                this.warnedSounds.add(soundId);
+            }
             this.loading.delete(soundId);
+            this.failedSounds.add(soundId);
             return null;
         }
     },
@@ -204,7 +253,18 @@ const SFXSystem = {
      * @returns {object|null} Voice instance or null if culled
      */
     play(soundId, options = {}) {
-        if (!this.ready || !this.audioManager || !this.audioManager.isReady()) {
+        // Early bail-outs for system not ready
+        if (!this.ready || !this.audioManager) {
+            return null;
+        }
+
+        // Check if AudioManager is ready (gracefully handle if isReady doesn't exist)
+        if (typeof this.audioManager.isReady === 'function' && !this.audioManager.isReady()) {
+            return null;
+        }
+
+        // Don't try to play sounds that already failed to load
+        if (this.failedSounds.has(soundId)) {
             return null;
         }
 
@@ -242,12 +302,14 @@ const SFXSystem = {
         // Get or load the buffer
         let buffer = this.soundBank.get(soundId);
         if (!buffer) {
-            // Try to load on-demand
+            // Try to load on-demand (won't retry if already failed)
             this.preload(soundId).then(loadedBuffer => {
                 if (loadedBuffer) {
                     // Play after loaded (delayed)
                     this._playBuffer(soundId, loadedBuffer, opts);
                 }
+            }).catch(() => {
+                // Silently ignore - preload already handles error tracking
             });
             return null;
         }
@@ -260,62 +322,79 @@ const SFXSystem = {
      * @private
      */
     _playBuffer(soundId, buffer, opts) {
+        // Defensive null checks
+        if (!buffer || !this.audioManager || !this.audioManager.audioContext) {
+            return null;
+        }
+
         const ctx = this.audioManager.audioContext;
-        const currentTime = ctx.currentTime;
 
-        // Create source
-        const source = ctx.createBufferSource();
-        source.buffer = buffer;
-        source.playbackRate.value = opts.pitch;
-
-        // Create gain node for volume
-        const gainNode = ctx.createGain();
-        gainNode.gain.value = opts.volume;
-
-        // Create stereo panner if panning is specified
-        let panNode = null;
-        if (opts.pan !== 0 && ctx.createStereoPanner) {
-            panNode = ctx.createStereoPanner();
-            panNode.pan.value = Math.max(-1, Math.min(1, opts.pan));
+        // Check if sfxGain exists
+        if (!this.audioManager.sfxGain) {
+            return null;
         }
 
-        // Connect nodes
-        source.connect(gainNode);
-        if (panNode) {
-            gainNode.connect(panNode);
-            panNode.connect(this.audioManager.sfxGain);
-        } else {
-            gainNode.connect(this.audioManager.sfxGain);
+        try {
+            const currentTime = ctx.currentTime;
+
+            // Create source
+            const source = ctx.createBufferSource();
+            source.buffer = buffer;
+            source.playbackRate.value = opts.pitch;
+
+            // Create gain node for volume
+            const gainNode = ctx.createGain();
+            gainNode.gain.value = opts.volume;
+
+            // Create stereo panner if panning is specified
+            let panNode = null;
+            if (opts.pan !== 0 && ctx.createStereoPanner) {
+                panNode = ctx.createStereoPanner();
+                panNode.pan.value = Math.max(-1, Math.min(1, opts.pan));
+            }
+
+            // Connect nodes
+            source.connect(gainNode);
+            if (panNode) {
+                gainNode.connect(panNode);
+                panNode.connect(this.audioManager.sfxGain);
+            } else {
+                gainNode.connect(this.audioManager.sfxGain);
+            }
+
+            // Create voice instance
+            const voice = {
+                id: soundId,
+                source,
+                gainNode,
+                panNode,
+                priority: opts.priority,
+                category: opts.category,
+                startTime: currentTime,
+                duration: buffer.duration / opts.pitch
+            };
+
+            // Track voice
+            this.activeVoices.push(voice);
+            this._incrementCategoryCount(opts.category);
+
+            // Setup cleanup on end
+            source.onended = () => {
+                this._removeVoice(voice);
+            };
+
+            // Start playback
+            source.start(0);
+
+            // Update last play time for cooldown
+            this.lastPlayTime.set(soundId, currentTime);
+
+            return voice;
+
+        } catch (error) {
+            // Silently fail - audio playback is optional
+            return null;
         }
-
-        // Create voice instance
-        const voice = {
-            id: soundId,
-            source,
-            gainNode,
-            panNode,
-            priority: opts.priority,
-            category: opts.category,
-            startTime: currentTime,
-            duration: buffer.duration / opts.pitch
-        };
-
-        // Track voice
-        this.activeVoices.push(voice);
-        this._incrementCategoryCount(opts.category);
-
-        // Setup cleanup on end
-        source.onended = () => {
-            this._removeVoice(voice);
-        };
-
-        // Start playback
-        source.start(0);
-
-        // Update last play time for cooldown
-        this.lastPlayTime.set(soundId, currentTime);
-
-        return voice;
     },
 
     /**

@@ -584,6 +584,33 @@ function getTierWeightsForDifficulty(difficulty, floor) {
 }
 
 // ============================================================================
+// FLOOR-BASED STAT SCALING
+// ============================================================================
+
+/**
+ * Scale enemy stats by floor level
+ * @param {Object} template - Base monster template
+ * @param {string} monsterType - Monster type name
+ * @param {number} floor - Current dungeon floor (1-10)
+ * @returns {Object} Scaled stats
+ */
+function applyTierMultipliers(template, monsterType, floor) {
+    // Floor scaling: 15% more HP/damage per floor
+    const floorScale = 1 + (floor - 1) * 0.15;
+    // Floor 1 = 1.0x, Floor 5 = 1.6x, Floor 10 = 2.35x
+
+    return {
+        ...template,
+        hp: Math.floor((template.hp || 50) * floorScale),
+        maxHp: Math.floor((template.hp || 50) * floorScale),
+        str: Math.floor((template.str || 10) * floorScale),
+        damage: Math.floor((template.damage || 8) * floorScale),
+        defense: Math.floor((template.defense || 2) * (1 + (floor - 1) * 0.10)),
+        xpValue: Math.floor((template.xpValue || 10) * floorScale)
+    };
+}
+
+// ============================================================================
 // ENEMY CREATION (LEGACY - Use EnemyFactory.createAndRegister() instead)
 // ============================================================================
 
@@ -1035,6 +1062,8 @@ if (typeof window !== 'undefined') {
     window.createEnemyLegacy = createEnemyLegacy;
     window.calculateEnemyCount = calculateEnemyCount;
     window.spawnEnemiesForAllRooms = spawnEnemiesForAllRooms;
+    // Override the disabled version from monster-tiers.js with actual floor scaling
+    window.applyTierMultipliers = applyTierMultipliers;
 }
 
 // Enemy spawner loaded (element-based selection, spawn patterns, uses EnemyFactory)

@@ -17,35 +17,27 @@ const AbilityRepository = {
     // ========================================================================
     // TIER SCALING - Adjusts ability parameters based on entity tier
     // ========================================================================
+    // TIER_SCALING: Only affects damage and range. Cooldowns and telegraphs are
+    // controlled by the ability definition itself for precise tuning.
     TIER_SCALING: {
         'TIER_3': {  // Weakest enemies
             damageMultiplier: 0.4,
-            cooldownMultiplier: 1.5,
-            telegraphMultiplier: 0.5,  // Shorter telegraphs (faster attacks but weaker)
             rangeMultiplier: 0.7
         },
         'TIER_2': {
             damageMultiplier: 0.6,
-            cooldownMultiplier: 1.2,
-            telegraphMultiplier: 0.6,
             rangeMultiplier: 0.85
         },
         'TIER_1': {
             damageMultiplier: 0.8,
-            cooldownMultiplier: 1.0,
-            telegraphMultiplier: 0.8,
             rangeMultiplier: 1.0
         },
         'ELITE': {
             damageMultiplier: 1.0,
-            cooldownMultiplier: 0.9,
-            telegraphMultiplier: 1.0,
             rangeMultiplier: 1.0
         },
         'BOSS': {
             damageMultiplier: 1.2,
-            cooldownMultiplier: 0.8,
-            telegraphMultiplier: 1.2,  // Longer telegraphs for bosses (more time to react)
             rangeMultiplier: 1.2
         }
     },
@@ -63,7 +55,8 @@ const AbilityRepository = {
             range: 2,
             aoe: { shape: 'arc', angle: 120, radius: 2 },
             telegraphTime: 600,
-            cooldown: 2000,
+            cooldown: 1600,
+            recoveryTime: 600,
             forBoss: true,
             forEnemy: true,
             description: 'Standard melee arc attack'
@@ -76,8 +69,9 @@ const AbilityRepository = {
             damage: 40,
             range: 3,
             aoe: { shape: 'circle', radius: 2.5 },
-            telegraphTime: 1200,
-            cooldown: 5000,
+            telegraphTime: 1000,
+            cooldown: 4000,
+            recoveryTime: 800,
             effect: 'knockback',
             knockbackForce: 3,
             forBoss: true,
@@ -94,8 +88,9 @@ const AbilityRepository = {
             hitCount: 2,
             hitDelay: 300,
             aoe: { shape: 'arc', angle: 90, radius: 2 },
-            telegraphTime: 500,
-            cooldown: 3000,
+            telegraphTime: 550,
+            cooldown: 2200,
+            recoveryTime: 350,
             forBoss: true,
             forEnemy: true,
             description: 'Two quick strikes in succession'
@@ -109,9 +104,11 @@ const AbilityRepository = {
             range: 3,
             aoe: { shape: 'arc', angle: 270, radius: 3 },
             telegraphTime: 1000,
-            cooldown: 6000,
+            cooldown: 4500,
+            recoveryTime: 1000,
             forBoss: true,
             forEnemy: false,  // Too powerful for regular enemies
+            allowedEnemies: ['Giant Spider'],  // Named exceptions
             description: 'Wide sweeping attack'
         },
 
@@ -122,8 +119,9 @@ const AbilityRepository = {
             damage: 18,
             range: 3,
             aoe: { shape: 'line', width: 1, length: 3 },
-            telegraphTime: 400,
-            cooldown: 2500,
+            telegraphTime: 450,
+            cooldown: 1800,
+            recoveryTime: 500,
             effect: 'dash_to_target',
             dashDistance: 2,
             forBoss: true,
@@ -138,8 +136,9 @@ const AbilityRepository = {
             damage: 22,
             range: 1,
             aoe: { shape: 'arc', angle: 60, radius: 1 },
-            telegraphTime: 300,
-            cooldown: 1800,
+            telegraphTime: 400,
+            cooldown: 1400,
+            recoveryTime: 350,
             effect: 'bleed',
             bleedDamage: 3,
             bleedDuration: 3000,
@@ -155,8 +154,9 @@ const AbilityRepository = {
             damage: 16,
             range: 2,
             aoe: { shape: 'arc', angle: 90, radius: 2 },
-            telegraphTime: 350,
-            cooldown: 1500,
+            telegraphTime: 450,
+            cooldown: 1200,
+            recoveryTime: 350,
             forBoss: true,
             forEnemy: true,
             description: 'Fast claw attack'
@@ -169,8 +169,9 @@ const AbilityRepository = {
             damage: 14,
             range: 2.5,
             aoe: { shape: 'arc', angle: 180, radius: 2.5 },
-            telegraphTime: 500,
-            cooldown: 2200,
+            telegraphTime: 550,
+            cooldown: 1800,
+            recoveryTime: 600,
             effect: 'knockback',
             knockbackForce: 2,
             forBoss: true,
@@ -187,7 +188,8 @@ const AbilityRepository = {
             range: 10,
             aoe: { shape: 'line', width: 2 },
             telegraphTime: 800,
-            cooldown: 6000,
+            cooldown: 4500,
+            recoveryTime: 1000,
             stunOnHit: true,
             stunDuration: 1000,
             moveDuringAttack: true,
@@ -203,8 +205,9 @@ const AbilityRepository = {
             damage: 45,
             range: 8,
             aoe: { shape: 'circle', radius: 2 },
-            telegraphTime: 1000,
-            cooldown: 8000,
+            telegraphTime: 900,
+            cooldown: 5000,
+            recoveryTime: 800,
             effect: 'leap_to_target',
             forBoss: true,
             forEnemy: true,
@@ -218,8 +221,9 @@ const AbilityRepository = {
             damage: 30,
             range: 12,
             aoe: { shape: 'line', width: 3 },
-            telegraphTime: 1200,
-            cooldown: 10000,
+            telegraphTime: 1100,
+            cooldown: 6000,
+            recoveryTime: 1200,
             wallCollisionDamage: 20,
             stunOnWall: true,
             forBoss: true,
@@ -235,7 +239,8 @@ const AbilityRepository = {
             range: 5,
             aoe: { shape: 'circle', radius: 1 },
             telegraphTime: 500,
-            cooldown: 4000,
+            cooldown: 2500,
+            recoveryTime: 500,
             effect: 'leap_to_target',
             forBoss: true,
             forEnemy: true,
@@ -251,8 +256,9 @@ const AbilityRepository = {
             range: 12,
             projectile: true,
             projectileSpeed: 8,
-            telegraphTime: 400,
-            cooldown: 2000,
+            telegraphTime: 450,
+            cooldown: 1100,
+            recoveryTime: 500,
             forBoss: true,
             forEnemy: true,
             description: 'Single ranged projectile'
@@ -269,7 +275,8 @@ const AbilityRepository = {
             projectileSpread: 30,
             projectileSpeed: 6,
             telegraphTime: 600,
-            cooldown: 4000,
+            cooldown: 2200,
+            recoveryTime: 500,
             forBoss: true,
             forEnemy: true,
             description: 'Burst of three projectiles'
@@ -286,7 +293,8 @@ const AbilityRepository = {
             projectileSpread: 360,
             projectileSpeed: 5,
             telegraphTime: 1000,
-            cooldown: 8000,
+            cooldown: 5000,
+            recoveryTime: 600,
             forBoss: true,
             forEnemy: false,
             description: 'Ring of projectiles in all directions'
@@ -302,8 +310,9 @@ const AbilityRepository = {
             homing: true,
             projectileSpeed: 4,
             homingStrength: 0.5,
-            telegraphTime: 800,
-            cooldown: 6000,
+            telegraphTime: 750,
+            cooldown: 3200,
+            recoveryTime: 500,
             forBoss: true,
             forEnemy: true,
             description: 'Slow homing projectile'
@@ -317,8 +326,9 @@ const AbilityRepository = {
             range: 6,
             projectile: true,
             projectileSpeed: 7,
-            telegraphTime: 350,
-            cooldown: 2500,
+            telegraphTime: 450,
+            cooldown: 1300,
+            recoveryTime: 400,
             element: 'poison',
             effect: 'poison',
             poisonDamage: 2,
@@ -336,8 +346,9 @@ const AbilityRepository = {
             damage: 30,
             range: 4,
             aoe: { shape: 'circle', radius: 3 },
-            telegraphTime: 1000,
-            cooldown: 5000,
+            telegraphTime: 900,
+            cooldown: 4000,
+            recoveryTime: 800,
             effect: 'screen_shake',
             forBoss: true,
             forEnemy: true,
@@ -350,8 +361,9 @@ const AbilityRepository = {
             category: 'aoe',
             damage: 20,
             aoe: { shape: 'ring', innerRadius: 1, outerRadius: 6 },
-            telegraphTime: 800,
-            cooldown: 7000,
+            telegraphTime: 850,
+            cooldown: 5000,
+            recoveryTime: 700,
             knockback: true,
             forBoss: true,
             forEnemy: false,
@@ -364,8 +376,9 @@ const AbilityRepository = {
             category: 'aoe',
             damage: 50,
             aoe: { shape: 'circle', radius: 3 },
-            telegraphTime: 2000,
-            cooldown: 12000,
+            telegraphTime: 1800,
+            cooldown: 8000,
+            recoveryTime: 1000,
             targetLocation: 'player',
             effect: 'spawn_fire_pool',
             forBoss: true,
@@ -380,7 +393,8 @@ const AbilityRepository = {
             damage: 15,
             aoe: { shape: 'full_room' },
             telegraphTime: 1500,
-            cooldown: 15000,
+            cooldown: 10000,
+            recoveryTime: 1200,
             avoidableBy: 'jumping',
             forBoss: true,
             forEnemy: false,
@@ -394,7 +408,8 @@ const AbilityRepository = {
             damage: 18,
             aoe: { shape: 'circle', radius: 2 },
             telegraphTime: 600,
-            cooldown: 3500,
+            cooldown: 2500,
+            recoveryTime: 600,
             effect: 'stun',
             stunDuration: 500,
             forBoss: true,
@@ -409,8 +424,9 @@ const AbilityRepository = {
             category: 'breath',
             damage: 25,
             aoe: { shape: 'cone', angle: 60, range: 6 },
-            telegraphTime: 1000,
-            cooldown: 6000,
+            telegraphTime: 900,
+            cooldown: 4500,
+            recoveryTime: 700,
             element: 'fire',
             lingering: true,
             lingerDuration: 3000,
@@ -425,8 +441,9 @@ const AbilityRepository = {
             category: 'breath',
             damage: 20,
             aoe: { shape: 'cone', angle: 75, range: 5 },
-            telegraphTime: 1000,
-            cooldown: 6000,
+            telegraphTime: 900,
+            cooldown: 4500,
+            recoveryTime: 700,
             element: 'ice',
             effect: 'slow',
             slowDuration: 3000,
@@ -441,14 +458,17 @@ const AbilityRepository = {
             name: 'Void Beam',
             category: 'breath',
             damage: 35,
-            aoe: { shape: 'line', width: 1, range: 15 },
-            telegraphTime: 1500,
+            range: 15,
+            aoe: { shape: 'line', width: 1, length: 15 },
+            telegraphTime: 1400,
             duration: 2000,
-            cooldown: 10000,
+            cooldown: 7000,
+            recoveryTime: 1500,
             element: 'void',
             continuous: true,
             forBoss: true,
             forEnemy: false,
+            allowedEnemies: ['Void Touched'],  // Named exceptions
             description: 'Sustained beam of void energy'
         },
 
@@ -459,7 +479,8 @@ const AbilityRepository = {
             damage: 8,
             aoe: { shape: 'cone', angle: 90, range: 4 },
             telegraphTime: 700,
-            cooldown: 5000,
+            cooldown: 3500,
+            recoveryTime: 600,
             element: 'poison',
             effect: 'poison',
             poisonDamage: 3,
@@ -475,7 +496,9 @@ const AbilityRepository = {
             name: 'Summon Minions',
             category: 'summon',
             damage: 0,
-            cooldown: 12000,
+            telegraphTime: 800,
+            cooldown: 10000,
+            recoveryTime: 1000,
             effect: 'spawn_enemies',
             spawnCount: 3,
             spawnType: 'basic',
@@ -489,7 +512,9 @@ const AbilityRepository = {
             name: 'Healing Pulse',
             category: 'support',
             damage: 0,
-            cooldown: 15000,
+            telegraphTime: 600,
+            cooldown: 12000,
+            recoveryTime: 500,
             effect: 'heal_self',
             healPercent: 0.1,
             forBoss: true,
@@ -502,7 +527,9 @@ const AbilityRepository = {
             name: 'Shield Barrier',
             category: 'defensive',
             damage: 0,
-            cooldown: 20000,
+            telegraphTime: 500,
+            cooldown: 15000,
+            recoveryTime: 400,
             effect: 'create_shield',
             shieldAmount: 100,
             shieldDuration: 5000,
@@ -517,7 +544,9 @@ const AbilityRepository = {
             category: 'buff',
             damage: 0,
             aoe: { shape: 'circle', radius: 8 },
-            cooldown: 25000,
+            telegraphTime: 800,
+            cooldown: 18000,
+            recoveryTime: 600,
             effect: 'buff_self',
             buffDamageMod: 1.5,
             buffSpeedMod: 1.3,
@@ -532,7 +561,9 @@ const AbilityRepository = {
             name: 'Deploy Traps',
             category: 'tactical',
             damage: 0,
-            cooldown: 10000,
+            telegraphTime: 600,
+            cooldown: 8000,
+            recoveryTime: 500,
             effect: 'spawn_traps',
             trapCount: 4,
             trapType: 'spike',
@@ -547,8 +578,9 @@ const AbilityRepository = {
             category: 'special',
             damage: 40,
             aoe: { shape: 'circle', radius: 2 },
-            telegraphTime: 500,
-            cooldown: 8000,
+            telegraphTime: 550,
+            cooldown: 5000,
+            recoveryTime: 400,
             effect: 'teleport_behind_player',
             forBoss: true,
             forEnemy: true,
@@ -561,8 +593,9 @@ const AbilityRepository = {
             category: 'special',
             damage: 30,
             range: 2,
-            telegraphTime: 800,
-            cooldown: 10000,
+            telegraphTime: 850,
+            cooldown: 6000,
+            recoveryTime: 800,
             effect: 'grab_and_throw',
             throwDistance: 5,
             forBoss: true,
@@ -578,8 +611,9 @@ const AbilityRepository = {
             range: 6,
             projectile: true,
             projectileSpeed: 10,
-            telegraphTime: 300,
-            cooldown: 4000,
+            telegraphTime: 400,
+            cooldown: 2500,
+            recoveryTime: 500,
             effect: 'root',
             rootDuration: 2000,
             forBoss: true,
@@ -593,8 +627,9 @@ const AbilityRepository = {
             category: 'special',
             damage: 25,
             range: 6,
-            telegraphTime: 200,
-            cooldown: 5000,
+            telegraphTime: 350,
+            cooldown: 3000,
+            recoveryTime: 400,
             effect: 'teleport_to_shadows',
             forBoss: true,
             forEnemy: true,
@@ -609,8 +644,9 @@ const AbilityRepository = {
             range: 7,
             projectile: true,
             projectileSpeed: 9,
-            telegraphTime: 400,
-            cooldown: 2200,
+            telegraphTime: 450,
+            cooldown: 1200,
+            recoveryTime: 400,
             forBoss: true,
             forEnemy: true,
             description: 'Throw bone projectile'
@@ -622,8 +658,9 @@ const AbilityRepository = {
             category: 'special',
             damage: 18,
             range: 4,
-            telegraphTime: 600,
-            cooldown: 6000,
+            telegraphTime: 650,
+            cooldown: 4000,
+            recoveryTime: 600,
             effect: 'heal_on_hit',
             healPercent: 0.5,  // Heal 50% of damage dealt
             forBoss: true,
@@ -1020,26 +1057,66 @@ const AbilityRepository = {
     // ========================================================================
 
     /**
+     * Get an ability by ID (without scaling)
+     * @param {string} abilityId - Ability ID
+     * @returns {object|null} Ability or null if not found
+     */
+    get(abilityId) {
+        return this.ATTACKS[abilityId] || null;
+    },
+
+    /**
+     * Check if an enemy can use a specific ability
+     * Handles elite/named exceptions for boss-only abilities
+     * @param {string} abilityId - Ability ID
+     * @param {object} enemy - Enemy object with tier and name properties
+     * @returns {boolean} Whether the enemy can use this ability
+     */
+    canEnemyUse(abilityId, enemy) {
+        const ability = this.ATTACKS[abilityId];
+        if (!ability) return false;
+        if (ability.forEnemy) return true;
+        if (ability.forBoss && enemy.tier === 'ELITE') return true;
+        // Check allowedEnemies array defined on the ability itself
+        if (ability.allowedEnemies && ability.allowedEnemies.includes(enemy.name)) {
+            return true;
+        }
+        return false;
+    },
+
+    /**
      * Get an attack ability scaled for a specific tier
      * @param {string} attackId - Attack ID
      * @param {string} tier - Entity tier (TIER_3, TIER_2, TIER_1, ELITE, BOSS)
+     * @param {object} enemy - Optional enemy object for named exceptions
      * @returns {object|null} Scaled attack or null if not found/not allowed
      */
-    getScaledAttack(attackId, tier = 'TIER_2') {
+    getScaledAttack(attackId, tier = 'TIER_2', enemy = null) {
         const attack = this.ATTACKS[attackId];
         if (!attack) return null;
 
         // Check if attack is allowed for this tier level
         if (tier === 'BOSS' && !attack.forBoss) return null;
-        if (tier !== 'BOSS' && !attack.forEnemy) return null;
+
+        // For non-boss tiers, use canEnemyUse if enemy provided, else simple forEnemy check
+        if (tier !== 'BOSS') {
+            if (enemy) {
+                if (!this.canEnemyUse(attackId, enemy)) return null;
+            } else if (!attack.forEnemy) {
+                return null;
+            }
+        }
 
         const scaling = this.TIER_SCALING[tier] || this.TIER_SCALING['TIER_2'];
 
+        // Cooldown, telegraphTime, and recoveryTime come directly from the ability definition
+        // Only damage and range are scaled by tier
         return {
             ...attack,
             damage: Math.floor(attack.damage * scaling.damageMultiplier),
-            cooldown: Math.floor(attack.cooldown * scaling.cooldownMultiplier),
-            telegraphTime: attack.telegraphTime ? Math.floor(attack.telegraphTime * scaling.telegraphMultiplier) : 0,
+            cooldown: attack.cooldown,
+            telegraphTime: attack.telegraphTime || 0,
+            recoveryTime: attack.recoveryTime || 500,
             range: attack.range ? attack.range * scaling.rangeMultiplier : undefined,
             tier: tier,
             scaled: true
@@ -1050,18 +1127,27 @@ const AbilityRepository = {
      * Get all attacks suitable for a specific tier
      * @param {string} tier - Entity tier
      * @param {string} category - Optional category filter
+     * @param {object} enemy - Optional enemy object for named exceptions
      * @returns {Array} Array of scaled attacks
      */
-    getAttacksForTier(tier, category = null) {
+    getAttacksForTier(tier, category = null, enemy = null) {
         const attacks = [];
         const isBoss = tier === 'BOSS';
 
         for (const [id, attack] of Object.entries(this.ATTACKS)) {
             if (isBoss && !attack.forBoss) continue;
-            if (!isBoss && !attack.forEnemy) continue;
+            // For non-boss, check forEnemy OR allowedEnemies
+            if (!isBoss) {
+                if (!attack.forEnemy) {
+                    // Check if enemy is in allowedEnemies list
+                    if (!enemy || !attack.allowedEnemies || !attack.allowedEnemies.includes(enemy.name)) {
+                        continue;
+                    }
+                }
+            }
             if (category && attack.category !== category) continue;
 
-            attacks.push(this.getScaledAttack(id, tier));
+            attacks.push(this.getScaledAttack(id, tier, enemy));
         }
 
         return attacks;

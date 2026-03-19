@@ -1,33 +1,5 @@
 // === js/generation/village-generator.js ===
-// SURVIVAL EXTRACTION UPDATE: Village hub map generation
-
-// ============================================================================
-// FALLBACK DEFINITIONS
-// ============================================================================
-
-/**
- * Fallback for getTransformedTile if village-tile-states.js not loaded
- * Returns the original tile unchanged
- */
-function _fallbackGetTransformedTile(baseTileType, worldState) {
-    return { type: baseTileType };
-}
-
-/**
- * Fallback for getBuildingState if village-tile-states.js not loaded
- * Returns default intact building state
- */
-function _fallbackGetBuildingState(buildingId, worldState) {
-    return { status: 'intact', usable: true };
-}
-
-/**
- * Fallback for getDamageConfig if village-tile-states.js not loaded
- * Returns no damage effects
- */
-function _fallbackGetDamageConfig(worldState) {
-    return { crackChance: 0, rubbleChance: 0, fireChance: 0 };
-}
+// Village hub map generation
 
 // ============================================================================
 // VILLAGE GENERATOR
@@ -112,6 +84,15 @@ const VillageGenerator = {
             type: 'entrance',
             color: '#2F1810',
             npcs: []
+        },
+        TRAINING_GROUND: {
+            id: 'training_ground',
+            name: 'Training Ground',
+            width: 5,
+            height: 4,
+            type: 'open',
+            color: '#5a5a40',
+            npcs: []
         }
     },
 
@@ -121,28 +102,21 @@ const VillageGenerator = {
 
     /**
      * Generate the village map
-     * @param {number} degradationLevel - Legacy param (ignored if WorldStateSystem available)
-     * @returns {Object} { map, buildings, spawnPoint, worldState }
+     * Village is always in a healthy state (no degradation).
+     * @returns {Object} { map, buildings, spawnPoint }
      */
-    generate(degradationLevel = 0) {
-        // Use WorldStateSystem if available, otherwise fall back to degradation
-        const worldState = typeof WorldStateSystem !== 'undefined' ?
-            WorldStateSystem.getState() : Math.min(degradationLevel + 1, 4);
-
+    generate() {
         // Initialize empty map
         const map = this._createBaseMap();
 
-        // Place buildings (applies building state transformations)
-        const buildings = this._placeBuildings(map, worldState);
+        // Place buildings
+        const buildings = this._placeBuildings(map);
 
         // Add paths between buildings
         this._addPaths(map, buildings);
 
         // Add decorations
-        this._addDecorations(map, buildings, worldState);
-
-        // Apply world state effects (tile transformations, damage)
-        this._applyWorldState(map, buildings, worldState);
+        this._addDecorations(map, buildings);
 
         // Find spawn point (in front of player house or town square)
         const spawnPoint = this._findSpawnPoint(buildings);
@@ -152,8 +126,7 @@ const VillageGenerator = {
             buildings,
             spawnPoint,
             width: this.WIDTH,
-            height: this.HEIGHT,
-            worldState: worldState
+            height: this.HEIGHT
         };
     },
 
@@ -195,11 +168,10 @@ const VillageGenerator = {
     /**
      * Place all buildings on the map
      * @param {Array} map
-     * @param {number} degradationLevel
      * @returns {Array} Building objects with positions
      * @private
      */
-    _placeBuildings(map, degradationLevel) {
+    _placeBuildings(map) {
         const buildings = [];
 
         // Fixed layout for consistent village feel
@@ -211,7 +183,8 @@ const VillageGenerator = {
             { def: this.BUILDINGS.PLAYER_HOUSE, x: 38, y: 30 },
             { def: this.BUILDINGS.EXPEDITION_HALL, x: 20, y: 5 },
             { def: this.BUILDINGS.SHRINE, x: 40, y: 20 },
-            { def: this.BUILDINGS.CHASM_ENTRANCE, x: 22, y: 32 }
+            { def: this.BUILDINGS.CHASM_ENTRANCE, x: 22, y: 32 },
+            { def: this.BUILDINGS.TRAINING_GROUND, x: 12, y: 5 }
         ];
 
         layout.forEach(({ def, x, y }) => {
@@ -409,10 +382,9 @@ const VillageGenerator = {
      * Add decorative elements
      * @param {Array} map
      * @param {Array} buildings
-     * @param {number} degradationLevel
      * @private
      */
-    _addDecorations(map, buildings, degradationLevel) {
+    _addDecorations(map, buildings) {
         const decorations = ['tree', 'bush', 'flowers', 'barrel', 'crate', 'well', 'bench'];
 
         // Add some trees around the edges
@@ -449,6 +421,33 @@ const VillageGenerator = {
                 map[wellY][wellX].decoration = 'well';
                 map[wellY][wellX].walkable = false;
             }
+
+            // Add bulletin board at edge of town square
+            const bulletinX = townSquare.x + townSquare.width - 2;
+            const bulletinY = townSquare.y + 1;
+            if (map[bulletinY][bulletinX].type === 'cobblestone' || map[bulletinY][bulletinX].type === 'stone_border') {
+                map[bulletinY][bulletinX].decoration = 'bulletin_board';
+                map[bulletinY][bulletinX].walkable = false;
+                map[bulletinY][bulletinX].interactable = true;
+                map[bulletinY][bulletinX].interactionType = 'bulletin';
+            }
+        }
+
+        // Add training dummies in training ground
+        const trainingGround = buildings.find(b => b.id === 'training_ground');
+        if (trainingGround) {
+            const dummyTypes = ['straw', 'wood', 'iron'];
+            dummyTypes.forEach((type, index) => {
+                const dummyX = trainingGround.x + 1 + index;
+                const dummyY = trainingGround.y + 2;
+                if (map[dummyY] && map[dummyY][dummyX]) {
+                    map[dummyY][dummyX].decoration = 'training_dummy';
+                    map[dummyY][dummyX].dummyType = type;
+                    map[dummyY][dummyX].walkable = false;
+                    map[dummyY][dummyX].interactable = true;
+                    map[dummyY][dummyX].interactionType = 'training';
+                }
+            });
         }
 
         // Add benches near buildings
@@ -465,153 +464,8 @@ const VillageGenerator = {
         });
     },
 
-    /**
-     * Apply world state effects to village tiles and buildings
-     * THE BLEEDING EARTH: Transforms village based on narrative progression
-     * @param {Array} map
-     * @param {Array} buildings
-     * @param {number} worldState - 1=NORMAL, 2=ASH, 3=BURNING, 4=ENDGAME
-     * @private
-     */
-    _applyWorldState(map, buildings, worldState) {
-        // Use global functions if available, otherwise fallbacks
-        const _getDamageConfig = typeof getDamageConfig === 'function'
-            ? getDamageConfig
-            : _fallbackGetDamageConfig;
-        const _getTransformedTile = typeof getTransformedTile === 'function'
-            ? getTransformedTile
-            : _fallbackGetTransformedTile;
-        const _getBuildingState = typeof getBuildingState === 'function'
-            ? getBuildingState
-            : _fallbackGetBuildingState;
-
-        // Get damage configuration for this world state
-        const damageConfig = _getDamageConfig(worldState);
-
-        // Transform tiles based on world state
-        for (let y = 0; y < this.HEIGHT; y++) {
-            for (let x = 0; x < this.WIDTH; x++) {
-                const tile = map[y][x];
-                if (!tile) continue;  // Defensive check
-
-                const baseType = tile.baseType || tile.type;
-
-                // Apply tile transformation
-                const transformed = _getTransformedTile(baseType, worldState);
-                if (transformed && transformed.type !== baseType) {
-                    tile.baseType = baseType;  // Remember original
-                    tile.type = transformed.type;
-                    if (transformed.color) {
-                        tile.stateColor = transformed.color;
-                    }
-                }
-
-                // Apply random damage effects (only if not already damaged)
-                if (damageConfig.crackChance > 0 && Math.random() < damageConfig.crackChance) {
-                    if (tile.type && (tile.type.includes('path') || tile.type.includes('cobble'))) {
-                        tile.cracked = true;
-                    }
-                }
-
-                if (damageConfig.rubbleChance > 0 && Math.random() < damageConfig.rubbleChance) {
-                    if (tile.type === 'wall' || tile.type === 'wall_cracked') {
-                        tile.type = 'rubble';
-                        tile.walkable = false;
-                    }
-                }
-
-                if (damageConfig.fireChance > 0 && Math.random() < damageConfig.fireChance) {
-                    if (tile.type && (tile.type.includes('grass') || tile.type.includes('floor'))) {
-                        tile.onFire = true;
-                    }
-                }
-            }
-        }
-
-        // Apply building state transformations
-        buildings.forEach(building => {
-            if (!building) return;  // Defensive check
-
-            const buildingState = _getBuildingState(building.id, worldState);
-            if (!buildingState) return;  // Defensive check
-
-            building.status = buildingState.status || 'intact';
-            building.usable = buildingState.usable !== false;
-
-            if (buildingState.name) {
-                building.displayName = buildingState.name;
-            }
-            if (buildingState.color) {
-                building.stateColor = buildingState.color;
-            }
-            if (buildingState.description) {
-                building.stateDescription = buildingState.description;
-            }
-            if (buildingState.replacementInteraction) {
-                building.replacementInteraction = buildingState.replacementInteraction;
-            }
-            if (buildingState.npc === null) {
-                building.npcs = [];  // NPC is dead/gone
-                building.npcDead = true;
-            }
-
-            // Special case: Bank is crushed in BURNING state
-            if (building.id === 'bank' && buildingState.status === 'crushed') {
-                this._crushBuilding(map, building);
-            }
-        });
-    },
-
-    /**
-     * Apply crushed building effect (rubble, collapsed walls)
-     * @param {Array} map
-     * @param {Object} building
-     * @private
-     */
-    _crushBuilding(map, building) {
-        for (let dy = 0; dy < building.height; dy++) {
-            for (let dx = 0; dx < building.width; dx++) {
-                const x = building.x + dx;
-                const y = building.y + dy;
-
-                if (y >= 0 && y < this.HEIGHT && x >= 0 && x < this.WIDTH) {
-                    const tile = map[y][x];
-                    const isEdge = dx === 0 || dx === building.width - 1 ||
-                                   dy === 0 || dy === building.height - 1;
-
-                    // Mostly rubble with some walls still standing
-                    if (Math.random() < 0.7) {
-                        tile.type = 'rubble';
-                        tile.walkable = false;
-                    } else if (isEdge) {
-                        tile.type = 'wall_cracked';
-                        tile.walkable = false;
-                    }
-                }
-            }
-        }
-
-        // Place a large boulder in the center
-        const centerX = building.x + Math.floor(building.width / 2);
-        const centerY = building.y + Math.floor(building.height / 2);
-        if (map[centerY] && map[centerY][centerX]) {
-            map[centerY][centerX].type = 'boulder';
-            map[centerY][centerX].walkable = false;
-            map[centerY][centerX].interactable = true;
-            map[centerY][centerX].interactionType = 'emergency_safe';
-        }
-
-        building.crushed = true;
-    },
-
-    /**
-     * Legacy method - redirects to _applyWorldState
-     * @deprecated Use _applyWorldState instead
-     */
-    _applyDegradation(map, buildings, level) {
-        // Convert old degradation level to world state (0->1, 1->2, 2->3)
-        this._applyWorldState(map, buildings, Math.min(level + 1, 4));
-    },
+    // Degradation / world-state damage system has been removed.
+    // Village always appears in a healthy, intact state.
 
     /**
      * Find player spawn point

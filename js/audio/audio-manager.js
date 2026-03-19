@@ -398,20 +398,45 @@ const AudioManager = {
     // UTILITY METHODS
     // ========================================================================
 
+    /** @type {Set<string>} URLs that have already failed to load (don't retry) */
+    failedUrls: new Set(),
+
+    /** @type {boolean} Whether we've logged the file:// protocol warning */
+    _loggedFileProtocolWarning: false,
+
     /**
      * Load an audio file and decode it
      * @param {string} url - URL to audio file
-     * @returns {Promise<AudioBuffer>} Decoded audio buffer
+     * @returns {Promise<AudioBuffer|null>} Decoded audio buffer or null on failure
      */
     async loadAudioBuffer(url) {
+        // If AudioContext not initialized, return null gracefully
         if (!this.audioContext) {
-            throw new Error('AudioContext not initialized');
+            return null;
+        }
+
+        // Don't retry URLs that have already failed
+        if (this.failedUrls.has(url)) {
+            return null;
         }
 
         try {
+            // Check for file:// protocol which blocks fetch due to CORS
+            if (window.location.protocol === 'file:') {
+                if (!this._loggedFileProtocolWarning) {
+                    console.warn('[AudioManager] Running from file:// protocol - audio loading disabled due to CORS restrictions. Serve from a local server for audio support.');
+                    this._loggedFileProtocolWarning = true;
+                }
+                this.failedUrls.add(url);
+                return null;
+            }
+
             const response = await fetch(url);
             if (!response.ok) {
-                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                // Log once, then add to failed set
+                console.warn(`[AudioManager] Failed to load audio (HTTP ${response.status}): ${url}`);
+                this.failedUrls.add(url);
+                return null;
             }
 
             const arrayBuffer = await response.arrayBuffer();
@@ -420,8 +445,17 @@ const AudioManager = {
             return audioBuffer;
 
         } catch (error) {
-            console.error(`[AudioManager] Failed to load audio: ${url}`, error);
-            throw error;
+            // Only log each failure once to avoid console spam
+            if (!this.failedUrls.has(url)) {
+                // Check for common CORS/network errors
+                if (error.name === 'TypeError' && error.message.includes('fetch')) {
+                    console.warn(`[AudioManager] Network error loading audio (CORS or missing file): ${url}`);
+                } else {
+                    console.warn(`[AudioManager] Failed to load audio: ${url}`, error.message || error);
+                }
+                this.failedUrls.add(url);
+            }
+            return null;
         }
     },
 
@@ -536,6 +570,19 @@ const AudioManager = {
         }
 
         console.log('[AudioManager] Cleanup complete');
+    },
+
+    /**
+     * Play a sound effect (convenience wrapper for SFXSystem)
+     * @param {string} soundId - The sound ID to play
+     * @param {number} volume - Optional volume (0-1)
+     * @returns {object|null} Voice instance or null
+     */
+    playSfx(soundId, volume = 1.0) {
+        if (this.sfx && typeof this.sfx.play === 'function') {
+            return this.sfx.play(soundId, { volume });
+        }
+        return null;
     },
 
     /**

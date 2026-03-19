@@ -1,5 +1,5 @@
 // === js/systems/village-system.js ===
-// SURVIVAL EXTRACTION UPDATE: Village hub management
+// Village hub management
 
 // ============================================================================
 // VILLAGE SYSTEM
@@ -23,17 +23,12 @@ const VillageSystem = {
 
     /**
      * Initialize the village
-     * @param {number} degradationLevel - Optional degradation level (0-2)
      */
-    init(degradationLevel = 0) {
-        // Use persistent state degradation if available
-        const degradation = degradationLevel ||
-            (typeof persistentState !== 'undefined' ? persistentState.village?.degradationLevel : 0) || 0;
-
-        console.log(`[VillageSystem] Initializing village (degradation: ${degradation})`);
+    init() {
+        console.log('[VillageSystem] Initializing village');
 
         // Generate village map
-        this.villageData = VillageGenerator.generate(degradation);
+        this.villageData = VillageGenerator.generate();
 
         // Set up village state
         if (typeof villageState !== 'undefined') {

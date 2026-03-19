@@ -245,7 +245,7 @@ const VILLAGE_NPC_BARKS = {
     1: [
         "Fine day for delving!",
         "The Chasm provides.",
-        "May your extraction be swift.",
+        "May you return safely.",
         "Careful down there.",
         "The volcano sleeps..."
     ],

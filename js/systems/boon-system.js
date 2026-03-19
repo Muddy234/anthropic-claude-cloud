@@ -38,7 +38,16 @@ const ANCESTORS = {
         element: 'fire',
         color: '#e67e22',
         icon: String.fromCodePoint(0x1F525), // 🔥
-        theme: 'Light manipulation, fire damage, visibility'
+        theme: 'Light manipulation, fire damage, visibility',
+        synergyThreshold: 3,
+        synergyBonus: {
+            id: 'torchbearer_synergy', name: 'Blazing Legacy',
+            description: 'All fire damage +25%. Attacks have 15% chance to ignite.',
+            effects: [
+                { stat: 'fireDamagePercent', value: 25, type: 'additive' },
+                { stat: 'igniteChance', value: 15, type: 'additive' }
+            ]
+        }
     },
     headsman: {
         id: 'headsman',
@@ -47,7 +56,16 @@ const ANCESTORS = {
         element: 'physical',
         color: '#c0392b',
         icon: String.fromCodePoint(0x2694), // ⚔
-        theme: 'Execution, bleeding, critical strikes'
+        theme: 'Execution, bleeding, critical strikes',
+        synergyThreshold: 3,
+        synergyBonus: {
+            id: 'headsman_synergy', name: 'Executioner\'s Edge',
+            description: 'Critical damage +30%. Critical hits restore 10 stamina.',
+            effects: [
+                { stat: 'critDamage', value: 30, type: 'additive' },
+                { stat: 'staminaKillRefund', value: 10, type: 'additive' }
+            ]
+        }
     },
     lurker: {
         id: 'lurker',
@@ -56,7 +74,16 @@ const ANCESTORS = {
         element: 'shadow',
         color: '#2c3e50',
         icon: String.fromCodePoint(0x1F441), // 👁
-        theme: 'Stealth, ambush, fear, darkness'
+        theme: 'Stealth, ambush, fear, darkness',
+        synergyThreshold: 3,
+        synergyBonus: {
+            id: 'lurker_synergy', name: 'Shadow Mastery',
+            description: 'Shadow damage +25%. +10% lifesteal.',
+            effects: [
+                { stat: 'shadowDamagePercent', value: 25, type: 'additive' },
+                { stat: 'lifestealPercent', value: 10, type: 'additive' }
+            ]
+        }
     },
     storm_caller: {
         id: 'storm_caller',
@@ -65,7 +92,16 @@ const ANCESTORS = {
         element: 'lightning',
         color: '#9b59b6',
         icon: String.fromCodePoint(0x26A1), // ⚡
-        theme: 'Speed, movement, knockback, momentum'
+        theme: 'Speed, movement, knockback, momentum',
+        synergyThreshold: 3,
+        synergyBonus: {
+            id: 'storm_caller_synergy', name: 'Tempest Fury',
+            description: 'Attack speed +15%. Cooldown reduction +15%.',
+            effects: [
+                { stat: 'attackSpeed', value: 15, type: 'multiplicative' },
+                { stat: 'cooldownReduction', value: 15, type: 'additive' }
+            ]
+        }
     },
     rot_weaver: {
         id: 'rot_weaver',
@@ -74,7 +110,16 @@ const ANCESTORS = {
         element: 'poison',
         color: '#27ae60',
         icon: String.fromCodePoint(0x2620), // ☠
-        theme: 'Poison, DoT, armor reduction, life steal'
+        theme: 'Poison, DoT, armor reduction, life steal',
+        synergyThreshold: 3,
+        synergyBonus: {
+            id: 'rot_weaver_synergy', name: 'Plague Bearer',
+            description: 'Poison damage +25%. 15% chance to poison on hit.',
+            effects: [
+                { stat: 'poisonDamagePercent', value: 25, type: 'additive' },
+                { stat: 'poisonChance', value: 15, type: 'additive' }
+            ]
+        }
     },
     iron_warden: {
         id: 'iron_warden',
@@ -83,7 +128,16 @@ const ANCESTORS = {
         element: 'ice',
         color: '#3498db',
         icon: String.fromCodePoint(0x1F9CA), // 🧊
-        theme: 'Defense, frost, standing ground, armor'
+        theme: 'Defense, frost, standing ground, armor',
+        synergyThreshold: 3,
+        synergyBonus: {
+            id: 'iron_warden_synergy', name: 'Frozen Bastion',
+            description: 'Ice resistance +30%. Thorns damage +8.',
+            effects: [
+                { stat: 'iceResist', value: 30, type: 'additive' },
+                { stat: 'thornsDamage', value: 8, type: 'additive' }
+            ]
+        }
     },
     maniac: {
         id: 'maniac',
@@ -92,7 +146,16 @@ const ANCESTORS = {
         element: 'chaos',
         color: '#e74c3c',
         icon: String.fromCodePoint(0x1F608), // 😈
-        theme: 'Risk/reward, self-damage, extreme power'
+        theme: 'Risk/reward, self-damage, extreme power',
+        synergyThreshold: 3,
+        synergyBonus: {
+            id: 'maniac_synergy', name: 'Chaos Incarnate',
+            description: 'All damage +15%. Gold find +25%.',
+            effects: [
+                { stat: 'damage', value: 15, type: 'multiplicative' },
+                { stat: 'goldFindPercent', value: 25, type: 'additive' }
+            ]
+        }
     }
 };
 
@@ -1325,6 +1388,15 @@ const BoonSystem = {
     // Currently active boons: { boonId: stackCount }
     activeBoons: {},
 
+    // Active boons as an ordered array of boon data objects (for UI and death summary)
+    activePlayerBoons: [],
+
+    // Active synergy bonuses: Set of ancestor IDs whose synergies are active
+    activeSynergies: new Set(),
+
+    // Special effect handlers: Map of boonId -> { event, handler } for EventBus listeners
+    specialEffectHandlers: new Map(),
+
     // ========================================================================
     // INITIALIZATION
     // ========================================================================
@@ -1334,27 +1406,22 @@ const BoonSystem = {
      */
     init() {
         this.activeBoons = {};
+        this.activePlayerBoons = [];
+        this.activeSynergies = new Set();
+        this.specialEffectHandlers = new Map();
         console.log('[BoonSystem] Initialized (no active boons)');
     },
 
-    /**
-     * Clear all boons (on death or new game)
-     */
-    clearBoons() {
-        this.activeBoons = {};
-        console.log('[BoonSystem] All boons cleared');
-    },
-
     // ========================================================================
-    // BOON MANAGEMENT
+    // BOON APPLICATION (StatModifierStack integration)
     // ========================================================================
 
     /**
-     * Grant a boon to the player
-     * @param {string} boonId - ID of the boon to grant
+     * Apply a boon to the player, registering stat modifiers via StatModifierStack
+     * @param {string} boonId - ID of the boon to apply
      * @returns {boolean} Success
      */
-    grantBoon(boonId) {
+    applyBoon(boonId) {
         const boon = BOONS[boonId];
         if (!boon) {
             console.warn(`[BoonSystem] Unknown boon: ${boonId}`);
@@ -1371,31 +1438,46 @@ const BoonSystem = {
             return false;
         }
 
-        // Add or stack the boon
+        // Handle stacking
         if (this.activeBoons[boonId]) {
-            // Already have this boon - try to stack
             if (!boon.stackable) {
-                console.log(`[BoonSystem] ${boon.name} is not stackable`);
                 if (typeof addMessage === 'function') {
                     addMessage(`${boon.name} cannot stack!`, 'info');
                 }
                 return false;
             }
-
             if (this.activeBoons[boonId] >= boon.maxStacks) {
-                console.log(`[BoonSystem] ${boon.name} at max stacks (${boon.maxStacks})`);
                 if (typeof addMessage === 'function') {
                     addMessage(`${boon.name} at maximum stacks!`, 'info');
                 }
                 return false;
             }
-
             this.activeBoons[boonId]++;
-            console.log(`[BoonSystem] ${boon.name} stacked to ${this.activeBoons[boonId]}`);
         } else {
-            // New boon
             this.activeBoons[boonId] = 1;
-            console.log(`[BoonSystem] Granted ${boon.name}`);
+            // Add to ordered list
+            this.activePlayerBoons.push({
+                id: boon.id,
+                name: boon.name,
+                ancestor: boon.ancestor,
+                tier: boon.tier,
+                icon: boon.icon,
+                color: boon.color
+            });
+        }
+
+        // Apply stat modifiers via StatModifierStack
+        const player = (typeof game !== 'undefined' && game.player) ? game.player : null;
+        if (player && player.statStacks && boon.effect) {
+            this._applyBoonStatModifiers(boonId, boon, player);
+        }
+
+        // Register special effect handlers via EventBus
+        this._registerSpecialEffects(boonId, boon);
+
+        // Update run stats
+        if (typeof game !== 'undefined' && game.runStats) {
+            game.runStats.boonsCollected = (game.runStats.boonsCollected || 0) + 1;
         }
 
         // Notify player
@@ -1405,16 +1487,190 @@ const BoonSystem = {
             addMessage(`Boon acquired: ${boon.name}${stackText}`, 'reward');
         }
 
-        // Recalculate player stats with new boon
-        if (typeof recalculatePlayerStats === 'function' && game.player) {
-            recalculatePlayerStats(game.player);
+        // Emit event
+        if (typeof EventBus !== 'undefined') {
+            EventBus.emit('player:boon_selected', { boonId, boon, stacks: this.activeBoons[boonId] });
         }
 
+        // Check synergy for this boon's ancestor
+        if (boon.ancestor) {
+            this.checkSynergy(boon.ancestor);
+        }
+        // For resonance boons (ancestor is null), check all required ancestors
+        if (boon.tier === 'resonance' && Array.isArray(boon.requires)) {
+            for (const reqAncestor of boon.requires) {
+                this.checkSynergy(reqAncestor);
+            }
+        }
+
+        // Recalculate player stats
+        if (typeof recalculatePlayerStats === 'function' && player) {
+            recalculatePlayerStats(player);
+        }
+
+        console.log(`[BoonSystem] Applied ${boon.name} (stacks: ${this.activeBoons[boonId]})`);
         return true;
     },
 
     /**
-     * Remove a boon from the player
+     * Apply stat modifiers from a boon's effect to the player's statStacks.
+     * Maps boon effect types to appropriate stat modifiers.
+     * @private
+     */
+    _applyBoonStatModifiers(boonId, boon, player) {
+        const effect = boon.effect;
+        if (!effect || !player.statStacks) return;
+
+        const source = `boon:${boonId}`;
+
+        // Direct stat effects from synergy-style boons with effects arrays
+        // (These are handled by synergy system, not here)
+
+        // Map common effect types to stat modifiers
+        switch (effect.type) {
+            case 'conditional_damage':
+                // Conditional damage bonuses (e.g. searing_radiance: +15% in light)
+                // These are tracked as special effects, not flat stat modifiers
+                break;
+
+            case 'tradeoff':
+                // Tradeoff boons apply both bonus and penalty
+                if (effect.bonus) {
+                    if (effect.bonus.attackSpeed && player.statStacks.attackSpeed) {
+                        player.statStacks.attackSpeed.addModifier(boonId, effect.bonus.attackSpeed * 100, 'multiplicative', source);
+                    }
+                    if (effect.bonus.damageMultiplier && player.statStacks.damage) {
+                        player.statStacks.damage.addModifier(boonId, (effect.bonus.damageMultiplier - 1) * 100, 'multiplicative', source);
+                    }
+                    if (effect.bonus.armor && player.statStacks.defense) {
+                        player.statStacks.defense.addModifier(boonId, effect.bonus.armor, 'additive', source);
+                    }
+                    if (effect.bonus.reflectDamage && player.statStacks.thornsDamage) {
+                        player.statStacks.thornsDamage.addModifier(boonId, effect.bonus.reflectDamage * 10, 'additive', source);
+                    }
+                }
+                if (effect.penalty) {
+                    if (effect.penalty.damageTaken && player.statStacks.defense) {
+                        // Negative defense = increased damage taken
+                        player.statStacks.defense.addModifier(boonId + '_penalty', -(effect.penalty.damageTaken * 100), 'multiplicative', source);
+                    }
+                    if (effect.penalty.maxHpMultiplier && player.statStacks.maxHp) {
+                        // maxHpMultiplier of 0.5 means -50% HP
+                        player.statStacks.maxHp.addModifier(boonId + '_penalty', (effect.penalty.maxHpMultiplier - 1) * 100, 'multiplicative', source);
+                    }
+                    if (effect.penalty.moveSpeed && player.statStacks.speed) {
+                        player.statStacks.speed.addModifier(boonId + '_penalty', effect.penalty.moveSpeed, 'additive', source);
+                    }
+                }
+                break;
+
+            case 'stationary_buff':
+                // Stationary buffs are conditional - tracked as special effects
+                if (effect.stat === 'damageReduction' && player.statStacks.defense) {
+                    // Pre-register the modifier ID so it can be toggled at runtime
+                }
+                break;
+
+            case 'ultimate_tradeoff':
+                // Final Offer: 1 Max HP, 5x Damage
+                if (player.statStacks.damage) {
+                    player.statStacks.damage.addModifier(boonId, (effect.damageMultiplier - 1) * 100, 'multiplicative', source);
+                }
+                // maxHp override is handled specially in recalculation
+                break;
+
+            default:
+                // Most boons are special/conditional effects tracked via getBonus()
+                break;
+        }
+    },
+
+    /**
+     * Register special effect handlers via EventBus for on-hit, on-kill, etc.
+     * @private
+     */
+    _registerSpecialEffects(boonId, boon) {
+        if (typeof EventBus === 'undefined') return;
+        const effect = boon.effect;
+        if (!effect) return;
+
+        const handlers = [];
+
+        // On-hit effects (ignite, chill, rot, etc.)
+        if (effect.type === 'on_hit' && effect.applies) {
+            const handler = (data) => {
+                if (data && data.target && typeof applyStatusEffect === 'function') {
+                    applyStatusEffect(data.target, effect.applies, { source: boonId });
+                }
+            };
+            EventBus.on('player:hit_enemy', handler);
+            handlers.push({ event: 'player:hit_enemy', handler });
+        }
+
+        // On-crit effects
+        if (effect.type === 'on_crit' && effect.applies) {
+            const handler = (data) => {
+                if (data && data.target && typeof applyStatusEffect === 'function') {
+                    applyStatusEffect(data.target, effect.applies, { source: boonId });
+                }
+            };
+            EventBus.on('player:crit_hit', handler);
+            handlers.push({ event: 'player:crit_hit', handler });
+        }
+
+        // On-kill effects
+        if (effect.type === 'on_kill' || effect.type === 'on_kill_tradeoff') {
+            const handler = (data) => {
+                const player = (typeof game !== 'undefined' && game.player) ? game.player : null;
+                if (!player) return;
+
+                // Healing on kill
+                if (effect.heals) {
+                    player.hp = Math.min(player.maxHp, player.hp + effect.heals);
+                    if (typeof addMessage === 'function') {
+                        addMessage(`${boon.name}: +${effect.heals} HP`, 'heal');
+                    }
+                }
+                // Speed buff on kill
+                if (effect.grants === 'speed_buff') {
+                    // Temporary buff - handled by combat system
+                }
+            };
+            EventBus.on('player:killed_enemy', handler);
+            handlers.push({ event: 'player:killed_enemy', handler });
+        }
+
+        // On-hit-taken effects (knockback, reflect, etc.)
+        if (effect.type === 'on_hit_taken') {
+            const handler = (data) => {
+                // Handled by combat system checking hasBoon()
+            };
+            EventBus.on('player:took_damage', handler);
+            handlers.push({ event: 'player:took_damage', handler });
+        }
+
+        if (handlers.length > 0) {
+            this.specialEffectHandlers.set(boonId, handlers);
+        }
+    },
+
+    /**
+     * Unregister special effect handlers for a boon
+     * @private
+     */
+    _unregisterSpecialEffects(boonId) {
+        if (typeof EventBus === 'undefined') return;
+        const handlers = this.specialEffectHandlers.get(boonId);
+        if (!handlers) return;
+
+        for (const { event, handler } of handlers) {
+            EventBus.off(event, handler);
+        }
+        this.specialEffectHandlers.delete(boonId);
+    },
+
+    /**
+     * Remove a boon from the player, cleaning up stat modifiers and effects
      * @param {string} boonId - ID of the boon to remove
      * @param {boolean} removeAllStacks - Remove all stacks or just one
      */
@@ -1422,30 +1678,255 @@ const BoonSystem = {
         if (!this.activeBoons[boonId]) return;
 
         const boon = BOONS[boonId];
+        const player = (typeof game !== 'undefined' && game.player) ? game.player : null;
+        const source = `boon:${boonId}`;
+        let fullyRemoved = false;
+
         if (removeAllStacks) {
             delete this.activeBoons[boonId];
+            fullyRemoved = true;
         } else {
             this.activeBoons[boonId]--;
             if (this.activeBoons[boonId] <= 0) {
                 delete this.activeBoons[boonId];
+                fullyRemoved = true;
             }
         }
 
-        console.log(`[BoonSystem] Removed ${boon?.name || boonId}`);
+        // Remove stat modifiers from StatModifierStacks
+        if (fullyRemoved && player && player.statStacks) {
+            for (const stackKey of Object.keys(player.statStacks)) {
+                player.statStacks[stackKey].removeModifier(boonId);
+                player.statStacks[stackKey].removeModifier(boonId + '_penalty');
+                player.statStacks[stackKey].removeBySource(source);
+            }
+        }
+
+        // Unregister special effect handlers
+        if (fullyRemoved) {
+            this._unregisterSpecialEffects(boonId);
+
+            // Remove from ordered list
+            this.activePlayerBoons = this.activePlayerBoons.filter(b => b.id !== boonId);
+        }
+
+        // Re-check synergy for the removed boon's ancestor
+        if (boon && boon.ancestor) {
+            this.checkSynergy(boon.ancestor);
+        }
+        if (boon && boon.tier === 'resonance' && Array.isArray(boon.requires)) {
+            for (const reqAncestor of boon.requires) {
+                this.checkSynergy(reqAncestor);
+            }
+        }
+
+        // Emit event
+        if (typeof EventBus !== 'undefined') {
+            EventBus.emit('player:boon_removed', { boonId, boonName: boon?.name || boonId });
+        }
 
         // Recalculate stats
-        if (typeof recalculatePlayerStats === 'function' && game.player) {
-            recalculatePlayerStats(game.player);
+        if (typeof recalculatePlayerStats === 'function' && player) {
+            recalculatePlayerStats(player);
+        }
+
+        console.log(`[BoonSystem] Removed ${boon?.name || boonId}`);
+    },
+
+    /**
+     * Grant a boon (legacy alias for applyBoon)
+     */
+    grantBoon(boonId) {
+        return this.applyBoon(boonId);
+    },
+
+    // ========================================================================
+    // SYNERGY MANAGEMENT
+    // ========================================================================
+
+    /**
+     * Check if an ancestor's synergy should be activated or deactivated.
+     * Counts boons (core tier) from the ancestor and compares to synergyThreshold.
+     * @param {string} ancestorId - Ancestor ID to check
+     */
+    checkSynergy(ancestorId) {
+        const ancestor = ANCESTORS[ancestorId];
+        if (!ancestor || !ancestor.synergyBonus) return;
+
+        const threshold = ancestor.synergyThreshold || 3;
+        const ancestorCounts = this.getAncestorCounts();
+        const count = ancestorCounts[ancestorId] || 0;
+
+        if (count >= threshold && !this.activeSynergies.has(ancestorId)) {
+            // Activate synergy
+            this.applySynergyBonus(ancestorId, ancestor.synergyBonus);
+        } else if (count < threshold && this.activeSynergies.has(ancestorId)) {
+            // Deactivate synergy
+            this.removeSynergyBonus(ancestorId);
+        }
+    },
+
+    /**
+     * Apply a synergy bonus, adding all its effects as stat modifiers.
+     * @param {string} ancestorId - Ancestor ID
+     * @param {Object} synergyData - The synergyBonus object from ANCESTORS
+     */
+    applySynergyBonus(ancestorId, synergyData) {
+        const player = (typeof game !== 'undefined' && game.player) ? game.player : null;
+        if (!player || !player.statStacks) return;
+
+        const source = `synergy:${ancestorId}`;
+
+        for (const effect of synergyData.effects) {
+            const stack = player.statStacks[effect.stat];
+            if (stack) {
+                stack.addModifier(synergyData.id, effect.value, effect.type, source);
+            } else {
+                console.warn(`[BoonSystem] No statStack found for synergy effect stat: ${effect.stat}`);
+            }
+        }
+
+        this.activeSynergies.add(ancestorId);
+
+        // Emit synergy activated event
+        if (typeof EventBus !== 'undefined') {
+            EventBus.emit('synergy:activated', {
+                ancestorId,
+                synergyName: synergyData.name,
+                synergyDescription: synergyData.description
+            });
+        }
+
+        // Notify player
+        if (typeof addMessage === 'function') {
+            const ancestor = ANCESTORS[ancestorId];
+            addMessage(`Synergy unlocked: ${synergyData.name} (${ancestor.name})!`, 'legendary');
+        }
+
+        console.log(`[BoonSystem] Synergy activated: ${synergyData.name} (${ancestorId})`);
+
+        // Recalculate stats
+        if (typeof recalculatePlayerStats === 'function') {
+            recalculatePlayerStats(player);
+        }
+    },
+
+    /**
+     * Remove a synergy bonus, stripping all its stat modifiers.
+     * @param {string} ancestorId - Ancestor ID
+     */
+    removeSynergyBonus(ancestorId) {
+        const player = (typeof game !== 'undefined' && game.player) ? game.player : null;
+        const ancestor = ANCESTORS[ancestorId];
+        if (!ancestor || !ancestor.synergyBonus) return;
+
+        const source = `synergy:${ancestorId}`;
+        const synergyData = ancestor.synergyBonus;
+
+        if (player && player.statStacks) {
+            for (const effect of synergyData.effects) {
+                const stack = player.statStacks[effect.stat];
+                if (stack) {
+                    stack.removeModifier(synergyData.id);
+                    stack.removeBySource(source);
+                }
+            }
+        }
+
+        this.activeSynergies.delete(ancestorId);
+
+        // Emit synergy deactivated event
+        if (typeof EventBus !== 'undefined') {
+            EventBus.emit('synergy:deactivated', {
+                ancestorId,
+                synergyName: synergyData.name
+            });
+        }
+
+        if (typeof addMessage === 'function') {
+            addMessage(`Synergy lost: ${synergyData.name}`, 'warning');
+        }
+
+        console.log(`[BoonSystem] Synergy deactivated: ${synergyData.name} (${ancestorId})`);
+
+        // Recalculate stats
+        if (typeof recalculatePlayerStats === 'function' && player) {
+            recalculatePlayerStats(player);
         }
     },
 
     // ========================================================================
-    // BONUS CALCULATION
+    // CLEAR ALL BOONS (Death wipe)
+    // ========================================================================
+
+    /**
+     * Clear all boons on death - removes stat modifiers, synergies, and EventBus handlers.
+     * Must be called with boon data still intact so modifiers can be properly removed.
+     */
+    clearBoons() {
+        const player = (typeof game !== 'undefined' && game.player) ? game.player : null;
+
+        // 1. Remove each boon's modifiers from statStacks in reverse order
+        const boonIds = Object.keys(this.activeBoons);
+        for (let i = boonIds.length - 1; i >= 0; i--) {
+            const boonId = boonIds[i];
+            const source = `boon:${boonId}`;
+
+            if (player && player.statStacks) {
+                for (const stackKey of Object.keys(player.statStacks)) {
+                    player.statStacks[stackKey].removeModifier(boonId);
+                    player.statStacks[stackKey].removeModifier(boonId + '_penalty');
+                    player.statStacks[stackKey].removeBySource(source);
+                }
+            }
+        }
+
+        // 2. Clear all synergy bonuses
+        const synergyCopy = [...this.activeSynergies];
+        for (const ancestorId of synergyCopy) {
+            const ancestor = ANCESTORS[ancestorId];
+            if (ancestor && ancestor.synergyBonus && player && player.statStacks) {
+                const source = `synergy:${ancestorId}`;
+                for (const effect of ancestor.synergyBonus.effects) {
+                    const stack = player.statStacks[effect.stat];
+                    if (stack) {
+                        stack.removeModifier(ancestor.synergyBonus.id);
+                        stack.removeBySource(source);
+                    }
+                }
+            }
+        }
+        this.activeSynergies.clear();
+
+        // 3. Clear special effect handlers (unregister EventBus listeners)
+        if (typeof EventBus !== 'undefined') {
+            for (const [boonId, handlers] of this.specialEffectHandlers) {
+                for (const { event, handler } of handlers) {
+                    EventBus.off(event, handler);
+                }
+            }
+        }
+        this.specialEffectHandlers.clear();
+
+        // 4. Clear boon tracking
+        this.activeBoons = {};
+        this.activePlayerBoons = [];
+
+        // Recalculate stats
+        if (typeof recalculatePlayerStats === 'function' && player) {
+            recalculatePlayerStats(player);
+        }
+
+        console.log('[BoonSystem] All boons cleared (death wipe)');
+    },
+
+    // ========================================================================
+    // BONUS CALCULATION (Legacy compatibility)
     // ========================================================================
 
     /**
      * Get total bonus from all active boons for a specific stat
-     * Boons stack multiplicatively: (1 + boon1) × (1 + boon2) × ...
+     * Boons stack multiplicatively: (1 + boon1) x (1 + boon2) x ...
      * @param {string} statName - The stat to get bonus for
      * @returns {number} Total multiplier (1.0 = no bonus)
      */
@@ -1469,7 +1950,6 @@ const BoonSystem = {
 
                 case 'damageReduction':
                     if (bonuses.damageReduction) {
-                        // Damage reduction is additive then applied
                         multiplier += bonuses.damageReduction;
                     }
                     break;
@@ -1496,7 +1976,6 @@ const BoonSystem = {
                     break;
 
                 case 'damage':
-                    // Future boons could add damage bonuses
                     if (bonuses.damage) {
                         multiplier *= (1 + bonuses.damage);
                     }
@@ -1523,7 +2002,7 @@ const BoonSystem = {
     },
 
     // ========================================================================
-    // SHRINE INTERACTION
+    // SHRINE INTERACTION / OFFERING GENERATION
     // ========================================================================
 
     /**
@@ -1547,39 +2026,71 @@ const BoonSystem = {
     },
 
     /**
-     * Check if player meets requirements for a boon
+     * Check if a boon tier is available based on merged gating:
+     * - Core (Tier 1): always available
+     * - Resonance (Tier 2): Floor 3+ AND have boons from 2+ different ancestors
+     * - Legendary (Tier 3): Floor 6+ AND have 3+ boons from the same ancestor
+     * Also checks the boon's own 'requires' field.
      * @param {Object} boon - Boon definition
+     * @param {number} floor - Current dungeon floor
+     * @param {Array} activePlayerBoons - Currently active boons
      * @returns {boolean}
      */
-    meetsRequirements(boon) {
-        // Core boons - always available
+    isTierAvailable(boon, floor, activePlayerBoons) {
+        const ancestorCounts = this.getAncestorCounts();
+
         if (boon.tier === 'core') {
+            // Core boons: always available on any floor
             return true;
         }
 
-        // Resonance boons - need 1 boon from each of 2 required ancestors
-        if (boon.tier === 'resonance' && Array.isArray(boon.requires)) {
-            const ancestorCounts = this.getAncestorCounts();
-            const [ancestor1, ancestor2] = boon.requires;
-            return (ancestorCounts[ancestor1] >= 1) && (ancestorCounts[ancestor2] >= 1);
+        if (boon.tier === 'resonance') {
+            // Floor gate: requires floor 3+
+            if (floor < 3) return false;
+
+            // Diversity gate: need boons from at least 2 different ancestors
+            const diverseAncestors = Object.values(ancestorCounts).filter(c => c >= 1).length;
+            if (diverseAncestors < 2) return false;
+
+            // Requirement gate: need 1 boon from each of 2 required ancestors
+            if (Array.isArray(boon.requires)) {
+                const [ancestor1, ancestor2] = boon.requires;
+                return (ancestorCounts[ancestor1] >= 1) && (ancestorCounts[ancestor2] >= 1);
+            }
+            return true;
         }
 
-        // Legendary boons - need 3 boons from the same ancestor
-        if (boon.tier === 'legendary' && boon.requires && boon.requires.ancestor) {
-            const ancestorCounts = this.getAncestorCounts();
-            return ancestorCounts[boon.requires.ancestor] >= boon.requires.count;
+        if (boon.tier === 'legendary') {
+            // Floor gate: requires floor 6+
+            if (floor < 6) return false;
+
+            // Requirement gate: need 3 boons from the same ancestor
+            if (boon.requires && boon.requires.ancestor) {
+                return (ancestorCounts[boon.requires.ancestor] || 0) >= (boon.requires.count || 3);
+            }
+            return false;
         }
 
         return false;
     },
 
     /**
-     * Get random boons for a shrine offering
-     * Respects tier requirements: Core always available, Resonance needs 2 ancestors, Legendary needs 3 from same
+     * Check if player meets requirements for a boon (legacy - no floor gating)
+     * @param {Object} boon - Boon definition
+     * @returns {boolean}
+     */
+    meetsRequirements(boon) {
+        // Use isTierAvailable with floor=99 to bypass floor gating for legacy callers
+        return this.isTierAvailable(boon, 99, this.activePlayerBoons);
+    },
+
+    /**
+     * Generate a boon offering for a shrine using merged tier gating.
      * @param {number} count - Number of boons to offer
+     * @param {number} [floor=1] - Current dungeon floor (for tier gating)
      * @returns {Array} Array of boon IDs
      */
-    getShrineBoons(count = BOON_CONFIG.shrineBoonsOffered) {
+    generateOffering(count = BOON_CONFIG.shrineBoonsOffered, floor = 1) {
         const availableBoons = Object.keys(BOONS).filter(boonId => {
             const boon = BOONS[boonId];
             const currentStacks = this.activeBoons[boonId] || 0;
@@ -1592,8 +2103,8 @@ const BoonSystem = {
                 return false;
             }
 
-            // Check tier requirements
-            if (!this.meetsRequirements(boon)) {
+            // Merged tier gating: requirement + floor
+            if (!this.isTierAvailable(boon, floor, this.activePlayerBoons)) {
                 return false;
             }
 
@@ -1609,7 +2120,7 @@ const BoonSystem = {
             return { boonId, weight };
         });
 
-        // Weighted shuffle
+        // Weighted random selection
         const selected = [];
         const pool = [...weighted];
         while (selected.length < count && pool.length > 0) {
@@ -1627,6 +2138,17 @@ const BoonSystem = {
         }
 
         return selected;
+    },
+
+    /**
+     * Get random boons for a shrine offering (legacy alias for generateOffering)
+     * @param {number} count - Number of boons to offer
+     * @returns {Array} Array of boon IDs
+     */
+    getShrineBoons(count = BOON_CONFIG.shrineBoonsOffered) {
+        // Determine current floor from game state
+        const floor = (typeof game !== 'undefined' && game.floor) ? game.floor : 1;
+        return this.generateOffering(count, floor);
     },
 
     // ========================================================================
@@ -1660,6 +2182,159 @@ const BoonSystem = {
             boon: BOONS[boonId],
             stacks
         })).filter(entry => entry.boon);
+    },
+
+    // ========================================================================
+    // TESTING
+    // ========================================================================
+
+    /**
+     * Console-callable test: applies each boon, verifies stat changes,
+     * removes it, and verifies stats restored to baseline.
+     * @returns {Object} Test results summary
+     */
+    testAllBoons() {
+        const results = { passed: 0, failed: 0, errors: [] };
+        const player = (typeof game !== 'undefined' && game.player) ? game.player : null;
+
+        if (!player || !player.statStacks) {
+            console.error('[BoonSystem.testAllBoons] No player or statStacks available.');
+            return { passed: 0, failed: 0, errors: ['No player or statStacks available'] };
+        }
+
+        console.log('[BoonSystem.testAllBoons] Starting test of all boons...');
+        console.log('='.repeat(60));
+
+        // Save clean state
+        const savedBoons = { ...this.activeBoons };
+        const savedPlayerBoons = [...this.activePlayerBoons];
+        const savedSynergies = new Set(this.activeSynergies);
+
+        // Capture baseline stat values
+        const baselineStats = {};
+        for (const [key, stack] of Object.entries(player.statStacks)) {
+            baselineStats[key] = stack.compute();
+        }
+
+        // Test each boon individually
+        for (const [boonId, boon] of Object.entries(BOONS)) {
+            try {
+                // Reset to clean state
+                this.activeBoons = {};
+                this.activePlayerBoons = [];
+                this.activeSynergies = new Set();
+
+                // Clean all modifiers with boon sources
+                for (const stackKey of Object.keys(player.statStacks)) {
+                    const stack = player.statStacks[stackKey];
+                    stack.additiveModifiers = stack.additiveModifiers.filter(
+                        m => !m.source.startsWith('boon:') && !m.source.startsWith('synergy:')
+                    );
+                    stack.multiplicativeModifiers = stack.multiplicativeModifiers.filter(
+                        m => !m.source.startsWith('boon:') && !m.source.startsWith('synergy:')
+                    );
+                }
+
+                // Capture pre-apply stats
+                const preStats = {};
+                for (const [key, stack] of Object.entries(player.statStacks)) {
+                    preStats[key] = stack.compute();
+                }
+
+                // Apply the boon
+                this.applyBoon(boonId);
+
+                // Capture post-apply stats
+                const postStats = {};
+                for (const [key, stack] of Object.entries(player.statStacks)) {
+                    postStats[key] = stack.compute();
+                }
+
+                // Remove the boon
+                this.removeBoon(boonId, true);
+
+                // Capture post-remove stats
+                const postRemoveStats = {};
+                for (const [key, stack] of Object.entries(player.statStacks)) {
+                    postRemoveStats[key] = stack.compute();
+                }
+
+                // Verify stats restored to baseline
+                let restored = true;
+                const diffs = [];
+                for (const key of Object.keys(preStats)) {
+                    const tolerance = 0.001;
+                    if (Math.abs(postRemoveStats[key] - preStats[key]) > tolerance) {
+                        restored = false;
+                        diffs.push(`${key}: pre=${preStats[key].toFixed(3)}, post=${postRemoveStats[key].toFixed(3)}`);
+                    }
+                }
+
+                if (restored) {
+                    results.passed++;
+                } else {
+                    results.failed++;
+                    const errMsg = `FAIL: ${boonId} (${boon.name}) - stats not restored: ${diffs.join(', ')}`;
+                    results.errors.push(errMsg);
+                    console.warn(errMsg);
+                }
+            } catch (e) {
+                results.failed++;
+                const errMsg = `ERROR: ${boonId} - ${e.message}`;
+                results.errors.push(errMsg);
+                console.error(errMsg, e);
+            }
+        }
+
+        // Restore saved state
+        this.activeBoons = savedBoons;
+        this.activePlayerBoons = savedPlayerBoons;
+        this.activeSynergies = savedSynergies;
+
+        // Clean any leftover test modifiers
+        for (const stackKey of Object.keys(player.statStacks)) {
+            const stack = player.statStacks[stackKey];
+            stack.additiveModifiers = stack.additiveModifiers.filter(
+                m => !m.source.startsWith('boon:') && !m.source.startsWith('synergy:')
+            );
+            stack.multiplicativeModifiers = stack.multiplicativeModifiers.filter(
+                m => !m.source.startsWith('boon:') && !m.source.startsWith('synergy:')
+            );
+        }
+
+        // Re-apply current boons' modifiers
+        for (const boonId of Object.keys(this.activeBoons)) {
+            const boon = BOONS[boonId];
+            if (boon) {
+                this._applyBoonStatModifiers(boonId, boon, player);
+            }
+        }
+
+        // Re-apply current synergies
+        for (const ancestorId of this.activeSynergies) {
+            const ancestor = ANCESTORS[ancestorId];
+            if (ancestor && ancestor.synergyBonus) {
+                const source = `synergy:${ancestorId}`;
+                for (const effect of ancestor.synergyBonus.effects) {
+                    const stack = player.statStacks[effect.stat];
+                    if (stack) {
+                        stack.addModifier(ancestor.synergyBonus.id, effect.value, effect.type, source);
+                    }
+                }
+            }
+        }
+
+        if (typeof recalculatePlayerStats === 'function') {
+            recalculatePlayerStats(player);
+        }
+
+        console.log('='.repeat(60));
+        console.log(`[BoonSystem.testAllBoons] Results: ${results.passed} passed, ${results.failed} failed out of ${Object.keys(BOONS).length} boons`);
+        if (results.errors.length > 0) {
+            console.log('Errors:', results.errors);
+        }
+
+        return results;
     }
 };
 
@@ -1730,5 +2405,5 @@ window.applyBoonAttackSpeed = applyBoonAttackSpeed;
 window.applyBoonGoldBonus = applyBoonGoldBonus;
 window.applyBoonXpBonus = applyBoonXpBonus;
 
-console.log('✓ Boon system loaded (Soul & Body Model)');
-console.log(`  ${Object.keys(BOONS).length} boons available`);
+console.log('Boon system loaded (Soul & Body Model - Wave 1 Enhanced)');
+console.log(`  ${Object.keys(BOONS).length} boons, ${Object.keys(ANCESTORS).length} ancestors with synergies`);

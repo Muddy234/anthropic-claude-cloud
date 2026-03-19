@@ -1,5 +1,5 @@
 // === js/systems/crafting-system.js ===
-// SURVIVAL EXTRACTION UPDATE: Crafting logic and management
+// Crafting logic and management
 
 // ============================================================================
 // CRAFTING SYSTEM

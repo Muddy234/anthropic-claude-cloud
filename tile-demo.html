@@ -1,0 +1,725 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tileset Demo - The Shifting Chasm</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            background: #1a1a2e;
+            color: #eee;
+            font-family: 'Courier New', monospace;
+            padding: 20px;
+            min-height: 100vh;
+        }
+
+        h1 {
+            color: #FF6B35;
+            margin-bottom: 10px;
+        }
+
+        h2 {
+            color: #88CCFF;
+            margin: 20px 0 10px 0;
+            border-bottom: 1px solid #333;
+            padding-bottom: 5px;
+        }
+
+        h3 {
+            color: #AAEEFF;
+            margin: 15px 0 8px 0;
+            font-size: 14px;
+        }
+
+        .subtitle {
+            color: #888;
+            margin-bottom: 30px;
+        }
+
+        .controls {
+            background: #252540;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 20px;
+            align-items: center;
+        }
+
+        .controls label {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .controls select, .controls input {
+            background: #1a1a2e;
+            color: #eee;
+            border: 1px solid #444;
+            padding: 5px 10px;
+            border-radius: 4px;
+        }
+
+        .scale-buttons {
+            display: flex;
+            gap: 5px;
+        }
+
+        .scale-buttons button {
+            background: #FF6B35;
+            color: #fff;
+            border: none;
+            padding: 6px 12px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-family: inherit;
+            font-size: 12px;
+        }
+
+        .scale-buttons button:hover {
+            background: #FF8855;
+        }
+
+        .scale-buttons button.active {
+            background: #44AA44;
+        }
+
+        .tile-grid {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 15px;
+            margin-bottom: 30px;
+        }
+
+        .tile-card {
+            background: #252540;
+            border: 2px solid #333;
+            border-radius: 8px;
+            padding: 12px;
+            text-align: center;
+            min-width: 100px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .tile-card:hover {
+            border-color: #FF6B35;
+            background: #2a2a4a;
+        }
+
+        .tile-card.selected {
+            border-color: #44AA44;
+            background: #2a3a2a;
+        }
+
+        .tile-canvas {
+            background: #111122;
+            border: 1px solid #444;
+            margin-bottom: 8px;
+            image-rendering: pixelated;
+            image-rendering: crisp-edges;
+        }
+
+        .tile-name {
+            font-size: 11px;
+            color: #aaa;
+            margin-top: 5px;
+            word-break: break-word;
+        }
+
+        .tile-info {
+            font-size: 10px;
+            color: #666;
+            margin-top: 3px;
+        }
+
+        .tile-type {
+            display: inline-block;
+            font-size: 9px;
+            padding: 2px 6px;
+            border-radius: 3px;
+            margin-top: 5px;
+        }
+
+        .tile-type.floor { background: #2a5a2a; color: #8f8; }
+        .tile-type.wall { background: #5a4a2a; color: #fc8; }
+        .tile-type.hazard { background: #5a2a2a; color: #f88; }
+        .tile-type.door { background: #2a4a5a; color: #8cf; }
+        .tile-type.stairs { background: #4a2a5a; color: #c8f; }
+        .tile-type.interactive { background: #5a5a2a; color: #ff8; }
+        .tile-type.decoration { background: #3a3a5a; color: #aaf; }
+
+        .palette-demo {
+            display: flex;
+            gap: 3px;
+            margin-top: 8px;
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+
+        .palette-color {
+            width: 14px;
+            height: 14px;
+            border: 1px solid #444;
+            border-radius: 2px;
+        }
+
+        /* Preview Section */
+        .preview-section {
+            display: flex;
+            gap: 30px;
+            flex-wrap: wrap;
+        }
+
+        .preview-panel {
+            flex: 1;
+            min-width: 300px;
+        }
+
+        #single-preview {
+            background: #111122;
+            border: 2px solid #333;
+            border-radius: 8px;
+            padding: 20px;
+            min-height: 150px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        #single-preview canvas {
+            image-rendering: pixelated;
+            image-rendering: crisp-edges;
+        }
+
+        /* Grid Preview */
+        #grid-preview-container {
+            background: #111122;
+            border: 2px solid #333;
+            border-radius: 8px;
+            padding: 20px;
+            overflow: auto;
+        }
+
+        #grid-preview {
+            image-rendering: pixelated;
+            image-rendering: crisp-edges;
+        }
+
+        .grid-controls {
+            margin-bottom: 15px;
+            display: flex;
+            gap: 15px;
+            flex-wrap: wrap;
+        }
+
+        .grid-controls button {
+            background: #4a4a6a;
+            color: #fff;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-family: inherit;
+        }
+
+        .grid-controls button:hover {
+            background: #5a5a7a;
+        }
+
+        .grid-controls button.active {
+            background: #FF6B35;
+        }
+
+        /* Info Panel */
+        .info-panel {
+            background: #252540;
+            padding: 15px;
+            border-radius: 8px;
+            margin-top: 20px;
+        }
+
+        .info-panel h3 {
+            color: #FF6B35;
+            margin-bottom: 10px;
+        }
+
+        .info-panel p {
+            color: #aaa;
+            line-height: 1.6;
+            margin-bottom: 10px;
+        }
+
+        code {
+            background: #1a1a2e;
+            padding: 2px 6px;
+            border-radius: 3px;
+            color: #88CCFF;
+        }
+
+        /* Environment Tabs */
+        .env-tabs {
+            display: flex;
+            gap: 5px;
+            margin-bottom: 15px;
+            flex-wrap: wrap;
+        }
+
+        .env-tab {
+            background: #3a3a5a;
+            color: #aaa;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 4px 4px 0 0;
+            cursor: pointer;
+            font-family: inherit;
+            font-size: 12px;
+        }
+
+        .env-tab:hover {
+            background: #4a4a6a;
+            color: #fff;
+        }
+
+        .env-tab.active {
+            background: #252540;
+            color: #FF6B35;
+            border-bottom: 2px solid #FF6B35;
+        }
+
+        /* Walkability indicator */
+        .walkable-indicator {
+            font-size: 10px;
+            margin-top: 3px;
+        }
+
+        .walkable-indicator.yes { color: #8f8; }
+        .walkable-indicator.no { color: #f88; }
+    </style>
+</head>
+<body>
+    <h1>Procedural Tileset Demo</h1>
+    <p class="subtitle">Desktop Dungeons-style environment tiles defined entirely in code</p>
+
+    <div class="controls">
+        <label>
+            Scale:
+            <span class="scale-buttons">
+                <button onclick="setScale(1)">1x</button>
+                <button onclick="setScale(2)" class="active">2x</button>
+                <button onclick="setScale(3)">3x</button>
+                <button onclick="setScale(4)">4x</button>
+            </span>
+        </label>
+        <label>
+            Background:
+            <select onchange="setBackground(this.value)">
+                <option value="#111122">Dark Blue</option>
+                <option value="#1a1a1a">Dark Gray</option>
+                <option value="#000000">Black</option>
+                <option value="#2d4a3e">Dungeon Green</option>
+                <option value="#FFFFFF">White (debug)</option>
+            </select>
+        </label>
+        <label>
+            Filter:
+            <select id="type-filter" onchange="filterByType(this.value)">
+                <option value="all">All Types</option>
+                <option value="floor">Floors</option>
+                <option value="wall">Walls</option>
+                <option value="hazard">Hazards</option>
+                <option value="door">Doors</option>
+                <option value="stairs">Stairs</option>
+                <option value="interactive">Interactive</option>
+                <option value="decoration">Decorations</option>
+            </select>
+        </label>
+    </div>
+
+    <h2>Environment Tiles</h2>
+    <div class="env-tabs" id="env-tabs">
+        <button class="env-tab active" onclick="setEnvironment('all')">All</button>
+        <button class="env-tab" onclick="setEnvironment('dungeon')">Dungeon</button>
+        <button class="env-tab" onclick="setEnvironment('volcanic')">Volcanic</button>
+        <button class="env-tab" onclick="setEnvironment('frozen')">Frozen</button>
+        <button class="env-tab" onclick="setEnvironment('catacombs')">Catacombs</button>
+        <button class="env-tab" onclick="setEnvironment('crystal')">Crystal</button>
+        <button class="env-tab" onclick="setEnvironment('shadow')">Shadow</button>
+        <button class="env-tab" onclick="setEnvironment('temple')">Temple</button>
+        <button class="env-tab" onclick="setEnvironment('water')">Water</button>
+    </div>
+
+    <div class="tile-grid" id="tile-grid"></div>
+
+    <h2>Previews</h2>
+    <div class="preview-section">
+        <div class="preview-panel">
+            <h3>Single Tile (8x Scale)</h3>
+            <div id="single-preview">
+                <canvas id="single-canvas"></canvas>
+            </div>
+            <div id="tile-details" style="margin-top: 10px; color: #888; font-size: 12px;"></div>
+        </div>
+
+        <div class="preview-panel">
+            <h3>Grid Preview</h3>
+            <div class="grid-controls">
+                <button class="active" onclick="setGridMode('selected')">Selected Tile</button>
+                <button onclick="setGridMode('dungeon')">Dungeon Layout</button>
+                <button onclick="setGridMode('corridor')">Corridor</button>
+                <button onclick="setGridMode('room')">Room</button>
+                <button onclick="setGridMode('corners')">Corners</button>
+            </div>
+            <div id="grid-preview-container">
+                <canvas id="grid-preview"></canvas>
+            </div>
+        </div>
+    </div>
+
+    <div class="info-panel">
+        <h3>How This Works</h3>
+        <p>
+            These tiles are defined entirely in JavaScript as arrays of characters,
+            where each character maps to a color in a palette. No external image files needed!
+        </p>
+        <p>
+            <strong>Example:</strong><br>
+            <code>pixels: ["DMMMD", "DMLLD", "DMMMD"]</code><br>
+            <code>palette: { 'D': '#1A1A1A', 'M': '#2A2A2A', 'L': '#3A3A3A' }</code>
+        </p>
+        <p>
+            The <code>TileRenderer</code> converts these definitions to Canvas drawings,
+            with support for scaling, palette swapping, environment theming, and caching.
+        </p>
+        <p>
+            <strong>Tile Properties:</strong><br>
+            - <code>walkable</code>: Whether entities can walk on this tile<br>
+            - <code>type</code>: Category (floor, wall, hazard, door, etc.)<br>
+            - <code>animated</code>: Whether the tile has animation frames<br>
+            - <code>hazard</code>: Special effect (slow, slippery, damage)
+        </p>
+    </div>
+
+    <script src="js/rendering/tile-renderer.js"></script>
+    <script>
+        let currentScale = 2;
+        let currentBackground = '#111122';
+        let currentEnvironment = 'all';
+        let currentTypeFilter = 'all';
+        let selectedTile = null;
+        let gridMode = 'selected';
+
+        // Environment keywords for filtering
+        const environmentKeywords = {
+            'all': null,
+            'dungeon': ['stone', 'brick', 'wall_corner', 'wall_top', 'door', 'stairs', 'pressure', 'chest'],
+            'volcanic': ['volcanic', 'obsidian', 'lava'],
+            'frozen': ['frozen', 'ice'],
+            'catacombs': ['tomb', 'crypt', 'bone'],
+            'crystal': ['cave', 'crystal'],
+            'shadow': ['void', 'shadow'],
+            'temple': ['marble', 'temple'],
+            'water': ['water', 'shallow', 'deep']
+        };
+
+        function setScale(scale) {
+            currentScale = scale;
+            document.querySelectorAll('.scale-buttons button').forEach(btn => {
+                btn.classList.remove('active');
+            });
+            event.target.classList.add('active');
+            renderAllTiles();
+        }
+
+        function setBackground(color) {
+            currentBackground = color;
+            renderAllTiles();
+        }
+
+        function setEnvironment(env) {
+            currentEnvironment = env;
+            document.querySelectorAll('.env-tab').forEach(tab => {
+                tab.classList.remove('active');
+            });
+            event.target.classList.add('active');
+            renderAllTiles();
+        }
+
+        function filterByType(type) {
+            currentTypeFilter = type;
+            renderAllTiles();
+        }
+
+        function setGridMode(mode) {
+            gridMode = mode;
+            document.querySelectorAll('.grid-controls button').forEach(btn => {
+                btn.classList.remove('active');
+            });
+            event.target.classList.add('active');
+            renderGridPreview();
+        }
+
+        function shouldShowTile(tileName, tile) {
+            // Type filter
+            if (currentTypeFilter !== 'all' && tile.type !== currentTypeFilter) {
+                return false;
+            }
+
+            // Environment filter
+            if (currentEnvironment !== 'all') {
+                const keywords = environmentKeywords[currentEnvironment];
+                if (keywords) {
+                    const matches = keywords.some(kw => tileName.includes(kw));
+                    if (!matches) return false;
+                }
+            }
+
+            return true;
+        }
+
+        function renderTile(tile, canvas, scale) {
+            const width = tile.width * scale;
+            const height = tile.height * scale;
+            canvas.width = width;
+            canvas.height = height;
+            canvas.style.width = width + 'px';
+            canvas.style.height = height + 'px';
+
+            const ctx = canvas.getContext('2d');
+            ctx.imageSmoothingEnabled = false;
+            ctx.fillStyle = currentBackground;
+            ctx.fillRect(0, 0, width, height);
+
+            TileRenderer.draw(ctx, tile, 0, 0, scale);
+        }
+
+        function createTileCard(tileName, tile) {
+            const card = document.createElement('div');
+            card.className = 'tile-card';
+            card.onclick = () => selectTile(tileName, tile, card);
+
+            const canvas = document.createElement('canvas');
+            canvas.className = 'tile-canvas';
+            renderTile(tile, canvas, currentScale);
+
+            const name = document.createElement('div');
+            name.className = 'tile-name';
+            name.textContent = tileName.replace(/_/g, ' ');
+
+            const info = document.createElement('div');
+            info.className = 'tile-info';
+            info.textContent = `${tile.width}x${tile.height}`;
+
+            const typeTag = document.createElement('span');
+            typeTag.className = `tile-type ${tile.type}`;
+            typeTag.textContent = tile.type;
+
+            const walkable = document.createElement('div');
+            walkable.className = `walkable-indicator ${tile.walkable ? 'yes' : 'no'}`;
+            walkable.textContent = tile.walkable ? 'walkable' : 'blocked';
+
+            // Palette colors
+            const paletteDemo = document.createElement('div');
+            paletteDemo.className = 'palette-demo';
+            for (const color of Object.values(tile.palette)) {
+                if (color === '#1A1A1A' || color === '.' ) continue; // Skip common dark/transparent
+                const swatch = document.createElement('div');
+                swatch.className = 'palette-color';
+                swatch.style.backgroundColor = color;
+                swatch.title = color;
+                paletteDemo.appendChild(swatch);
+            }
+
+            card.appendChild(canvas);
+            card.appendChild(name);
+            card.appendChild(info);
+            card.appendChild(typeTag);
+            card.appendChild(walkable);
+            card.appendChild(paletteDemo);
+
+            return card;
+        }
+
+        function selectTile(tileName, tile, card) {
+            // Remove previous selection
+            document.querySelectorAll('.tile-card.selected').forEach(c => {
+                c.classList.remove('selected');
+            });
+
+            // Select new
+            card.classList.add('selected');
+            selectedTile = { name: tileName, tile: tile };
+
+            // Update single preview
+            renderSinglePreview(tile);
+
+            // Update details
+            const details = document.getElementById('tile-details');
+            details.innerHTML = `
+                <strong>${tileName}</strong><br>
+                Type: ${tile.type} | Size: ${tile.width}x${tile.height}<br>
+                Walkable: ${tile.walkable ? 'Yes' : 'No'}
+                ${tile.hazard ? ' | Hazard: ' + tile.hazard : ''}
+                ${tile.animated ? ' | Animated' : ''}
+            `;
+
+            // Update grid preview if in selected mode
+            if (gridMode === 'selected') {
+                renderGridPreview();
+            }
+        }
+
+        function renderSinglePreview(tile) {
+            const canvas = document.getElementById('single-canvas');
+            renderTile(tile, canvas, 8);
+        }
+
+        function renderGridPreview() {
+            const canvas = document.getElementById('grid-preview');
+            const gridSize = 5; // 5x5 grid
+            const tileSize = 16;
+            const scale = currentScale;
+
+            canvas.width = gridSize * tileSize * scale;
+            canvas.height = gridSize * tileSize * scale;
+            canvas.style.width = (gridSize * tileSize * scale) + 'px';
+            canvas.style.height = (gridSize * tileSize * scale) + 'px';
+
+            const ctx = canvas.getContext('2d');
+            ctx.imageSmoothingEnabled = false;
+            ctx.fillStyle = currentBackground;
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            if (gridMode === 'selected' && selectedTile) {
+                // Fill grid with selected tile
+                for (let y = 0; y < gridSize; y++) {
+                    for (let x = 0; x < gridSize; x++) {
+                        TileRenderer.draw(
+                            ctx,
+                            selectedTile.tile,
+                            x * tileSize * scale,
+                            y * tileSize * scale,
+                            scale
+                        );
+                    }
+                }
+            } else if (gridMode === 'dungeon') {
+                // Simple dungeon layout
+                const layout = [
+                    ['W', 'W', 'W', 'W', 'W'],
+                    ['W', 'F', 'F', 'F', 'W'],
+                    ['W', 'F', 'F', 'D', 'W'],
+                    ['W', 'F', 'F', 'F', 'W'],
+                    ['W', 'W', 'W', 'W', 'W']
+                ];
+                renderLayout(ctx, layout, scale, tileSize);
+            } else if (gridMode === 'corridor') {
+                const layout = [
+                    ['W', 'W', 'W', 'W', 'W'],
+                    ['F', 'F', 'F', 'F', 'F'],
+                    ['F', 'F', 'F', 'F', 'F'],
+                    ['F', 'F', 'F', 'F', 'F'],
+                    ['W', 'W', 'W', 'W', 'W']
+                ];
+                renderLayout(ctx, layout, scale, tileSize);
+            } else if (gridMode === 'room') {
+                // Use specific corners for each position
+                const layout = [
+                    ['1', 'W', 'W', 'W', '2'],
+                    ['W', 'F', 'F', 'F', 'W'],
+                    ['W', 'F', 'F', 'F', 'W'],
+                    ['W', 'F', 'F', 'F', 'W'],
+                    ['3', 'W', 'D', 'W', '4']
+                ];
+                renderLayout(ctx, layout, scale, tileSize);
+            } else if (gridMode === 'corners') {
+                // Showcase all corner types with labels
+                const layout = [
+                    ['1', 'W', 'F', 'W', '2'],
+                    ['W', 'F', 'F', 'F', 'W'],
+                    ['F', 'F', 'O', 'F', 'F'],
+                    ['W', 'F', 'F', 'F', 'W'],
+                    ['3', 'W', 'F', 'W', '4']
+                ];
+                renderLayout(ctx, layout, scale, tileSize);
+            }
+        }
+
+        function renderLayout(ctx, layout, scale, tileSize) {
+            const tileMap = {
+                'W': TILE_SPRITES.brick_wall || TILE_SPRITES.stone_wall,
+                'F': TILE_SPRITES.stone_floor,
+                'D': TILE_SPRITES.door_closed,
+                '1': TILE_SPRITES.wall_corner_nw,  // Top-left corner (interior)
+                '2': TILE_SPRITES.wall_corner_ne,  // Top-right corner (interior)
+                '3': TILE_SPRITES.wall_corner_sw,  // Bottom-left corner (interior)
+                '4': TILE_SPRITES.wall_corner_se,  // Bottom-right corner (interior)
+                'O': TILE_SPRITES.wall_corner_outer_nw,  // Outer corner (pillar)
+                'S': TILE_SPRITES.stairs_down,
+                'H': TILE_SPRITES.lava_pool || TILE_SPRITES.shallow_water,
+                'P': TILE_SPRITES.pressure_plate
+            };
+
+            for (let y = 0; y < layout.length; y++) {
+                for (let x = 0; x < layout[y].length; x++) {
+                    const char = layout[y][x];
+                    const tile = tileMap[char];
+                    if (tile) {
+                        TileRenderer.draw(
+                            ctx,
+                            tile,
+                            x * tileSize * scale,
+                            y * tileSize * scale,
+                            scale
+                        );
+                    }
+                }
+            }
+        }
+
+        function renderAllTiles() {
+            // Clear cache when settings change
+            TileRenderer.clearCache();
+
+            const grid = document.getElementById('tile-grid');
+            grid.innerHTML = '';
+
+            let count = 0;
+            for (const [name, tile] of Object.entries(TILE_SPRITES)) {
+                if (shouldShowTile(name, tile)) {
+                    const card = createTileCard(name, tile);
+                    grid.appendChild(card);
+                    count++;
+
+                    // Auto-select first tile
+                    if (count === 1 && !selectedTile) {
+                        selectTile(name, tile, card);
+                    }
+                }
+            }
+
+            // Update grid preview
+            renderGridPreview();
+        }
+
+        // Initial render
+        renderAllTiles();
+
+        // Select first tile by default
+        const firstTileName = Object.keys(TILE_SPRITES)[0];
+        if (firstTileName) {
+            const firstTile = TILE_SPRITES[firstTileName];
+            selectedTile = { name: firstTileName, tile: firstTile };
+            renderSinglePreview(firstTile);
+            renderGridPreview();
+        }
+    </script>
+</body>
+</html>

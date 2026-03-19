@@ -1,5 +1,5 @@
 // === js/ui/crafting-ui.js ===
-// SURVIVAL EXTRACTION UPDATE: Crafting interface
+// Crafting interface
 
 // ============================================================================
 // CRAFTING UI
@@ -310,38 +310,101 @@ const CraftingUI = {
     },
 
     /**
-     * Render main panel background
+     * Render main panel background - CotDG Alchemist's Workshop
      * @param {CanvasRenderingContext2D} ctx
      * @private
      */
     _renderPanel(ctx) {
-        // Background
-        ctx.fillStyle = '#1a1a2e';
+        // Get design system colors
+        const colors = typeof UI_COLORS !== 'undefined' ? UI_COLORS : {};
+        const frameGold = colors.frameGold || '#b8860b';
+        const frameGoldBright = colors.frameGoldBright || '#daa520';
+        const frameGoldDark = colors.frameGoldDark || '#8b6914';
+        const templeStone = colors.templeStone || '#2a2622';
+        const templeStoneDark = colors.templeStoneDark || '#1a1816';
+
+        ctx.save();
+
+        // Workshop background (dark wood/stone workbench)
+        const bgGrad = ctx.createLinearGradient(0, 0, 0, this.panelHeight);
+        bgGrad.addColorStop(0, '#2a2420');
+        bgGrad.addColorStop(0.1, templeStone);
+        bgGrad.addColorStop(0.9, templeStoneDark);
+        bgGrad.addColorStop(1, '#0a0908');
+        ctx.fillStyle = bgGrad;
         ctx.fillRect(0, 0, this.panelWidth, this.panelHeight);
 
-        // Border
-        ctx.strokeStyle = '#4a4a6a';
-        ctx.lineWidth = 2;
-        ctx.strokeRect(0, 0, this.panelWidth, this.panelHeight);
+        // Subtle forge glow from bottom
+        const forgeGlow = ctx.createRadialGradient(
+            this.panelWidth / 2, this.panelHeight + 50, 0,
+            this.panelWidth / 2, this.panelHeight + 50, 200
+        );
+        forgeGlow.addColorStop(0, 'rgba(255, 100, 30, 0.15)');
+        forgeGlow.addColorStop(1, 'rgba(255, 50, 0, 0)');
+        ctx.fillStyle = forgeGlow;
+        ctx.fillRect(0, this.panelHeight - 100, this.panelWidth, 100);
 
-        // Title
-        ctx.fillStyle = '#ffd700';
-        ctx.font = 'bold 24px monospace';
+        // Use design system temple frame if available
+        if (typeof drawTempleFrame === 'function') {
+            drawTempleFrame(ctx, 0, 0, this.panelWidth, this.panelHeight, {
+                cornerSize: 18, borderWidth: 4, pattern: true
+            });
+        } else {
+            // Bronze/copper frame (forge aesthetic)
+            const frameGrad = ctx.createLinearGradient(0, 0, this.panelWidth, this.panelHeight);
+            frameGrad.addColorStop(0, '#cd7f32');
+            frameGrad.addColorStop(0.3, frameGold);
+            frameGrad.addColorStop(0.7, '#a0522d');
+            frameGrad.addColorStop(1, frameGold);
+            ctx.strokeStyle = frameGrad;
+            ctx.lineWidth = 4;
+            ctx.strokeRect(0, 0, this.panelWidth, this.panelHeight);
+        }
+
+        // Add ornate corners if available
+        if (typeof drawOrnateCorners === 'function') {
+            drawOrnateCorners(ctx, 0, 0, this.panelWidth, this.panelHeight, { size: 16 });
+        }
+
+        // Title bar with anvil/forge motif
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.3)';
+        ctx.fillRect(4, 4, this.panelWidth - 8, 44);
+
+        // Title with hammer icons
+        ctx.font = 'bold 22px serif';
         ctx.textAlign = 'center';
-        ctx.fillText('⚒️ CRAFTING ⚒️', this.panelWidth / 2, 30);
+        ctx.fillStyle = frameGoldDark;
+        ctx.fillText('CRAFTING FORGE', this.panelWidth / 2 + 1, 31);
+        ctx.fillStyle = frameGoldBright;
+        ctx.fillText('CRAFTING FORGE', this.panelWidth / 2, 30);
 
-        // Gold display
+        // Hammer icons
+        ctx.font = '18px serif';
+        ctx.fillText('⚒', this.panelWidth / 2 - 100, 30);
+        ctx.fillText('⚒', this.panelWidth / 2 + 100, 30);
+
+        // Gold display with coin stack effect
         const gold = persistentState?.bank?.gold || 0;
-        ctx.font = '14px monospace';
-        ctx.fillStyle = '#ffd700';
+        ctx.font = 'bold 14px monospace';
+        ctx.fillStyle = frameGoldBright;
         ctx.textAlign = 'right';
-        ctx.fillText(`💰 ${gold} gold`, this.panelWidth - 15, 30);
+        ctx.fillText(`${gold}g`, this.panelWidth - 20, 28);
+        ctx.font = '12px monospace';
+        ctx.fillStyle = frameGoldDark;
+        ctx.fillText('Treasury', this.panelWidth - 20, 42);
 
-        // Instructions
-        ctx.fillStyle = '#888';
-        ctx.font = '11px monospace';
+        // Decorative divider
+        if (typeof drawOrnateDivider === 'function') {
+            drawOrnateDivider(ctx, 20, 50, this.panelWidth - 40, { emblem: true });
+        }
+
+        // Control hints (styled)
+        ctx.fillStyle = colors.textMuted || '#706850';
+        ctx.font = '10px monospace';
         ctx.textAlign = 'center';
-        ctx.fillText('[Tab] Category  [Enter] Select  [F] Favorite  [Esc] Close', this.panelWidth / 2, this.panelHeight - 10);
+        ctx.fillText('[Tab] Category  [Enter] Select  [F] Favorite  [Esc] Close', this.panelWidth / 2, this.panelHeight - 12);
+
+        ctx.restore();
     },
 
     /**

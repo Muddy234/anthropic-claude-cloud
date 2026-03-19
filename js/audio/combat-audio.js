@@ -90,23 +90,27 @@ const CombatAudio = {
     onPlayerSwing(player) {
         if (!this.enabled || !this._canPlaySound()) return;
 
-        const weapon = player?.equipped?.MAIN;
-        const weaponType = this._getWeaponType(weapon);
+        try {
+            const weapon = player?.equipped?.MAIN;
+            const weaponType = this._getWeaponType(weapon);
 
-        // Play swing sound based on weapon type
-        const swingSounds = this._getSwingSounds(weaponType);
-        if (swingSounds.length > 0) {
-            // Pick a sound different from the last one for variety
-            let soundId = swingSounds[Math.floor(Math.random() * swingSounds.length)];
-            if (swingSounds.length > 1 && soundId === this.lastPlayerAttackSound) {
-                const otherSounds = swingSounds.filter(s => s !== soundId);
-                soundId = otherSounds[Math.floor(Math.random() * otherSounds.length)];
-            }
-            this.lastPlayerAttackSound = soundId;
+            // Play swing sound based on weapon type
+            const swingSounds = this._getSwingSounds(weaponType);
+            if (swingSounds && swingSounds.length > 0) {
+                // Pick a sound different from the last one for variety
+                let soundId = swingSounds[Math.floor(Math.random() * swingSounds.length)];
+                if (swingSounds.length > 1 && soundId === this.lastPlayerAttackSound) {
+                    const otherSounds = swingSounds.filter(s => s !== soundId);
+                    soundId = otherSounds[Math.floor(Math.random() * otherSounds.length)];
+                }
+                this.lastPlayerAttackSound = soundId;
 
-            if (typeof SFXSystem !== 'undefined') {
-                SFXSystem.playCombat(soundId, { volume: 0.7 });
+                if (typeof SFXSystem !== 'undefined' && typeof SFXSystem.playCombat === 'function') {
+                    SFXSystem.playCombat(soundId, { volume: 0.7 });
+                }
             }
+        } catch (e) {
+            // Silently fail - audio is optional
         }
     },
 
@@ -119,26 +123,30 @@ const CombatAudio = {
     onHit(attacker, defender, damageResult) {
         if (!this.enabled || !this._canPlaySound()) return;
 
-        const isPlayerAttacking = attacker === game?.player;
-        const isPlayerDefending = defender === game?.player;
+        try {
+            const isPlayerAttacking = attacker === game?.player;
+            const isPlayerDefending = defender === game?.player;
 
-        // Play appropriate hit sound
-        if (damageResult.isCrit) {
-            // Critical hit sound
-            this._playCriticalHit();
-        } else if (damageResult.isHit !== false) {
-            // Normal hit sound
-            this._playHitSound(attacker, defender);
-        } else {
-            // Miss/blocked sound
-            this._playBlockSound();
-        }
+            // Play appropriate hit sound
+            if (damageResult?.isCrit) {
+                // Critical hit sound
+                this._playCriticalHit();
+            } else if (damageResult?.isHit !== false) {
+                // Normal hit sound
+                this._playHitSound(attacker, defender);
+            } else {
+                // Miss/blocked sound
+                this._playBlockSound();
+            }
 
-        // Play hurt sound for the defender
-        if (isPlayerDefending && damageResult.finalDamage > 0) {
-            this._playPlayerHurt(damageResult.finalDamage, game.player.maxHp);
-        } else if (!isPlayerDefending && damageResult.finalDamage > 0) {
-            this._playMonsterHurt(defender, damageResult);
+            // Play hurt sound for the defender
+            if (isPlayerDefending && damageResult?.finalDamage > 0 && game?.player?.maxHp) {
+                this._playPlayerHurt(damageResult.finalDamage, game.player.maxHp);
+            } else if (!isPlayerDefending && damageResult?.finalDamage > 0) {
+                this._playMonsterHurt(defender, damageResult);
+            }
+        } catch (e) {
+            // Silently fail - audio is optional
         }
     },
 
@@ -150,12 +158,16 @@ const CombatAudio = {
     onDeath(entity, killer) {
         if (!this.enabled || !this._canPlaySound()) return;
 
-        const isPlayer = entity === game?.player;
+        try {
+            const isPlayer = entity === game?.player;
 
-        if (isPlayer) {
-            this._playPlayerDeath();
-        } else {
-            this._playMonsterDeath(entity);
+            if (isPlayer) {
+                this._playPlayerDeath();
+            } else {
+                this._playMonsterDeath(entity);
+            }
+        } catch (e) {
+            // Silently fail - audio is optional
         }
     },
 
@@ -167,9 +179,13 @@ const CombatAudio = {
     onCombatEngage(entity, target) {
         if (!this.enabled || !this._canPlaySound()) return;
 
-        // Only play alert sound when enemy notices player
-        if (entity !== game?.player && target === game?.player) {
-            this._playMonsterAlert(entity);
+        try {
+            // Only play alert sound when enemy notices player
+            if (entity !== game?.player && target === game?.player) {
+                this._playMonsterAlert(entity);
+            }
+        } catch (e) {
+            // Silently fail - audio is optional
         }
     },
 
@@ -227,16 +243,29 @@ const CombatAudio = {
     },
 
     /**
+     * Safely call SFXSystem method
+     * @private
+     */
+    _safePlaySound(method, ...args) {
+        if (typeof SFXSystem === 'undefined') return null;
+        if (typeof SFXSystem[method] !== 'function') return null;
+
+        try {
+            return SFXSystem[method](...args);
+        } catch (e) {
+            // Silently fail - audio is optional
+            return null;
+        }
+    },
+
+    /**
      * Play hit sound based on attacker/defender
      * @private
      */
     _playHitSound(attacker, defender) {
-        if (typeof SFXSystem === 'undefined') return;
-
         const hitSounds = ['hit_melee_1', 'hit_melee_2', 'hit_melee_3'];
         const soundId = hitSounds[Math.floor(Math.random() * hitSounds.length)];
-
-        SFXSystem.playCombat(soundId, { volume: 0.8 });
+        this._safePlaySound('playCombat', soundId, { volume: 0.8 });
     },
 
     /**
@@ -244,8 +273,7 @@ const CombatAudio = {
      * @private
      */
     _playCriticalHit() {
-        if (typeof SFXSystem === 'undefined') return;
-        SFXSystem.playCombat('hit_critical', { volume: 0.9, priority: 'HIGH' });
+        this._safePlaySound('playCombat', 'hit_critical', { volume: 0.9, priority: 'HIGH' });
     },
 
     /**
@@ -253,8 +281,7 @@ const CombatAudio = {
      * @private
      */
     _playBlockSound() {
-        if (typeof SFXSystem === 'undefined') return;
-        SFXSystem.playCombat('hit_blocked', { volume: 0.7 });
+        this._safePlaySound('playCombat', 'hit_blocked', { volume: 0.7 });
     },
 
     /**
@@ -262,13 +289,11 @@ const CombatAudio = {
      * @private
      */
     _playPlayerHurt(damage, maxHp) {
-        if (typeof SFXSystem === 'undefined') return;
-
         // Louder hurt sound for bigger hits
-        const damagePercent = damage / maxHp;
+        const damagePercent = maxHp > 0 ? damage / maxHp : 0;
         const volume = Math.min(1.0, 0.6 + damagePercent * 0.4);
 
-        SFXSystem.play('player_hurt', {
+        this._safePlaySound('play', 'player_hurt', {
             volume,
             priority: 'CRITICAL',
             category: 'combat'
@@ -280,12 +305,10 @@ const CombatAudio = {
      * @private
      */
     _playMonsterHurt(monster, damageResult) {
-        if (typeof SFXSystem === 'undefined') return;
-
         const monsterType = this._getMonsterSoundType(monster);
 
         // Try to play monster-specific hit sound
-        SFXSystem.playMonsterSound(monsterType, 'hit', {
+        this._safePlaySound('playMonsterSound', monsterType, 'hit', {
             volume: 0.6,
             priority: 'MEDIUM'
         });
@@ -296,9 +319,7 @@ const CombatAudio = {
      * @private
      */
     _playPlayerDeath() {
-        if (typeof SFXSystem === 'undefined') return;
-
-        SFXSystem.play('player_death', {
+        this._safePlaySound('play', 'player_death', {
             volume: 1.0,
             priority: 'CRITICAL',
             category: 'combat'
@@ -310,11 +331,9 @@ const CombatAudio = {
      * @private
      */
     _playMonsterDeath(monster) {
-        if (typeof SFXSystem === 'undefined') return;
-
         const monsterType = this._getMonsterSoundType(monster);
 
-        SFXSystem.playMonsterSound(monsterType, 'death', {
+        this._safePlaySound('playMonsterSound', monsterType, 'death', {
             volume: 0.8,
             priority: 'HIGH'
         });
@@ -325,11 +344,9 @@ const CombatAudio = {
      * @private
      */
     _playMonsterAlert(monster) {
-        if (typeof SFXSystem === 'undefined') return;
-
         const monsterType = this._getMonsterSoundType(monster);
 
-        SFXSystem.playMonsterSound(monsterType, 'alert', {
+        this._safePlaySound('playMonsterSound', monsterType, 'alert', {
             volume: 0.6,
             priority: 'MEDIUM'
         });
@@ -369,10 +386,26 @@ const CombatAudio = {
      * @private
      */
     _canPlaySound() {
-        return typeof AudioManager !== 'undefined' &&
-               AudioManager.isReady() &&
-               typeof SFXSystem !== 'undefined' &&
-               SFXSystem.ready;
+        // Check AudioManager exists and is ready (with safe method call)
+        if (typeof AudioManager === 'undefined') {
+            return false;
+        }
+
+        // Safely check isReady - it may not exist or may throw
+        try {
+            if (typeof AudioManager.isReady === 'function' && !AudioManager.isReady()) {
+                return false;
+            }
+        } catch (e) {
+            return false;
+        }
+
+        // Check SFXSystem exists and is ready
+        if (typeof SFXSystem === 'undefined' || !SFXSystem.ready) {
+            return false;
+        }
+
+        return true;
     },
 
     // ========================================================================
@@ -386,19 +419,21 @@ const CombatAudio = {
     playSpellCast(element) {
         if (!this.enabled || !this._canPlaySound()) return;
 
-        const elementLower = String(element).toLowerCase();
-        let soundId = 'spell_fire';
+        try {
+            const elementLower = String(element || 'fire').toLowerCase();
+            let soundId = 'spell_fire';
 
-        if (elementLower.includes('ice') || elementLower.includes('frost')) {
-            soundId = 'spell_ice';
-        } else if (elementLower.includes('lightning') || elementLower.includes('shock')) {
-            soundId = 'spell_lightning';
-        } else if (elementLower.includes('heal')) {
-            soundId = 'spell_heal';
-        }
+            if (elementLower.includes('ice') || elementLower.includes('frost')) {
+                soundId = 'spell_ice';
+            } else if (elementLower.includes('lightning') || elementLower.includes('shock')) {
+                soundId = 'spell_lightning';
+            } else if (elementLower.includes('heal')) {
+                soundId = 'spell_heal';
+            }
 
-        if (typeof SFXSystem !== 'undefined') {
-            SFXSystem.playCombat(soundId, { volume: 0.8 });
+            this._safePlaySound('playCombat', soundId, { volume: 0.8 });
+        } catch (e) {
+            // Silently fail - audio is optional
         }
     },
 
@@ -409,13 +444,11 @@ const CombatAudio = {
     playSkillActivate(skill) {
         if (!this.enabled || !this._canPlaySound()) return;
 
-        if (typeof SFXSystem !== 'undefined') {
-            SFXSystem.play('skill_activate', {
-                volume: 0.7,
-                priority: 'HIGH',
-                category: 'combat'
-            });
-        }
+        this._safePlaySound('play', 'skill_activate', {
+            volume: 0.7,
+            priority: 'HIGH',
+            category: 'combat'
+        });
     },
 
     /**
@@ -424,13 +457,11 @@ const CombatAudio = {
     playPotionUse() {
         if (!this.enabled || !this._canPlaySound()) return;
 
-        if (typeof SFXSystem !== 'undefined') {
-            SFXSystem.play('use_potion', {
-                volume: 0.6,
-                priority: 'MEDIUM',
-                category: 'combat'
-            });
-        }
+        this._safePlaySound('play', 'use_potion', {
+            volume: 0.6,
+            priority: 'MEDIUM',
+            category: 'combat'
+        });
     },
 
     /**
@@ -439,13 +470,11 @@ const CombatAudio = {
     playBuffApply() {
         if (!this.enabled || !this._canPlaySound()) return;
 
-        if (typeof SFXSystem !== 'undefined') {
-            SFXSystem.play('buff_apply', {
-                volume: 0.6,
-                priority: 'MEDIUM',
-                category: 'combat'
-            });
-        }
+        this._safePlaySound('play', 'buff_apply', {
+            volume: 0.6,
+            priority: 'MEDIUM',
+            category: 'combat'
+        });
     },
 
     /**
@@ -454,13 +483,11 @@ const CombatAudio = {
     playDebuffApply() {
         if (!this.enabled || !this._canPlaySound()) return;
 
-        if (typeof SFXSystem !== 'undefined') {
-            SFXSystem.play('debuff_apply', {
-                volume: 0.6,
-                priority: 'MEDIUM',
-                category: 'combat'
-            });
-        }
+        this._safePlaySound('play', 'debuff_apply', {
+            volume: 0.6,
+            priority: 'MEDIUM',
+            category: 'combat'
+        });
     }
 };
 

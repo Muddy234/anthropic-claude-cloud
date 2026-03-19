@@ -419,13 +419,50 @@ const DamageCalculator = {
     // ========================================================================
 
     /**
-     * Calculate damage with 2 layers
+     * Calculate damage with 2 layers.
+     * Delegates to DamageResolver if available, otherwise uses inline calculation.
      * @param {Object} attacker - Attacking entity (player or enemy)
      * @param {Object} defender - Defending entity
      * @param {Object} room - Current room (unused, kept for API compatibility)
      * @returns {Object} Damage result with breakdown
      */
     calculateDamage(attacker, defender, room = null) {
+        // ====================================================================
+        // DELEGATE to DamageResolver when loaded (damage-resolver.js loads
+        // before combat-master.js via index.html script order)
+        // ====================================================================
+        if (typeof DamageResolver !== 'undefined') {
+            // Sync config so runtime tweaks on DamageCalculator propagate
+            DamageResolver.config.baseVariance = this.config.baseVariance;
+            DamageResolver.config.minDamage = this.config.minDamage;
+            DamageResolver.config.critMultiplier = this.config.critMultiplier;
+            DamageResolver.config.baseCritChance = this.config.baseCritChance;
+            DamageResolver.config.pierceCritBonus = this.config.pierceCritBonus;
+            DamageResolver.config.defenseScaling = this.config.defenseScaling;
+            DamageResolver.config.maxDefenseReduction = this.config.maxDefenseReduction;
+
+            const resolved = DamageResolver.calculate(attacker, defender);
+
+            // Map DamageResolver output to DamageCalculator's expected shape
+            const result = {
+                finalDamage: resolved.finalDamage,
+                baseDamage: resolved.rawDamage,
+                isCrit: resolved.isCrit,
+                isHit: resolved.isHit,
+                breakdown: resolved.breakdown,
+                messages: resolved.messages
+            };
+
+            if (this.config.debugLogging) {
+                this.logDamageCalculation(attacker, defender, room, result);
+            }
+
+            return result;
+        }
+
+        // ====================================================================
+        // INLINE FALLBACK (when DamageResolver is not loaded)
+        // ====================================================================
         const result = {
             finalDamage: 0,
             baseDamage: 0,
@@ -1257,6 +1294,10 @@ if (typeof addMessage !== 'function') {
 // ############################################################################
 // SECTION 4: PROJECTILES
 // ############################################################################
+// NOTE: ProjectileManager (projectile-manager.js) wraps these functions as a
+// clean facade. It delegates spawn -> createProjectile, update -> updateProjectiles,
+// cleanup -> clearProjectiles, etc. The canonical data lives here.
+// ############################################################################
 
 const projectiles = [];
 
@@ -2016,6 +2057,23 @@ function performAttack(attacker, defender) {
 
     applyWeaponEffects(attacker, defender, result);
 
+    // TIME EFFECTS: Dramatic slow on critical hits
+    if (result.isCrit && attacker === game.player) {
+        if (typeof TimeEffects !== 'undefined') {
+            TimeEffects.triggerDramaticSlow(150); // 0.3x for 150ms
+        }
+        if (typeof game !== 'undefined' && game.runStats) {
+            game.runStats.criticalHits = (game.runStats.criticalHits || 0) + 1;
+        }
+        if (typeof EventBus !== 'undefined') {
+            EventBus.emit('player:critical_hit', {
+                target: defender,
+                damage: result.finalDamage,
+                damageType: result.breakdown?.weaponArmorMod ? 'weapon' : 'physical'
+            });
+        }
+    }
+
     if (defender.hp <= 0) handleDeath(defender, attacker);
 }
 
@@ -2047,6 +2105,17 @@ function applyDamage(entity, damage, source, damageResult) {
     entity.hp -= damage;
     if (isNaN(entity.hp)) entity.hp = 0;
 
+    // Track damage in runStats
+    if (typeof game !== 'undefined' && game.runStats) {
+        if (entity === game.player) {
+            // Player is taking damage
+            game.runStats.damageTaken = (game.runStats.damageTaken || 0) + damage;
+        } else if (source === game.player) {
+            // Player is dealing damage to an enemy
+            game.runStats.damageDealt = (game.runStats.damageDealt || 0) + damage;
+        }
+    }
+
     // Defense XP removed - defense is now handled by equipment only (per skill-system-implementation.md)
 
     if (entity === game.player && typeof triggerScreenEffect === 'function') {
@@ -2060,6 +2129,31 @@ function applyDamage(entity, damage, source, damageResult) {
             // Use critFlash effect for intense red vignette
             const critIntensity = isCrit ? 0.5 : (0.25 + dmgPct * 0.3);
             triggerScreenEffect('critFlash', critIntensity, isCrit ? 150 : 100);
+        }
+    }
+
+    // EVENT + TIME EFFECTS: Player damage taken
+    if (entity === game.player) {
+        const isLethal = entity.hp <= 0;
+        const damageType = damageResult?.element || damageResult?.type || 'physical';
+
+        if (typeof EventBus !== 'undefined') {
+            EventBus.emit('player:damage_taken', {
+                amount: damage,
+                source: source,
+                damageType: damageType,
+                isLethal: isLethal
+            });
+        }
+
+        // Dramatic slow on lethal damage (death slow)
+        if (isLethal && typeof TimeEffects !== 'undefined') {
+            TimeEffects.triggerDramaticSlow(800); // 0.3x for 800ms death slow
+        }
+
+        // Track hazard damage in runStats
+        if (source && source.isHazard && typeof game !== 'undefined' && game.runStats) {
+            game.runStats.hazardsTriggered = (game.runStats.hazardsTriggered || 0) + 1;
         }
     }
 
@@ -2134,9 +2228,32 @@ function applyWeaponEffects(attacker, defender, damageResult) {
 
 function handleDeath(entity, killer) {
     if (entity === game.player) {
+        // Record cause of death for the death screen summary
+        if (typeof game !== 'undefined' && game.runStats) {
+            game.runStats.causeOfDeath = {
+                enemyName: killer ? (killer.name || killer.type || 'Unknown') : 'Unknown',
+                enemyType: killer ? (killer.type || '') : '',
+                floor: game.floor || 1
+            };
+        }
         if (typeof handlePlayerDeath === 'function') handlePlayerDeath();
         else game.state = 'gameover';
         return;
+    }
+
+    // TIME EFFECTS: Impact slow on enemy death
+    if (typeof TimeEffects !== 'undefined') {
+        TimeEffects.triggerImpactSlow(100); // 0.7x for 100ms
+    }
+
+    // EVENT: Emit enemy death event
+    if (typeof EventBus !== 'undefined') {
+        EventBus.emit('enemy:death', {
+            enemy: entity,
+            killer: killer,
+            position: { x: entity.gridX, y: entity.gridY },
+            damageType: 'physical'
+        });
     }
 
     if (entity.combat) {
@@ -2151,6 +2268,17 @@ function handleDeath(entity, killer) {
     if (typeof addMessage === 'function') addMessage(`Defeated ${entity.name}!`);
     if (typeof NoiseSystem !== 'undefined') NoiseSystem.monsterNoise(entity, 'DEATH_CRY');
     if (typeof clearStatusEffects === 'function') clearStatusEffects(entity);
+
+    // Track kill stats
+    if (typeof trackMonsterKill === 'function') {
+        trackMonsterKill(entity.name || entity.type);
+    }
+    persistentState.stats.totalKills = (persistentState.stats.totalKills || 0) + 1;
+
+    // Track kill in runStats
+    if (typeof game !== 'undefined' && game.runStats) {
+        game.runStats.enemiesKilled = (game.runStats.enemiesKilled || 0) + 1;
+    }
 
     if (typeof BoonCombatIntegration !== 'undefined' && killer === game.player) {
         BoonCombatIntegration.applyOnKillEffects(killer, entity);
@@ -2178,7 +2306,25 @@ function handleDeath(entity, killer) {
     const index = game.enemies.indexOf(entity);
     if (index > -1) game.enemies.splice(index, 1);
 
-    if (game.player.combat?.currentTarget === entity) disengageCombat(game.player);
+    // Disengage player if they were targeting this entity
+    if (game.player.combat?.currentTarget === entity) {
+        disengageCombat(game.player);
+    }
+    // Also check if this entity was targeting the player - disengage if no other threats remain
+    else if (entity.combat?.currentTarget === game.player && game.player.inCombat) {
+        let hasOtherThreats = false;
+        for (const enemy of game.enemies) {
+            if (enemy.hp > 0 && enemy.combat?.currentTarget === game.player) {
+                hasOtherThreats = true;
+                break;
+            }
+        }
+        if (!hasOtherThreats) {
+            disengageCombat(game.player);
+        }
+    }
+
+    // Disengage any enemies that were targeting this entity
     for (const enemy of game.enemies) {
         if (enemy.combat?.currentTarget === entity) disengageCombat(enemy);
     }
@@ -3880,6 +4026,23 @@ function applyMeleeDamageInternal(player, enemy, isSpecial) {
 
     if (isNaN(damageResult.finalDamage)) damageResult.finalDamage = Math.max(1, baseDamage);
 
+    // TIME EFFECTS: Dramatic slow on critical hits (mouse attack path)
+    if (damageResult.isCrit) {
+        if (typeof TimeEffects !== 'undefined') {
+            TimeEffects.triggerDramaticSlow(150); // 0.3x for 150ms
+        }
+        if (typeof game !== 'undefined' && game.runStats) {
+            game.runStats.criticalHits = (game.runStats.criticalHits || 0) + 1;
+        }
+        if (typeof EventBus !== 'undefined') {
+            EventBus.emit('player:critical_hit', {
+                target: enemy,
+                damage: damageResult.finalDamage,
+                damageType: weapon?.damageType || 'physical'
+            });
+        }
+    }
+
     // Trigger hitstop
     triggerHitstopInternal(damageResult.isCrit, isSpecial);
     triggerDirectionalShakeInternal(mouseAttackState.swingDirection, damageResult.isCrit, isSpecial);
@@ -4310,7 +4473,7 @@ if (typeof window !== 'undefined') {
     window.DEFAULT_ARC_CONFIG = DEFAULT_ARC_CONFIG;
     window.MAGIC_CONFIG = MAGIC_CONFIG;
 
-    // Damage Calculator exports
+    // Damage Calculator exports (DamageResolver loaded via damage-resolver.js)
     window.DamageCalculator = DamageCalculator;
     window.calculateDamageSimple = calculateDamageSimple;
     window.calculateDamageWithRoom = calculateDamageWithRoom;
@@ -4327,7 +4490,7 @@ if (typeof window !== 'undefined') {
     window.getStatusEffects = getStatusEffects;
     window.clearStatusEffects = clearStatusEffects;
 
-    // Projectile exports
+    // Projectile exports (ProjectileManager facade loaded via projectile-manager.js)
     window.projectiles = projectiles;
     window.createProjectile = createProjectile;
     window.updateProjectiles = updateProjectiles;

@@ -33,28 +33,23 @@ const AI_VISUALIZER_CONFIG = {
 
     // Visual settings
     colors: {
-        // State colors (match AI states)
-        idle: '#88ff88',
-        wandering: '#aaffaa',
-        reacting: '#ffff00',
-        alert: '#ffaa00',
-        searching: '#ff8800',
-        chasing: '#ff4400',
-        combat: '#ff0000',
-        circling: '#ff00ff',
-        skirmishing: '#aa00ff',
-        defensive: '#0088ff',
-        returning: '#00ffaa',
-        commanded: '#ffffff',
-        following: '#88ffff',
-        panicked: '#ffff00',
-        enraged: '#ff0000',
-        retreating: '#0044ff',
-        sacrificing: '#880088',
+        // State colors (5-state system)
+        idle: '#88ff88',          // Green - patrolling/wandering
+        alert: '#ffaa00',         // Orange - investigating
+        combat: '#ff0000',        // Red - engaged in combat
+        searching: '#ff8800',     // Dark orange - looking for lost target
+        following: '#88ffff',     // Cyan - following leader/command
+
+        // Status modifiers (applied within states)
+        panicked: '#ffff00',      // Yellow - fleeing in fear
+        enraged: '#ff4400',       // Bright red - increased aggression
+
         // Special indicators
-        hasToken: '#00ff00',
-        noToken: '#ff0000',
-        frustrated: '#ff8800'
+        hasToken: '#00ff00',      // Green - can attack
+        noToken: '#888888',       // Gray - waiting for token
+        frustrated: '#ff8800',    // Orange - building frustration
+        windup: '#ff00ff',        // Magenta - winding up attack
+        fleeing: '#0088ff'        // Blue - retreating
     },
 
     // Vision cone settings
@@ -203,10 +198,31 @@ const AIVisualizer = {
      */
     drawStateLabel(ctx, enemy, screenX, screenY, tileSize) {
         const state = enemy.ai?.currentState || enemy.state || 'unknown';
-        const color = AI_VISUALIZER_CONFIG.colors[state] || '#ffffff';
+        let color = AI_VISUALIZER_CONFIG.colors[state] || '#ffffff';
 
         // Build label text based on detail level
         let label = state.toUpperCase();
+
+        // Check for status modifiers
+        const isPanicked = enemy.isFeared || enemy.ai?.isPanicked;
+        const isEnraged = enemy.isEnraged || enemy.ai?.isEnraged;
+        const isWindingUp = enemy.isWindingUp || enemy.ai?.windupActive;
+        const isFleeing = enemy.isFleeing;
+
+        // Override color based on status
+        if (isWindingUp) {
+            color = AI_VISUALIZER_CONFIG.colors.windup;
+            label = 'WINDUP';
+        } else if (isPanicked) {
+            color = AI_VISUALIZER_CONFIG.colors.panicked;
+            label += ' [PANIC]';
+        } else if (isEnraged) {
+            color = AI_VISUALIZER_CONFIG.colors.enraged;
+            label += ' [RAGE]';
+        } else if (isFleeing) {
+            color = AI_VISUALIZER_CONFIG.colors.fleeing;
+            label += ' [FLEE]';
+        }
 
         if (this.detailLevel !== 'minimal') {
             // Add attack token indicator
@@ -313,7 +329,7 @@ const AIVisualizer = {
         if (!path || path.length === 0) return;
 
         const state = enemy.ai?.currentState || enemy.state;
-        const color = state === 'chasing' ?
+        const color = (state === 'combat' || state === 'searching') ?
             AI_VISUALIZER_CONFIG.paths.chaseColor :
             AI_VISUALIZER_CONFIG.paths.patrolColor;
 

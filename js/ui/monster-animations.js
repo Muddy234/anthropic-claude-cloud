@@ -277,13 +277,16 @@ function getMonsterSpritePath(monsterName, animationType) {
     const anim = config.animations[animationType];
     if (!anim) return null;
 
+    // Check for custom base path (for assets/sprites/ folder)
+    const basePath = config.basePath || 'assets/spritesheet/Monsters';
+
     // Organized format (subdirectory)
     if (config.spriteDir) {
-        return `assets/spritesheet/Monsters/${config.spriteDir}/${anim.fileName}`;
+        return `${basePath}/${config.spriteDir}/${anim.fileName}`;
     }
 
     // Legacy format (root folder)
-    return `assets/spritesheet/Monsters/${anim.fileName}`;
+    return `${basePath}/${anim.fileName}`;
 }
 
 /**

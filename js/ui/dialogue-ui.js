@@ -1,5 +1,5 @@
 // === js/ui/dialogue-ui.js ===
-// SURVIVAL EXTRACTION UPDATE: Dialogue system UI
+// Dialogue system UI
 
 // ============================================================================
 // DIALOGUE UI
@@ -375,6 +375,24 @@ const DialogueUI = {
                 }
                 break;
 
+            case 'open_bulletin':
+                this.close();
+                if (typeof BulletinUI !== 'undefined') {
+                    BulletinUI.open();
+                } else {
+                    console.warn('[DialogueUI] BulletinUI not available');
+                }
+                break;
+
+            case 'open_dice_game':
+                this.close();
+                if (typeof TavernGamesUI !== 'undefined') {
+                    TavernGamesUI.open();
+                } else {
+                    console.warn('[DialogueUI] TavernGamesUI not available');
+                }
+                break;
+
             case 'show_quests':
                 // TODO: Quest UI
                 console.log('[DialogueUI] Quest UI not yet implemented');
@@ -401,32 +419,16 @@ const DialogueUI = {
     _getDynamicText(type) {
         switch (type) {
             case 'village_status':
-                const degradation = persistentState?.village?.degradationLevel || 0;
-                if (degradation === 0) {
-                    return 'The village is thriving. Your efforts have made a difference.';
-                } else if (degradation === 1) {
-                    return 'The village has seen better days. Some buildings show damage, but we persevere.';
-                } else {
-                    return 'The village suffers greatly. We need more resources from the Chasm to rebuild.';
-                }
+                return 'The village endures, as it always has. Your contributions help keep us safe.';
 
             case 'bank_balance':
                 const gold = persistentState?.bank?.gold || 0;
                 const items = persistentState?.bank?.items?.length || 0;
                 return `Your vault contains ${gold} gold and ${items} items.`;
 
-            case 'shortcut_status':
-                const shortcuts = persistentState?.shortcuts || [];
-                const unlocked = shortcuts.filter(s => s.unlocked).length;
-                if (unlocked === 0) {
-                    return 'No shortcuts unlocked yet. Defeat floor guardians to create new paths.';
-                } else {
-                    return `You have ${unlocked} shortcut(s) unlocked. Choose your starting floor wisely.`;
-                }
-
             case 'player_stats':
                 const stats = persistentState?.stats || {};
-                return `Runs: ${stats.totalRuns || 0} | Extractions: ${stats.successfulExtractions || 0} | Deepest: Floor ${stats.deepestFloor || 1}`;
+                return `Runs: ${stats.totalRuns || 0} | Deepest: Floor ${stats.deepestFloor || 1}`;
 
             case 'random_rumor':
             case 'random_tip':
@@ -439,11 +441,11 @@ const DialogueUI = {
     },
 
     // ========================================================================
-    // RENDERING
+    // RENDERING - CotDG Style
     // ========================================================================
 
     /**
-     * Render dialogue UI
+     * Render dialogue UI with CotDG-style ornate frames
      * @param {CanvasRenderingContext2D} ctx
      */
     render(ctx) {
@@ -451,176 +453,366 @@ const DialogueUI = {
 
         const canvas = ctx.canvas;
 
-        // Darken background
-        ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
-        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        // Get design system colors (with fallbacks)
+        const colors = typeof UI_COLORS !== 'undefined' ? UI_COLORS : {
+            bgDark: '#141414',
+            bgMedium: '#1c1c1c',
+            frameGold: '#b8860b',
+            frameGoldBright: '#daa520',
+            frameGoldDark: '#8b6914',
+            textPrimary: '#efe4b0',
+            textSecondary: '#b8a878',
+            textMuted: '#706850',
+            boneWhite: '#f5f5dc'
+        };
+
+        // Atmospheric vignette background
+        this._renderVignette(ctx, canvas.width, canvas.height);
 
         // Calculate total height needed (box + responses)
         const responses = this.currentNode.responses || [];
-        const responsesHeight = responses.length * (this.OPTION_HEIGHT + 5);
-        const totalHeight = this.BOX_HEIGHT + responsesHeight + 20;
+        const responsesHeight = responses.length * (this.OPTION_HEIGHT + 8);
+        const totalHeight = this.BOX_HEIGHT + responsesHeight + 25;
 
         // Calculate box position - center vertically with room for responses
         const boxX = (canvas.width - this.BOX_WIDTH) / 2;
         const boxY = (canvas.height - totalHeight) / 2;
 
-        // Draw dialogue box
-        this._renderDialogueBox(ctx, boxX, boxY);
+        // Draw dialogue box with temple frame
+        this._renderDialogueBox(ctx, boxX, boxY, colors);
 
-        // Draw speaker name
-        this._renderSpeakerName(ctx, boxX, boxY);
+        // Draw speaker name plate
+        this._renderSpeakerName(ctx, boxX, boxY, colors);
 
-        // Draw text
-        this._renderText(ctx, boxX, boxY);
+        // Draw text with parchment styling
+        this._renderText(ctx, boxX, boxY, colors);
 
-        // Draw responses
+        // Draw responses as stone buttons
         if (!this.animatingText) {
-            this._renderResponses(ctx, boxX, boxY);
+            this._renderResponses(ctx, boxX, boxY, colors);
         }
 
         // Draw continue prompt
         if (this.animatingText) {
-            this._renderContinuePrompt(ctx, boxX, boxY);
+            this._renderContinuePrompt(ctx, boxX, boxY, colors);
         }
     },
 
     /**
-     * Render the dialogue box background
+     * Render atmospheric vignette overlay
      * @private
      */
-    _renderDialogueBox(ctx, x, y) {
-        // Box shadow
-        ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
-        ctx.fillRect(x + 4, y + 4, this.BOX_WIDTH, this.BOX_HEIGHT);
+    _renderVignette(ctx, width, height) {
+        // Dark gradient vignette
+        const vignette = ctx.createRadialGradient(
+            width / 2, height / 2, height * 0.2,
+            width / 2, height / 2, height * 0.8
+        );
+        vignette.addColorStop(0, 'rgba(0, 0, 0, 0.4)');
+        vignette.addColorStop(0.5, 'rgba(0, 0, 0, 0.6)');
+        vignette.addColorStop(1, 'rgba(0, 0, 0, 0.85)');
 
-        // Main box
-        ctx.fillStyle = '#1a1a2e';
-        ctx.fillRect(x, y, this.BOX_WIDTH, this.BOX_HEIGHT);
-
-        // Border
-        ctx.strokeStyle = '#4a4a6a';
-        ctx.lineWidth = 3;
-        ctx.strokeRect(x, y, this.BOX_WIDTH, this.BOX_HEIGHT);
-
-        // Inner border
-        ctx.strokeStyle = '#2a2a4e';
-        ctx.lineWidth = 1;
-        ctx.strokeRect(x + 5, y + 5, this.BOX_WIDTH - 10, this.BOX_HEIGHT - 10);
+        ctx.fillStyle = vignette;
+        ctx.fillRect(0, 0, width, height);
     },
 
     /**
-     * Render speaker name plate
+     * Render the dialogue box with CotDG temple frame
      * @private
      */
-    _renderSpeakerName(ctx, boxX, boxY) {
+    _renderDialogueBox(ctx, x, y, colors) {
+        ctx.save();
+
+        // Use temple frame if available, otherwise fallback
+        if (typeof drawTempleFrame === 'function') {
+            drawTempleFrame(ctx, x, y, this.BOX_WIDTH, this.BOX_HEIGHT, {
+                bgColor: colors.bgDark || '#141414',
+                frameColor: colors.frameGold || '#b8860b',
+                frameColorDark: colors.frameGoldDark || '#8b6914',
+                frameWidth: 5,
+                cornerSize: 18,
+                pattern: true,
+                innerGlow: true
+            });
+        } else {
+            // Fallback to basic panel
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.6)';
+            ctx.fillRect(x + 5, y + 5, this.BOX_WIDTH, this.BOX_HEIGHT);
+
+            ctx.fillStyle = colors.bgDark || '#141414';
+            ctx.fillRect(x, y, this.BOX_WIDTH, this.BOX_HEIGHT);
+
+            ctx.strokeStyle = colors.frameGold || '#b8860b';
+            ctx.lineWidth = 4;
+            ctx.strokeRect(x, y, this.BOX_WIDTH, this.BOX_HEIGHT);
+        }
+
+        // Inner decorative divider at top
+        if (typeof drawOrnateDivider === 'function') {
+            drawOrnateDivider(ctx, x + 30, y + this.BOX_HEIGHT - 25, this.BOX_WIDTH - 60, {
+                color: colors.frameGoldDark || '#8b6914',
+                colorDark: 'rgba(139, 105, 20, 0.3)',
+                emblem: 'diamond',
+                emblemSize: 8
+            });
+        }
+
+        ctx.restore();
+    },
+
+    /**
+     * Render speaker name plate with ornate styling
+     * @private
+     */
+    _renderSpeakerName(ctx, boxX, boxY, colors) {
         if (!this.currentNPC) return;
 
-        const nameWidth = 200;
-        const nameHeight = 30;
-        const nameX = boxX + 20;
-        const nameY = boxY - nameHeight + 5;
+        ctx.save();
 
-        // Name plate background
-        ctx.fillStyle = this.currentNPC.color || '#4a4a6a';
+        // Calculate name width dynamically
+        ctx.font = typeof UI_FONTS !== 'undefined' ? UI_FONTS.heading : 'bold 16px Georgia, serif';
+        const nameWidth = Math.max(180, ctx.measureText(this.currentNPC.name).width + 50);
+        const nameHeight = 32;
+        const nameX = boxX + 25;
+        const nameY = boxY - nameHeight + 8;
+
+        // Name plate shadow
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.6)';
+        ctx.fillRect(nameX + 3, nameY + 3, nameWidth, nameHeight);
+
+        // Name plate background gradient
+        const nameGrad = ctx.createLinearGradient(nameX, nameY, nameX, nameY + nameHeight);
+        nameGrad.addColorStop(0, colors.bgMedium || '#1c1c1c');
+        nameGrad.addColorStop(0.5, colors.bgDark || '#141414');
+        nameGrad.addColorStop(1, '#0a0a0a');
+        ctx.fillStyle = nameGrad;
         ctx.fillRect(nameX, nameY, nameWidth, nameHeight);
 
-        // Border
-        ctx.strokeStyle = '#FFF';
+        // Gold border with bright top edge
+        ctx.strokeStyle = colors.frameGold || '#b8860b';
         ctx.lineWidth = 2;
         ctx.strokeRect(nameX, nameY, nameWidth, nameHeight);
 
-        // Name text
-        ctx.font = 'bold 14px Arial';
-        ctx.textAlign = 'left';
-        ctx.fillStyle = '#FFF';
-        ctx.fillText(this.currentNPC.name, nameX + 10, nameY + 20);
+        // Bright top edge highlight
+        ctx.strokeStyle = colors.frameGoldBright || '#daa520';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(nameX + 1, nameY + 1);
+        ctx.lineTo(nameX + nameWidth - 1, nameY + 1);
+        ctx.stroke();
 
-        // Title (smaller)
+        // Corner accents
+        const accentSize = 6;
+        ctx.fillStyle = colors.frameGold || '#b8860b';
+
+        // Top-left corner
+        ctx.fillRect(nameX - 2, nameY - 2, accentSize, 2);
+        ctx.fillRect(nameX - 2, nameY - 2, 2, accentSize);
+
+        // Top-right corner
+        ctx.fillRect(nameX + nameWidth - accentSize + 2, nameY - 2, accentSize, 2);
+        ctx.fillRect(nameX + nameWidth, nameY - 2, 2, accentSize);
+
+        // Name text with shadow
+        ctx.font = typeof UI_FONTS !== 'undefined' ? UI_FONTS.heading : 'bold 16px Georgia, serif';
+        ctx.textAlign = 'left';
+        ctx.textBaseline = 'middle';
+
+        // Text shadow
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.8)';
+        ctx.fillText(this.currentNPC.name, nameX + 13, nameY + nameHeight / 2 + 2);
+
+        // Main text in bone white
+        ctx.fillStyle = colors.boneWhite || '#f5f5dc';
+        ctx.fillText(this.currentNPC.name, nameX + 12, nameY + nameHeight / 2);
+
+        // Title (smaller, to the right or below)
         if (this.currentNPC.title) {
-            ctx.font = '10px Arial';
-            ctx.fillStyle = '#AAA';
-            ctx.fillText(this.currentNPC.title, nameX + 10 + ctx.measureText(this.currentNPC.name).width + 10, nameY + 20);
+            ctx.font = typeof UI_FONTS !== 'undefined' ? UI_FONTS.tiny : '10px Georgia, serif';
+            ctx.fillStyle = colors.textMuted || '#706850';
+            const titleX = nameX + ctx.measureText(this.currentNPC.name).width + 20;
+
+            if (titleX + ctx.measureText(this.currentNPC.title).width < nameX + nameWidth - 10) {
+                ctx.fillText('- ' + this.currentNPC.title, titleX, nameY + nameHeight / 2);
+            }
         }
+
+        ctx.restore();
     },
 
     /**
-     * Render dialogue text
+     * Render dialogue text with parchment styling
      * @private
      */
-    _renderText(ctx, boxX, boxY) {
-        ctx.font = '16px Arial';
+    _renderText(ctx, boxX, boxY, colors) {
+        ctx.save();
+
+        ctx.font = typeof UI_FONTS !== 'undefined' ? UI_FONTS.body : '14px Georgia, serif';
         ctx.textAlign = 'left';
-        ctx.fillStyle = '#FFF';
+        ctx.textBaseline = 'top';
 
         // Word wrap
-        const maxWidth = this.BOX_WIDTH - 40;
-        const lineHeight = 24;
-        const startX = boxX + 20;
-        const startY = boxY + 40;
+        const maxWidth = this.BOX_WIDTH - 50;
+        const lineHeight = 22;
+        const startX = boxX + 25;
+        const startY = boxY + 30;
 
         const lines = this._wrapText(ctx, this.displayedText, maxWidth);
+
         lines.forEach((line, index) => {
-            ctx.fillText(line, startX, startY + index * lineHeight);
+            const lineY = startY + index * lineHeight;
+
+            // Text shadow for depth
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.6)';
+            ctx.fillText(line, startX + 1, lineY + 1);
+
+            // Main text in parchment color
+            ctx.fillStyle = colors.textPrimary || '#efe4b0';
+            ctx.fillText(line, startX, lineY);
         });
+
+        ctx.restore();
     },
 
     /**
-     * Render response options
+     * Render response options as stone buttons
      * @private
      */
-    _renderResponses(ctx, boxX, boxY) {
+    _renderResponses(ctx, boxX, boxY, colors) {
         const responses = this.currentNode.responses || [];
         if (responses.length === 0) return;
 
-        const startY = boxY + this.BOX_HEIGHT + 10;
+        const startY = boxY + this.BOX_HEIGHT + 12;
+        const buttonHeight = this.OPTION_HEIGHT + 4;
+        const buttonSpacing = 6;
 
         responses.forEach((response, index) => {
-            const optionY = startY + index * (this.OPTION_HEIGHT + 5);
+            const optionY = startY + index * (buttonHeight + buttonSpacing);
             const isSelected = index === this.selectedOption;
 
-            // Option background
-            ctx.fillStyle = isSelected ? '#3a3a5e' : '#1a1a2e';
-            ctx.fillRect(boxX, optionY, this.BOX_WIDTH, this.OPTION_HEIGHT);
+            ctx.save();
 
-            // Border
-            ctx.strokeStyle = isSelected ? '#8888FF' : '#4a4a6a';
-            ctx.lineWidth = isSelected ? 2 : 1;
-            ctx.strokeRect(boxX, optionY, this.BOX_WIDTH, this.OPTION_HEIGHT);
+            // Use stone button if available
+            if (typeof drawStoneButton === 'function') {
+                drawStoneButton(ctx, boxX, optionY, this.BOX_WIDTH, buttonHeight, {
+                    text: '',  // We'll draw text separately for more control
+                    isHovered: isSelected,
+                    isPressed: false,
+                    isDisabled: false
+                });
+            } else {
+                // Fallback button rendering
+                ctx.fillStyle = isSelected ?
+                    (colors.templeStoneLight || '#5a5a50') :
+                    (colors.templeStone || '#4a4a40');
+                ctx.fillRect(boxX, optionY, this.BOX_WIDTH, buttonHeight);
 
-            // Number
-            ctx.font = 'bold 14px Arial';
+                ctx.strokeStyle = isSelected ?
+                    (colors.frameGold || '#b8860b') :
+                    (colors.border || '#3a3530');
+                ctx.lineWidth = isSelected ? 2 : 1;
+                ctx.strokeRect(boxX, optionY, this.BOX_WIDTH, buttonHeight);
+            }
+
+            // Number badge
+            const badgeSize = 22;
+            const badgeX = boxX + 10;
+            const badgeY = optionY + (buttonHeight - badgeSize) / 2;
+
+            // Badge background
+            ctx.fillStyle = isSelected ? (colors.frameGold || '#b8860b') : (colors.bgDarkest || '#0d0d0d');
+            ctx.beginPath();
+            ctx.arc(badgeX + badgeSize / 2, badgeY + badgeSize / 2, badgeSize / 2, 0, Math.PI * 2);
+            ctx.fill();
+
+            // Badge border
+            ctx.strokeStyle = isSelected ? (colors.frameGoldBright || '#daa520') : (colors.frameGoldDark || '#8b6914');
+            ctx.lineWidth = 1.5;
+            ctx.stroke();
+
+            // Number text
+            ctx.font = typeof UI_FONTS !== 'undefined' ? UI_FONTS.hotkey : 'bold 12px Georgia, serif';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillStyle = isSelected ? '#000' : (colors.frameGold || '#b8860b');
+            ctx.fillText(`${index + 1}`, badgeX + badgeSize / 2, badgeY + badgeSize / 2);
+
+            // Response text
+            ctx.font = typeof UI_FONTS !== 'undefined' ? UI_FONTS.body : '14px Georgia, serif';
             ctx.textAlign = 'left';
-            ctx.fillStyle = isSelected ? '#FFD700' : '#888';
-            ctx.fillText(`${index + 1}.`, boxX + 15, optionY + 20);
+            ctx.textBaseline = 'middle';
 
-            // Text
-            ctx.fillStyle = isSelected ? '#FFF' : '#AAA';
-            ctx.fillText(response.text, boxX + 40, optionY + 20);
+            // Text shadow
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
+            ctx.fillText(response.text, boxX + 42, optionY + buttonHeight / 2 + 1);
 
-            // Selection arrow
+            // Main text
+            ctx.fillStyle = isSelected ? (colors.boneWhite || '#f5f5dc') : (colors.textSecondary || '#b8a878');
+            ctx.fillText(response.text, boxX + 40, optionY + buttonHeight / 2);
+
+            // Selection indicator (gold arrow)
             if (isSelected) {
-                ctx.fillStyle = '#FFD700';
+                ctx.fillStyle = colors.frameGoldBright || '#daa520';
+
+                // Animated glow
+                const pulse = typeof getPulseValue === 'function' ? getPulseValue(0.004) : 0.5;
+                ctx.shadowColor = colors.frameGold || '#b8860b';
+                ctx.shadowBlur = 5 + pulse * 5;
+
+                // Arrow
                 ctx.beginPath();
-                ctx.moveTo(boxX + 5, optionY + 10);
-                ctx.lineTo(boxX + 5, optionY + 20);
-                ctx.lineTo(boxX + 12, optionY + 15);
+                ctx.moveTo(boxX - 8, optionY + buttonHeight / 2 - 6);
+                ctx.lineTo(boxX - 8, optionY + buttonHeight / 2 + 6);
+                ctx.lineTo(boxX - 2, optionY + buttonHeight / 2);
                 ctx.closePath();
                 ctx.fill();
+
+                ctx.shadowBlur = 0;
             }
+
+            ctx.restore();
         });
     },
 
     /**
-     * Render continue prompt
+     * Render continue prompt with pulsing gold text
      * @private
      */
-    _renderContinuePrompt(ctx, boxX, boxY) {
-        const pulseAlpha = 0.5 + Math.sin(Date.now() / 200) * 0.3;
+    _renderContinuePrompt(ctx, boxX, boxY, colors) {
+        ctx.save();
 
-        ctx.font = '12px Arial';
+        const pulse = typeof getPulseValue === 'function' ? getPulseValue(0.005) : (0.5 + Math.sin(Date.now() / 200) * 0.3);
+        const alpha = 0.4 + pulse * 0.4;
+
+        ctx.font = typeof UI_FONTS !== 'undefined' ? UI_FONTS.small : '12px Georgia, serif';
         ctx.textAlign = 'right';
-        ctx.fillStyle = `rgba(255, 255, 255, ${pulseAlpha})`;
-        ctx.fillText('Press ENTER to continue...', boxX + this.BOX_WIDTH - 20, boxY + this.BOX_HEIGHT - 15);
+        ctx.textBaseline = 'bottom';
+
+        // Text shadow
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
+        ctx.fillText('Press SPACE or ENTER to continue...', boxX + this.BOX_WIDTH - 22, boxY + this.BOX_HEIGHT - 12);
+
+        // Pulsing gold text
+        const goldColor = colors.frameGold || '#b8860b';
+        ctx.fillStyle = `rgba(${parseInt(goldColor.slice(1, 3), 16)}, ${parseInt(goldColor.slice(3, 5), 16)}, ${parseInt(goldColor.slice(5, 7), 16)}, ${alpha})`;
+        ctx.fillText('Press SPACE or ENTER to continue...', boxX + this.BOX_WIDTH - 20, boxY + this.BOX_HEIGHT - 10);
+
+        // Small animated diamond
+        const diamondX = boxX + this.BOX_WIDTH - 20 - ctx.measureText('Press SPACE or ENTER to continue...').width - 15;
+        const diamondY = boxY + this.BOX_HEIGHT - 18;
+        const diamondSize = 4 + pulse * 2;
+
+        ctx.fillStyle = colors.frameGoldBright || '#daa520';
+        ctx.globalAlpha = alpha;
+        ctx.beginPath();
+        ctx.moveTo(diamondX, diamondY - diamondSize);
+        ctx.lineTo(diamondX + diamondSize * 0.7, diamondY);
+        ctx.lineTo(diamondX, diamondY + diamondSize);
+        ctx.lineTo(diamondX - diamondSize * 0.7, diamondY);
+        ctx.closePath();
+        ctx.fill();
+
+        ctx.restore();
     },
 
     /**

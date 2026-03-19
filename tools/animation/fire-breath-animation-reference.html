@@ -1,0 +1,1499 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>fire_breath — Animation Implementation Reference</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&family=Space+Grotesk:wght@400;500;600;700&display=swap');
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  :root {
+    --bg: #0a0a0f;
+    --surface: #12121a;
+    --surface2: #1a1a26;
+    --border: #2a2a3a;
+    --text: #e0e0e8;
+    --text-dim: #8888a0;
+    --accent: #FF6B35;
+    --accent2: #FF4400;
+    --warn: #ffaa00;
+    --danger: #ff4444;
+    --success: #2ecc71;
+    --blue: #74b9ff;
+    --purple: #a29bfe;
+    --fire1: #FFCC00;
+    --fire2: #FF6B35;
+    --fire3: #FF4400;
+    --fire4: #CC2200;
+  }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Space Grotesk', sans-serif;
+    line-height: 1.6;
+    padding: 2rem;
+    max-width: 1400px;
+    margin: 0 auto;
+  }
+
+  h1 {
+    font-size: 2.2rem;
+    font-weight: 700;
+    margin-bottom: 0.25rem;
+    background: linear-gradient(135deg, var(--fire1), var(--fire3));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+  h1 span { font-family: 'JetBrains Mono', monospace; font-size: 1.4rem; }
+
+  .subtitle {
+    color: var(--text-dim);
+    font-size: 1rem;
+    margin-bottom: 2.5rem;
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 1.5rem;
+  }
+
+  h2 {
+    font-size: 1.3rem; font-weight: 600; margin-top: 2.5rem; margin-bottom: 1rem;
+    color: var(--accent);
+    display: flex; align-items: center; gap: 0.5rem;
+  }
+  h2 .phase-num {
+    background: var(--accent); color: #fff;
+    width: 28px; height: 28px; border-radius: 50%;
+    display: inline-flex; align-items: center; justify-content: center;
+    font-size: 0.85rem; font-weight: 700; flex-shrink: 0;
+  }
+
+  h3 { font-size: 1rem; font-weight: 600; margin: 1.5rem 0 0.75rem; color: var(--blue); }
+  p, li { color: var(--text); font-size: 0.92rem; margin-bottom: 0.5rem; }
+  ul { padding-left: 1.25rem; margin-bottom: 1rem; }
+  li { margin-bottom: 0.35rem; }
+
+  .card {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 8px; padding: 1.5rem; margin: 1rem 0;
+  }
+
+  .callout {
+    background: var(--surface2); border-left: 3px solid var(--warn);
+    padding: 1rem 1.25rem; margin: 1rem 0; border-radius: 0 6px 6px 0; font-size: 0.9rem;
+  }
+  .callout.critical { border-left-color: var(--danger); }
+  .callout.success { border-left-color: var(--success); }
+  .callout strong { color: var(--warn); }
+  .callout.critical strong { color: var(--danger); }
+  .callout.success strong { color: var(--success); }
+
+  .demo-area {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 8px; padding: 1.5rem; margin: 1.5rem 0;
+  }
+  .demo-area canvas {
+    display: block; margin: 0 auto;
+    image-rendering: pixelated; image-rendering: crisp-edges;
+    border: 1px solid var(--border); border-radius: 4px; background: #08080c;
+  }
+  .demo-controls {
+    display: flex; gap: 0.75rem; justify-content: center; margin-top: 1rem; flex-wrap: wrap;
+  }
+  .demo-controls button {
+    font-family: 'JetBrains Mono', monospace; font-size: 0.8rem;
+    padding: 0.5rem 1.25rem; border: 1px solid var(--border); border-radius: 4px;
+    background: var(--surface2); color: var(--text); cursor: pointer; transition: all 0.15s;
+  }
+  .demo-controls button:hover { border-color: var(--accent); color: var(--accent); }
+
+  .phase-label {
+    text-align: center; font-family: 'JetBrains Mono', monospace;
+    font-size: 0.85rem; color: var(--text-dim); margin-top: 0.5rem; min-height: 1.4em;
+  }
+  .demo-hint {
+    text-align: center; font-size: 0.8rem; color: var(--text-dim);
+    margin-top: 0.25rem; font-style: italic;
+  }
+
+  pre {
+    background: #0d0d14; border: 1px solid var(--border); border-radius: 6px;
+    padding: 1.25rem; overflow-x: auto; margin: 1rem 0;
+    font-family: 'JetBrains Mono', monospace; font-size: 0.78rem; line-height: 1.55; color: #c8c8d8;
+  }
+  .kw { color: #c792ea; } .str { color: #c3e88d; } .num { color: #f78c6c; }
+  .cm { color: #546e7a; font-style: italic; } .fn { color: #82aaff; }
+  .prop { color: #f07178; } .op { color: #89ddff; }
+
+  .timeline {
+    display: flex; gap: 0; margin: 1.5rem 0; border-radius: 6px; overflow: hidden;
+    font-family: 'JetBrains Mono', monospace; font-size: 0.72rem;
+  }
+  .timeline-seg {
+    padding: 0.75rem 0.4rem; text-align: center; color: var(--bg); font-weight: 600;
+    display: flex; flex-direction: column; align-items: center; gap: 0.2rem;
+  }
+  .timeline-seg .t-label { font-size: 0.6rem; opacity: 0.7; }
+  .t-telegraph { background: var(--warn); flex: 0.6; }
+  .t-channel { background: var(--accent); flex: 1.5; color: #fff; }
+  .t-recovery { background: var(--success); flex: 0.5; }
+  .t-idle { background: var(--border); flex: 4; color: var(--text-dim); }
+
+  .split {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; margin: 1rem 0;
+  }
+  @media (max-width: 900px) { .split { grid-template-columns: 1fr; } }
+
+  .tag {
+    display: inline-block; font-family: 'JetBrains Mono', monospace;
+    font-size: 0.7rem; padding: 0.15rem 0.5rem; border-radius: 3px; font-weight: 600;
+  }
+  .tag-telegraph { background: rgba(255,170,0,0.2); color: var(--warn); }
+  .tag-channel { background: rgba(255,107,53,0.2); color: var(--accent); }
+  .tag-recovery { background: rgba(46,204,113,0.2); color: var(--success); }
+
+  .compare-table {
+    width: 100%; border-collapse: collapse; margin: 1rem 0; font-size: 0.85rem;
+  }
+  .compare-table th {
+    background: var(--surface2); padding: 0.5rem 0.75rem; text-align: left;
+    color: var(--text-dim); font-weight: 600; border-bottom: 1px solid var(--border);
+  }
+  .compare-table td {
+    padding: 0.5rem 0.75rem; border-bottom: 1px solid var(--border); vertical-align: top;
+  }
+  .compare-table tr:hover td { background: rgba(255,255,255,0.02); }
+  .diff { color: var(--warn); font-weight: 600; }
+
+  .sprite-grid-container {
+    display: flex; gap: 1.5rem; flex-wrap: wrap; justify-content: center; margin: 1rem 0;
+  }
+  .sprite-frame { text-align: center; }
+  .sprite-frame canvas {
+    image-rendering: pixelated; image-rendering: crisp-edges;
+    border: 1px solid var(--border); border-radius: 3px; background: #08080c;
+  }
+  .sprite-frame .frame-label {
+    font-family: 'JetBrains Mono', monospace; font-size: 0.7rem;
+    color: var(--text-dim); margin-top: 0.3rem;
+  }
+</style>
+</head>
+<body>
+
+<h1>Ability Animation Reference: <span>fire_breath</span></h1>
+<p class="subtitle">
+  Inferno Drake signature ability — a cone telegraph with a channeled damage zone.
+  This covers mechanics the previous three didn't: arc/pie-slice shapes, channeled abilities
+  that deal damage over time, direction-locked zones, and persistent hazard rendering.
+</p>
+
+<!-- ════════════════════════════════════════════ -->
+<h2><span class="phase-num">0</span> What is fire_breath?</h2>
+
+<div class="card">
+  <p><strong>Used by:</strong> Inferno Drake (primary)</p>
+  <p><strong>Shape:</strong> Cone — 60° arc, 5 tile radius, aimed at the target's position when telegraph starts</p>
+  <p><strong>Damage:</strong> 8 per tick, 4 ticks over the channel (32 total) + burn DoT (3 damage/sec for 3 seconds = 9 more)</p>
+  <p><strong>Telegraph:</strong> 600ms — orange cone outline appears on the ground, direction locks immediately</p>
+  <p><strong>Channel:</strong> 1500ms — the Drake breathes fire, filling the cone with flame. Damage ticks every 375ms.</p>
+  <p><strong>Recovery:</strong> 800ms — standard punish window</p>
+  <p><strong>Cooldown:</strong> 7000ms</p>
+  <p><strong>Direction lock:</strong> The cone aims where the target WAS at telegraph start. The Drake does NOT rotate during channel.</p>
+  <p style="margin-top:0.75rem; color: var(--accent);"><strong>The player experience:</strong> An orange wedge flashes on the ground pointed at you — you have 0.6 seconds to sidestep. Then fire erupts and fills the wedge for 1.5 seconds. If you're caught in it, you take rapid ticks of damage plus a burn that keeps hurting after you escape. The Drake is locked in place during the channel, so flanking it is the play — get behind it and attack while it's breathing fire at empty space. The cone is wide enough (60°) that you must move decisively, not just shuffle sideways.</p>
+</div>
+
+<div class="callout">
+  <strong>What makes cones different from every other shape:</strong> Circles (ground_slam) and lines (charge) are symmetrical — they look the same from any angle. Cones are <em>directional and asymmetrical</em>. The rendering math is more complex: you need to draw a pie-slice with an arc, the telegraph must aim in a specific direction, and the "am I inside the cone?" check requires an angle comparison, not just a distance check. Cones also introduce <em>channeling</em> — the ability deals damage continuously over time rather than in a single burst.
+</div>
+
+<!-- ════════════════════════════════════════════ -->
+<h2><span class="phase-num">1</span> The Animation Lifecycle</h2>
+
+<p>Fire breath has a <strong>channel phase</strong> between telegraph and recovery. During the channel, the Drake is locked in place breathing fire. Damage ticks repeatedly — this is NOT a single burst like ground_slam.</p>
+
+<div class="timeline">
+  <div class="timeline-seg t-telegraph">
+    TELEGRAPH<br>
+    <span class="t-label">600ms</span>
+  </div>
+  <div class="timeline-seg t-channel">
+    CHANNEL (damage ticks × 4)<br>
+    <span class="t-label">1500ms</span>
+  </div>
+  <div class="timeline-seg t-recovery">
+    RECOVERY<br>
+    <span class="t-label">800ms</span>
+  </div>
+  <div class="timeline-seg t-idle">
+    IDLE (cooldown ticking)<br>
+    <span class="t-label">~4100ms remaining</span>
+  </div>
+</div>
+
+<div class="split">
+  <div class="card">
+    <h3><span class="tag tag-telegraph">TELEGRAPH</span> Warning phase (600ms)</h3>
+    <ul>
+      <li>An <strong>orange cone outline</strong> appears on the ground — a pie-slice shape</li>
+      <li>The cone is <strong>60° wide, 5 tiles long</strong>, centered on the Drake's facing direction toward the target</li>
+      <li>Direction <strong>locks immediately</strong> — the cone does NOT follow the player</li>
+      <li>The outline <strong>pulses</strong> and the fill opacity <strong>ramps from 0% to 25%</strong> over 600ms</li>
+      <li>The Drake plays a <strong>head-rear-back</strong> animation — inhaling, chest glowing</li>
+      <li>A <strong>rising hiss/roar</strong> builds — fire crackling mixed with reptilian growl</li>
+    </ul>
+    <p style="color:var(--warn);">The 60° arc is the key readability challenge. The player must instantly understand the shape and whether they're inside it. The pulsing border and semi-transparent fill are essential — a thin outline alone isn't readable at game speed.</p>
+  </div>
+  <div class="card">
+    <h3><span class="tag tag-channel">CHANNEL</span> Active damage zone (1500ms)</h3>
+    <ul>
+      <li>The cone <strong>fills with animated fire</strong> — the telegraph shape becomes a damage zone</li>
+      <li>Fire <strong>streams outward</strong> from the Drake's mouth toward the cone edge</li>
+      <li>The fire visual <strong>billows and turbulates</strong> — not static, constantly shifting</li>
+      <li><strong>Ember particles</strong> rise up from the fire zone</li>
+      <li>Damage ticks <strong>every 375ms</strong> (4 ticks total) — players inside take 8 damage per tick</li>
+      <li>First tick applies <strong>burn DoT</strong> (3 dmg/sec for 3 seconds)</li>
+      <li>The Drake is <strong>completely immobile</strong> — locked in place, can't turn, can't cancel</li>
+      <li>A constant <strong>roaring fire sound</strong> plays for the full 1.5 seconds</li>
+    </ul>
+    <p style="color:var(--accent);">Players who dodge the telegraph see a clear "go behind it" opportunity. Players who get caught take escalating damage — the burn DoT means even escaping mid-channel still costs you. The longer you stay, the worse it gets.</p>
+  </div>
+</div>
+<div class="split">
+  <div class="card">
+    <h3><span class="tag tag-recovery">RECOVERY</span> The punish window (800ms)</h3>
+    <ul>
+      <li>Fire dissipates — the cone fades over 200ms with lingering embers</li>
+      <li>The Drake plays an <strong>exhausted/panting animation</strong> — head lowered, chest heaving</li>
+      <li>Takes <strong>1.25x damage</strong> during this window</li>
+      <li>Cannot move or use abilities</li>
+      <li>Faint <strong>heat shimmer</strong> lingers in the cone area for 500ms after fire stops</li>
+    </ul>
+    <p style="color:var(--success);">The 1.5s channel + 0.8s recovery = 2.3 seconds of total vulnerability from the flank. This is the Drake's weakness — it commits fully to one direction.</p>
+  </div>
+  <div class="card">
+    <h3>Burn DoT (separate from the ability phases)</h3>
+    <ul>
+      <li>Applied on the <strong>first damage tick</strong> if the player is in the cone</li>
+      <li>Deals <strong>3 damage per second for 3 seconds</strong> (9 total)</li>
+      <li>Visually: <strong>small flame particles</strong> orbit the burning player</li>
+      <li>The burn DoT is a <strong>status effect on the player</strong> — it persists independently of the ability</li>
+      <li>It does NOT stack if the player gets hit by multiple ticks — it refreshes duration instead</li>
+      <li>The burn is managed by the <strong>StatusEffectSystem</strong>, not the EffectAnimator or the cone</li>
+    </ul>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════════ -->
+<h2><span class="phase-num">2</span> Key Differences from Previous Abilities</h2>
+
+<table class="compare-table">
+  <tr><th>Mechanic</th><th>Previous abilities</th><th>fire_breath</th><th>What changes</th></tr>
+  <tr>
+    <td>Telegraph shape</td>
+    <td>Circle / Line</td>
+    <td class="diff">Cone (pie-slice)</td>
+    <td>New telegraph type: <code>cone_fixed</code>. Needs center point, direction angle, arc width (60°), and radius. Rendering uses <code>ctx.arc()</code> with start/end angles to draw the pie slice.</td>
+  </tr>
+  <tr>
+    <td>Damage timing</td>
+    <td>Single instant burst</td>
+    <td class="diff">4 ticks over 1.5 seconds</td>
+    <td>New phase: <code>channel</code>. A tick counter fires every 375ms. Each tick checks if players are inside the cone and applies damage. This means the "am I inside?" check runs repeatedly, not once.</td>
+  </tr>
+  <tr>
+    <td>Damage zone persistence</td>
+    <td>Telegraph shows danger, then disappears on resolve</td>
+    <td class="diff">Telegraph becomes the damage zone</td>
+    <td>The cone shape stays on screen for the full 1.5s channel. Its visual transforms from "warning outline" to "active fire" at the transition, but the geometry is identical. One shape, two visual states.</td>
+  </tr>
+  <tr>
+    <td>DoT application</td>
+    <td>None</td>
+    <td class="diff">Burn (3 dmg/sec, 3s)</td>
+    <td>The first damage tick applies a status effect to the player via <code>StatusEffectSystem.apply()</code>. The burn has its own visual (flame particles on the player) managed separately.</td>
+  </tr>
+  <tr>
+    <td>Hit detection</td>
+    <td>Distance check (circle) / rectangle overlap (line)</td>
+    <td class="diff">Angle + distance check</td>
+    <td>A point is inside the cone if: (1) its distance from center ≤ radius, AND (2) its angle from center is within ±halfArc of the cone's facing direction. Both conditions must be true.</td>
+  </tr>
+  <tr>
+    <td>Channel animation</td>
+    <td>N/A</td>
+    <td class="diff">Animated fire fill for 1.5s</td>
+    <td>The fire visual must look alive — not a static orange fill. Use layered particles streaming outward from the origin, with turbulence noise offsetting their paths. This is the most complex render of any ability.</td>
+  </tr>
+  <tr>
+    <td>Enemy state during damage</td>
+    <td>Instant (ground_slam) / moving (charge)</td>
+    <td class="diff">Stationary and locked</td>
+    <td>The Drake can't move, turn, or cancel during the 1.5s channel. <code>abilityLockout = true</code> for the full duration. This is a commitment — the Drake is punishable from behind for the entire channel.</td>
+  </tr>
+  <tr>
+    <td>Visual layering</td>
+    <td>Ground layer (telegraph) + overlay (impact)</td>
+    <td class="diff">Ground → overlay transition</td>
+    <td>Telegraph draws in ground layer. When channel starts, the fire draws in the overlay layer (on top of entities). Ember particles draw above everything. The cone goes from "under feet" to "engulfing".</td>
+  </tr>
+</table>
+
+<!-- ════════════════════════════════════════════ -->
+<h2><span class="phase-num">3</span> Live Animation Preview</h2>
+
+<p>Working simulation of the full fire_breath cycle. The Drake aims right and breathes fire in a 60° cone. Watch how the telegraph transitions into the active fire channel.</p>
+
+<div class="demo-area">
+  <canvas id="demoCanvas" width="480" height="340"></canvas>
+  <div class="phase-label" id="phaseLabel">Click a button to start</div>
+  <div class="demo-hint" id="demoHint"></div>
+  <div class="demo-controls">
+    <button onclick="playScenario('full')">▶ Full Cycle</button>
+    <button onclick="playScenario('telegraph_only')">Telegraph Only</button>
+    <button onclick="playScenario('channel_only')">Channel Only</button>
+    <button onclick="playScenario('hit')">▶ Player Gets Hit</button>
+    <button onclick="playScenario('dodge')">▶ Player Dodges Behind</button>
+    <button onclick="stopAnim()">⏹ Stop</button>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════════ -->
+<h2><span class="phase-num">4</span> Visual Frame Breakdowns</h2>
+
+<h3>A. Telegraph Frames (cone outline on ground — 600ms)</h3>
+<p>A 60° pie-slice that fades in, pulses, and grows slightly more opaque as it nears resolve. Direction is locked to the target's position at telegraph start.</p>
+<div id="telegraphFrames" class="sprite-grid-container"></div>
+
+<h3>B. Channel Frames (active fire filling the cone — 1500ms)</h3>
+<p>Fire streams outward from the Drake's mouth. Multiple particle layers create depth: a base glow, mid-layer flame tongues, and top-layer bright sparks. The fire billows with pseudo-random turbulence.</p>
+<div id="channelFrames" class="sprite-grid-container"></div>
+
+<h3>C. Dissipation Frames (fire fades — 200ms after channel ends)</h3>
+<div id="dissipateFrames" class="sprite-grid-container"></div>
+
+<!-- ════════════════════════════════════════════ -->
+<h2><span class="phase-num">5</span> JavaScript Implementation</h2>
+
+<h3>Part A — The Data: Define what fire_breath looks like</h3>
+
+<pre><span class="cm">// ─── In effect-sprites.js ───</span>
+
+<span class="kw">const</span> ABILITY_EFFECTS <span class="op">=</span> {
+  ground_slam: { <span class="cm">/* ... */</span> },
+  charge: { <span class="cm">/* ... */</span> },
+  homing_orb: { <span class="cm">/* ... */</span> },
+
+  fire_breath: {
+    <span class="cm">// ── TELEGRAPH: cone outline on the ground ──</span>
+    telegraph: {
+      <span class="prop">type</span>: <span class="str">'cone_fixed'</span>,           <span class="cm">// New type — pie-slice shape</span>
+      <span class="prop">color</span>: <span class="str">'#FFAA00'</span>,              <span class="cm">// Orange fill</span>
+      <span class="prop">borderColor</span>: <span class="str">'#FF6B35'</span>,       <span class="cm">// Darker orange border</span>
+      <span class="prop">fillOpacity</span>: <span class="num">0.25</span>,            <span class="cm">// Max fill opacity (ramps from 0)</span>
+      <span class="prop">borderWidth</span>: <span class="num">2</span>,
+      <span class="prop">arcDegrees</span>: <span class="num">60</span>,              <span class="cm">// 60° wide cone</span>
+      <span class="prop">radius</span>: <span class="num">5</span>,                   <span class="cm">// 5 tiles long</span>
+      <span class="prop">fadeInTime</span>: <span class="num">150</span>,              <span class="cm">// Cone fades in over first 150ms</span>
+      <span class="prop">pulseSpeed</span>: <span class="num">5</span>,               <span class="cm">// Pulses per second on the border</span>
+      <span class="prop">locksDirection</span>: <span class="kw">true</span>,        <span class="cm">// Direction fixed at telegraph start</span>
+    },
+
+    <span class="cm">// ── CHANNEL: fire fills the cone for 1.5 seconds ──</span>
+    channel: {
+      <span class="prop">duration</span>: <span class="num">1500</span>,              <span class="cm">// Total channel time</span>
+      <span class="prop">tickInterval</span>: <span class="num">375</span>,           <span class="cm">// Damage every 375ms (4 ticks)</span>
+      <span class="prop">tickCount</span>: <span class="num">4</span>,                <span class="cm">// 4 total ticks</span>
+
+      <span class="cm">// Fire visual layers (rendered bottom to top)</span>
+      <span class="prop">baseFill</span>: {
+        <span class="prop">color</span>: <span class="str">'#FF4400'</span>,           <span class="cm">// Dark red-orange base glow</span>
+        <span class="prop">opacity</span>: <span class="num">0.45</span>,
+      },
+      <span class="prop">flameStreams</span>: {
+        <span class="prop">count</span>: <span class="num">12</span>,                 <span class="cm">// 12 flame "tongue" particles streaming outward</span>
+        <span class="prop">speed</span>: <span class="num">120</span>,                <span class="cm">// Pixels/sec outward from mouth</span>
+        <span class="prop">colors</span>: [<span class="str">'#FFCC00'</span>, <span class="str">'#FF6B35'</span>, <span class="str">'#FF4400'</span>],  <span class="cm">// Core bright, edges dark</span>
+        <span class="prop">sizeRange</span>: [<span class="num">4</span>, <span class="num">10</span>],        <span class="cm">// Pixel size of each flame tongue</span>
+        <span class="prop">turbulence</span>: <span class="num">20</span>,             <span class="cm">// Pixels of lateral wobble</span>
+        <span class="prop">respawnAtOrigin</span>: <span class="kw">true</span>,      <span class="cm">// When a flame reaches the edge, it respawns at the mouth</span>
+      },
+      <span class="prop">embers</span>: {
+        <span class="prop">spawnRate</span>: <span class="num">20</span>,              <span class="cm">// Ember particles per second</span>
+        <span class="prop">sprite</span>: {
+          <span class="prop">width</span>: <span class="num">2</span>, <span class="prop">height</span>: <span class="num">2</span>,
+          <span class="prop">pixels</span>: [<span class="str">'EE'</span>, <span class="str">'EE'</span>],
+          <span class="prop">palette</span>: { <span class="str">'E'</span>: <span class="str">'#FFCC00'</span> }
+        },
+        <span class="prop">velocity</span>: { <span class="prop">xRange</span>: [<span class="num">-15</span>, <span class="num">15</span>], <span class="prop">yRange</span>: [<span class="num">-50</span>, <span class="num">-20</span>] },
+        <span class="prop">gravity</span>: <span class="num">-10</span>,               <span class="cm">// Negative — embers float UP (heat rises)</span>
+        <span class="prop">lifetime</span>: <span class="num">600</span>,
+      },
+
+      <span class="cm">// Ramp-up: fire builds to full intensity over first 300ms</span>
+      <span class="prop">rampUpTime</span>: <span class="num">300</span>,
+    },
+
+    <span class="cm">// ── DISSIPATION: fire fades after channel ends ──</span>
+    dissipation: {
+      <span class="prop">duration</span>: <span class="num">200</span>,               <span class="cm">// Fire fades over 200ms</span>
+      <span class="prop">lingerEmbers</span>: {
+        <span class="prop">count</span>: <span class="num">8</span>,
+        <span class="prop">lifetime</span>: <span class="num">500</span>,
+      },
+      <span class="prop">heatShimmer</span>: {
+        <span class="prop">duration</span>: <span class="num">500</span>,              <span class="cm">// Faint shimmer in the cone area</span>
+        <span class="prop">opacity</span>: <span class="num">0.08</span>,              <span class="cm">// Very subtle</span>
+      }
+    },
+
+    <span class="cm">// ── BURN DoT (applied to players hit) ──</span>
+    burn: {
+      <span class="prop">damagePerSecond</span>: <span class="num">3</span>,
+      <span class="prop">duration</span>: <span class="num">3000</span>,              <span class="cm">// 3 seconds</span>
+      <span class="prop">refreshOnReapply</span>: <span class="kw">true</span>,      <span class="cm">// Subsequent ticks refresh duration, don't stack</span>
+      <span class="prop">visual</span>: {
+        <span class="prop">type</span>: <span class="str">'orbiting_flames'</span>,
+        <span class="prop">particleCount</span>: <span class="num">3</span>,
+        <span class="prop">orbitRadius</span>: <span class="num">10</span>,
+        <span class="prop">orbitSpeed</span>: <span class="num">3</span>,
+        <span class="prop">colors</span>: [<span class="str">'#FF6B35'</span>, <span class="str">'#FF4400'</span>],
+      }
+    },
+
+    <span class="cm">// ── AUDIO ──</span>
+    audio: {
+      <span class="prop">telegraph</span>: <span class="str">'sfx_drake_inhale'</span>,       <span class="cm">// Deep inhale + chest glow sound</span>
+      <span class="prop">channelStart</span>: <span class="str">'sfx_fire_breath_start'</span>, <span class="cm">// Explosive burst as fire begins</span>
+      <span class="prop">channelLoop</span>: <span class="str">'sfx_fire_breath_loop'</span>,   <span class="cm">// Looping fire roar for 1.5 seconds</span>
+      <span class="prop">channelEnd</span>: <span class="str">'sfx_fire_breath_end'</span>,     <span class="cm">// Fire sputters out</span>
+      <span class="prop">burnTick</span>: <span class="str">'sfx_burn_sizzle'</span>,           <span class="cm">// Quiet sizzle each DoT tick on the player</span>
+    }
+  }
+};</pre>
+
+<div class="callout">
+  <strong>The channel phase is new and complex.</strong> Unlike ground_slam (instant), charge (movement), or homing_orb (projectile), fire_breath has a sustained phase where the ability is actively dealing damage over time while rendering an animated fire effect. The cone shape stays identical — only the visual filling it changes. The data separates the base glow (static fill), flame streams (directional particles), and embers (floating sparks) into three layers that combine into the full fire visual.
+</div>
+
+<h3>Part B — The Controller: Managing channel state</h3>
+
+<pre><span class="cm">// ─── In effect-animator.js ───</span>
+<span class="cm">// New method for cone/channeled abilities</span>
+
+<span class="fn">startConeEffect</span>(abilityId, enemy, targetX, targetY, telegraphMs) {
+  <span class="kw">const</span> id <span class="op">=</span> <span class="kw">this</span>.nextId++;
+  <span class="kw">const</span> config <span class="op">=</span> ABILITY_EFFECTS[abilityId];
+  <span class="kw">if</span> (!config) <span class="kw">return</span> <span class="num">-1</span>;
+
+  <span class="cm">// Lock direction at this moment</span>
+  <span class="kw">const</span> angle <span class="op">=</span> Math.<span class="fn">atan2</span>(targetY <span class="op">-</span> enemy.worldY, targetX <span class="op">-</span> enemy.worldX);
+  <span class="kw">const</span> halfArc <span class="op">=</span> (config.telegraph.arcDegrees <span class="op">/</span> <span class="num">2</span>) <span class="op">*</span> (Math.PI <span class="op">/</span> <span class="num">180</span>);
+  <span class="kw">const</span> radiusPx <span class="op">=</span> config.telegraph.radius <span class="op">*</span> TILE_SIZE;
+
+  <span class="kw">this</span>.activeEffects.<span class="fn">set</span>(id, {
+    id,
+    abilityId,
+    config,
+    enemy,
+
+    <span class="cm">// ── Cone geometry (locked at creation) ──</span>
+    x: enemy.worldX,
+    y: enemy.worldY,
+    angle,             <span class="cm">// Center direction of the cone</span>
+    halfArc,           <span class="cm">// Half the arc width in radians</span>
+    radiusPx,          <span class="cm">// Pixel radius</span>
+
+    <span class="cm">// ── Phase tracking ──</span>
+    phase: <span class="str">'telegraph'</span>,  <span class="cm">// 'telegraph' | 'channel' | 'dissipate' | 'done'</span>
+    phaseTimer: <span class="num">0</span>,
+    telegraphDuration: telegraphMs,
+
+    <span class="cm">// ── Channel state ──</span>
+    tickTimer: <span class="num">0</span>,       <span class="cm">// Accumulator for damage ticks</span>
+    ticksDealt: <span class="num">0</span>,
+
+    <span class="cm">// ── Flame stream particles (created at channel start) ──</span>
+    flameStreams: [],
+    embers: [],
+    emberAccum: <span class="num">0</span>,
+  });
+
+  <span class="kw">return</span> id;
+},
+
+<span class="cm">// ── In the update() method, add 'channel' and 'dissipate' cases: ──</span>
+
+<span class="kw">case</span> <span class="str">'channel'</span>: {
+  <span class="kw">const</span> chanCfg <span class="op">=</span> effect.config.channel;
+
+  <span class="cm">// ── Fire ramp-up (first 300ms fire builds to full intensity) ──</span>
+  <span class="kw">const</span> intensity <span class="op">=</span> Math.<span class="fn">min</span>(effect.phaseTimer <span class="op">/</span> chanCfg.rampUpTime, <span class="num">1.0</span>);
+
+  <span class="cm">// ── Damage tick check ──</span>
+  effect.tickTimer <span class="op">+=</span> deltaTime;
+  <span class="kw">if</span> (effect.tickTimer <span class="op">>=</span> chanCfg.tickInterval <span class="op">&&</span> effect.ticksDealt <span class="op"><</span> chanCfg.tickCount) {
+    effect.tickTimer <span class="op">-=</span> chanCfg.tickInterval;
+    effect.ticksDealt<span class="op">++</span>;
+
+    <span class="cm">// Check every player: are they inside the cone right now?</span>
+    <span class="kw">for</span> (<span class="kw">const</span> player <span class="kw">of</span> players) {
+      <span class="kw">if</span> (<span class="kw">this</span>.<span class="fn">isInsideCone</span>(player.worldX, player.worldY, effect)) {
+        <span class="cm">// Apply tick damage</span>
+        EnemyAbilitySystem.<span class="fn">applyDamage</span>(player, effect.config.damage <span class="op">||</span> <span class="num">8</span>, <span class="str">'fire'</span>);
+
+        <span class="cm">// Apply burn on first hit (refresh on subsequent)</span>
+        <span class="kw">if</span> (effect.config.burn) {
+          StatusEffectSystem.<span class="fn">apply</span>(player, {
+            <span class="prop">type</span>: <span class="str">'burn'</span>,
+            <span class="prop">damagePerSecond</span>: effect.config.burn.damagePerSecond,
+            <span class="prop">duration</span>: effect.config.burn.duration,
+            <span class="prop">refresh</span>: effect.config.burn.refreshOnReapply,
+          });
+        }
+      }
+    }
+  }
+
+  <span class="cm">// ── Update flame stream particles ──</span>
+  <span class="kw">this</span>.<span class="fn">updateFlameStreams</span>(effect, deltaTime, intensity);
+
+  <span class="cm">// ── Spawn embers ──</span>
+  <span class="kw">this</span>.<span class="fn">updateEmbers</span>(effect, deltaTime, intensity);
+
+  <span class="cm">// ── Channel complete? ──</span>
+  <span class="kw">if</span> (effect.phaseTimer <span class="op">>=</span> chanCfg.duration) {
+    effect.phase <span class="op">=</span> <span class="str">'dissipate'</span>;
+    effect.phaseTimer <span class="op">=</span> <span class="num">0</span>;
+    AudioManager.<span class="fn">play</span>(effect.config.audio.channelEnd);
+  }
+  <span class="kw">break</span>;
+}
+
+<span class="kw">case</span> <span class="str">'dissipate'</span>: {
+  <span class="cm">// Fade remaining particles, apply heat shimmer</span>
+  <span class="kw">this</span>.<span class="fn">updateEmbers</span>(effect, deltaTime, <span class="num">0</span>);  <span class="cm">// intensity=0 → no new spawns</span>
+
+  <span class="kw">if</span> (effect.phaseTimer <span class="op">>=</span> effect.config.dissipation.duration <span class="op">+</span>
+      effect.config.dissipation.heatShimmer.duration) {
+    effect.phase <span class="op">=</span> <span class="str">'done'</span>;
+  }
+  <span class="kw">break</span>;
+}
+
+<span class="cm">// ── Cone hit detection ──</span>
+
+<span class="fn">isInsideCone</span>(px, py, effect) {
+  <span class="cm">// Step 1: Distance check (must be within radius)</span>
+  <span class="kw">const</span> dx <span class="op">=</span> px <span class="op">-</span> effect.x;
+  <span class="kw">const</span> dy <span class="op">=</span> py <span class="op">-</span> effect.y;
+  <span class="kw">const</span> dist <span class="op">=</span> Math.<span class="fn">hypot</span>(dx, dy);
+  <span class="kw">if</span> (dist <span class="op">></span> effect.radiusPx) <span class="kw">return</span> <span class="kw">false</span>;
+
+  <span class="cm">// Step 2: Angle check (must be within the arc)</span>
+  <span class="kw">const</span> pointAngle <span class="op">=</span> Math.<span class="fn">atan2</span>(dy, dx);
+  <span class="kw">let</span> angleDiff <span class="op">=</span> pointAngle <span class="op">-</span> effect.angle;
+
+  <span class="cm">// Normalize to [-PI, PI]</span>
+  <span class="kw">while</span> (angleDiff <span class="op">></span> Math.PI) angleDiff <span class="op">-=</span> Math.PI <span class="op">*</span> <span class="num">2</span>;
+  <span class="kw">while</span> (angleDiff <span class="op"><</span> <span class="op">-</span>Math.PI) angleDiff <span class="op">+=</span> Math.PI <span class="op">*</span> <span class="num">2</span>;
+
+  <span class="kw">return</span> Math.<span class="fn">abs</span>(angleDiff) <span class="op"><=</span> effect.halfArc;
+},</pre>
+
+<div class="callout critical">
+  <strong>The isInsideCone check is the critical math.</strong> This two-step test (distance + angle) determines whether a player takes damage each tick. Getting it wrong means players get hit outside the visual or dodge inside it — both destroy trust. The angle normalization (wrapping to [-π, π]) handles the case where the cone crosses the 0°/360° boundary. Always test with cones aimed in all four cardinal directions and both diagonals.
+</div>
+
+<h3>Part C — The Renderer: Drawing the cone</h3>
+
+<pre><span class="cm">// ─── In effect-renderer.js ───</span>
+
+<span class="fn">drawConeTelegraph</span>(ctx, effect, camX, camY) {
+  <span class="kw">const</span> cfg <span class="op">=</span> effect.config.telegraph;
+  <span class="kw">const</span> progress <span class="op">=</span> Math.<span class="fn">min</span>(effect.phaseTimer <span class="op">/</span> effect.telegraphDuration, <span class="num">1.0</span>);
+
+  <span class="cm">// Fade in</span>
+  <span class="kw">const</span> fadeIn <span class="op">=</span> Math.<span class="fn">min</span>(effect.phaseTimer <span class="op">/</span> cfg.fadeInTime, <span class="num">1.0</span>);
+  <span class="kw">const</span> pulse <span class="op">=</span> fadeIn <span class="op">>=</span> <span class="num">1.0</span>
+    <span class="op">?</span> <span class="num">0.7</span> <span class="op">+</span> <span class="num">0.3</span> <span class="op">*</span> Math.<span class="fn">sin</span>(effect.phaseTimer <span class="op">/</span> <span class="num">1000</span> <span class="op">*</span> cfg.pulseSpeed <span class="op">*</span> Math.PI <span class="op">*</span> <span class="num">2</span>)
+    <span class="op">:</span> fadeIn;
+
+  <span class="kw">const</span> sx <span class="op">=</span> effect.x <span class="op">-</span> camX;
+  <span class="kw">const</span> sy <span class="op">=</span> effect.y <span class="op">-</span> camY;
+
+  <span class="cm">// ── Draw the pie slice ──</span>
+  <span class="cm">// This is the key shape: a filled arc from (angle - halfArc) to (angle + halfArc)</span>
+  <span class="cm">// connected back to the center point by straight lines.</span>
+
+  ctx.<span class="fn">save</span>();
+
+  <span class="cm">// Filled cone</span>
+  ctx.globalAlpha <span class="op">=</span> cfg.fillOpacity <span class="op">*</span> progress <span class="op">*</span> fadeIn;  <span class="cm">// Opacity ramps up with telegraph</span>
+  ctx.fillStyle <span class="op">=</span> cfg.color;
+  ctx.<span class="fn">beginPath</span>();
+  ctx.<span class="fn">moveTo</span>(sx, sy);  <span class="cm">// Start at center (enemy position)</span>
+  ctx.<span class="fn">arc</span>(sx, sy, effect.radiusPx,
+    effect.angle <span class="op">-</span> effect.halfArc,   <span class="cm">// Start angle</span>
+    effect.angle <span class="op">+</span> effect.halfArc     <span class="cm">// End angle</span>
+  );
+  ctx.<span class="fn">closePath</span>();  <span class="cm">// Closes back to center, forming the pie slice</span>
+  ctx.<span class="fn">fill</span>();
+
+  <span class="cm">// Border</span>
+  ctx.globalAlpha <span class="op">=</span> pulse;
+  ctx.strokeStyle <span class="op">=</span> cfg.borderColor;
+  ctx.lineWidth <span class="op">=</span> cfg.borderWidth;
+  ctx.<span class="fn">stroke</span>();
+
+  ctx.<span class="fn">restore</span>();
+},
+
+<span class="cm">// ── CHANNEL FIRE: the active flame visual ──</span>
+
+<span class="fn">drawChannelFire</span>(ctx, effect, camX, camY) {
+  <span class="kw">const</span> chanCfg <span class="op">=</span> effect.config.channel;
+  <span class="kw">const</span> intensity <span class="op">=</span> Math.<span class="fn">min</span>(effect.phaseTimer <span class="op">/</span> chanCfg.rampUpTime, <span class="num">1.0</span>);
+
+  <span class="kw">const</span> sx <span class="op">=</span> effect.x <span class="op">-</span> camX;
+  <span class="kw">const</span> sy <span class="op">=</span> effect.y <span class="op">-</span> camY;
+
+  <span class="cm">// ── Layer 1: Base glow (same cone shape, filled solid) ──</span>
+  ctx.<span class="fn">save</span>();
+  ctx.globalAlpha <span class="op">=</span> chanCfg.baseFill.opacity <span class="op">*</span> intensity;
+  ctx.fillStyle <span class="op">=</span> chanCfg.baseFill.color;
+  ctx.<span class="fn">beginPath</span>();
+  ctx.<span class="fn">moveTo</span>(sx, sy);
+  ctx.<span class="fn">arc</span>(sx, sy, effect.radiusPx, effect.angle <span class="op">-</span> effect.halfArc, effect.angle <span class="op">+</span> effect.halfArc);
+  ctx.<span class="fn">closePath</span>();
+  ctx.<span class="fn">fill</span>();
+  ctx.<span class="fn">restore</span>();
+
+  <span class="cm">// ── Layer 2: Flame stream particles ──</span>
+  <span class="cm">// Each stream is a "flame tongue" that travels outward from the mouth</span>
+  <span class="cm">// within the cone bounds. When it reaches the edge, it respawns at origin.</span>
+  <span class="kw">for</span> (<span class="kw">const</span> flame <span class="kw">of</span> effect.flameStreams) {
+    <span class="kw">const</span> lifeRatio <span class="op">=</span> flame.dist <span class="op">/</span> effect.radiusPx;  <span class="cm">// 0 at mouth, 1 at edge</span>
+
+    <span class="cm">// Flames are brightest near the mouth, darker at the edges</span>
+    <span class="kw">const</span> colorIdx <span class="op">=</span> Math.<span class="fn">min</span>(
+      Math.<span class="fn">floor</span>(lifeRatio <span class="op">*</span> chanCfg.flameStreams.colors.length),
+      chanCfg.flameStreams.colors.length <span class="op">-</span> <span class="num">1</span>
+    );
+    <span class="kw">const</span> color <span class="op">=</span> chanCfg.flameStreams.colors[colorIdx];
+    <span class="kw">const</span> alpha <span class="op">=</span> (<span class="num">1.0</span> <span class="op">-</span> lifeRatio <span class="op">*</span> <span class="num">0.6</span>) <span class="op">*</span> intensity;
+    <span class="kw">const</span> size <span class="op">=</span> chanCfg.flameStreams.sizeRange[<span class="num">0</span>] <span class="op">+</span>
+      lifeRatio <span class="op">*</span> (chanCfg.flameStreams.sizeRange[<span class="num">1</span>] <span class="op">-</span> chanCfg.flameStreams.sizeRange[<span class="num">0</span>]);
+
+    ctx.<span class="fn">save</span>();
+    ctx.globalAlpha <span class="op">=</span> alpha;
+    ctx.fillStyle <span class="op">=</span> color;
+    ctx.<span class="fn">fillRect</span>(flame.x <span class="op">-</span> camX <span class="op">-</span> size<span class="op">/</span><span class="num">2</span>, flame.y <span class="op">-</span> camY <span class="op">-</span> size<span class="op">/</span><span class="num">2</span>, size, size);
+    ctx.<span class="fn">restore</span>();
+  }
+
+  <span class="cm">// ── Layer 3: Rising embers ──</span>
+  <span class="kw">for</span> (<span class="kw">const</span> e <span class="kw">of</span> effect.embers) {
+    <span class="kw">if</span> (e.life <span class="op"><=</span> <span class="num">0</span>) <span class="kw">continue</span>;
+    <span class="kw">const</span> alpha <span class="op">=</span> (e.life <span class="op">/</span> e.maxLife) <span class="op">*</span> intensity;
+    ctx.<span class="fn">save</span>();
+    ctx.globalAlpha <span class="op">=</span> alpha;
+    ctx.fillStyle <span class="op">=</span> <span class="str">'#FFCC00'</span>;
+    ctx.<span class="fn">fillRect</span>(e.x <span class="op">-</span> camX <span class="op">-</span> <span class="num">1</span>, e.y <span class="op">-</span> camY <span class="op">-</span> <span class="num">1</span>, <span class="num">3</span>, <span class="num">3</span>);
+    ctx.<span class="fn">restore</span>();
+  }
+},
+
+<span class="cm">// ── Flame stream management ──</span>
+
+<span class="fn">updateFlameStreams</span>(effect, dt, intensity) {
+  <span class="kw">const</span> cfg <span class="op">=</span> effect.config.channel.flameStreams;
+
+  <span class="cm">// Initialize streams on first call</span>
+  <span class="kw">if</span> (effect.flameStreams.length <span class="op">===</span> <span class="num">0</span>) {
+    <span class="kw">for</span> (<span class="kw">let</span> i <span class="op">=</span> <span class="num">0</span>; i <span class="op"><</span> cfg.count; i<span class="op">++</span>) {
+      effect.flameStreams.<span class="fn">push</span>(<span class="kw">this</span>.<span class="fn">spawnFlameStream</span>(effect, Math.<span class="fn">random</span>()));
+    }
+  }
+
+  <span class="cm">// Update each stream</span>
+  <span class="kw">for</span> (<span class="kw">const</span> flame <span class="kw">of</span> effect.flameStreams) {
+    <span class="cm">// Move outward along the cone direction (with turbulence)</span>
+    flame.dist <span class="op">+=</span> cfg.speed <span class="op">*</span> (dt <span class="op">/</span> <span class="num">1000</span>);
+    flame.turbOffset <span class="op">+=</span> flame.turbSpeed <span class="op">*</span> (dt <span class="op">/</span> <span class="num">1000</span>);
+
+    <span class="cm">// Calculate position: base direction + random angle offset + turbulence</span>
+    <span class="kw">const</span> flameAngle <span class="op">=</span> effect.angle <span class="op">+</span> flame.angleOffset;
+    <span class="kw">const</span> turbX <span class="op">=</span> Math.<span class="fn">sin</span>(flame.turbOffset) <span class="op">*</span> cfg.turbulence;
+    <span class="kw">const</span> turbY <span class="op">=</span> Math.<span class="fn">cos</span>(flame.turbOffset <span class="op">*</span> <span class="num">1.3</span>) <span class="op">*</span> cfg.turbulence;
+
+    flame.x <span class="op">=</span> effect.x <span class="op">+</span> Math.<span class="fn">cos</span>(flameAngle) <span class="op">*</span> flame.dist <span class="op">+</span> turbX;
+    flame.y <span class="op">=</span> effect.y <span class="op">+</span> Math.<span class="fn">sin</span>(flameAngle) <span class="op">*</span> flame.dist <span class="op">+</span> turbY;
+
+    <span class="cm">// Respawn at origin when reaching edge</span>
+    <span class="kw">if</span> (flame.dist <span class="op">>=</span> effect.radiusPx) {
+      Object.<span class="fn">assign</span>(flame, <span class="kw">this</span>.<span class="fn">spawnFlameStream</span>(effect, <span class="num">0</span>));
+    }
+  }
+},
+
+<span class="fn">spawnFlameStream</span>(effect, initialProgress) {
+  <span class="kw">const</span> halfArc <span class="op">=</span> effect.halfArc;
+  <span class="kw">return</span> {
+    dist: initialProgress <span class="op">*</span> effect.radiusPx,
+    angleOffset: (<span class="fn">Math.random</span>() <span class="op">-</span> <span class="num">0.5</span>) <span class="op">*</span> <span class="num">2</span> <span class="op">*</span> halfArc,  <span class="cm">// Random within arc</span>
+    turbOffset: Math.<span class="fn">random</span>() <span class="op">*</span> Math.PI <span class="op">*</span> <span class="num">2</span>,
+    turbSpeed: <span class="num">2</span> <span class="op">+</span> Math.<span class="fn">random</span>() <span class="op">*</span> <span class="num">3</span>,
+    x: effect.x,
+    y: effect.y,
+  };
+},</pre>
+
+<h3>Part D — The Glue: Connecting to the ability system</h3>
+
+<pre><span class="cm">// ─── In enemy-ability-system.js ───</span>
+<span class="cm">// Channeled abilities use the existing executeAbility flow</span>
+<span class="cm">// but the resolve triggers a channel phase instead of instant damage.</span>
+
+<span class="fn">executeAbility</span>(enemy, target, ability, abilitySet) {
+  <span class="kw">const</span> telegraphTime <span class="op">=</span> <span class="cm">/* ... */</span>;
+  <span class="kw">const</span> recoveryTime <span class="op">=</span> ability.recoveryTime <span class="op">||</span> <span class="num">600</span>;
+
+  abilitySet.cooldowns[ability.id] <span class="op">=</span> ability.cooldown;
+  abilitySet.globalCooldown <span class="op">=</span> <span class="num">1000</span>;
+  enemy.abilityState <span class="op">=</span> <span class="str">'telegraph'</span>;
+  enemy.abilityLockout <span class="op">=</span> <span class="kw">true</span>;
+
+  <span class="kw">let</span> effectId;
+  <span class="kw">if</span> (ability.shape <span class="op">===</span> <span class="str">'cone'</span>) {
+    effectId <span class="op">=</span> EffectAnimator.<span class="fn">startConeEffect</span>(
+      ability.id, enemy, target.worldX, target.worldY, telegraphTime
+    );
+  } <span class="kw">else if</span> (ability.movementType <span class="op">===</span> <span class="str">'charge'</span>) {
+    <span class="cm">/* ... charge path ... */</span>
+  } <span class="kw">else</span> {
+    <span class="cm">/* ... circle/default path ... */</span>
+  }
+  enemy._currentEffectId <span class="op">=</span> effectId;
+
+  <span class="kw">const</span> enemyId <span class="op">=</span> enemy.id;
+  <span class="fn">setTimeout</span>(() <span class="op">=></span> {
+    <span class="kw">if</span> (!enemy <span class="op">||</span> enemy.hp <span class="op"><=</span> <span class="num">0</span> <span class="op">||</span> enemy.isStunned <span class="op">||</span> enemy.isRooted) {
+      EffectAnimator.<span class="fn">cancel</span>(effectId);
+      <span class="kw">this</span>.<span class="fn">cleanupAbilityState</span>(enemy);
+      <span class="kw">return</span>;
+    }
+
+    <span class="kw">if</span> (ability.channelDuration) {
+      <span class="cm">// ── CHANNEL: transition from telegraph → channel ──</span>
+      <span class="cm">// The EffectAnimator handles the visual transition internally.</span>
+      <span class="cm">// Damage ticks happen inside the EffectAnimator update loop</span>
+      <span class="cm">// (it calls EnemyAbilitySystem.applyDamage via the players reference).</span>
+      enemy.abilityState <span class="op">=</span> <span class="str">'channeling'</span>;
+      EffectAnimator.<span class="fn">resolveToChannel</span>(effectId, {
+        <span class="prop">onChannelComplete</span>: () <span class="op">=></span> {
+          <span class="kw">this</span>.<span class="fn">enterRecovery</span>(enemy, recoveryTime, enemyId);
+        },
+        <span class="prop">onInterrupt</span>: () <span class="op">=></span> {
+          <span class="cm">// If the Drake is stunned DURING the channel, fire stops early</span>
+          EffectAnimator.<span class="fn">forceDisssipate</span>(effectId);
+          <span class="kw">this</span>.<span class="fn">enterRecovery</span>(enemy, recoveryTime <span class="op">*</span> <span class="num">0.5</span>, enemyId);
+        }
+      });
+
+      AudioManager.<span class="fn">play</span>(ABILITY_EFFECTS[ability.id].audio.channelStart);
+      AudioManager.<span class="fn">playLoop</span>(ABILITY_EFFECTS[ability.id].audio.channelLoop,
+        ability.channelDuration);
+    } <span class="kw">else</span> {
+      <span class="cm">// Instant abilities (ground_slam path)</span>
+      EffectAnimator.<span class="fn">resolve</span>(effectId);
+      <span class="kw">this</span>.<span class="fn">resolveAbility</span>(enemy, target, ability);
+      <span class="kw">this</span>.<span class="fn">enterRecovery</span>(enemy, recoveryTime, enemyId);
+    }
+  }, telegraphTime);
+},</pre>
+
+<div class="callout success">
+  <strong>Channeled abilities CAN be interrupted mid-channel.</strong> If a player stuns the Drake while it's breathing fire, the channel stops early. The <code>onInterrupt</code> callback triggers early dissipation and a shorter recovery. This gives players a meaningful choice: dodge the breath and punish during recovery (safe) vs stun the Drake mid-breath to stop it early (aggressive, uses a cooldown but saves teammates who got caught).
+</div>
+
+<!-- ════════════════════════════════════════════ -->
+<h2><span class="phase-num">6</span> Render Loop Integration</h2>
+
+<pre><span class="cm">// ─── Updated drawGround and drawOverlay ───</span>
+
+<span class="fn">drawGround</span>(ctx, camX, camY) {
+  <span class="kw">for</span> (<span class="kw">const</span> [id, effect] <span class="kw">of</span> EffectAnimator.activeEffects) {
+    <span class="kw">if</span> (effect.phase <span class="op">===</span> <span class="str">'telegraph'</span>) {
+      <span class="kw">if</span> (effect.config.telegraph.type <span class="op">===</span> <span class="str">'circle_grow'</span>) <span class="kw">this</span>.<span class="fn">drawCircleTelegraph</span>(<span class="cm">/*...*/</span>);
+      <span class="kw">else if</span> (effect.config.telegraph.type <span class="op">===</span> <span class="str">'line_fixed'</span>) <span class="kw">this</span>.<span class="fn">drawLineTelegraph</span>(<span class="cm">/*...*/</span>);
+      <span class="kw">else if</span> (effect.config.telegraph.type <span class="op">===</span> <span class="str">'cone_fixed'</span>) <span class="kw">this</span>.<span class="fn">drawConeTelegraph</span>(<span class="cm">/*...*/</span>);
+    }
+  }
+},
+
+<span class="fn">drawOverlay</span>(ctx, camX, camY) {
+  <span class="kw">for</span> (<span class="kw">const</span> [id, effect] <span class="kw">of</span> EffectAnimator.activeEffects) {
+    <span class="cm">// Channel fire renders ON TOP of entities (engulfing)</span>
+    <span class="kw">if</span> (effect.phase <span class="op">===</span> <span class="str">'channel'</span>) {
+      <span class="kw">this</span>.<span class="fn">drawChannelFire</span>(ctx, effect, camX, camY);
+    }
+    <span class="cm">// Dissipation (fading fire + shimmer)</span>
+    <span class="kw">if</span> (effect.phase <span class="op">===</span> <span class="str">'dissipate'</span>) {
+      <span class="kw">const</span> fadeAlpha <span class="op">=</span> <span class="num">1.0</span> <span class="op">-</span> (effect.phaseTimer <span class="op">/</span> effect.config.dissipation.duration);
+      <span class="kw">if</span> (fadeAlpha <span class="op">></span> <span class="num">0</span>) {
+        ctx.<span class="fn">save</span>();
+        ctx.globalAlpha <span class="op">=</span> fadeAlpha;
+        <span class="kw">this</span>.<span class="fn">drawChannelFire</span>(ctx, effect, camX, camY);
+        ctx.<span class="fn">restore</span>();
+      }
+    }
+    <span class="cm">// Standard impacts (ground_slam rings, charge shockwave, etc.)</span>
+    <span class="kw">if</span> (effect.phase <span class="op">===</span> <span class="str">'impact'</span>) {
+      <span class="kw">this</span>.<span class="fn">drawImpact</span>(ctx, effect, camX, camY);
+    }
+  }
+},</pre>
+
+<!-- ════════════════════════════════════════════ -->
+<h2><span class="phase-num">7</span> Adapting This for Other Cone / Channeled Abilities</h2>
+
+<div class="card">
+  <h3>frost_breath (Frost Elemental)</h3>
+  <p>Identical shape, different visuals and effect. Change the <strong>arc to 75°</strong> (wider — frost breath fans out more than fire). Change colors to blue/white (<code>#88CCFF</code>, <code>#AADDFF</code>, <code>#FFFFFF</code>). Instead of burn DoT, apply <strong>slow</strong> (40% movement reduction for 2 seconds). The flame streams become ice crystal particles that drift more slowly. The dissipation leaves behind a frost ground texture instead of heat shimmer. Channel duration stays 1500ms. Mechanically identical, visually opposite.</p>
+</div>
+
+<div class="card">
+  <h3>poison_cloud (Plague Bearer)</h3>
+  <p><strong>90° arc, 4 tile radius</strong> — widest and shortest cone. Channel is only 800ms but the <strong>cloud lingers for 3 seconds</strong> after the channel ends as a persistent hazard zone. The cone transitions from "active spray" to "static cloud" — a semi-transparent green fog that doesn't animate directionally but slowly billows. The cloud deals 2 damage/sec to anyone standing in it. The linger mechanic means you need a <code>hazardZone</code> phase after dissipation that keeps the damage-check active even after the visual changes.</p>
+</div>
+
+<div class="card">
+  <h3>void_beam (Shadow Sentinel — if implemented as a cone variant)</h3>
+  <p>A <strong>very narrow cone (15°)</strong> that functions more like a beam. Same rendering math — just a thin pie slice. The narrow arc makes it easier to dodge sideways but devastating if you're in a corridor. Channel is shorter (1000ms) with higher tick damage. The beam visual is a solid purple line with edge glow, not a particle field — use a <code>beam</code> sub-renderer that draws a filled gradient along the cone's center axis.</p>
+</div>
+
+<script>
+// ════════════════════════════════════════════
+// LIVE DEMO — fire_breath animation
+// ════════════════════════════════════════════
+
+const canvas = document.getElementById('demoCanvas');
+const ctx = canvas.getContext('2d');
+const W = canvas.width;
+const H = canvas.height;
+const TILE = 32;
+
+let anim = null;
+let frameId = null;
+
+const C = {
+  ground: '#1a1a22',
+  grid: '#222230',
+  drake: '#AA4422',
+  drakeDark: '#882211',
+  drakeHorn: '#CCAA44',
+  player: '#4488CC',
+  playerDark: '#336699',
+  fire1: '#FFCC00',
+  fire2: '#FF6B35',
+  fire3: '#FF4400',
+  fire4: '#CC2200',
+  telegraph: '#FFAA00',
+  telegraphBorder: '#FF6B35',
+  burn: '#FF6B35',
+};
+
+function drawScene() {
+  ctx.fillStyle = C.ground;
+  ctx.fillRect(0, 0, W, H);
+  ctx.strokeStyle = C.grid;
+  ctx.lineWidth = 1;
+  for (let x = 0; x < W; x += TILE) {
+    ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, H); ctx.stroke();
+  }
+  for (let y = 0; y < H; y += TILE) {
+    ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke();
+  }
+}
+
+function drawDrake(x, y, telegraphProgress, channeling, recovery) {
+  const bodyC = recovery ? '#558844' : (channeling ? '#CC5533' : C.drake);
+  // Body (larger — this is a drake)
+  ctx.fillStyle = bodyC;
+  ctx.fillRect(x - 12, y - 16, 24, 28);
+  // Head
+  ctx.fillStyle = C.drakeDark;
+  ctx.fillRect(x - 8, y - 24, 16, 10);
+  // Horns
+  ctx.fillStyle = C.drakeHorn;
+  ctx.fillRect(x - 10, y - 28, 4, 6);
+  ctx.fillRect(x + 6, y - 28, 4, 6);
+
+  if (telegraphProgress !== null && telegraphProgress >= 0) {
+    // Head rearing back, chest glowing
+    const rear = telegraphProgress * 6;
+    ctx.fillStyle = C.fire3;
+    ctx.globalAlpha = 0.3 + telegraphProgress * 0.4;
+    ctx.fillRect(x - 6, y - 10, 12, 14);
+    ctx.globalAlpha = 1;
+  }
+
+  if (channeling) {
+    // Mouth open, fire glow on chest
+    ctx.fillStyle = C.fire1;
+    ctx.fillRect(x + 10, y - 22, 6, 4);
+    ctx.fillStyle = C.fire3;
+    ctx.globalAlpha = 0.5 + Math.sin(performance.now() / 80) * 0.3;
+    ctx.fillRect(x - 5, y - 8, 10, 12);
+    ctx.globalAlpha = 1;
+  }
+}
+
+function drawPlayer(x, y, burning) {
+  ctx.fillStyle = burning ? '#CC6644' : C.player;
+  ctx.fillRect(x - 7, y - 11, 14, 18);
+  ctx.fillStyle = burning ? '#AA5533' : C.playerDark;
+  ctx.fillRect(x - 5, y - 16, 10, 7);
+
+  if (burning) {
+    const t = performance.now() / 1000;
+    for (let i = 0; i < 3; i++) {
+      const a = t * 3 + i * Math.PI * 2 / 3;
+      const fx = x + Math.cos(a) * 10;
+      const fy = y - 2 + Math.sin(a) * 6;
+      ctx.fillStyle = C.burn;
+      ctx.fillRect(fx - 1.5, fy - 1.5, 3, 3);
+    }
+  }
+}
+
+function drawConePie(cx, cy, radius, angle, halfArc, fillColor, fillAlpha, borderColor, borderAlpha, borderWidth) {
+  ctx.save();
+  ctx.globalAlpha = fillAlpha;
+  ctx.fillStyle = fillColor;
+  ctx.beginPath();
+  ctx.moveTo(cx, cy);
+  ctx.arc(cx, cy, radius, angle - halfArc, angle + halfArc);
+  ctx.closePath();
+  ctx.fill();
+
+  if (borderColor) {
+    ctx.globalAlpha = borderAlpha;
+    ctx.strokeStyle = borderColor;
+    ctx.lineWidth = borderWidth || 2;
+    ctx.stroke();
+  }
+  ctx.restore();
+}
+
+// Flame streams
+let flameStreams = [];
+let embers = [];
+let particles = [];
+
+function initFlameStreams(cx, cy, angle, halfArc, radius) {
+  flameStreams = [];
+  for (let i = 0; i < 14; i++) {
+    flameStreams.push(spawnFlame(cx, cy, angle, halfArc, radius, Math.random()));
+  }
+}
+
+function spawnFlame(cx, cy, angle, halfArc, radius, initialProgress) {
+  const aOffset = (Math.random() - 0.5) * 2 * halfArc;
+  return {
+    dist: initialProgress * radius,
+    angleOffset: aOffset,
+    turbOffset: Math.random() * Math.PI * 2,
+    turbSpeed: 2 + Math.random() * 3,
+    cx, cy, angle, radius,
+    x: cx, y: cy,
+  };
+}
+
+function updateFlameStreams(dt, intensity) {
+  const speed = 120;
+  const turb = 20;
+  for (const f of flameStreams) {
+    f.dist += speed * (dt / 1000);
+    f.turbOffset += f.turbSpeed * (dt / 1000);
+    const fa = f.angle + f.angleOffset;
+    const tx = Math.sin(f.turbOffset) * turb;
+    const ty = Math.cos(f.turbOffset * 1.3) * turb;
+    f.x = f.cx + Math.cos(fa) * f.dist + tx;
+    f.y = f.cy + Math.sin(fa) * f.dist + ty;
+    if (f.dist >= f.radius) {
+      Object.assign(f, spawnFlame(f.cx, f.cy, f.angle, anim ? anim.halfArc : 0.524, f.radius, 0));
+    }
+  }
+}
+
+function drawFlameStreams(intensity) {
+  const colors = [C.fire1, C.fire2, C.fire3];
+  for (const f of flameStreams) {
+    const lifeRatio = f.dist / f.radius;
+    const colorIdx = Math.min(Math.floor(lifeRatio * colors.length), colors.length - 1);
+    const alpha = (1.0 - lifeRatio * 0.6) * intensity;
+    const size = 4 + lifeRatio * 6;
+    ctx.save();
+    ctx.globalAlpha = alpha;
+    ctx.fillStyle = colors[colorIdx];
+    ctx.fillRect(f.x - size/2, f.y - size/2, size, size);
+    ctx.restore();
+  }
+}
+
+function spawnEmber(cx, cy, angle, halfArc, radius) {
+  const a = angle + (Math.random() - 0.5) * 2 * halfArc;
+  const d = Math.random() * radius;
+  embers.push({
+    x: cx + Math.cos(a) * d,
+    y: cy + Math.sin(a) * d,
+    vx: (Math.random() - 0.5) * 30,
+    vy: -20 - Math.random() * 30,
+    life: 600,
+    maxLife: 600,
+  });
+}
+
+function updateEmbers(dt) {
+  for (const e of embers) {
+    e.x += e.vx * (dt / 1000);
+    e.y += e.vy * (dt / 1000);
+    e.vy -= 10 * (dt / 1000); // Float up
+    e.life -= dt;
+  }
+  embers = embers.filter(e => e.life > 0);
+}
+
+function drawEmbers() {
+  for (const e of embers) {
+    const alpha = Math.max(0, e.life / e.maxLife);
+    ctx.save();
+    ctx.globalAlpha = alpha;
+    ctx.fillStyle = C.fire1;
+    ctx.fillRect(e.x - 1, e.y - 1, 3, 3);
+    ctx.restore();
+  }
+}
+
+function updateParticles(dt) {
+  for (const p of particles) {
+    p.x += p.vx * (dt / 1000);
+    p.y += p.vy * (dt / 1000);
+    p.life -= dt;
+  }
+  particles = particles.filter(p => p.life > 0);
+}
+
+// ── Scenarios ──
+
+function playScenario(scenario) {
+  stopAnim();
+  flameStreams = [];
+  embers = [];
+  particles = [];
+
+  const drakePos = { x: 120, y: H / 2 };
+  const angle = 0; // Aiming right
+  const halfArc = (60 / 2) * (Math.PI / 180); // 30 degrees = ~0.524 rad
+  const radius = 5 * TILE;
+
+  let playerStart, playerPath;
+
+  switch (scenario) {
+    case 'full':
+    case 'telegraph_only':
+    case 'channel_only':
+      playerStart = { x: 350, y: H / 2 - 80 };
+      playerPath = null;
+      break;
+    case 'hit':
+      playerStart = { x: 300, y: H / 2 };
+      playerPath = [
+        { x: 300, y: H / 2, t: 0 },
+        { x: 320, y: H / 2 - 10, t: 2000 },
+        { x: 300, y: H / 2 + 10, t: 4000 },
+      ];
+      break;
+    case 'dodge':
+      playerStart = { x: 300, y: H / 2 + 10 };
+      playerPath = [
+        { x: 300, y: H / 2 + 10, t: 0 },
+        { x: 200, y: H / 2 + 80, t: 400 }, // dodge down
+        { x: 120, y: H / 2 + 60, t: 800 }, // circle behind
+        { x: 100, y: H / 2, t: 1200 }, // attack from behind
+        { x: 120, y: H / 2 - 20, t: 2500 },
+      ];
+      break;
+  }
+
+  anim = {
+    scenario,
+    phase: scenario === 'channel_only' ? 'channel' : 'telegraph',
+    timer: 0,
+    lastTime: performance.now(),
+    drakePos: { ...drakePos },
+    playerPos: { ...playerStart },
+    playerPath,
+    angle,
+    halfArc,
+    radius,
+    telegraphDuration: scenario === 'channel_only' ? 0 : 600,
+    channelDuration: scenario === 'telegraph_only' ? 0 : 1500,
+    recoveryDuration: 800,
+    dissipationDuration: 200,
+    tickInterval: 375,
+    tickTimer: 0,
+    ticksDealt: 0,
+    totalTicks: 4,
+    playerBurning: false,
+    burnTimer: 0,
+    damageFlashes: [],
+    emberAccum: 0,
+    channelStarted: false,
+  };
+
+  if (scenario === 'channel_only') {
+    initFlameStreams(drakePos.x, drakePos.y, angle, halfArc, radius);
+    anim.channelStarted = true;
+  }
+
+  frameId = requestAnimationFrame(tick);
+}
+
+function getPathPos(path, t) {
+  if (!path || path.length === 0) return null;
+  if (t <= path[0].t) return { x: path[0].x, y: path[0].y };
+  for (let i = 1; i < path.length; i++) {
+    if (t <= path[i].t) {
+      const s = (t - path[i-1].t) / (path[i].t - path[i-1].t);
+      return {
+        x: path[i-1].x + (path[i].x - path[i-1].x) * s,
+        y: path[i-1].y + (path[i].y - path[i-1].y) * s,
+      };
+    }
+  }
+  return { x: path[path.length-1].x, y: path[path.length-1].y };
+}
+
+function isInsideCone(px, py) {
+  if (!anim) return false;
+  const dx = px - anim.drakePos.x;
+  const dy = py - anim.drakePos.y;
+  const dist = Math.hypot(dx, dy);
+  if (dist > anim.radius) return false;
+  const pointAngle = Math.atan2(dy, dx);
+  let angleDiff = pointAngle - anim.angle;
+  while (angleDiff > Math.PI) angleDiff -= Math.PI * 2;
+  while (angleDiff < -Math.PI) angleDiff += Math.PI * 2;
+  return Math.abs(angleDiff) <= anim.halfArc;
+}
+
+function tick(now) {
+  if (!anim) return;
+  const dt = Math.min(now - anim.lastTime, 32);
+  anim.lastTime = now;
+  anim.timer += dt;
+
+  // Player path
+  if (anim.playerPath) {
+    const pathTime = anim.timer - anim.telegraphDuration;
+    if (pathTime >= 0) {
+      const pos = getPathPos(anim.playerPath, pathTime);
+      if (pos) { anim.playerPos.x = pos.x; anim.playerPos.y = pos.y; }
+    }
+  }
+
+  // Phase transitions
+  if (anim.phase === 'telegraph' && anim.timer >= anim.telegraphDuration) {
+    if (anim.channelDuration > 0) {
+      anim.phase = 'channel';
+      anim.timer = 0;
+      anim.channelStarted = true;
+      initFlameStreams(anim.drakePos.x, anim.drakePos.y, anim.angle, anim.halfArc, anim.radius);
+    } else {
+      anim.phase = 'done';
+    }
+  }
+  else if (anim.phase === 'channel' && anim.timer >= anim.channelDuration) {
+    anim.phase = 'dissipate';
+    anim.timer = 0;
+  }
+  else if (anim.phase === 'dissipate' && anim.timer >= anim.dissipationDuration + 500) {
+    anim.phase = 'recovery';
+    anim.timer = 0;
+  }
+  else if (anim.phase === 'recovery' && anim.timer >= anim.recoveryDuration) {
+    document.getElementById('phaseLabel').textContent = 'Cycle complete';
+    document.getElementById('demoHint').textContent = '';
+    anim = null; frameId = null; return;
+  }
+
+  // Channel damage ticks
+  if (anim.phase === 'channel') {
+    anim.tickTimer += dt;
+    if (anim.tickTimer >= anim.tickInterval && anim.ticksDealt < anim.totalTicks) {
+      anim.tickTimer -= anim.tickInterval;
+      anim.ticksDealt++;
+      if (isInsideCone(anim.playerPos.x, anim.playerPos.y)) {
+        anim.damageFlashes.push({ timer: 300, x: anim.playerPos.x, y: anim.playerPos.y - 20 });
+        anim.playerBurning = true;
+        anim.burnTimer = 3000;
+      }
+    }
+
+    const intensity = Math.min(anim.timer / 300, 1.0);
+    updateFlameStreams(dt, intensity);
+
+    anim.emberAccum += dt;
+    while (anim.emberAccum >= 50) {
+      anim.emberAccum -= 50;
+      spawnEmber(anim.drakePos.x, anim.drakePos.y, anim.angle, anim.halfArc, anim.radius);
+    }
+  }
+
+  if (anim.phase === 'dissipate') {
+    updateFlameStreams(dt, 0);
+  }
+
+  updateEmbers(dt);
+
+  // Burn timer
+  if (anim.playerBurning) {
+    anim.burnTimer -= dt;
+    if (anim.burnTimer <= 0) anim.playerBurning = false;
+  }
+
+  // Damage flash timers
+  anim.damageFlashes = anim.damageFlashes.filter(f => { f.timer -= dt; return f.timer > 0; });
+
+  // ── RENDER ──
+  drawScene();
+
+  // Telegraph cone (ground layer)
+  if (anim.phase === 'telegraph') {
+    const progress = Math.min(anim.timer / anim.telegraphDuration, 1.0);
+    const fadeIn = Math.min(anim.timer / 150, 1.0);
+    const pulse = fadeIn >= 1 ? 0.7 + 0.3 * Math.sin(anim.timer / 1000 * 5 * Math.PI * 2) : fadeIn;
+
+    drawConePie(
+      anim.drakePos.x, anim.drakePos.y, anim.radius,
+      anim.angle, anim.halfArc,
+      C.telegraph, 0.25 * progress * fadeIn,
+      C.telegraphBorder, pulse, 2
+    );
+  }
+
+  // Channel fire (overlay layer)
+  if (anim.phase === 'channel') {
+    const intensity = Math.min(anim.timer / 300, 1.0);
+    // Base glow
+    drawConePie(
+      anim.drakePos.x, anim.drakePos.y, anim.radius,
+      anim.angle, anim.halfArc,
+      C.fire3, 0.45 * intensity,
+      null, 0, 0
+    );
+    drawFlameStreams(intensity);
+    drawEmbers();
+  }
+
+  // Dissipation
+  if (anim.phase === 'dissipate') {
+    const fadeAlpha = Math.max(0, 1.0 - anim.timer / anim.dissipationDuration);
+    if (fadeAlpha > 0) {
+      ctx.save();
+      ctx.globalAlpha = fadeAlpha;
+      drawConePie(
+        anim.drakePos.x, anim.drakePos.y, anim.radius,
+        anim.angle, anim.halfArc,
+        C.fire3, 0.3, null, 0, 0
+      );
+      drawFlameStreams(fadeAlpha);
+      ctx.restore();
+    }
+    drawEmbers();
+
+    // Heat shimmer
+    if (anim.timer > anim.dissipationDuration && anim.timer < anim.dissipationDuration + 500) {
+      const shimmerAlpha = 0.08 * (1 - (anim.timer - anim.dissipationDuration) / 500);
+      drawConePie(
+        anim.drakePos.x, anim.drakePos.y, anim.radius,
+        anim.angle, anim.halfArc,
+        '#FFAA00', shimmerAlpha, null, 0, 0
+      );
+    }
+  }
+
+  // Drake
+  const telegraphP = anim.phase === 'telegraph' ? Math.min(anim.timer / anim.telegraphDuration, 1) : -1;
+  drawDrake(anim.drakePos.x, anim.drakePos.y, telegraphP,
+    anim.phase === 'channel', anim.phase === 'recovery');
+
+  // Player
+  drawPlayer(anim.playerPos.x, anim.playerPos.y, anim.playerBurning);
+
+  // Damage flashes
+  for (const f of anim.damageFlashes) {
+    ctx.save();
+    ctx.globalAlpha = f.timer / 300;
+    ctx.fillStyle = '#FF4444';
+    ctx.font = '10px JetBrains Mono';
+    ctx.textAlign = 'center';
+    ctx.fillText('-8', f.x, f.y - (300 - f.timer) * 0.05);
+    ctx.restore();
+  }
+
+  // Phase label
+  if (anim.phase === 'telegraph') {
+    const rem = Math.ceil(anim.telegraphDuration - anim.timer);
+    document.getElementById('phaseLabel').textContent = `TELEGRAPH — 60° cone locked, ${rem}ms to sidestep`;
+    document.getElementById('demoHint').textContent = 'Orange wedge shows the danger zone — direction is locked';
+  } else if (anim.phase === 'channel') {
+    const rem = ((anim.channelDuration - anim.timer) / 1000).toFixed(1);
+    const ticks = anim.ticksDealt;
+    document.getElementById('phaseLabel').textContent = `CHANNEL — fire active, ${rem}s remaining, ${ticks}/4 ticks dealt`;
+    document.getElementById('demoHint').textContent = anim.scenario === 'dodge'
+      ? 'Player dodges behind the Drake — safe to attack from the flank!'
+      : 'Players inside the cone take 8 damage every 375ms + burn DoT';
+  } else if (anim.phase === 'dissipate') {
+    document.getElementById('phaseLabel').textContent = 'DISSIPATE — fire fading, heat shimmer lingers';
+    document.getElementById('demoHint').textContent = '';
+  } else if (anim.phase === 'recovery') {
+    const rem = Math.ceil(anim.recoveryDuration - anim.timer);
+    document.getElementById('phaseLabel').textContent = `RECOVERY — Drake exhausted, ${rem}ms punish window`;
+    document.getElementById('demoHint').textContent = anim.playerBurning ? 'Player is still burning from the DoT!' : '';
+  }
+
+  frameId = requestAnimationFrame(tick);
+}
+
+function stopAnim() {
+  if (frameId) cancelAnimationFrame(frameId);
+  frameId = null; anim = null;
+  flameStreams = []; embers = []; particles = [];
+  ctx.fillStyle = '#1a1a22'; ctx.fillRect(0, 0, W, H);
+  document.getElementById('phaseLabel').textContent = 'Click a button to start';
+  document.getElementById('demoHint').textContent = '';
+}
+
+// ── Frame previews ──
+function drawFramePreview(containerId, frames) {
+  const container = document.getElementById(containerId);
+  container.innerHTML = '';
+  frames.forEach((frame) => {
+    const div = document.createElement('div');
+    div.className = 'sprite-frame';
+    const c = document.createElement('canvas');
+    c.width = frame.w; c.height = frame.h;
+    c.style.width = (frame.w * 2) + 'px'; c.style.height = (frame.h * 2) + 'px';
+    const fctx = c.getContext('2d');
+    fctx.fillStyle = '#08080c'; fctx.fillRect(0, 0, frame.w, frame.h);
+    frame.draw(fctx);
+    div.appendChild(c);
+    const label = document.createElement('div');
+    label.className = 'frame-label';
+    label.textContent = frame.label;
+    div.appendChild(label);
+    container.appendChild(div);
+  });
+}
+
+const HA = Math.PI * 30 / 180;
+
+drawFramePreview('telegraphFrames', [
+  { w: 100, h: 80, label: 'T=0ms (fade in)', draw: (c) => {
+    c.globalAlpha = 0.06; c.fillStyle = '#FFAA00';
+    c.beginPath(); c.moveTo(10,40); c.arc(10,40,70, -HA, HA); c.closePath(); c.fill();
+    c.globalAlpha = 0.2; c.strokeStyle = '#FF6B35'; c.lineWidth = 1; c.stroke();
+  }},
+  { w: 100, h: 80, label: 'T=200ms', draw: (c) => {
+    c.globalAlpha = 0.15; c.fillStyle = '#FFAA00';
+    c.beginPath(); c.moveTo(10,40); c.arc(10,40,70, -HA, HA); c.closePath(); c.fill();
+    c.globalAlpha = 0.7; c.strokeStyle = '#FF6B35'; c.lineWidth = 2; c.stroke();
+  }},
+  { w: 100, h: 80, label: 'T=400ms (pulse)', draw: (c) => {
+    c.globalAlpha = 0.2; c.fillStyle = '#FFAA00';
+    c.beginPath(); c.moveTo(10,40); c.arc(10,40,70, -HA, HA); c.closePath(); c.fill();
+    c.globalAlpha = 0.5; c.strokeStyle = '#FF6B35'; c.lineWidth = 2; c.stroke();
+  }},
+  { w: 100, h: 80, label: 'T=600ms (bright)', draw: (c) => {
+    c.globalAlpha = 0.25; c.fillStyle = '#FFAA00';
+    c.beginPath(); c.moveTo(10,40); c.arc(10,40,70, -HA, HA); c.closePath(); c.fill();
+    c.globalAlpha = 1.0; c.strokeStyle = '#FF6B35'; c.lineWidth = 2; c.stroke();
+  }},
+]);
+
+drawFramePreview('channelFrames', [
+  { w: 100, h: 80, label: 'Ramp-up (0-300ms)', draw: (c) => {
+    c.globalAlpha = 0.2; c.fillStyle = '#FF4400';
+    c.beginPath(); c.moveTo(10,40); c.arc(10,40,70, -HA, HA); c.closePath(); c.fill();
+    c.fillStyle = '#FFCC00'; c.fillRect(20,36,5,5); c.fillRect(30,42,4,4);
+    c.fillStyle = '#FF6B35'; c.fillRect(40,33,6,6); c.fillRect(25,46,5,5);
+  }},
+  { w: 100, h: 80, label: 'Full intensity', draw: (c) => {
+    c.globalAlpha = 0.45; c.fillStyle = '#FF4400';
+    c.beginPath(); c.moveTo(10,40); c.arc(10,40,70, -HA, HA); c.closePath(); c.fill();
+    c.fillStyle = '#FFCC00';
+    c.fillRect(18,35,6,6); c.fillRect(35,40,7,7); c.fillRect(22,45,5,5);
+    c.fillStyle = '#FF6B35';
+    c.fillRect(45,32,8,8); c.fillRect(50,44,7,7); c.fillRect(30,37,6,6);
+    c.fillRect(55,38,5,5); c.fillRect(60,42,6,6);
+    c.fillStyle = '#FF4400';
+    c.fillRect(65,35,7,8); c.fillRect(70,44,5,6);
+    c.globalAlpha = 0.8;
+    c.fillStyle = '#FFCC00'; c.fillRect(40,26,2,2); c.fillRect(55,22,2,2);
+    c.fillRect(35,52,2,2); c.fillRect(62,55,2,2);
+  }},
+  { w: 100, h: 80, label: 'Tick moment (flash)', draw: (c) => {
+    c.globalAlpha = 0.55; c.fillStyle = '#FF4400';
+    c.beginPath(); c.moveTo(10,40); c.arc(10,40,70, -HA, HA); c.closePath(); c.fill();
+    c.globalAlpha = 0.2; c.fillStyle = '#FFFFFF';
+    c.beginPath(); c.moveTo(10,40); c.arc(10,40,70, -HA, HA); c.closePath(); c.fill();
+    c.globalAlpha = 1;
+    c.fillStyle = '#FFCC00';
+    c.fillRect(20,34,7,7); c.fillRect(38,38,8,8); c.fillRect(55,35,9,9);
+    c.fillStyle = '#FF6B35';
+    c.fillRect(30,44,7,7); c.fillRect(48,43,8,8); c.fillRect(65,40,7,7);
+  }},
+  { w: 100, h: 80, label: 'Late channel', draw: (c) => {
+    c.globalAlpha = 0.4; c.fillStyle = '#FF4400';
+    c.beginPath(); c.moveTo(10,40); c.arc(10,40,70, -HA, HA); c.closePath(); c.fill();
+    c.fillStyle = '#FFCC00';
+    c.fillRect(25,37,5,5); c.fillRect(42,42,6,6); c.fillRect(58,36,7,7);
+    c.fillStyle = '#FF6B35';
+    c.fillRect(35,46,6,6); c.fillRect(50,33,5,5); c.fillRect(65,44,5,5);
+    c.fillStyle = '#CC2200';
+    c.fillRect(72,38,4,5); c.fillRect(68,48,5,4);
+  }},
+]);
+
+drawFramePreview('dissipateFrames', [
+  { w: 100, h: 80, label: 'Fading (50%)', draw: (c) => {
+    c.globalAlpha = 0.2; c.fillStyle = '#FF4400';
+    c.beginPath(); c.moveTo(10,40); c.arc(10,40,70, -HA, HA); c.closePath(); c.fill();
+    c.fillStyle = '#FF6B35'; c.globalAlpha = 0.3;
+    c.fillRect(35,38,5,5); c.fillRect(50,42,4,4);
+    c.globalAlpha = 0.6;
+    c.fillStyle = '#FFCC00'; c.fillRect(42,28,2,2); c.fillRect(55,24,2,2);
+  }},
+  { w: 100, h: 80, label: 'Heat shimmer', draw: (c) => {
+    c.globalAlpha = 0.06; c.fillStyle = '#FFAA00';
+    c.beginPath(); c.moveTo(10,40); c.arc(10,40,70, -HA, HA); c.closePath(); c.fill();
+    c.globalAlpha = 0.4;
+    c.fillStyle = '#FFCC00'; c.fillRect(38,20,2,2); c.fillRect(50,18,2,2); c.fillRect(60,22,2,2);
+  }},
+  { w: 100, h: 80, label: 'Clear', draw: (c) => {
+    c.globalAlpha = 0.3;
+    c.fillStyle = '#FFCC00'; c.fillRect(42,16,2,2); c.fillRect(56,14,2,2);
+  }},
+]);
+
+ctx.fillStyle = '#1a1a22';
+ctx.fillRect(0, 0, W, H);
+</script>
+
+</body>
+</html>

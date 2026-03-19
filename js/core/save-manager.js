@@ -1,5 +1,5 @@
 // === js/core/save-manager.js ===
-// SURVIVAL EXTRACTION UPDATE: Save/Load system with 3 slots
+// Save/Load system with 3 slots
 
 // ============================================================================
 // SAVE MANAGER
@@ -33,7 +33,6 @@ const SaveManager = {
                         deepestFloor: parsed.persistent.stats.deepestFloor,
                         gold: parsed.persistent.bank.gold,
                         deaths: parsed.persistent.stats.deaths,
-                        extractions: parsed.persistent.stats.successfulExtractions,
                         hasActiveRun: parsed.session && parsed.session.active,
                         version: parsed.version || 1
                     });

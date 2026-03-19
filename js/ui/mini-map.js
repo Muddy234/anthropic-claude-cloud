@@ -339,8 +339,7 @@ function drawMinimapTileCotDG(ctx, x, y, size, tile, colors) {
         ctx.fillStyle = '#4a4a5a';
         ctx.fillRect(x - size/2, y - size/2, size, size);
     }
-    // OLD EXIT TILE - DISABLED (using extraction points now)
-    // Render as regular floor if any legacy exit tiles exist
+    // Legacy exit tile - render as regular floor
     else if (tile.type === 'exit') {
         ctx.fillStyle = '#28283a';  // Same as floor
         ctx.fillRect(x - size/2, y - size/2, size, size);
@@ -355,92 +354,13 @@ function drawMinimapTileCotDG(ctx, x, y, size, tile, colors) {
 }
 
 /**
- * Draw entities (enemies, loot, NPCs, extraction points)
+ * Draw entities (enemies, loot, NPCs, descent markers)
  */
 function drawMinimapEntities(ctx, cx, cy, cfg, playerGridX, playerGridY, colors) {
     const pulse = Math.sin(window.minimapState.pulsePhase) * 0.3 + 0.7;
-    const fastPulse = Math.sin(window.minimapState.pulsePhase * 2) * 0.4 + 0.6;
     const radius = cfg.size / 2;
 
-    // Draw extraction points FIRST (so they're behind other entities but very visible)
-    const extractionPoints = (typeof ExtractionSystem !== 'undefined' && ExtractionSystem.points)
-        ? ExtractionSystem.points
-        : (sessionState?.extractionPoints || []);
-
-    for (const point of extractionPoints) {
-        // Skip collapsed points
-        if (point.status === 'collapsed') continue;
-
-        const pointX = Math.floor(point.x || point.gridX);
-        const pointY = Math.floor(point.y || point.gridY);
-
-        const dx = pointX - playerGridX;
-        const dy = pointY - playerGridY;
-        const dist = Math.sqrt(dx * dx + dy * dy) * cfg.tileSize;
-
-        if (dist > radius - 5) continue;
-
-        const minimapX = cx + (dx * cfg.tileSize);
-        const minimapY = cy + (dy * cfg.tileSize);
-
-        // Determine color based on status
-        let pointColor = '#00ffff'; // Cyan for active
-        let glowColor = '#00ffff';
-        let pointPulse = pulse;
-
-        if (point.status === 'warning' || point.isWarning?.()) {
-            pointColor = '#ffaa00'; // Orange for warning
-            glowColor = '#ff6600';
-            pointPulse = fastPulse; // Faster pulse
-        } else if (point.status === 'collapsing') {
-            pointColor = '#ff0000'; // Red for collapsing
-            glowColor = '#ff0000';
-            pointPulse = Math.random() > 0.5 ? 1 : 0.3; // Flashing
-        }
-
-        // Draw extraction point with strong glow
-        ctx.save();
-
-        // Outer glow ring
-        ctx.shadowColor = glowColor;
-        ctx.shadowBlur = 12;
-        ctx.strokeStyle = pointColor;
-        ctx.lineWidth = 2;
-        ctx.globalAlpha = pointPulse;
-        ctx.beginPath();
-        ctx.arc(minimapX, minimapY, cfg.tileSize * 1.8, 0, Math.PI * 2);
-        ctx.stroke();
-
-        // Inner filled circle
-        ctx.shadowBlur = 8;
-        ctx.fillStyle = pointColor;
-        ctx.globalAlpha = pointPulse * 0.8;
-        ctx.beginPath();
-        ctx.arc(minimapX, minimapY, cfg.tileSize * 1.2, 0, Math.PI * 2);
-        ctx.fill();
-
-        // Center dot
-        ctx.shadowBlur = 0;
-        ctx.fillStyle = '#ffffff';
-        ctx.globalAlpha = 1;
-        ctx.beginPath();
-        ctx.arc(minimapX, minimapY, cfg.tileSize * 0.4, 0, Math.PI * 2);
-        ctx.fill();
-
-        // Up arrow indicator (shows it's an exit)
-        ctx.fillStyle = '#ffffff';
-        ctx.globalAlpha = pointPulse;
-        ctx.beginPath();
-        ctx.moveTo(minimapX, minimapY - cfg.tileSize * 2.5);
-        ctx.lineTo(minimapX - cfg.tileSize * 0.6, minimapY - cfg.tileSize * 1.5);
-        ctx.lineTo(minimapX + cfg.tileSize * 0.6, minimapY - cfg.tileSize * 1.5);
-        ctx.closePath();
-        ctx.fill();
-
-        ctx.restore();
-    }
-
-    // Draw path down / descent location (purple, separate from extraction)
+    // Draw path down / descent location (purple)
     let descentX = null, descentY = null;
     let descentRevealed = false;
 
@@ -707,92 +627,217 @@ function drawPlayerMarker(ctx, cx, cy, cfg, colors) {
 }
 
 /**
- * Draw minimap frame (border, decorations)
+ * Draw minimap frame (border, decorations) - Ornate Occult Compass Style
  */
 function drawMinimapFrame(ctx, cx, cy, radius, cfg, colors) {
-    // Outer border ring
-    ctx.strokeStyle = colors.border || '#3a3a4a';
-    ctx.lineWidth = cfg.borderWidth;
+    // Get design system colors
+    const frameGold = typeof UI_COLORS !== 'undefined' ? UI_COLORS.frameGold : '#b8860b';
+    const frameGoldBright = typeof UI_COLORS !== 'undefined' ? UI_COLORS.frameGoldBright : '#daa520';
+    const frameGoldDark = typeof UI_COLORS !== 'undefined' ? UI_COLORS.frameGoldDark : '#8b6914';
+
+    ctx.save();
+
+    // === OUTER ORNATE FRAME ===
+    // Dark stone outer ring
+    ctx.strokeStyle = '#1a1816';
+    ctx.lineWidth = 8;
+    ctx.beginPath();
+    ctx.arc(cx, cy, radius + 2, 0, Math.PI * 2);
+    ctx.stroke();
+
+    // Gold border ring (main frame)
+    const frameGrad = ctx.createLinearGradient(cx - radius, cy - radius, cx + radius, cy + radius);
+    frameGrad.addColorStop(0, frameGoldBright);
+    frameGrad.addColorStop(0.3, frameGold);
+    frameGrad.addColorStop(0.7, frameGoldDark);
+    frameGrad.addColorStop(1, frameGold);
+    ctx.strokeStyle = frameGrad;
+    ctx.lineWidth = 4;
     ctx.beginPath();
     ctx.arc(cx, cy, radius, 0, Math.PI * 2);
     ctx.stroke();
 
-    // Inner accent ring
-    ctx.strokeStyle = 'rgba(255, 255, 255, 0.1)';
-    ctx.lineWidth = 1;
+    // Inner dark ring
+    ctx.strokeStyle = '#0a0908';
+    ctx.lineWidth = 2;
     ctx.beginPath();
-    ctx.arc(cx, cy, radius - 4, 0, Math.PI * 2);
+    ctx.arc(cx, cy, radius - 3, 0, Math.PI * 2);
     ctx.stroke();
 
-    // Scan line (rotating radar effect)
+    // Subtle inner glow ring
+    ctx.strokeStyle = 'rgba(184, 134, 11, 0.2)';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.arc(cx, cy, radius - 5, 0, Math.PI * 2);
+    ctx.stroke();
+
+    // === DECORATIVE CORNER FLOURISHES ===
+    const cornerDist = radius + 1;
+    const flourishSize = 12;
+
+    // Draw ornate diamond markers at cardinal points
+    for (let i = 0; i < 4; i++) {
+        const angle = (i * Math.PI / 2) - Math.PI / 2; // N, E, S, W
+        const fx = cx + Math.cos(angle) * cornerDist;
+        const fy = cy + Math.sin(angle) * cornerDist;
+
+        ctx.save();
+        ctx.translate(fx, fy);
+        ctx.rotate(angle + Math.PI / 2);
+
+        // Outer diamond (gold)
+        ctx.fillStyle = frameGold;
+        ctx.beginPath();
+        ctx.moveTo(0, -flourishSize / 2);
+        ctx.lineTo(flourishSize / 3, 0);
+        ctx.lineTo(0, flourishSize / 2);
+        ctx.lineTo(-flourishSize / 3, 0);
+        ctx.closePath();
+        ctx.fill();
+
+        // Inner diamond (dark)
+        ctx.fillStyle = '#1a1816';
+        ctx.beginPath();
+        ctx.moveTo(0, -flourishSize / 4);
+        ctx.lineTo(flourishSize / 6, 0);
+        ctx.lineTo(0, flourishSize / 4);
+        ctx.lineTo(-flourishSize / 6, 0);
+        ctx.closePath();
+        ctx.fill();
+
+        ctx.restore();
+    }
+
+    // === DIAGONAL DECORATIVE NOTCHES ===
+    for (let i = 0; i < 4; i++) {
+        const angle = (i * Math.PI / 2) + Math.PI / 4; // NE, SE, SW, NW
+        const nx = cx + Math.cos(angle) * (radius - 2);
+        const ny = cy + Math.sin(angle) * (radius - 2);
+
+        ctx.fillStyle = frameGoldDark;
+        ctx.beginPath();
+        ctx.arc(nx, ny, 3, 0, Math.PI * 2);
+        ctx.fill();
+    }
+
+    // === SCAN LINE (rotating radar effect) ===
     const scanAngle = window.minimapState.scanAngle;
     ctx.save();
     ctx.translate(cx, cy);
     ctx.rotate(scanAngle);
 
     // Gradient for scan line fade
-    const scanGrad = ctx.createLinearGradient(0, 0, radius - 5, 0);
+    const scanGrad = ctx.createLinearGradient(0, 0, radius - 8, 0);
     scanGrad.addColorStop(0, 'rgba(142, 68, 173, 0)');
     scanGrad.addColorStop(0.5, 'rgba(142, 68, 173, 0.3)');
-    scanGrad.addColorStop(1, 'rgba(142, 68, 173, 0.6)');
+    scanGrad.addColorStop(1, 'rgba(142, 68, 173, 0.7)');
 
     ctx.strokeStyle = scanGrad;
     ctx.lineWidth = 2;
     ctx.beginPath();
     ctx.moveTo(0, 0);
-    ctx.lineTo(radius - 5, 0);
+    ctx.lineTo(radius - 8, 0);
     ctx.stroke();
 
-    // Scan fade trail
-    ctx.globalAlpha = 0.15;
+    // Scan fade trail (wedge)
+    ctx.globalAlpha = 0.12;
     ctx.fillStyle = colors.corruption || '#8e44ad';
     ctx.beginPath();
     ctx.moveTo(0, 0);
-    ctx.arc(0, 0, radius - 5, -0.3, 0);
+    ctx.arc(0, 0, radius - 8, -0.4, 0);
     ctx.closePath();
     ctx.fill();
     ctx.globalAlpha = 1;
 
     ctx.restore();
 
-    // Corner decorations
-    const cornerDist = radius * 0.85;
-    const cornerSize = 6;
-    ctx.fillStyle = colors.border || '#3a3a4a';
+    // === CENTRAL RUNE PATTERN (enhanced) ===
+    ctx.strokeStyle = 'rgba(184, 134, 11, 0.15)';
+    ctx.lineWidth = 1;
 
-    // N
-    ctx.beginPath();
-    ctx.arc(cx, cy - cornerDist, cornerSize / 2, 0, Math.PI * 2);
-    ctx.fill();
-    // S
-    ctx.beginPath();
-    ctx.arc(cx, cy + cornerDist, cornerSize / 2, 0, Math.PI * 2);
-    ctx.fill();
-    // E
-    ctx.beginPath();
-    ctx.arc(cx + cornerDist, cy, cornerSize / 2, 0, Math.PI * 2);
-    ctx.fill();
-    // W
-    ctx.beginPath();
-    ctx.arc(cx - cornerDist, cy, cornerSize / 2, 0, Math.PI * 2);
-    ctx.fill();
+    // Inner concentric rings with tick marks
+    for (let r = 0.3; r <= 0.6; r += 0.3) {
+        ctx.beginPath();
+        ctx.arc(cx, cy, radius * r, 0, Math.PI * 2);
+        ctx.stroke();
+    }
+
+    // Tick marks around inner ring
+    ctx.strokeStyle = 'rgba(184, 134, 11, 0.2)';
+    for (let i = 0; i < 8; i++) {
+        const tickAngle = (i * Math.PI / 4);
+        const innerR = radius * 0.25;
+        const outerR = radius * 0.35;
+        ctx.beginPath();
+        ctx.moveTo(cx + Math.cos(tickAngle) * innerR, cy + Math.sin(tickAngle) * innerR);
+        ctx.lineTo(cx + Math.cos(tickAngle) * outerR, cy + Math.sin(tickAngle) * outerR);
+        ctx.stroke();
+    }
+
+    ctx.restore();
 }
 
 /**
- * Draw compass labels
+ * Draw compass labels - Ornate Gold Cardinal Markers
  */
 function drawMinimapCompass(ctx, cx, cy, radius, colors) {
-    ctx.font = 'bold 9px monospace';
+    // Get design system colors
+    const frameGold = typeof UI_COLORS !== 'undefined' ? UI_COLORS.frameGold : '#b8860b';
+    const frameGoldBright = typeof UI_COLORS !== 'undefined' ? UI_COLORS.frameGoldBright : '#daa520';
+    const textMuted = typeof UI_COLORS !== 'undefined' ? UI_COLORS.textMuted : '#706850';
+
+    const labelDist = radius + 14;
+
+    ctx.save();
+
+    // North indicator (prominent, larger)
+    ctx.font = 'bold 11px serif';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.fillStyle = colors.textMuted || '#666666';
 
-    const labelDist = radius + 10;
-
+    // N with glow
+    ctx.shadowColor = frameGold;
+    ctx.shadowBlur = 4;
+    ctx.fillStyle = frameGoldBright;
     ctx.fillText('N', cx, cy - labelDist);
+    ctx.shadowBlur = 0;
+
+    // Small arrow above N
+    ctx.fillStyle = frameGold;
+    ctx.beginPath();
+    ctx.moveTo(cx, cy - labelDist - 10);
+    ctx.lineTo(cx - 4, cy - labelDist - 5);
+    ctx.lineTo(cx + 4, cy - labelDist - 5);
+    ctx.closePath();
+    ctx.fill();
+
+    // Other cardinals (smaller, more muted)
+    ctx.font = 'bold 9px serif';
+    ctx.fillStyle = textMuted;
+
     ctx.fillText('S', cx, cy + labelDist);
     ctx.fillText('E', cx + labelDist, cy);
     ctx.fillText('W', cx - labelDist, cy);
+
+    // Small dots for intercardinal directions
+    ctx.fillStyle = 'rgba(184, 134, 11, 0.3)';
+    const interDist = labelDist - 4;
+    const diagOffset = interDist * 0.707; // cos(45°)
+
+    ctx.beginPath();
+    ctx.arc(cx + diagOffset, cy - diagOffset, 2, 0, Math.PI * 2); // NE
+    ctx.fill();
+    ctx.beginPath();
+    ctx.arc(cx + diagOffset, cy + diagOffset, 2, 0, Math.PI * 2); // SE
+    ctx.fill();
+    ctx.beginPath();
+    ctx.arc(cx - diagOffset, cy + diagOffset, 2, 0, Math.PI * 2); // SW
+    ctx.fill();
+    ctx.beginPath();
+    ctx.arc(cx - diagOffset, cy - diagOffset, 2, 0, Math.PI * 2); // NW
+    ctx.fill();
+
+    ctx.restore();
 }
 
 // Export

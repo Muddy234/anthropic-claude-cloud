@@ -3,8 +3,16 @@
 // Uses layered pixel sprites (warrior design) with equipment rendering
 // Falls back to spritesheet system if pixel sprites unavailable
 
-// Flag to track which system to use
+// Flags to track which system to use
+let useUVMapSprites = false;
+let useBodypartSprites = false;
 let usePixelSprites = false;
+
+// UV-map renderer instance (created in init if available)
+let PlayerUVMapRenderer = null;
+
+// Bodypart renderer instance (created in init if available)
+let PlayerBodypartRenderer = null;
 
 // Spritesheet configuration (fallback)
 const PLAYER_SPRITESHEET_CONFIG = {
@@ -37,21 +45,51 @@ const playerSpritesheets = {
     right: new Image()
 };
 
-// Check for pixel sprite system availability
+// Check for sprite system availability (priority: uvmap > bodypart > pixel > spritesheet)
 function initPlayerSpriteSystem() {
-    // Check if pixel sprite system is loaded
+    // Priority 0: UV-map animation generator system
+    if (typeof AnimationGeneratorRegistry !== 'undefined' &&
+        AnimationGeneratorRegistry.has('humanoid') &&
+        typeof UVMapRenderer !== 'undefined' &&
+        typeof HUMANOID_SKINS !== 'undefined') {
+        PlayerUVMapRenderer = new UVMapRenderer('humanoid', 'default');
+        useUVMapSprites = true;
+        window.useUVMapSprites = true;
+        window.PlayerUVMapRenderer = PlayerUVMapRenderer;
+        console.log('Using UV-map animation generator (humanoid) for player');
+        return;
+    }
+
+    // Priority 1: Bodypart layered sprite system
+    if (typeof BODY_PART_SPRITES !== 'undefined' &&
+        typeof BodypartRenderer !== 'undefined' &&
+        typeof BODYPART_SPRITE_CONFIG !== 'undefined' &&
+        typeof BODYPART_WALK_ANIMATION !== 'undefined') {
+        PlayerBodypartRenderer = new BodypartRenderer();
+        useBodypartSprites = true;
+        window.useBodypartSprites = true;
+        window.PlayerBodypartRenderer = PlayerBodypartRenderer;
+        console.log('✅ Using bodypart sprite system for player');
+        return;
+    }
+
+    // Priority 2: Single-composite pixel sprite system
     if (typeof PLAYER_SPRITES !== 'undefined' &&
         typeof PlayerSpriteRenderer !== 'undefined' &&
         typeof PLAYER_SPRITE_CONFIG !== 'undefined') {
         usePixelSprites = true;
-        window.usePixelSprites = true;  // Update global export
+        window.usePixelSprites = true;
         console.log('✅ Using pixel sprite system for player');
-    } else {
-        usePixelSprites = false;
-        window.usePixelSprites = false;
-        console.log('⚠️ Pixel sprites not available, loading spritesheets as fallback');
-        loadPlayerSpritesheets();
+        return;
     }
+
+    // Priority 3: Spritesheet fallback
+    usePixelSprites = false;
+    useBodypartSprites = false;
+    window.usePixelSprites = false;
+    window.useBodypartSprites = false;
+    console.log('⚠️ Pixel sprites not available, loading spritesheets as fallback');
+    loadPlayerSpritesheets();
 }
 
 // Load spritesheets (fallback system)
@@ -103,6 +141,34 @@ function updatePlayerAnimation(deltaTime) {
     if (!game.player) return;
 
     const player = game.player;
+
+    // Use UV-map animation generator if available
+    if (useUVMapSprites && PlayerUVMapRenderer) {
+        PlayerUVMapRenderer.setDirection(player.facing || 'down');
+        if (player.isAttacking) {
+            PlayerUVMapRenderer.setState('attacking');
+        } else if (player.isMoving) {
+            PlayerUVMapRenderer.setState('walking');
+        } else {
+            PlayerUVMapRenderer.setState('idle');
+        }
+        PlayerUVMapRenderer.update(deltaTime);
+        return;
+    }
+
+    // Use bodypart sprite system if available
+    if (useBodypartSprites && PlayerBodypartRenderer) {
+        PlayerBodypartRenderer.setDirection(player.facing || 'down');
+        if (player.isAttacking) {
+            PlayerBodypartRenderer.setState('attacking');
+        } else if (player.isMoving) {
+            PlayerBodypartRenderer.setState('walking');
+        } else {
+            PlayerBodypartRenderer.setState('idle');
+        }
+        PlayerBodypartRenderer.update(deltaTime);
+        return;
+    }
 
     // Use pixel sprite system if available
     if (usePixelSprites && typeof PlayerSpriteRenderer !== 'undefined') {
@@ -157,8 +223,20 @@ function drawPlayerSprite(ctx, screenX, screenY, tileSize) {
             ctx.globalAlpha = ghost.alpha;
             ctx.filter = 'hue-rotate(200deg) brightness(1.2)';
 
-            // Use pixel sprites for ghosts if available
-            if (usePixelSprites && typeof PlayerSpriteRenderer !== 'undefined') {
+            // Use UV-map sprites for ghosts if available
+            if (useUVMapSprites && PlayerUVMapRenderer) {
+                const ghostDir = ghost.facing || 'down';
+                PlayerUVMapRenderer.draw(ctx, ghostScreenX, ghostScreenY, tileSize, ghostDir);
+            }
+            // Use bodypart sprites for ghosts if available
+            else if (useBodypartSprites && PlayerBodypartRenderer) {
+                const ghostDir = ghost.facing || 'down';
+                const bpScale = tileSize / 32 * 1.3;
+                const bpDrawSize = 32 * bpScale;
+                const bpOffX = (tileSize - bpDrawSize) / 2;
+                const bpOffY = (tileSize - bpDrawSize) / 2;
+                PlayerBodypartRenderer.draw(ctx, ghostScreenX + bpOffX, ghostScreenY + bpOffY, bpScale, ghostDir);
+            } else if (usePixelSprites && typeof PlayerSpriteRenderer !== 'undefined') {
                 const ghostPlayer = { ...player, facing: ghost.facing || 'down' };
                 PlayerSpriteRenderer.draw(ctx, ghostPlayer, ghostScreenX, ghostScreenY, tileSize);
             } else {
@@ -198,6 +276,24 @@ function drawPlayerSprite(ctx, screenX, screenY, tileSize) {
     if (isDashing || hasIframes) {
         ctx.save();
         ctx.globalAlpha = 0.5;
+    }
+
+    // Use UV-map animation generator if available
+    if (useUVMapSprites && PlayerUVMapRenderer) {
+        PlayerUVMapRenderer.draw(ctx, screenX, screenY, tileSize);
+        if (isDashing || hasIframes) ctx.restore();
+        return;
+    }
+
+    // Use bodypart sprite system if available
+    if (useBodypartSprites && PlayerBodypartRenderer) {
+        const bpScale = tileSize / 32 * 1.3;
+        const bpDrawSize = 32 * bpScale;
+        const bpOffX = (tileSize - bpDrawSize) / 2;
+        const bpOffY = (tileSize - bpDrawSize) / 2;
+        PlayerBodypartRenderer.draw(ctx, screenX + bpOffX, screenY + bpOffY, bpScale);
+        if (isDashing || hasIframes) ctx.restore();
+        return;
     }
 
     // Use pixel sprite system if available
@@ -283,7 +379,9 @@ window.updatePlayerAnimation = updatePlayerAnimation;
 window.drawPlayerSprite = drawPlayerSprite;
 window.playerSpritesheets = playerSpritesheets;
 window.PLAYER_SPRITESHEET_CONFIG = PLAYER_SPRITESHEET_CONFIG;
+window.useUVMapSprites = useUVMapSprites;
 window.usePixelSprites = usePixelSprites;
+window.useBodypartSprites = useBodypartSprites;
 window.initPlayerSpriteSystem = initPlayerSpriteSystem;
 
 console.log('✅ Player animation system loaded');

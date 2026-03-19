@@ -1,76 +1,448 @@
 // ============================================================================
-// ARMOR - DEFENSE (Shields + Head + Chest)
+// THE SHIFTING CHASM - ARMOR SYSTEM
+// ============================================================================
+// 80 Armor Pieces: 5 player types x 4 slots x 4 rarities
+// 5 Shields: Common through Legendary
+// 4 Legendary Armor Pieces: One per slot
 // ============================================================================
 
-const DEFENSE_ARMOR = {
+// ============================================================================
+// BASE STATS CONFIGURATION
+// ============================================================================
 
-// === SHIELDS (24) === [Heavy (armored/stone): pDef+STR | Light (hide/scaled/bone): AGI+pDef | Cloth (ethereal): INT+mDef]
-'wooden_shield': { id: 'wooden_shield', name: 'Wooden Shield', slot: 'OFF', armorType: 'hide', rarity: 'common', stats: { defense: 2, block: 0.15, str: 0, agi: 2, int: 0, pDef: 1, mDef: 0 }, element: null, elementPower: 0, noise: { onMove: 5 }, goldValue: 15 },
-'iron_shield': { id: 'iron_shield', name: 'Iron Shield', slot: 'OFF', armorType: 'armored', rarity: 'common', stats: { defense: 3, block: 0.20, str: 1, agi: 0, int: 0, pDef: 2, mDef: 0 }, element: null, elementPower: 0, noise: { onMove: 10 }, goldValue: 35 },
-'steel_shield': { id: 'steel_shield', name: 'Steel Shield', slot: 'OFF', armorType: 'armored', rarity: 'uncommon', stats: { defense: 4, block: 0.25, str: 2, agi: 0, int: 0, pDef: 4, mDef: 0 }, element: null, elementPower: 0, noise: { onMove: 10 }, goldValue: 80 },
-'tower_shield': { id: 'tower_shield', name: 'Tower Shield', slot: 'OFF', armorType: 'armored', rarity: 'uncommon', stats: { defense: 6, block: 0.35, str: 2, agi: 0, int: 0, pDef: 4, mDef: 0 }, element: null, elementPower: 0, special: { speedPenalty: -0.10 }, noise: { onMove: 15 }, goldValue: 100 },
-'hide_shield': { id: 'hide_shield', name: 'Hide Shield', slot: 'OFF', armorType: 'hide', rarity: 'uncommon', stats: { defense: 3, block: 0.20, str: 0, agi: 4, int: 0, pDef: 2, mDef: 0 }, element: null, elementPower: 0, noise: { onMove: 5 }, goldValue: 70 },
-'bone_buckler': { id: 'bone_buckler', name: 'Bone Buckler', slot: 'OFF', armorType: 'bone', rarity: 'uncommon', stats: { defense: 2, block: 0.18, str: 0, agi: 4, int: 0, pDef: 2, mDef: 0 }, element: 'death', elementPower: 2, noise: { onMove: 5 }, goldValue: 75 },
-'spiked_shield': { id: 'spiked_shield', name: 'Spiked Shield', slot: 'OFF', armorType: 'armored', rarity: 'uncommon', stats: { defense: 3, block: 0.20, str: 2, agi: 0, int: 0, pDef: 4, mDef: 0 }, element: null, elementPower: 0, special: { reflectDmg: 3 }, noise: { onMove: 10 }, goldValue: 85 },
-'ember_buckler': { id: 'ember_buckler', name: 'Ember Buckler', slot: 'OFF', armorType: 'scaled', rarity: 'uncommon', stats: { defense: 3, block: 0.20, str: 0, agi: 4, int: 0, pDef: 2, mDef: 0 }, element: 'fire', elementPower: 2, noise: { onMove: 5 }, goldValue: 85 },
-'frost_guard': { id: 'frost_guard', name: 'Frost Guard', slot: 'OFF', armorType: 'scaled', rarity: 'uncommon', stats: { defense: 4, block: 0.22, str: 0, agi: 4, int: 0, pDef: 2, mDef: 0 }, element: 'ice', elementPower: 2, noise: { onMove: 5 }, goldValue: 90 },
-'coral_shield': { id: 'coral_shield', name: 'Coral Shield', slot: 'OFF', armorType: 'scaled', rarity: 'uncommon', stats: { defense: 3, block: 0.22, str: 0, agi: 4, int: 0, pDef: 2, mDef: 0 }, element: 'water', elementPower: 2, noise: { onMove: 5 }, goldValue: 85 },
-'stone_bulwark': { id: 'stone_bulwark', name: 'Stone Bulwark', slot: 'OFF', armorType: 'stone', rarity: 'uncommon', stats: { defense: 5, block: 0.25, str: 2, agi: 0, int: 0, pDef: 4, mDef: 0 }, element: 'earth', elementPower: 2, special: { speedPenalty: -0.05 }, noise: { onMove: 10 }, goldValue: 95 },
-'templar_shield': { id: 'templar_shield', name: 'Templar Shield', slot: 'OFF', armorType: 'armored', rarity: 'rare', stats: { defense: 5, block: 0.25, str: 4, agi: 0, int: 0, pDef: 7, mDef: 0 }, element: 'holy', elementPower: 3, noise: { onMove: 10 }, goldValue: 165 },
-'volcanic_aegis': { id: 'volcanic_aegis', name: 'Volcanic Aegis', slot: 'OFF', armorType: 'scaled', rarity: 'rare', stats: { defense: 4, block: 0.22, str: 0, agi: 7, int: 0, pDef: 4, mDef: 0 }, element: 'fire', elementPower: 3, noise: { onMove: 5 }, goldValue: 160 },
-'glacial_ward': { id: 'glacial_ward', name: 'Glacial Ward', slot: 'OFF', armorType: 'scaled', rarity: 'rare', stats: { defense: 5, block: 0.24, str: 0, agi: 7, int: 0, pDef: 4, mDef: 0 }, element: 'ice', elementPower: 3, noise: { onMove: 5 }, goldValue: 165 },
-'tidal_barrier': { id: 'tidal_barrier', name: 'Tidal Barrier', slot: 'OFF', armorType: 'scaled', rarity: 'rare', stats: { defense: 4, block: 0.23, str: 0, agi: 7, int: 0, pDef: 4, mDef: 0 }, element: 'water', elementPower: 3, noise: { onMove: 5 }, goldValue: 155 },
-'crystal_barrier': { id: 'crystal_barrier', name: 'Crystal Barrier', slot: 'OFF', armorType: 'stone', rarity: 'rare', stats: { defense: 5, block: 0.28, str: 4, agi: 0, int: 0, pDef: 7, mDef: 0 }, element: 'earth', elementPower: 3, noise: { onMove: 10 }, goldValue: 175 },
-'spell_ward': { id: 'spell_ward', name: 'Spell Ward', slot: 'OFF', armorType: 'ethereal', rarity: 'rare', stats: { defense: 3, block: 0.20, str: 0, agi: 0, int: 7, pDef: 0, mDef: 4 }, element: 'arcane', elementPower: 3, noise: { onMove: 0 }, goldValue: 160 },
-'shadow_buckler': { id: 'shadow_buckler', name: 'Shadow Buckler', slot: 'OFF', armorType: 'hide', rarity: 'rare', stats: { defense: 3, block: 0.18, str: 0, agi: 7, int: 0, pDef: 4, mDef: 0 }, element: 'dark', elementPower: 3, special: { noiseReduction: 0.20 }, noise: { onMove: 0 }, goldValue: 155 },
-'fortress_shield': { id: 'fortress_shield', name: 'Fortress Shield', slot: 'OFF', armorType: 'armored', rarity: 'epic', stats: { defense: 8, block: 0.40, str: 7, agi: 0, int: 0, pDef: 11, mDef: 0 }, element: null, elementPower: 0, special: { speedPenalty: -0.20 }, noise: { onMove: 20 }, goldValue: 350 },
-'infernal_bulwark': { id: 'infernal_bulwark', name: 'Infernal Bulwark', slot: 'OFF', armorType: 'scaled', rarity: 'epic', stats: { defense: 6, block: 0.30, str: 0, agi: 11, int: 0, pDef: 7, mDef: 0 }, element: 'fire', elementPower: 5, noise: { onMove: 10 }, goldValue: 340 },
-'sanctified_aegis': { id: 'sanctified_aegis', name: 'Sanctified Aegis', slot: 'OFF', armorType: 'armored', rarity: 'epic', stats: { defense: 7, block: 0.32, str: 7, agi: 0, int: 0, pDef: 11, mDef: 0 }, element: 'holy', elementPower: 5, noise: { onMove: 10 }, goldValue: 360 },
-'abyssal_shield': { id: 'abyssal_shield', name: 'Abyssal Shield', slot: 'OFF', armorType: 'ethereal', rarity: 'epic', stats: { defense: 5, block: 0.28, str: 0, agi: 0, int: 11, pDef: 0, mDef: 7 }, element: 'dark', elementPower: 5, special: { noiseReduction: 0.25 }, noise: { onMove: 0 }, goldValue: 345 },
-'worldstone_shield': { id: 'worldstone_shield', name: 'Worldstone Shield', slot: 'OFF', armorType: 'stone', rarity: 'epic', stats: { defense: 8, block: 0.35, str: 7, agi: 0, int: 0, pDef: 11, mDef: 0 }, element: 'earth', elementPower: 5, special: { speedPenalty: -0.15 }, noise: { onMove: 15 }, goldValue: 380 },
-'voidwall': { id: 'voidwall', name: 'Voidwall', slot: 'OFF', armorType: 'ethereal', rarity: 'epic', stats: { defense: 4, block: 0.25, str: 0, agi: 0, int: 11, pDef: 0, mDef: 7 }, element: 'dark', elementPower: 5, noise: { onMove: 0 }, goldValue: 330 },
-
-// === HEAD (18) ===
-'cloth_hood': { id: 'cloth_hood', name: 'Cloth Hood', slot: 'HEAD', armorType: 'unarmored', rarity: 'common', stats: { defense: 1, str: 0, agi: 0, int: 2, pDef: 0, mDef: 1 }, element: null, elementPower: 0, noise: { onMove: 0 }, goldValue: 10 },
-'leather_cap': { id: 'leather_cap', name: 'Leather Cap', slot: 'HEAD', armorType: 'hide', rarity: 'common', stats: { defense: 2, str: 0, agi: 2, int: 0, pDef: 1, mDef: 0 }, element: null, elementPower: 0, noise: { onMove: 0 }, goldValue: 25 },
-'iron_helm': { id: 'iron_helm', name: 'Iron Helm', slot: 'HEAD', armorType: 'armored', rarity: 'uncommon', stats: { defense: 4, str: 2, agi: 0, int: 0, pDef: 4, mDef: 0 }, element: null, elementPower: 0, noise: { onMove: 5 }, goldValue: 70 },
-'steel_helm': { id: 'steel_helm', name: 'Steel Helm', slot: 'HEAD', armorType: 'armored', rarity: 'uncommon', stats: { defense: 5, str: 2, agi: 0, int: 0, pDef: 4, mDef: 0 }, element: null, elementPower: 0, special: { staggerResist: 0.10 }, noise: { onMove: 5 }, goldValue: 85 },
-'bone_helm': { id: 'bone_helm', name: 'Bone Helm', slot: 'HEAD', armorType: 'bone', rarity: 'uncommon', stats: { defense: 3, str: 0, agi: 4, int: 0, pDef: 2, mDef: 0 }, element: 'death', elementPower: 2, noise: { onMove: 0 }, goldValue: 75 },
-'ember_cowl': { id: 'ember_cowl', name: 'Ember Cowl', slot: 'HEAD', armorType: 'hide', rarity: 'uncommon', stats: { defense: 3, str: 0, agi: 4, int: 0, pDef: 2, mDef: 0 }, element: 'fire', elementPower: 2, noise: { onMove: 0 }, goldValue: 80 },
-'frost_hood': { id: 'frost_hood', name: 'Frost Hood', slot: 'HEAD', armorType: 'hide', rarity: 'uncommon', stats: { defense: 3, str: 0, agi: 4, int: 0, pDef: 2, mDef: 0 }, element: 'ice', elementPower: 2, noise: { onMove: 0 }, goldValue: 80 },
-'coral_helm': { id: 'coral_helm', name: 'Coral Helm', slot: 'HEAD', armorType: 'scaled', rarity: 'uncommon', stats: { defense: 3, str: 0, agi: 4, int: 0, pDef: 2, mDef: 0 }, element: 'water', elementPower: 2, noise: { onMove: 0 }, goldValue: 80 },
-'stone_cap': { id: 'stone_cap', name: 'Stone Cap', slot: 'HEAD', armorType: 'stone', rarity: 'uncommon', stats: { defense: 4, str: 2, agi: 0, int: 0, pDef: 4, mDef: 0 }, element: 'earth', elementPower: 2, noise: { onMove: 5 }, goldValue: 85 },
-'shadow_mask': { id: 'shadow_mask', name: 'Shadow Mask', slot: 'HEAD', armorType: 'hide', rarity: 'uncommon', stats: { defense: 2, str: 0, agi: 4, int: 0, pDef: 2, mDef: 0 }, element: 'dark', elementPower: 2, special: { noiseReduction: 0.20 }, noise: { onMove: 0 }, goldValue: 85 },
-'blessed_coif': { id: 'blessed_coif', name: 'Blessed Coif', slot: 'HEAD', armorType: 'hide', rarity: 'rare', stats: { defense: 4, str: 0, agi: 7, int: 0, pDef: 4, mDef: 0 }, element: 'holy', elementPower: 3, noise: { onMove: 0 }, goldValue: 150 },
-'volcanic_helm': { id: 'volcanic_helm', name: 'Volcanic Helm', slot: 'HEAD', armorType: 'scaled', rarity: 'rare', stats: { defense: 5, str: 0, agi: 7, int: 0, pDef: 4, mDef: 0 }, element: 'fire', elementPower: 3, noise: { onMove: 5 }, goldValue: 160 },
-'glacial_crown': { id: 'glacial_crown', name: 'Glacial Crown', slot: 'HEAD', armorType: 'scaled', rarity: 'rare', stats: { defense: 5, str: 0, agi: 7, int: 0, pDef: 4, mDef: 0 }, element: 'ice', elementPower: 3, noise: { onMove: 5 }, goldValue: 160 },
-'earthen_helm': { id: 'earthen_helm', name: 'Earthen Helm', slot: 'HEAD', armorType: 'stone', rarity: 'rare', stats: { defense: 6, str: 4, agi: 0, int: 0, pDef: 7, mDef: 0 }, element: 'earth', elementPower: 3, noise: { onMove: 10 }, goldValue: 170 },
-'heavy_greathelm': { id: 'heavy_greathelm', name: 'Heavy Greathelm', slot: 'HEAD', armorType: 'armored', rarity: 'epic', stats: { defense: 8, str: 7, agi: 0, int: 0, pDef: 11, mDef: 0 }, element: null, elementPower: 0, special: { staggerResist: 0.25, visionPenalty: -1 }, noise: { onMove: 15 }, goldValue: 320 },
-'infernal_visage': { id: 'infernal_visage', name: 'Infernal Visage', slot: 'HEAD', armorType: 'scaled', rarity: 'epic', stats: { defense: 6, str: 0, agi: 11, int: 0, pDef: 7, mDef: 0 }, element: 'fire', elementPower: 5, noise: { onMove: 5 }, goldValue: 340 },
-'voidgaze_helm': { id: 'voidgaze_helm', name: 'Voidgaze Helm', slot: 'HEAD', armorType: 'ethereal', rarity: 'epic', stats: { defense: 5, str: 0, agi: 0, int: 11, pDef: 0, mDef: 7 }, element: 'dark', elementPower: 5, special: { darkVision: 3 }, noise: { onMove: 0 }, goldValue: 345 },
-'worldstone_crown': { id: 'worldstone_crown', name: 'Worldstone Crown', slot: 'HEAD', armorType: 'stone', rarity: 'epic', stats: { defense: 7, str: 7, agi: 0, int: 0, pDef: 11, mDef: 0 }, element: 'earth', elementPower: 5, noise: { onMove: 10 }, goldValue: 360 },
-
-// === CHEST (18) ===
-'tattered_shirt': { id: 'tattered_shirt', name: 'Tattered Shirt', slot: 'CHEST', armorType: 'unarmored', rarity: 'common', stats: { defense: 2, str: 0, agi: 0, int: 2, pDef: 0, mDef: 1 }, element: null, elementPower: 0, noise: { onMove: 0 }, goldValue: 10 },
-'leather_vest': { id: 'leather_vest', name: 'Leather Vest', slot: 'CHEST', armorType: 'hide', rarity: 'common', stats: { defense: 4, str: 0, agi: 2, int: 0, pDef: 1, mDef: 0 }, element: null, elementPower: 0, noise: { onMove: 0 }, goldValue: 30 },
-'chainmail': { id: 'chainmail', name: 'Chainmail', slot: 'CHEST', armorType: 'armored', rarity: 'uncommon', stats: { defense: 7, str: 2, agi: 0, int: 0, pDef: 4, mDef: 0 }, element: null, elementPower: 0, special: { noiseIncrease: 0.15 }, noise: { onMove: 10 }, goldValue: 90 },
-'brigandine': { id: 'brigandine', name: 'Brigandine', slot: 'CHEST', armorType: 'armored', rarity: 'uncommon', stats: { defense: 6, str: 2, agi: 0, int: 0, pDef: 4, mDef: 0 }, element: null, elementPower: 0, noise: { onMove: 5 }, goldValue: 85 },
-'bone_harness': { id: 'bone_harness', name: 'Bone Harness', slot: 'CHEST', armorType: 'bone', rarity: 'uncommon', stats: { defense: 5, str: 0, agi: 4, int: 0, pDef: 2, mDef: 0 }, element: 'death', elementPower: 2, noise: { onMove: 0 }, goldValue: 80 },
-'ember_mail': { id: 'ember_mail', name: 'Ember Mail', slot: 'CHEST', armorType: 'scaled', rarity: 'uncommon', stats: { defense: 5, str: 0, agi: 4, int: 0, pDef: 2, mDef: 0 }, element: 'fire', elementPower: 2, noise: { onMove: 5 }, goldValue: 85 },
-'frost_jacket': { id: 'frost_jacket', name: 'Frost Jacket', slot: 'CHEST', armorType: 'hide', rarity: 'uncommon', stats: { defense: 5, str: 0, agi: 4, int: 0, pDef: 2, mDef: 0 }, element: 'ice', elementPower: 2, noise: { onMove: 0 }, goldValue: 85 },
-'coral_cuirass': { id: 'coral_cuirass', name: 'Coral Cuirass', slot: 'CHEST', armorType: 'scaled', rarity: 'uncommon', stats: { defense: 5, str: 0, agi: 4, int: 0, pDef: 2, mDef: 0 }, element: 'water', elementPower: 2, noise: { onMove: 5 }, goldValue: 85 },
-'stone_plate': { id: 'stone_plate', name: 'Stone Plate', slot: 'CHEST', armorType: 'stone', rarity: 'uncommon', stats: { defense: 7, str: 2, agi: 0, int: 0, pDef: 4, mDef: 0 }, element: 'earth', elementPower: 2, special: { speedPenalty: -0.10 }, noise: { onMove: 10 }, goldValue: 95 },
-'shadow_vest': { id: 'shadow_vest', name: 'Shadow Vest', slot: 'CHEST', armorType: 'hide', rarity: 'uncommon', stats: { defense: 4, str: 0, agi: 4, int: 0, pDef: 2, mDef: 0 }, element: 'dark', elementPower: 2, special: { noiseReduction: 0.25 }, noise: { onMove: 0 }, goldValue: 90 },
-'blessed_vestments': { id: 'blessed_vestments', name: 'Blessed Vestments', slot: 'CHEST', armorType: 'hide', rarity: 'rare', stats: { defense: 6, str: 0, agi: 7, int: 0, pDef: 4, mDef: 0 }, element: 'holy', elementPower: 3, noise: { onMove: 0 }, goldValue: 160 },
-'volcanic_plate': { id: 'volcanic_plate', name: 'Volcanic Plate', slot: 'CHEST', armorType: 'scaled', rarity: 'rare', stats: { defense: 8, str: 0, agi: 7, int: 0, pDef: 4, mDef: 0 }, element: 'fire', elementPower: 3, noise: { onMove: 10 }, goldValue: 175 },
-'glacial_mail': { id: 'glacial_mail', name: 'Glacial Mail', slot: 'CHEST', armorType: 'scaled', rarity: 'rare', stats: { defense: 7, str: 0, agi: 7, int: 0, pDef: 4, mDef: 0 }, element: 'ice', elementPower: 3, noise: { onMove: 5 }, goldValue: 170 },
-'earthen_plate': { id: 'earthen_plate', name: 'Earthen Plate', slot: 'CHEST', armorType: 'stone', rarity: 'rare', stats: { defense: 9, str: 4, agi: 0, int: 0, pDef: 7, mDef: 0 }, element: 'earth', elementPower: 3, special: { speedPenalty: -0.15 }, noise: { onMove: 15 }, goldValue: 180 },
-'fortress_plate': { id: 'fortress_plate', name: 'Fortress Plate', slot: 'CHEST', armorType: 'armored', rarity: 'epic', stats: { defense: 12, str: 7, agi: 0, int: 0, pDef: 11, mDef: 0 }, element: null, elementPower: 0, special: { speedPenalty: -0.20 }, noise: { onMove: 20 }, goldValue: 380 },
-'infernal_cuirass': { id: 'infernal_cuirass', name: 'Infernal Cuirass', slot: 'CHEST', armorType: 'scaled', rarity: 'epic', stats: { defense: 10, str: 0, agi: 11, int: 0, pDef: 7, mDef: 0 }, element: 'fire', elementPower: 5, noise: { onMove: 10 }, goldValue: 360 },
-'voidweave_robe': { id: 'voidweave_robe', name: 'Voidweave Robe', slot: 'CHEST', armorType: 'ethereal', rarity: 'epic', stats: { defense: 7, str: 0, agi: 0, int: 11, pDef: 0, mDef: 7 }, element: 'dark', elementPower: 5, special: { noiseReduction: 0.35 }, noise: { onMove: 0 }, goldValue: 355 },
-'worldstone_plate': { id: 'worldstone_plate', name: 'Worldstone Plate', slot: 'CHEST', armorType: 'stone', rarity: 'epic', stats: { defense: 11, str: 7, agi: 0, int: 0, pDef: 11, mDef: 0 }, element: 'earth', elementPower: 5, special: { speedPenalty: -0.15 }, noise: { onMove: 15 }, goldValue: 375 }
-
+const BASE_DEFENSE_BY_SLOT = {
+    HEAD: { common: 4, uncommon: 8, rare: 14, epic: 20 },
+    CHEST: { common: 6, uncommon: 12, rare: 20, epic: 28 },
+    LEGS: { common: 4, uncommon: 10, rare: 16, epic: 24 },
+    FEET: { common: 3, uncommon: 6, rare: 12, epic: 18 }
 };
 
-window.DEFENSE_ARMOR = DEFENSE_ARMOR;
-console.log('[DefenseArmor] Loaded', Object.keys(DEFENSE_ARMOR).length, 'items');
+const BASE_HP_BY_SLOT = {
+    HEAD: { common: 3, uncommon: 6, rare: 10, epic: 15 },
+    CHEST: { common: 5, uncommon: 10, rare: 16, epic: 25 },
+    LEGS: { common: 3, uncommon: 8, rare: 12, epic: 20 },
+    FEET: { common: 2, uncommon: 5, rare: 8, epic: 15 }
+};
+
+const STATS_BY_RARITY = {
+    common: { primary: 2, secondary: 0 },
+    uncommon: { primary: 4, secondary: 2 },
+    rare: { primary: 7, secondary: 4 },
+    epic: { primary: 11, secondary: 6 }
+};
+
+const ARMOR_TYPE_MODIFIERS = {
+    cloth: { defenseModifier: 0.5, hpTierModifier: 0.3, primary: 'int', secondary: 'agi' },
+    ethereal: { defenseModifier: 0.6, hpTierModifier: 0.3, primary: 'int', secondary: 'agi' },
+    hide: { defenseModifier: 0.8, hpTierModifier: 0.6, primary: 'agi', secondary: 'str' },
+    armored: { defenseModifier: 1.0, hpTierModifier: 1.0, primary: 'str', secondary: 'agi' },
+    stone: { defenseModifier: 1.1, hpTierModifier: 1.0, primary: 'str', secondary: 'str' }
+};
+
+const ADJECTIVES = {
+    common: 'Crude',
+    uncommon: 'Sturdy',
+    rare: 'Reinforced',
+    epic: 'Masterwork'
+};
+
+const SLOT_NAMES = {
+    HEAD: { cloth: 'Hood', ethereal: 'Circlet', hide: 'Cap', armored: 'Helm', stone: 'Crown' },
+    CHEST: { cloth: 'Robe', ethereal: 'Mantle', hide: 'Vest', armored: 'Cuirass', stone: 'Breastplate' },
+    LEGS: { cloth: 'Pants', ethereal: 'Legwraps', hide: 'Leggings', armored: 'Greaves', stone: 'Legguards' },
+    FEET: { cloth: 'Slippers', ethereal: 'Treads', hide: 'Boots', armored: 'Sabatons', stone: 'Stompers' }
+};
+
+const GOLD_VALUES = {
+    common: { HEAD: 25, CHEST: 35, LEGS: 25, FEET: 20 },
+    uncommon: { HEAD: 75, CHEST: 100, LEGS: 75, FEET: 60 },
+    rare: { HEAD: 175, CHEST: 225, LEGS: 175, FEET: 150 },
+    epic: { HEAD: 350, CHEST: 450, LEGS: 350, FEET: 300 }
+};
+
+// ============================================================================
+// ARMOR GENERATION FUNCTION
+// ============================================================================
+
+function generateArmorPiece(armorType, slot, rarity) {
+    const typeConfig = ARMOR_TYPE_MODIFIERS[armorType];
+    const adjective = ADJECTIVES[rarity];
+    const slotName = SLOT_NAMES[slot][armorType];
+    const typeName = armorType.charAt(0).toUpperCase() + armorType.slice(1);
+
+    const baseDef = BASE_DEFENSE_BY_SLOT[slot][rarity];
+    const baseHp = BASE_HP_BY_SLOT[slot][rarity];
+    const stats = STATS_BY_RARITY[rarity];
+
+    const finalDef = Math.round(baseDef * typeConfig.defenseModifier);
+    const finalHp = Math.round(baseHp * typeConfig.hpTierModifier);
+
+    const id = `${armorType}_${rarity}_${slot.toLowerCase()}`;
+    const name = `${typeName} ${adjective} ${slotName}`;
+
+    const statBlock = {
+        defense: finalDef,
+        hp: finalHp,
+        str: 0,
+        agi: 0,
+        int: 0
+    };
+
+    // Apply primary stat
+    statBlock[typeConfig.primary] += stats.primary;
+    // Apply secondary stat (stone doubles primary instead)
+    statBlock[typeConfig.secondary] += stats.secondary;
+
+    return {
+        id,
+        name,
+        slot,
+        armorType,
+        rarity,
+        stats: statBlock,
+        goldValue: GOLD_VALUES[rarity][slot]
+    };
+}
+
+// ============================================================================
+// GENERATE ALL 80 ARMOR PIECES
+// ============================================================================
+
+const ARMOR_PIECES = {};
+
+const PLAYER_ARMOR_TYPES = ['cloth', 'ethereal', 'hide', 'armored', 'stone'];
+const SLOTS = ['HEAD', 'CHEST', 'LEGS', 'FEET'];
+const RARITIES = ['common', 'uncommon', 'rare', 'epic'];
+
+for (const armorType of PLAYER_ARMOR_TYPES) {
+    for (const slot of SLOTS) {
+        for (const rarity of RARITIES) {
+            const piece = generateArmorPiece(armorType, slot, rarity);
+            ARMOR_PIECES[piece.id] = piece;
+        }
+    }
+}
+
+// ============================================================================
+// SHIELDS (5 total - pure defense, no armor type)
+// ============================================================================
+
+const SHIELDS = {
+    'wooden_buckler': {
+        id: 'wooden_buckler',
+        name: 'Wooden Buckler',
+        slot: 'OFF',
+        armorType: null,
+        rarity: 'common',
+        stats: {
+            defense: 5,
+            hp: 0,
+            str: 2,
+            agi: 0,
+            int: 0
+        },
+        goldValue: 30
+    },
+    'iron_kite_shield': {
+        id: 'iron_kite_shield',
+        name: 'Iron Kite Shield',
+        slot: 'OFF',
+        armorType: null,
+        rarity: 'uncommon',
+        stats: {
+            defense: 12,
+            hp: 0,
+            str: 4,
+            agi: 0,
+            int: 0,
+            pDef: 2
+        },
+        goldValue: 85
+    },
+    'reinforced_greatshield': {
+        id: 'reinforced_greatshield',
+        name: 'Reinforced Greatshield',
+        slot: 'OFF',
+        armorType: null,
+        rarity: 'rare',
+        stats: {
+            defense: 20,
+            hp: 0,
+            str: 7,
+            agi: 0,
+            int: 0,
+            pDef: 4
+        },
+        goldValue: 200
+    },
+    'fortress_shield': {
+        id: 'fortress_shield',
+        name: 'Fortress Shield',
+        slot: 'OFF',
+        armorType: null,
+        rarity: 'epic',
+        stats: {
+            defense: 25,
+            hp: 0,
+            str: 11,
+            agi: 0,
+            int: 0,
+            pDef: 6
+        },
+        goldValue: 400
+    },
+    'worldstone_barrier': {
+        id: 'worldstone_barrier',
+        name: 'Worldstone Barrier',
+        slot: 'OFF',
+        armorType: null,
+        rarity: 'legendary',
+        stats: {
+            defense: 30,
+            hp: 10,
+            str: 15,
+            agi: 0,
+            int: 0,
+            pDef: 8
+        },
+        goldValue: 800
+    }
+};
+
+// ============================================================================
+// LEGENDARY ARMOR (4 total - one per slot)
+// ============================================================================
+
+const LEGENDARY_ARMOR = {
+    'crown_of_embers': {
+        id: 'crown_of_embers',
+        name: 'Crown of Embers',
+        slot: 'HEAD',
+        armorType: 'stone',
+        rarity: 'legendary',
+        stats: {
+            defense: 24,
+            hp: 18,
+            str: 14,
+            agi: 0,
+            int: 0
+        },
+        special: {
+            fireResist: 0.10
+        },
+        element: 'fire',
+        goldValue: 750
+    },
+    'voidheart_mantle': {
+        id: 'voidheart_mantle',
+        name: 'Voidheart Mantle',
+        slot: 'CHEST',
+        armorType: 'ethereal',
+        rarity: 'legendary',
+        stats: {
+            defense: 18,
+            hp: 8,
+            str: 0,
+            agi: 0,
+            int: 18
+        },
+        special: {
+            spellEcho: 0.20
+        },
+        element: 'dark',
+        goldValue: 850
+    },
+    'ironhide_greaves': {
+        id: 'ironhide_greaves',
+        name: 'Ironhide Greaves',
+        slot: 'LEGS',
+        armorType: 'armored',
+        rarity: 'legendary',
+        stats: {
+            defense: 26,
+            hp: 22,
+            str: 14,
+            agi: 8,
+            int: 0
+        },
+        goldValue: 800
+    },
+    'windstrider_boots': {
+        id: 'windstrider_boots',
+        name: 'Windstrider Boots',
+        slot: 'FEET',
+        armorType: 'hide',
+        rarity: 'legendary',
+        stats: {
+            defense: 16,
+            hp: 12,
+            str: 0,
+            agi: 14,
+            int: 0
+        },
+        special: {
+            movementSpeed: 0.15
+        },
+        goldValue: 700
+    }
+};
+
+// ============================================================================
+// COMBINED ARMOR DATA
+// ============================================================================
+
+const ALL_ARMOR = {
+    ...ARMOR_PIECES,
+    ...SHIELDS,
+    ...LEGENDARY_ARMOR
+};
+
+// ============================================================================
+// HELPER FUNCTIONS
+// ============================================================================
+
+/**
+ * Get armor piece by ID
+ * @param {string} id - Armor piece ID
+ * @returns {Object|null} Armor data or null
+ */
+function getArmorById(id) {
+    return ALL_ARMOR[id] || null;
+}
+
+/**
+ * Get all armor pieces by slot
+ * @param {string} slot - Slot name (HEAD, CHEST, LEGS, FEET, OFF)
+ * @returns {Object[]} Array of armor pieces
+ */
+function getArmorBySlot(slot) {
+    return Object.values(ALL_ARMOR).filter(armor => armor.slot === slot);
+}
+
+/**
+ * Get all armor pieces by rarity
+ * @param {string} rarity - Rarity level
+ * @returns {Object[]} Array of armor pieces
+ */
+function getArmorByRarity(rarity) {
+    return Object.values(ALL_ARMOR).filter(armor => armor.rarity === rarity);
+}
+
+/**
+ * Get all armor pieces by armor type
+ * @param {string} armorType - Armor type (cloth, hide, etc.)
+ * @returns {Object[]} Array of armor pieces
+ */
+function getArmorByType(armorType) {
+    return Object.values(ALL_ARMOR).filter(armor => armor.armorType === armorType);
+}
+
+/**
+ * Get all shields
+ * @returns {Object[]} Array of shield items
+ */
+function getAllShields() {
+    return Object.values(SHIELDS);
+}
+
+/**
+ * Get all legendary armor
+ * @returns {Object[]} Array of legendary armor pieces
+ */
+function getAllLegendaryArmor() {
+    return Object.values(LEGENDARY_ARMOR);
+}
+
+/**
+ * Get armor for a specific slot and rarity
+ * @param {string} slot - Equipment slot
+ * @param {string} rarity - Rarity level
+ * @returns {Object[]} Array of matching armor pieces
+ */
+function getArmorBySlotAndRarity(slot, rarity) {
+    return Object.values(ALL_ARMOR).filter(
+        armor => armor.slot === slot && armor.rarity === rarity
+    );
+}
+
+/**
+ * Get random armor piece matching criteria
+ * @param {Object} criteria - Filter criteria {slot, rarity, armorType}
+ * @returns {Object|null} Random matching armor or null
+ */
+function getRandomArmor(criteria = {}) {
+    let pool = Object.values(ALL_ARMOR);
+
+    if (criteria.slot) {
+        pool = pool.filter(a => a.slot === criteria.slot);
+    }
+    if (criteria.rarity) {
+        pool = pool.filter(a => a.rarity === criteria.rarity);
+    }
+    if (criteria.armorType) {
+        pool = pool.filter(a => a.armorType === criteria.armorType);
+    }
+
+    if (pool.length === 0) return null;
+    return pool[Math.floor(Math.random() * pool.length)];
+}
+
+/**
+ * Calculate total stats from equipped armor
+ * @param {Object[]} equippedArmor - Array of armor piece objects
+ * @returns {Object} Combined stats
+ */
+function calculateArmorStats(equippedArmor) {
+    const totals = {
+        defense: 0,
+        hp: 0,
+        str: 0,
+        agi: 0,
+        int: 0,
+        pDef: 0,
+        mDef: 0
+    };
+
+    for (const armor of equippedArmor) {
+        if (!armor || !armor.stats) continue;
+
+        for (const [stat, value] of Object.entries(armor.stats)) {
+            if (totals.hasOwnProperty(stat)) {
+                totals[stat] += value;
+            }
+        }
+    }
+
+    return totals;
+}
+
+// ============================================================================
+// EXPORTS
+// ============================================================================
+
+window.ALL_ARMOR = ALL_ARMOR;
+window.ARMOR_PIECES = ARMOR_PIECES;
+window.SHIELDS = SHIELDS;
+window.LEGENDARY_ARMOR = LEGENDARY_ARMOR;
+window.BASE_DEFENSE_BY_SLOT = BASE_DEFENSE_BY_SLOT;
+window.BASE_HP_BY_SLOT = BASE_HP_BY_SLOT;
+window.STATS_BY_RARITY = STATS_BY_RARITY;
+window.ARMOR_TYPE_MODIFIERS = ARMOR_TYPE_MODIFIERS;
+
+window.getArmorById = getArmorById;
+window.getArmorBySlot = getArmorBySlot;
+window.getArmorByRarity = getArmorByRarity;
+window.getArmorByType = getArmorByType;
+window.getAllShields = getAllShields;
+window.getAllLegendaryArmor = getAllLegendaryArmor;
+window.getArmorBySlotAndRarity = getArmorBySlotAndRarity;
+window.getRandomArmor = getRandomArmor;
+window.calculateArmorStats = calculateArmorStats;
+
+// Legacy compatibility - export as DEFENSE_ARMOR for existing code
+window.DEFENSE_ARMOR = ALL_ARMOR;
+
+const armorCount = Object.keys(ARMOR_PIECES).length;
+const shieldCount = Object.keys(SHIELDS).length;
+const legendaryCount = Object.keys(LEGENDARY_ARMOR).length;
+console.log(`[ArmorDefense] Loaded ${armorCount} armor pieces, ${shieldCount} shields, ${legendaryCount} legendaries (${armorCount + shieldCount + legendaryCount} total)`);

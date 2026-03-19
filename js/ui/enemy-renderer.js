@@ -47,6 +47,118 @@ function getFacingCoordinates(facing) {
  * @returns {boolean} True if sprite was drawn, false if should fall back to circle
  */
 function tryDrawEnemySprite(ctx, enemy, ex, ey, cx, cy, tileSize) {
+    // =======================================================================
+    // UV-MAP ANIMATION GENERATOR SYSTEM (Priority 0)
+    // =======================================================================
+    if (typeof AnimationGeneratorRegistry !== 'undefined' && AnimationGeneratorRegistry.hasMonster) {
+        var monsterConfig = AnimationGeneratorRegistry.getMonster(enemy.name);
+        if (monsterConfig) {
+            // Get or create per-entity renderer
+            if (!enemy._uvRenderer) {
+                if (typeof UVMapRenderer !== 'undefined') {
+                    enemy._uvRenderer = new UVMapRenderer(monsterConfig.generator, monsterConfig.skin);
+                }
+            }
+            if (enemy._uvRenderer) {
+                // Determine direction
+                var dir = 'down';
+                if (typeof enemy.facing === 'string') {
+                    dir = enemy.facing;
+                } else if (enemy.facing && typeof enemy.facing === 'object') {
+                    if (Math.abs(enemy.facing.x) > Math.abs(enemy.facing.y)) {
+                        dir = enemy.facing.x < 0 ? 'left' : 'right';
+                    } else {
+                        dir = enemy.facing.y < 0 ? 'up' : 'down';
+                    }
+                }
+                enemy._uvRenderer.setDirection(dir);
+
+                // Determine state
+                if (enemy.dead || enemy.hp <= 0) {
+                    enemy._uvRenderer.setState('dying');
+                } else if (enemy.isWindingUp || (enemy.combat && enemy.combat.attackAnimation)) {
+                    enemy._uvRenderer.setState('attacking');
+                } else if (enemy.isMoving) {
+                    enemy._uvRenderer.setState('walking');
+                } else {
+                    enemy._uvRenderer.setState('idle');
+                }
+
+                // deltaTime approximation (enemies don't pass dt to draw)
+                var now = performance.now();
+                var dt = enemy._uvLastTime ? (now - enemy._uvLastTime) : 16;
+                enemy._uvLastTime = now;
+                enemy._uvRenderer.update(dt);
+
+                enemy._uvRenderer.draw(ctx, ex, ey, tileSize);
+
+                // Draw targeted outline
+                var isTargeted = game.player && game.player.combat && game.player.combat.currentTarget === enemy;
+                if (isTargeted) {
+                    ctx.strokeStyle = '#ff0000';
+                    ctx.lineWidth = 3;
+                    ctx.strokeRect(ex, ey, tileSize, tileSize);
+                }
+                return true;
+            }
+        }
+    }
+
+    // =======================================================================
+    // ANIMATED PIXEL SPRITE SYSTEM (Primary)
+    // =======================================================================
+    if (typeof getAnimatedSpriteForEnemy === 'function') {
+        const animatedData = getAnimatedSpriteForEnemy(enemy);
+        if (animatedData && animatedData.sprite) {
+            // Use animated drawPixelSprite if available
+            if (typeof drawAnimatedPixelSprite === 'function') {
+                const drawn = drawAnimatedPixelSprite(ctx, enemy, ex, ey, tileSize, animatedData);
+                if (drawn) {
+                    // Draw targeted outline
+                    const isTargeted = game.player?.combat?.currentTarget === enemy;
+                    if (isTargeted) {
+                        ctx.strokeStyle = '#ff0000';
+                        ctx.lineWidth = 3;
+                        ctx.strokeRect(ex, ey, tileSize, tileSize);
+                    }
+                    return true;
+                }
+            }
+            // Fallback to static drawPixelSprite with the animated sprite
+            else if (typeof drawPixelSprite === 'function') {
+                // Pass the animated sprite data directly
+                const drawn = drawPixelSprite(ctx, enemy, ex, ey, tileSize, animatedData);
+                if (drawn) {
+                    const isTargeted = game.player?.combat?.currentTarget === enemy;
+                    if (isTargeted) {
+                        ctx.strokeStyle = '#ff0000';
+                        ctx.lineWidth = 3;
+                        ctx.strokeRect(ex, ey, tileSize, tileSize);
+                    }
+                    return true;
+                }
+            }
+        }
+    }
+
+    // Fallback to static pixel sprite system
+    if (typeof drawPixelSprite === 'function') {
+        const pixelSpriteDrawn = drawPixelSprite(ctx, enemy, ex, ey, tileSize);
+        if (pixelSpriteDrawn) {
+            // Draw targeted outline for pixel sprites
+            const isTargeted = game.player?.combat?.currentTarget === enemy;
+            if (isTargeted) {
+                ctx.strokeStyle = '#ff0000';
+                ctx.lineWidth = 3;
+                ctx.strokeRect(ex, ey, tileSize, tileSize);
+            }
+            return true;
+        }
+    }
+
+    // =======================================================================
+    // LEGACY SPRITE SYSTEM (Fallback - uses sprite sheets)
+    // =======================================================================
     // Check if sprite rendering is available
     if (typeof getEnemySpriteFrame !== 'function') return false;
 
@@ -95,18 +207,13 @@ function tryDrawEnemySprite(ctx, enemy, ex, ey, cx, cy, tileSize) {
 
 /**
  * Draw attack windup visual effects
+ * ENHANCED: More visible telegraphs with danger indicators
  * Shows distinct visuals for melee, ranged, and magic attacks
  */
 function drawAttackWindup(ctx, enemy, ex, ey, cx, cy, tileSize) {
-    // Get attack animation state
-    if (typeof getAttackAnimationState !== 'function') return;
-
-    const animState = getAttackAnimationState(enemy);
-    if (!animState || !animState.isWindup) return;
-
-    const progress = animState.progress;
-    const type = animState.type;
-    const target = animState.targetLocked;
+    // DISABLED: Windup system removed in favor of simple attack animations
+    // The createMonsterAttackEffect function now handles attack visuals
+    return;
 
     ctx.save();
 
@@ -122,22 +229,31 @@ function drawAttackWindup(ctx, enemy, ex, ey, cx, cy, tileSize) {
         angle = Math.atan2(facingCoords.y, facingCoords.x);
     }
 
-    // Base alpha that pulses and increases with progress
-    const pulseSpeed = 12;
+    // Base alpha that pulses and increases with progress - MORE VISIBLE
+    const pulseSpeed = 15;
     const pulse = 0.5 + 0.5 * Math.sin(Date.now() / 1000 * pulseSpeed);
-    const baseAlpha = 0.3 + progress * 0.5 + pulse * 0.2;
+    const baseAlpha = 0.4 + progress * 0.5 + pulse * 0.2;
+
+    // === DANGER BORDER - Pulsing red outline around enemy during windup ===
+    const dangerPulse = 0.5 + 0.5 * Math.sin(Date.now() / 80);
+    ctx.strokeStyle = `rgba(255, 50, 50, ${0.4 + progress * 0.5 + dangerPulse * 0.3})`;
+    ctx.lineWidth = 3 + progress * 2;
+    ctx.beginPath();
+    ctx.arc(cx, cy, tileSize / 2 + 4, 0, Math.PI * 2);
+    ctx.stroke();
 
     // Draw different effects based on attack type
     switch (type) {
         case 'melee':
             // Slash arc telegraph - shows where the attack will swing
-            ctx.strokeStyle = `rgba(255, 100, 50, ${baseAlpha})`;
-            ctx.fillStyle = `rgba(255, 50, 0, ${baseAlpha * 0.3})`;
-            ctx.lineWidth = 3 + progress * 2;
+            // ENHANCED: Brighter, larger, more visible
+            ctx.strokeStyle = `rgba(255, 80, 30, ${baseAlpha * 1.2})`;
+            ctx.fillStyle = `rgba(255, 40, 0, ${baseAlpha * 0.5})`;
+            ctx.lineWidth = 4 + progress * 3;
 
-            // Draw arc showing attack range
-            const arcRadius = tileSize * (0.8 + progress * 0.5);
-            const arcSpread = Math.PI / 2;  // 90 degree arc
+            // Draw arc showing attack range - LARGER
+            const arcRadius = tileSize * (1.0 + progress * 0.7);
+            const arcSpread = Math.PI / 1.8;  // ~100 degree arc (wider)
 
             ctx.beginPath();
             ctx.moveTo(cx, cy);
@@ -146,13 +262,23 @@ function drawAttackWindup(ctx, enemy, ex, ey, cx, cy, tileSize) {
             ctx.fill();
             ctx.stroke();
 
-            // Inner charging arc
-            if (progress > 0.3) {
-                ctx.strokeStyle = `rgba(255, 200, 100, ${(progress - 0.3) * 1.5})`;
-                ctx.lineWidth = 2;
-                const innerRadius = arcRadius * 0.6 * progress;
+            // Inner charging arc - starts earlier, more visible
+            if (progress > 0.2) {
+                ctx.strokeStyle = `rgba(255, 220, 100, ${(progress - 0.2) * 1.2})`;
+                ctx.lineWidth = 3;
+                const innerRadius = arcRadius * 0.5 * (progress + 0.3);
                 ctx.beginPath();
                 ctx.arc(cx, cy, innerRadius, angle - arcSpread / 2, angle + arcSpread / 2);
+                ctx.stroke();
+            }
+
+            // ADDED: Sweep line showing attack direction
+            if (progress > 0.4) {
+                ctx.strokeStyle = `rgba(255, 255, 150, ${(progress - 0.4) * 1.5})`;
+                ctx.lineWidth = 2;
+                ctx.beginPath();
+                ctx.moveTo(cx, cy);
+                ctx.lineTo(cx + Math.cos(angle) * arcRadius, cy + Math.sin(angle) * arcRadius);
                 ctx.stroke();
             }
             break;
@@ -234,11 +360,11 @@ function drawAttackWindup(ctx, enemy, ex, ey, cx, cy, tileSize) {
             break;
     }
 
-    // Draw direction indicator arrow for all types
-    if (progress > 0.2) {
-        ctx.strokeStyle = `rgba(255, 255, 255, ${(progress - 0.2) * 0.8})`;
-        ctx.lineWidth = 2;
-        const arrowLen = tileSize * 0.6;
+    // Draw direction indicator arrow for all types - ENHANCED
+    if (progress > 0.15) {
+        ctx.strokeStyle = `rgba(255, 255, 255, ${(progress - 0.15) * 1.0})`;
+        ctx.lineWidth = 3;
+        const arrowLen = tileSize * 0.8;
         const arrowX = cx + Math.cos(angle) * arrowLen;
         const arrowY = cy + Math.sin(angle) * arrowLen;
 
@@ -248,9 +374,9 @@ function drawAttackWindup(ctx, enemy, ex, ey, cx, cy, tileSize) {
         ctx.lineTo(arrowX, arrowY);
         ctx.stroke();
 
-        // Arrow head
-        const headLen = 8;
-        const headAngle = Math.PI / 6;
+        // Arrow head - LARGER
+        const headLen = 12;
+        const headAngle = Math.PI / 5;
         ctx.beginPath();
         ctx.moveTo(arrowX, arrowY);
         ctx.lineTo(
@@ -262,6 +388,37 @@ function drawAttackWindup(ctx, enemy, ex, ey, cx, cy, tileSize) {
             arrowX - headLen * Math.cos(angle + headAngle),
             arrowY - headLen * Math.sin(angle + headAngle)
         );
+        ctx.stroke();
+    }
+
+    // === DANGER EXCLAMATION MARK - Shows attack is imminent ===
+    if (progress > 0.6) {
+        const warnAlpha = (progress - 0.6) * 2.5;
+        const warnPulse = Math.sin(Date.now() / 50) > 0 ? 1 : 0.6;
+
+        // Background circle for visibility
+        ctx.fillStyle = `rgba(0, 0, 0, ${warnAlpha * 0.7})`;
+        ctx.beginPath();
+        ctx.arc(cx, ey - 25, 12, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Exclamation mark
+        ctx.fillStyle = `rgba(255, ${50 + warnPulse * 100}, 50, ${warnAlpha * warnPulse})`;
+        ctx.font = 'bold 20px monospace';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText('!', cx, ey - 25);
+    }
+
+    // === ATTACK IMMINENT WARNING - At high progress ===
+    if (progress > 0.85) {
+        // Screen-space flash effect around the enemy
+        const flashAlpha = (progress - 0.85) * 6.67; // 0 to 1 over last 15%
+        const flashPulse = Math.sin(Date.now() / 30) > 0 ? 1 : 0.3;
+        ctx.strokeStyle = `rgba(255, 255, 255, ${flashAlpha * flashPulse})`;
+        ctx.lineWidth = 4;
+        ctx.beginPath();
+        ctx.arc(cx, cy, tileSize * 0.7, 0, Math.PI * 2);
         ctx.stroke();
     }
 
@@ -385,6 +542,25 @@ function drawEnemyOverlays(ctx, enemy, ex, ey, cx, cy, tileSize) {
  * @param {number} offsetX - X offset (tracker width)
  */
 function drawEnemy(ctx, enemy, camX, camY, tileSize, offsetX) {
+    // Check for death animation - trigger if enemy is dead
+    if (enemy.dead || enemy.hp <= 0) {
+        // UVMapRenderer handles its own death fade
+        if (enemy._uvRenderer) {
+            if (enemy._uvRenderer.isComplete()) {
+                return; // Death fade finished
+            }
+        } else {
+            if (typeof startMonsterDeathAnimation === 'function') {
+                startMonsterDeathAnimation(enemy);
+            }
+            // Check if death animation complete - don't render if so
+            const entityId = enemy.id || enemy.gridX + '_' + enemy.gridY;
+            if (typeof SpriteAnimator !== 'undefined' && SpriteAnimator.isDeathAnimationComplete(entityId)) {
+                return; // Don't render dead enemies with completed death anims
+            }
+        }
+    }
+
     // Check if enemy is staggered (frozen) - skip rendering movement if so
     const isStaggered = typeof isEnemyStaggered === 'function' && isEnemyStaggered(enemy);
     const staggerFlash = typeof getEnemyStaggerFlash === 'function' && getEnemyStaggerFlash(enemy);
@@ -410,9 +586,38 @@ function drawEnemy(ctx, enemy, camX, camY, tileSize, offsetX) {
     }
 
     const ex = (enemy.displayX - camX) * tileSize + offsetX;
-    const ey = (enemy.displayY - camY) * tileSize;
+    let ey = (enemy.displayY - camY) * tileSize;
+
+    // Adjust Y position for leap height (pounce ability)
+    // leapHeight is in tiles, so multiply by tileSize to get pixels
+    if (enemy.leapHeight && enemy.leapHeight > 0) {
+        ey = ey - enemy.leapHeight * tileSize;
+    }
+
     const cx = ex + tileSize / 2;
     const cy = ey + tileSize / 2;
+
+    // Draw leap shadow when enemy is airborne
+    // Shadow is drawn at ground level and shrinks as enemy gets higher
+    if (enemy.leapHeight && enemy.leapHeight > 0) {
+        const groundY = (enemy.displayY - camY) * tileSize; // Ground position (without leap offset)
+        const shadowCx = ex + tileSize / 2;
+        const shadowCy = groundY + tileSize / 2;
+
+        // Shadow shrinks and fades as enemy gets higher
+        const maxHeight = 2.0; // Match the arcHeight from pounce config
+        const heightRatio = Math.min(1, enemy.leapHeight / maxHeight);
+        const shadowScale = 1 - heightRatio * 0.5; // Shadow is 50-100% size
+        const shadowAlpha = 0.4 - heightRatio * 0.25; // Shadow fades from 0.4 to 0.15
+
+        ctx.save();
+        ctx.fillStyle = `rgba(0, 0, 0, ${shadowAlpha})`;
+        ctx.beginPath();
+        // Elliptical shadow (wider than tall)
+        ctx.ellipse(shadowCx, shadowCy + tileSize * 0.3, tileSize * 0.4 * shadowScale, tileSize * 0.2 * shadowScale, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+    }
 
     // Apply stagger flash (white overlay)
     if (staggerFlash) {
@@ -651,6 +856,16 @@ function drawEnemyHealthBar(ctx, x, y, width, hp, maxHp, isTargeted, barHeight) 
 function renderAllEnemies(ctx, camX, camY, tileSize, offsetX) {
     if (!game.enemies) return;
 
+    // Update sprite animations
+    if (typeof SpriteAnimator !== 'undefined' && SpriteAnimator.update) {
+        // Calculate deltaTime from last frame
+        const now = performance.now();
+        const deltaTime = renderAllEnemies._lastTime ? now - renderAllEnemies._lastTime : 16;
+        renderAllEnemies._lastTime = now;
+
+        SpriteAnimator.update(deltaTime);
+    }
+
     // Calculate view bounds for frustum culling (with 2 tile margin)
     const viewLeft = camX - 2;
     const viewRight = camX + (ctx.canvas.width - offsetX) / tileSize + 2;
@@ -783,4 +998,4 @@ if (typeof window !== 'undefined') {
     window.renderAIDebugOverlay = renderAIDebugOverlay;
 }
 
-console.log('✅ Enemy renderer loaded (with attack windups + white flash)');
+console.log('[EnemyRenderer] Loaded (with animated sprites, attack windups, death animations)');

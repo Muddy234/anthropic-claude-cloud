@@ -1,5 +1,5 @@
 // === js/ui/shop-ui.js ===
-// SURVIVAL EXTRACTION UPDATE: Village shop interface for NPCs
+// Village shop interface for NPCs
 
 // ============================================================================
 // SHOP UI
@@ -408,6 +408,9 @@ const ShopUI = {
 
         this._showMessage(`Bought ${item.name} for ${price}g!`, 'success');
         console.log(`[ShopUI] Purchased ${item.name} for ${price}g`);
+
+        // Auto-save after purchase
+        if (typeof SaveManager !== 'undefined') SaveManager.save();
     },
 
     /**
@@ -458,6 +461,9 @@ const ShopUI = {
 
         this._showMessage(`Sold ${item.name} for ${sellPrice}g!`, 'success');
         console.log(`[ShopUI] Sold ${item.name} for ${sellPrice}g`);
+
+        // Auto-save after sale
+        if (typeof SaveManager !== 'undefined') SaveManager.save();
     },
 
     /**
@@ -531,29 +537,103 @@ const ShopUI = {
     },
 
     /**
-     * Render panel background
+     * Render panel background - CotDG Merchant Counter Style
      * @private
      */
     _renderPanel(ctx, x, y) {
-        // Shadow
-        ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
-        ctx.fillRect(x + 5, y + 5, this.PANEL_WIDTH, this.PANEL_HEIGHT);
+        // Get design system colors
+        const colors = typeof UI_COLORS !== 'undefined' ? UI_COLORS : {};
+        const frameGold = colors.frameGold || '#b8860b';
+        const frameGoldBright = colors.frameGoldBright || '#daa520';
+        const frameGoldDark = colors.frameGoldDark || '#8b6914';
+        const templeStone = colors.templeStone || '#2a2622';
+        const templeStoneDark = colors.templeStoneDark || '#1a1816';
 
-        // Background
-        ctx.fillStyle = '#1a1a2e';
+        ctx.save();
+
+        // Shadow
+        ctx.shadowColor = 'rgba(0, 0, 0, 0.6)';
+        ctx.shadowBlur = 15;
+        ctx.shadowOffsetY = 5;
+
+        // Main background with wood/stone texture gradient
+        const bgGrad = ctx.createLinearGradient(x, y, x, y + this.PANEL_HEIGHT);
+        bgGrad.addColorStop(0, '#2a2420');
+        bgGrad.addColorStop(0.15, templeStone);
+        bgGrad.addColorStop(0.85, templeStoneDark);
+        bgGrad.addColorStop(1, '#0d0b0a');
+        ctx.fillStyle = bgGrad;
         ctx.fillRect(x, y, this.PANEL_WIDTH, this.PANEL_HEIGHT);
 
-        // Border
-        ctx.strokeStyle = '#FF6347';  // Tormund's color
-        ctx.lineWidth = 3;
-        ctx.strokeRect(x, y, this.PANEL_WIDTH, this.PANEL_HEIGHT);
+        ctx.shadowBlur = 0;
+        ctx.shadowOffsetY = 0;
 
-        // Title
-        const npcName = this.currentNPC?.name || 'Shop';
-        ctx.font = 'bold 24px Arial';
+        // Wood grain texture overlay
+        ctx.strokeStyle = 'rgba(139, 69, 19, 0.1)';
+        ctx.lineWidth = 1;
+        for (let ty = y; ty < y + this.PANEL_HEIGHT; ty += 8) {
+            ctx.beginPath();
+            ctx.moveTo(x, ty + Math.sin(ty * 0.1) * 2);
+            ctx.lineTo(x + this.PANEL_WIDTH, ty + Math.sin(ty * 0.1 + 1) * 2);
+            ctx.stroke();
+        }
+
+        // Use design system temple frame if available
+        if (typeof drawTempleFrame === 'function') {
+            drawTempleFrame(ctx, x, y, this.PANEL_WIDTH, this.PANEL_HEIGHT, {
+                cornerSize: 20, borderWidth: 4, pattern: true
+            });
+        } else {
+            // Fallback gold border frame
+            const frameGrad = ctx.createLinearGradient(x, y, x + this.PANEL_WIDTH, y + this.PANEL_HEIGHT);
+            frameGrad.addColorStop(0, frameGoldBright);
+            frameGrad.addColorStop(0.3, frameGold);
+            frameGrad.addColorStop(0.7, frameGoldDark);
+            frameGrad.addColorStop(1, frameGold);
+            ctx.strokeStyle = frameGrad;
+            ctx.lineWidth = 4;
+            ctx.strokeRect(x, y, this.PANEL_WIDTH, this.PANEL_HEIGHT);
+        }
+
+        // Add ornate corners if available
+        if (typeof drawOrnateCorners === 'function') {
+            drawOrnateCorners(ctx, x, y, this.PANEL_WIDTH, this.PANEL_HEIGHT, { size: 18 });
+        }
+
+        // Title bar background (counter surface)
+        ctx.fillStyle = '#352f28';
+        ctx.fillRect(x + 4, y + 4, this.PANEL_WIDTH - 8, 50);
+
+        // Title with ornate divider
+        const npcName = this.currentNPC?.name || 'Merchant';
+        ctx.font = 'bold 22px serif';
         ctx.textAlign = 'center';
-        ctx.fillStyle = '#FF6347';
+
+        // Title shadow
+        ctx.fillStyle = frameGoldDark;
+        ctx.fillText(`${npcName}'s Wares`, x + this.PANEL_WIDTH / 2 + 1, y + 36);
+        // Title main
+        ctx.fillStyle = frameGoldBright;
         ctx.fillText(`${npcName}'s Wares`, x + this.PANEL_WIDTH / 2, y + 35);
+
+        // Ornate divider below title
+        if (typeof drawOrnateDivider === 'function') {
+            drawOrnateDivider(ctx, x + 20, y + 48, this.PANEL_WIDTH - 40, { emblem: true });
+        } else {
+            ctx.strokeStyle = frameGold;
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            ctx.moveTo(x + 30, y + 52);
+            ctx.lineTo(x + this.PANEL_WIDTH - 30, y + 52);
+            ctx.stroke();
+            // Center emblem
+            ctx.fillStyle = frameGold;
+            ctx.beginPath();
+            ctx.arc(x + this.PANEL_WIDTH / 2, y + 52, 4, 0, Math.PI * 2);
+            ctx.fill();
+        }
+
+        ctx.restore();
     },
 
     /**

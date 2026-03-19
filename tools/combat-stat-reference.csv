@@ -1,0 +1,68 @@
+COMBAT STAT REFERENCE - The Shifting Chasm
+============================================
+
+STAT SCALING FORMULAS
+---------------------
+Stat,Context,Formula,Example (Stat=20),Notes
+STR,Physical melee damage,(STR × 0.5) + (STR / 5),10 + 4 = 14 base damage,~70% of STR becomes damage
+AGI,Physical ranged damage,(AGI × 0.5) + (AGI / 5),10 + 4 = 14 base damage,~70% of AGI becomes damage
+AGI,Hit chance (attacker),+0.2% per AGI,+4% hit chance,Adds to 90% base
+AGI,Evasion (defender),-0.2% per AGI,-4% enemy hit chance,Subtracts from attacker hit
+AGI,Crit chance,+0.1% per AGI,+2% crit chance,Adds to 5% base
+INT,Magic damage,(INT × 0.5) + (INT / 3),9 + 6 = 15 base damage,~83% of INT - higher scaling than physical
+pDef,Physical damage reduction,pDef × 1.5%,30% damage reduction,Capped at 75% max reduction
+mDef,Magic damage reduction,mDef × 1.5%,30% damage reduction,Capped at 75% max reduction
+
+WEAPON VS ARMOR MATRIX (Layer 1)
+--------------------------------
+Weapon Type,unarmored,hide,scaled,armored,stone,bone,ethereal
+blade,+30%,0%,0%,-30%,-30%,0%,0%
+blunt,0%,0%,0%,+30%,+30%,+30%,-30%
+pierce,0%,+30%,+30%,-30%,-30%,0%,+30%
+
+ARMOR TYPE DESCRIPTIONS
+-----------------------
+Armor Type,Description,Weak To,Resistant To
+unarmored,Cloth-wearing mages/soft creatures,blade,none
+hide,Leathery skin/tough beasts,pierce,none
+scaled,Reptilian/crustacean exoskeletons,pierce,none
+armored,Metal plate/heavy armor,blunt,"blade, pierce"
+stone,Rock constructs/golems,blunt,"blade, pierce"
+bone,Skeletal undead,blunt,none
+ethereal,Incorporeal spirits/ghosts,pierce,blunt
+
+ELEMENT VS ELEMENT MATRIX (Layer 2)
+-----------------------------------
+Attacker Element,Strong Against (+30%),Weak Against (-30%)
+fire,"ice, nature",water
+ice,none,fire
+water,"fire, earth",none
+earth,nature,water
+nature,death,"fire, earth"
+death,none,"nature, holy"
+arcane,physical,none
+dark,none,holy
+holy,"death, dark",none
+physical,none,arcane
+neutral,none,none
+
+COMBAT CONSTANTS
+----------------
+Parameter,Value,Notes
+Base Hit Chance,90%,Modified by AGI difference
+Base Crit Chance,5%,Modified by AGI and weapon
+Crit Multiplier,2.5x,Applied to final damage
+Pierce Crit Bonus,+7%,Pierce weapons get extra crit
+Damage Variance,±10%,Random multiplier 0.9-1.1
+Minimum Damage,1,Floor for all damage
+Defense Scaling,1.5% per point,Each defense point = 1.5% reduction
+Max Defense Reduction,75%,Defense cannot reduce more than this
+
+STATS NOT CURRENTLY IMPACTING COMBAT
+------------------------------------
+Stat,Current Use,Potential Use
+attackSpeed,Stored in monster data,Could modify DPS/attack frequency
+moveInterval,AI movement timing,Could affect kiting/positioning
+aggression,AI behavior priority,Could affect target selection
+spawnWeight,Dungeon generation only,N/A - generation stat
+elite,Boolean flag,Could modify all stats by multiplier
