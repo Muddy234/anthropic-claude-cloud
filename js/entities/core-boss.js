@@ -1,5 +1,5 @@
 // === js/entities/core-boss.js ===
-// SURVIVAL EXTRACTION UPDATE: The Primordial boss entity
+// The Primordial boss entity
 
 // ============================================================================
 // CORE BOSS ENTITY

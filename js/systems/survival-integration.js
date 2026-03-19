@@ -1,5 +1,5 @@
 // === js/systems/survival-integration.js ===
-// SURVIVAL EXTRACTION UPDATE: Integration layer connecting all survival systems
+// Integration layer connecting all survival systems
 
 // ============================================================================
 // SURVIVAL INTEGRATION SYSTEM
@@ -52,7 +52,6 @@ const SurvivalIntegration = {
             },
             stats: {
                 totalRuns: 0,
-                successfulExtractions: 0,
                 totalDeaths: 0,
                 deepestFloor: 1,
                 totalGoldEarned: 0,
@@ -60,11 +59,6 @@ const SurvivalIntegration = {
                 guardiansDefeated: 0,
                 playTime: 0
             },
-            village: {
-                degradationLevel: 0,
-                degradationProgress: 0
-            },
-            shortcuts: [],
             quests: {
                 active: [],
                 completed: [],
@@ -78,13 +72,6 @@ const SurvivalIntegration = {
                 favoriteRecipes: []
             },
             guardiansDefeated: [],
-            floorDegradation: {},
-            rescue: {
-                hasDroppedItems: false,
-                droppedItems: [],
-                droppedGold: 0,
-                deathFloor: null
-            },
             coreDefeated: false,
             newGamePlusUnlocked: false,
             firstTimePlayed: Date.now()
@@ -96,16 +83,6 @@ const SurvivalIntegration = {
                 persistentState[key] = defaults[key];
             }
         });
-
-        // Initialize floor degradation for floors 1-6
-        for (let i = 1; i <= 6; i++) {
-            if (!persistentState.floorDegradation[i]) {
-                persistentState.floorDegradation[i] = {
-                    extractionCount: 0,
-                    qualityMultiplier: 1.0
-                };
-            }
-        }
     },
 
     /**
@@ -132,8 +109,7 @@ const SurvivalIntegration = {
                 weapon: null,
                 armor: null,
                 consumables: []
-            },
-            isRescueRun: false
+            }
         };
 
         Object.keys(sessionDefaults).forEach(key => {
@@ -149,16 +125,11 @@ const SurvivalIntegration = {
      */
     _initSubSystems() {
         // Initialize systems that don't require game state
-        // Note: ExtractionSystem is initialized per-floor in startRun()
         const systems = [
             'BankingSystem',
-            'ShortcutSystem',
-            'DegradationSystem',
-            'RescueSystem',
             'QuestSystem',
             'CraftingSystem',
             'CoreSystem'
-            // ExtractionSystem - initialized when floor is generated
             // LoadoutSystem - initialized when UI opens
         ];
 
@@ -179,21 +150,15 @@ const SurvivalIntegration = {
 
     /**
      * Start a new run from village
-     * @param {Object} options - { startingFloor, loadout, isRescueRun }
+     * @param {Object} options - { startingFloor, loadout }
      * @returns {boolean} Success
      */
     startRun(options = {}) {
-        const { startingFloor = 1, loadout = null, isRescueRun = false } = options;
+        const { startingFloor = 1, loadout = null } = options;
 
-        // Validate starting floor
-        if (!ShortcutSystem.isFloorUnlocked(startingFloor)) {
-            console.warn(`[SurvivalIntegration] Floor ${startingFloor} not unlocked`);
-            return false;
-        }
-
-        // Set up session state - ensure both flags are set for compatibility
-        sessionState.active = true;  // Used by SessionManager/ExtractionSystem
-        sessionState.runActive = true;  // Legacy flag
+        // Set up session state
+        sessionState.active = true;  // Used by SessionManager
+        sessionState.runActive = true;
         sessionState.currentFloor = startingFloor;
         sessionState.startFloor = startingFloor;
         sessionState.floorStartTime = Date.now();
@@ -203,7 +168,6 @@ const SurvivalIntegration = {
         sessionState.enemiesKilled = 0;
         sessionState.bossesKilled = 0;
         sessionState.runStartTime = Date.now();
-        sessionState.isRescueRun = isRescueRun;
 
         // Apply loadout
         if (loadout) {
@@ -213,14 +177,6 @@ const SurvivalIntegration = {
 
         // Update stats
         persistentState.stats.totalRuns++;
-
-        // Start rescue run if applicable
-        if (isRescueRun && typeof RescueSystem !== 'undefined') {
-            const rescueInfo = RescueSystem.startRescueRun();
-            if (!rescueInfo.success) {
-                sessionState.isRescueRun = false;
-            }
-        }
 
         console.log(`[SurvivalIntegration] Starting run on Floor ${startingFloor}`);
 
@@ -267,62 +223,6 @@ const SurvivalIntegration = {
     },
 
     /**
-     * Handle successful extraction
-     * @param {number} floor - Floor extracted from
-     */
-    onExtraction(floor) {
-        console.log(`[SurvivalIntegration] Extraction from Floor ${floor}`);
-
-        // Update stats
-        persistentState.stats.successfulExtractions++;
-        if (floor > persistentState.stats.deepestFloor) {
-            persistentState.stats.deepestFloor = floor;
-        }
-
-        // Deposit inventory to bank
-        sessionState.inventory.forEach(item => {
-            if (typeof BankingSystem !== 'undefined') {
-                BankingSystem.deposit(item);
-            }
-        });
-
-        // Deposit gold
-        if (sessionState.goldCollected > 0) {
-            if (typeof BankingSystem !== 'undefined') {
-                BankingSystem.depositGold(sessionState.goldCollected);
-            }
-            persistentState.stats.totalGoldEarned += sessionState.goldCollected;
-        }
-
-        // Handle rescue item collection
-        if (sessionState.isRescueRun && typeof RescueSystem !== 'undefined') {
-            RescueSystem.collectRescuedItems();
-        }
-
-        // Update degradation
-        if (typeof DegradationSystem !== 'undefined') {
-            DegradationSystem.onExtractionSuccess(floor);
-            DegradationSystem.onFloorExtracted(floor);
-        }
-
-        // Track quest progress
-        if (typeof QuestSystem !== 'undefined') {
-            QuestSystem.onExtraction(floor);
-        }
-
-        // THE BLEEDING EARTH: Check world state progression
-        if (typeof WorldStateSystem !== 'undefined') {
-            WorldStateSystem.checkExtractionProgression(floor);
-        }
-
-        // End run
-        this._endRun(true);
-
-        // Return to village
-        this.returnToVillage();
-    },
-
-    /**
      * Handle player death
      * @param {number} floor - Floor died on
      * @param {Object} room - Room died in
@@ -333,36 +233,8 @@ const SurvivalIntegration = {
         // Update stats
         persistentState.stats.totalDeaths++;
 
-        // Handle rescue system
-        if (typeof RescueSystem !== 'undefined') {
-            const deathData = {
-                floor: floor,
-                room: room,
-                inventory: [...sessionState.inventory],
-                gold: sessionState.goldCollected
-            };
-
-            if (sessionState.isRescueRun) {
-                // Failed rescue attempt
-                RescueSystem.onRescueRunFailed();
-            } else {
-                // Create rescue opportunity
-                RescueSystem.onPlayerDeath(deathData);
-            }
-        }
-
-        // Update degradation
-        if (typeof DegradationSystem !== 'undefined') {
-            DegradationSystem.onRunFailed();
-        }
-
-        // End run
+        // End run - gameover screen handles restart flow
         this._endRun(false);
-
-        // Return to village after delay
-        setTimeout(() => {
-            this.returnToVillage();
-        }, 3000);
     },
 
     /**
@@ -376,11 +248,6 @@ const SurvivalIntegration = {
         if (!persistentState.guardiansDefeated.includes(floor)) {
             persistentState.guardiansDefeated.push(floor);
             persistentState.stats.guardiansDefeated++;
-        }
-
-        // Unlock shortcut
-        if (typeof ShortcutSystem !== 'undefined') {
-            ShortcutSystem.unlockByGuardian(floor);
         }
 
         // Quest tracking
@@ -458,7 +325,7 @@ const SurvivalIntegration = {
         const runDuration = Date.now() - sessionState.runStartTime;
         persistentState.stats.playTime += runDuration;
 
-        sessionState.active = false;  // Used by SessionManager/ExtractionSystem
+        sessionState.active = false;  // Used by SessionManager
         sessionState.runActive = false;  // Legacy flag
 
         // Clear session inventory (already deposited if success)
@@ -521,7 +388,6 @@ const SurvivalIntegration = {
             floorsVisited: sessionState.floorsVisited.length,
             enemiesKilled: sessionState.enemiesKilled,
             bossesKilled: sessionState.bossesKilled,
-            isRescueRun: sessionState.isRescueRun,
             duration: sessionState.runStartTime ?
                 Date.now() - sessionState.runStartTime : 0
         };
@@ -534,11 +400,8 @@ const SurvivalIntegration = {
     getProgress() {
         return {
             totalRuns: persistentState.stats.totalRuns,
-            successRate: persistentState.stats.totalRuns > 0 ?
-                (persistentState.stats.successfulExtractions / persistentState.stats.totalRuns * 100).toFixed(1) : 0,
             deepestFloor: persistentState.stats.deepestFloor,
             guardiansDefeated: persistentState.guardiansDefeated.length,
-            shortcutsUnlocked: ShortcutSystem?.getUnlocked?.().length || 0,
             questsCompleted: persistentState.quests.completed.length,
             coreDefeated: persistentState.coreDefeated,
             playTime: this._formatPlayTime(persistentState.stats.playTime)

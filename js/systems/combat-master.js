@@ -404,7 +404,7 @@ const ObjectPool = {
 const DamageCalculator = {
     // Configuration
     config: {
-        baseVariance: 0,             // No random variance (was 0.10)
+        baseVariance: 0.10,          // 10% damage variance for combat feel
         minDamage: 1,                // Minimum damage floor
         critMultiplier: 2.5,         // Critical hit multiplier (was 1.5, buffed for balance)
         baseCritChance: 0.05,        // 5% base crit chance
@@ -419,13 +419,50 @@ const DamageCalculator = {
     // ========================================================================
 
     /**
-     * Calculate damage with 2 layers
+     * Calculate damage with 2 layers.
+     * Delegates to DamageResolver if available, otherwise uses inline calculation.
      * @param {Object} attacker - Attacking entity (player or enemy)
      * @param {Object} defender - Defending entity
      * @param {Object} room - Current room (unused, kept for API compatibility)
      * @returns {Object} Damage result with breakdown
      */
     calculateDamage(attacker, defender, room = null) {
+        // ====================================================================
+        // DELEGATE to DamageResolver when loaded (damage-resolver.js loads
+        // before combat-master.js via index.html script order)
+        // ====================================================================
+        if (typeof DamageResolver !== 'undefined') {
+            // Sync config so runtime tweaks on DamageCalculator propagate
+            DamageResolver.config.baseVariance = this.config.baseVariance;
+            DamageResolver.config.minDamage = this.config.minDamage;
+            DamageResolver.config.critMultiplier = this.config.critMultiplier;
+            DamageResolver.config.baseCritChance = this.config.baseCritChance;
+            DamageResolver.config.pierceCritBonus = this.config.pierceCritBonus;
+            DamageResolver.config.defenseScaling = this.config.defenseScaling;
+            DamageResolver.config.maxDefenseReduction = this.config.maxDefenseReduction;
+
+            const resolved = DamageResolver.calculate(attacker, defender);
+
+            // Map DamageResolver output to DamageCalculator's expected shape
+            const result = {
+                finalDamage: resolved.finalDamage,
+                baseDamage: resolved.rawDamage,
+                isCrit: resolved.isCrit,
+                isHit: resolved.isHit,
+                breakdown: resolved.breakdown,
+                messages: resolved.messages
+            };
+
+            if (this.config.debugLogging) {
+                this.logDamageCalculation(attacker, defender, room, result);
+            }
+
+            return result;
+        }
+
+        // ====================================================================
+        // INLINE FALLBACK (when DamageResolver is not loaded)
+        // ====================================================================
         const result = {
             finalDamage: 0,
             baseDamage: 0,
@@ -579,7 +616,7 @@ const DamageCalculator = {
 
         // Monster/unarmed damage - scale based on attackType and appropriate stat
         const attackType = attacker.attackType || 'physical';
-        const attackRange = attacker.attackRange || 1;
+        const attackRange = attacker.combat?.attackRange || attacker.attackRange || 1;
 
         let stat, scalingDivisor;
 
@@ -789,23 +826,23 @@ const DamageCalculator = {
         const attackerName = attacker.name || 'Player';
         const defenderName = defender.name || 'Target';
 
-        console.log(`[DamageCalc] ${attackerName} → ${defenderName}`);
-        console.log(`  Base: ${result.baseDamage}`);
-        console.log(`  Weapon/Armor: x${result.breakdown.weaponArmorMod.toFixed(2)}`);
-        console.log(`  Element: x${result.breakdown.elementMod.toFixed(2)}`);
-        console.log(`  Defense: x${result.breakdown.defenseMod.toFixed(2)}`);
+        // console.log(`[DamageCalc] ${attackerName} → ${defenderName}`);
+        // console.log(`  Base: ${result.baseDamage}`);
+        // console.log(`  Weapon/Armor: x${result.breakdown.weaponArmorMod.toFixed(2)}`);
+        // console.log(`  Element: x${result.breakdown.elementMod.toFixed(2)}`);
+        // console.log(`  Defense: x${result.breakdown.defenseMod.toFixed(2)}`);
         if (result.breakdown.socialMod !== 1.0) {
-            console.log(`  Social: x${result.breakdown.socialMod.toFixed(2)}`);
+            // console.log(`  Social: x${result.breakdown.socialMod.toFixed(2)}`);
         }
         if (result.breakdown.skillMod !== 1.0) {
-            console.log(`  Skill (${result.breakdown.proficiencyType || 'N/A'}): x${result.breakdown.skillMod.toFixed(2)}`);
+            // console.log(`  Skill (${result.breakdown.proficiencyType || 'N/A'}): x${result.breakdown.skillMod.toFixed(2)}`);
         }
         if (result.breakdown.skillDefenseMod !== 1.0) {
-            console.log(`  Skill Defense: x${result.breakdown.skillDefenseMod.toFixed(2)}`);
+            // console.log(`  Skill Defense: x${result.breakdown.skillDefenseMod.toFixed(2)}`);
         }
-        console.log(`  Crit: x${result.breakdown.critMod.toFixed(2)}`);
-        console.log(`  Variance: x${result.breakdown.variance.toFixed(2)}`);
-        console.log(`  FINAL: ${result.finalDamage} ${result.messages.join(' ')}`);
+        // console.log(`  Crit: x${result.breakdown.critMod.toFixed(2)}`);
+        // console.log(`  Variance: x${result.breakdown.variance.toFixed(2)}`);
+        // console.log(`  FINAL: ${result.finalDamage} ${result.messages.join(' ')}`);
     }
 };
 
@@ -1257,6 +1294,10 @@ if (typeof addMessage !== 'function') {
 // ############################################################################
 // SECTION 4: PROJECTILES
 // ############################################################################
+// NOTE: ProjectileManager (projectile-manager.js) wraps these functions as a
+// clean facade. It delegates spawn -> createProjectile, update -> updateProjectiles,
+// cleanup -> clearProjectiles, etc. The canonical data lives here.
+// ############################################################################
 
 const projectiles = [];
 
@@ -1430,6 +1471,9 @@ function applyProjectileDamage(config) {
     let damage = config.damage;
     if (isNaN(damage) || damage === undefined) damage = 5;
 
+    // Capture HP before damage for effective damage calculation (XP capped at actual HP removed)
+    const hpBeforeDamage = target.hp;
+
     if (typeof applyDamage === 'function') {
         applyDamage(target, damage, config.attacker);
     } else {
@@ -1438,11 +1482,14 @@ function applyProjectileDamage(config) {
 
     if (isNaN(target.hp)) target.hp = 0;
 
+    // Soul & Body: Award skill XP based on EFFECTIVE damage (capped at actual HP removed)
+    // This prevents overkill damage from giving bonus XP (per skill-system-implementation.md)
     if (config.attacker === game.player) {
+        const effectiveDamage = Math.min(damage, hpBeforeDamage);
         if (config.isMagic && typeof awardMagicXp === 'function') {
-            awardMagicXp(game.player, damage);
+            awardMagicXp(game.player, effectiveDamage);
         } else if (typeof awardRangedXp === 'function') {
-            awardRangedXp(game.player, damage);
+            awardRangedXp(game.player, effectiveDamage);
         }
     }
 
@@ -1455,7 +1502,7 @@ function applyProjectileDamage(config) {
                 attackCooldown: 0,
                 attackSpeed: target.attackSpeed || 1.0,
                 autoRetaliate: true,
-                attackRange: target.attackRange || 1
+                attackRange: target.combat?.attackRange || target.attackRange || 1
             };
         }
         if (typeof engageCombat === 'function') {
@@ -1759,7 +1806,14 @@ function updateEntityCombat(entity, deltaTime) {
             usedAbility = EnemyAbilitySystem.tryUseAbility(entity, combat.currentTarget);
         }
         if (!usedAbility) {
-            startAttackWindup(entity, combat.currentTarget);
+            // BUGFIX: Don't fall through to basic attack if enemy has a signature ability
+            // (ability is just on cooldown, not missing). Only use basic attacks for
+            // unmapped monsters without any ability configuration.
+            const hasSignatureAbility = typeof EnemyAbilitySystem !== 'undefined' &&
+                EnemyAbilitySystem.enemyAbilities?.get(entity.id)?.signatureAbility;
+            if (!hasSignatureAbility) {
+                startAttackWindup(entity, combat.currentTarget);
+            }
         } else {
             const baseSpeed = combat.attackSpeed || 1.0;
             combat.attackCooldown = (COMBAT_CONFIG.baseAttackTime * baseSpeed) / 1000;
@@ -1772,7 +1826,8 @@ function startAttackWindup(attacker, target) {
     const duration = COMBAT_CONFIG.enemyAttackDuration;
 
     let attackType = 'melee';
-    if (attacker.attackRange && attacker.attackRange > 2) attackType = 'ranged';
+    const attackRange = attacker.combat?.attackRange || attacker.attackRange || 1;
+    if (attackRange > 2) attackType = 'ranged';
     if (attacker.element && ['fire', 'ice', 'arcane', 'void', 'death'].includes(attacker.element)) attackType = 'magic';
     if (combat.attackType) attackType = combat.attackType;
 
@@ -1904,8 +1959,22 @@ function performAttack(attacker, defender) {
     const isAmbush = checkAmbush(attacker, defender);
 
     const isEnemy = attacker !== game.player;
-    const comboCount = isEnemy ? (attacker.combat?.comboCount || 1) : 1;
-    const isComboFinisher = isEnemy && comboCount === 3;
+
+    // Issue #12: Player Combo System - Get combo count for both player and enemies
+    // Player combo tracked in mouseAttackState, enemy combo in attacker.combat
+    let comboCount;
+    if (isEnemy) {
+        comboCount = attacker.combat?.comboCount || 1;
+    } else {
+        // Player combo from mouse attack system (1, 2, 3 cycle)
+        // Note: comboCount was already incremented after attack start, so 1 means just did 3rd hit
+        comboCount = mouseAttackState?.comboCount || 1;
+        // Since combo increments AFTER performMouseAttack, we need the previous value
+        // If current is 1, previous was 3 (finisher). If current is 2, previous was 1. If current is 3, previous was 2.
+        const previousCombo = comboCount === 1 ? 3 : comboCount - 1;
+        comboCount = previousCombo;
+    }
+    const isComboFinisher = comboCount === 3;
 
     let result;
     if (typeof DamageCalculator !== 'undefined') {
@@ -1937,6 +2006,22 @@ function performAttack(attacker, defender) {
         result.isComboFinisher = true;
     }
 
+    // PACK TACTICS: Apply flanking bonus for enemy attacks on player
+    if (isEnemy && typeof AIManager !== 'undefined' && AIManager.calculateFlankingBonus) {
+        const flankingResult = AIManager.calculateFlankingBonus(attacker, defender);
+        if (flankingResult.multiplier > 1.0) {
+            result.finalDamage = Math.floor(result.finalDamage * flankingResult.multiplier);
+            result.flankingPosition = flankingResult.position;
+
+            // Log flanking attack
+            if (flankingResult.position === 'behind') {
+                result.isBackstab = true;
+            } else if (flankingResult.position === 'flank') {
+                result.isFlanking = true;
+            }
+        }
+    }
+
     if (isEnemy && attacker.combat) attacker.combat.comboCount = (comboCount % 3) + 1;
 
     applyDamage(defender, result.finalDamage, attacker, result);
@@ -1954,7 +2039,16 @@ function performAttack(attacker, defender) {
         }
     }
 
-    showDamageNumber(defender, result.finalDamage, color, { isCrit: result.isCrit || result.isAmbush });
+    // Issue #12: Show COMBO! text for player combo finisher
+    if (result.isComboFinisher && !isEnemy) {
+        showDamageNumber(defender, 'COMBO!', '#ff00ff', { isCrit: true });
+        // Small screen shake for satisfying feedback
+        if (typeof triggerScreenEffect === 'function') {
+            triggerScreenEffect('shake', 0.25, 150);
+        }
+    }
+
+    showDamageNumber(defender, result.finalDamage, color, { isCrit: result.isCrit || result.isAmbush || result.isComboFinisher });
 
     if (typeof NoiseSystem !== 'undefined') {
         if (attacker === game.player) NoiseSystem.playerNoise('HIT_IMPACT');
@@ -1963,12 +2057,38 @@ function performAttack(attacker, defender) {
 
     applyWeaponEffects(attacker, defender, result);
 
+    // TIME EFFECTS: Dramatic slow on critical hits
+    if (result.isCrit && attacker === game.player) {
+        if (typeof TimeEffects !== 'undefined') {
+            TimeEffects.triggerDramaticSlow(150); // 0.3x for 150ms
+        }
+        if (typeof game !== 'undefined' && game.runStats) {
+            game.runStats.criticalHits = (game.runStats.criticalHits || 0) + 1;
+        }
+        if (typeof EventBus !== 'undefined') {
+            EventBus.emit('player:critical_hit', {
+                target: defender,
+                damage: result.finalDamage,
+                damageType: result.breakdown?.weaponArmorMod ? 'weapon' : 'physical'
+            });
+        }
+    }
+
     if (defender.hp <= 0) handleDeath(defender, attacker);
 }
 
 function applyDamage(entity, damage, source, damageResult) {
     if (entity === game.player && typeof playerHasIframes === 'function' && playerHasIframes()) return;
     if (entity === game.player && window.godMode) return;
+
+    // SPELL SYSTEM SHIELD: Absorb damage with active shield
+    if (entity === game.player && typeof SpellSystem !== 'undefined' && SpellSystem.hasActiveShield()) {
+        damage = SpellSystem.absorbDamage(damage);
+        if (damage <= 0) {
+            // Shield absorbed all damage
+            return;
+        }
+    }
 
     if (typeof damage !== 'number' || isNaN(damage)) damage = 1;
 
@@ -1985,13 +2105,56 @@ function applyDamage(entity, damage, source, damageResult) {
     entity.hp -= damage;
     if (isNaN(entity.hp)) entity.hp = 0;
 
-    if (entity === game.player && typeof awardDefenseXp === 'function') {
-        awardDefenseXp(game.player, damage);
+    // Track damage in runStats
+    if (typeof game !== 'undefined' && game.runStats) {
+        if (entity === game.player) {
+            // Player is taking damage
+            game.runStats.damageTaken = (game.runStats.damageTaken || 0) + damage;
+        } else if (source === game.player) {
+            // Player is dealing damage to an enemy
+            game.runStats.damageDealt = (game.runStats.damageDealt || 0) + damage;
+        }
     }
+
+    // Defense XP removed - defense is now handled by equipment only (per skill-system-implementation.md)
 
     if (entity === game.player && typeof triggerScreenEffect === 'function') {
         const dmgPct = Math.min(1, damage / entity.maxHp);
         triggerScreenEffect('damage', 0.2 + dmgPct * 0.4, 200);
+
+        // Critical hit flash: intense red flash for big hits (crit or >20% of max HP)
+        const isCrit = damageResult?.isCrit;
+        const isBigHit = dmgPct >= 0.2;
+        if (isCrit || isBigHit) {
+            // Use critFlash effect for intense red vignette
+            const critIntensity = isCrit ? 0.5 : (0.25 + dmgPct * 0.3);
+            triggerScreenEffect('critFlash', critIntensity, isCrit ? 150 : 100);
+        }
+    }
+
+    // EVENT + TIME EFFECTS: Player damage taken
+    if (entity === game.player) {
+        const isLethal = entity.hp <= 0;
+        const damageType = damageResult?.element || damageResult?.type || 'physical';
+
+        if (typeof EventBus !== 'undefined') {
+            EventBus.emit('player:damage_taken', {
+                amount: damage,
+                source: source,
+                damageType: damageType,
+                isLethal: isLethal
+            });
+        }
+
+        // Dramatic slow on lethal damage (death slow)
+        if (isLethal && typeof TimeEffects !== 'undefined') {
+            TimeEffects.triggerDramaticSlow(800); // 0.3x for 800ms death slow
+        }
+
+        // Track hazard damage in runStats
+        if (source && source.isHazard && typeof game !== 'undefined' && game.runStats) {
+            game.runStats.hazardsTriggered = (game.runStats.hazardsTriggered || 0) + 1;
+        }
     }
 
     if (!entity.hitFlash) entity.hitFlash = { active: false, time: 0 };
@@ -2004,6 +2167,14 @@ function applyDamage(entity, damage, source, damageResult) {
         EnemyAbilitySystem.checkMechanics(entity, 'on_damaged', { damage, source });
     }
 
+    // ENEMY WINDUP INTERRUPT: Interrupt attack windup if enemy can be interrupted
+    if (entity !== game.player && typeof AIManager !== 'undefined' && AIManager.ais) {
+        const ai = AIManager.ais.get(entity);
+        if (ai && typeof ai.interruptWindup === 'function') {
+            ai.interruptWindup();
+        }
+    }
+
     if (entity.isInvisible) {
         entity.isInvisible = false;
         if (typeof removeStatusEffect === 'function') removeStatusEffect(entity, 'invisible');
@@ -2011,6 +2182,11 @@ function applyDamage(entity, damage, source, damageResult) {
 
     if (typeof BoonCombatIntegration !== 'undefined' && entity === game.player) {
         BoonCombatIntegration.applyOnDamageTakenEffects(entity, damage, source);
+    }
+
+    // KILL STREAK: Reset streak when player takes damage
+    if (entity === game.player && typeof KillStreakSystem !== 'undefined') {
+        KillStreakSystem.onDamageTaken(damage, source);
     }
 }
 
@@ -2052,9 +2228,32 @@ function applyWeaponEffects(attacker, defender, damageResult) {
 
 function handleDeath(entity, killer) {
     if (entity === game.player) {
+        // Record cause of death for the death screen summary
+        if (typeof game !== 'undefined' && game.runStats) {
+            game.runStats.causeOfDeath = {
+                enemyName: killer ? (killer.name || killer.type || 'Unknown') : 'Unknown',
+                enemyType: killer ? (killer.type || '') : '',
+                floor: game.floor || 1
+            };
+        }
         if (typeof handlePlayerDeath === 'function') handlePlayerDeath();
         else game.state = 'gameover';
         return;
+    }
+
+    // TIME EFFECTS: Impact slow on enemy death
+    if (typeof TimeEffects !== 'undefined') {
+        TimeEffects.triggerImpactSlow(100); // 0.7x for 100ms
+    }
+
+    // EVENT: Emit enemy death event
+    if (typeof EventBus !== 'undefined') {
+        EventBus.emit('enemy:death', {
+            enemy: entity,
+            killer: killer,
+            position: { x: entity.gridX, y: entity.gridY },
+            damageType: 'physical'
+        });
     }
 
     if (entity.combat) {
@@ -2069,6 +2268,17 @@ function handleDeath(entity, killer) {
     if (typeof addMessage === 'function') addMessage(`Defeated ${entity.name}!`);
     if (typeof NoiseSystem !== 'undefined') NoiseSystem.monsterNoise(entity, 'DEATH_CRY');
     if (typeof clearStatusEffects === 'function') clearStatusEffects(entity);
+
+    // Track kill stats
+    if (typeof trackMonsterKill === 'function') {
+        trackMonsterKill(entity.name || entity.type);
+    }
+    persistentState.stats.totalKills = (persistentState.stats.totalKills || 0) + 1;
+
+    // Track kill in runStats
+    if (typeof game !== 'undefined' && game.runStats) {
+        game.runStats.enemiesKilled = (game.runStats.enemiesKilled || 0) + 1;
+    }
 
     if (typeof BoonCombatIntegration !== 'undefined' && killer === game.player) {
         BoonCombatIntegration.applyOnKillEffects(killer, entity);
@@ -2096,7 +2306,25 @@ function handleDeath(entity, killer) {
     const index = game.enemies.indexOf(entity);
     if (index > -1) game.enemies.splice(index, 1);
 
-    if (game.player.combat?.currentTarget === entity) disengageCombat(game.player);
+    // Disengage player if they were targeting this entity
+    if (game.player.combat?.currentTarget === entity) {
+        disengageCombat(game.player);
+    }
+    // Also check if this entity was targeting the player - disengage if no other threats remain
+    else if (entity.combat?.currentTarget === game.player && game.player.inCombat) {
+        let hasOtherThreats = false;
+        for (const enemy of game.enemies) {
+            if (enemy.hp > 0 && enemy.combat?.currentTarget === game.player) {
+                hasOtherThreats = true;
+                break;
+            }
+        }
+        if (!hasOtherThreats) {
+            disengageCombat(game.player);
+        }
+    }
+
+    // Disengage any enemies that were targeting this entity
     for (const enemy of game.enemies) {
         if (enemy.combat?.currentTarget === entity) disengageCombat(enemy);
     }
@@ -2126,6 +2354,11 @@ function getDistance(entity1, entity2) {
 }
 
 function getCurrentRoom(entity) {
+    // Use consolidated RoomUtils if available
+    if (typeof RoomUtils !== 'undefined') {
+        return RoomUtils.getCurrentRoom(entity);
+    }
+    // Fallback implementation (for backwards compatibility)
     if (!game.rooms) return null;
     const x = entity.gridX ?? entity.x;
     const y = entity.gridY ?? entity.y;
@@ -2361,8 +2594,16 @@ function updateDash(deltaTime) {
     }
 }
 
-function playerHasIframes() { return dashState.hasIframes; }
-function playerIsDashing() { return dashState.isDashing; }
+function playerHasIframes() {
+    if (dashState.hasIframes) return true;
+    if (typeof DodgeSystem !== 'undefined' && DodgeSystem.isInvincible()) return true;
+    return false;
+}
+function playerIsDashing() {
+    if (dashState.isDashing) return true;
+    if (typeof DodgeSystem !== 'undefined' && DodgeSystem.isDodging()) return true;
+    return false;
+}
 function getDashCooldown() { return dashState.cooldown; }
 function getDashCooldownMax() { return COMBAT_ENHANCEMENTS_CONFIG.dash.cooldown; }
 
@@ -2453,6 +2694,36 @@ function updateScreenShake(deltaTime) {
 
 function getScreenShakeOffset() { return { x: screenShakeState.offsetX, y: screenShakeState.offsetY }; }
 
+/**
+ * Trigger screen shake from ability effects
+ * Used by enemy-ability-system when abilities with camera effects resolve
+ * @param {Object} config - Camera config from ABILITY_EFFECTS (e.g., { type: 'screenShake', intensity: 4, duration: 150, flash: { color, intensity, duration } })
+ */
+function triggerAbilityScreenShake(config) {
+    if (!config || config.type !== 'screenShake') return;
+    if (!COMBAT_ENHANCEMENTS_CONFIG.screenShake.enabled) return;
+
+    const intensity = config.intensity || COMBAT_ENHANCEMENTS_CONFIG.screenShake.normalIntensity;
+    const duration = (config.duration || 150) / 1000; // Convert ms to seconds
+
+    screenShakeState.active = true;
+    screenShakeState.intensity = intensity;
+    screenShakeState.timer = duration;
+    // Reset directional shake for random shake pattern
+    screenShakeState.directionalX = 0;
+    screenShakeState.directionalY = 0;
+
+    // Trigger screen flash if configured (for heavy-hitting abilities)
+    if (config.flash && typeof triggerScreenFlash === 'function') {
+        const flashConfig = config.flash;
+        triggerScreenFlash(
+            flashConfig.color || '#FFFFFF',
+            flashConfig.intensity || 0.3,
+            flashConfig.duration || 80
+        );
+    }
+}
+
 function applyStagger(enemy) {
     if (!COMBAT_ENHANCEMENTS_CONFIG.stagger.enabled || !enemy) return;
     if (enemy.tier === 'ELITE' || enemy.tier === 'BOSS') return;
@@ -2505,19 +2776,13 @@ function onCombatHit(attacker, defender, damageResult) {
     }
 }
 
-// Spacebar dash input handler
+// Spacebar spell input handler (Dash/Heal/Shield based on SpellSystem selection)
+// NOTE: Primary handler is in input-handler.js - this is a backup for mouse-direction dash
 let lastMouseX = 0, lastMouseY = 0;
 window.addEventListener('mousemove', (e) => { lastMouseX = e.clientX; lastMouseY = e.clientY; });
-window.addEventListener('keydown', (e) => {
-    if (e.key === ' ' && game.state === 'playing') {
-        e.preventDefault();
-        const canvas = document.getElementById('gameCanvas');
-        if (canvas) {
-            const rect = canvas.getBoundingClientRect();
-            performDash(game.player, lastMouseX - rect.left, lastMouseY - rect.top);
-        }
-    }
-});
+// REMOVED: Duplicate spacebar handler - now handled by input-handler.js via SpellSystem
+// The input-handler.js spacebar handler routes to SpellSystem.tryActivate() which handles
+// all three spells (Dash, Heal, Shield) based on loadout selection.
 
 // ############################################################################
 // SECTION 7: BOON COMBAT INTEGRATION
@@ -3557,6 +3822,15 @@ function performMouseAttack(player, fromBuffer = false) {
     const isSpecial = (comboCount === 3);
     const attackFromLeft = (comboCount === 1);
 
+    // STAMINA CHECK: Attacks cost stamina
+    if (typeof StaminaSystem !== 'undefined') {
+        const actionType = isSpecial ? 'heavyAttack' : 'lightAttack';
+        if (!StaminaSystem.consumeAction(actionType)) {
+            // Not enough stamina - show feedback but don't attack
+            return false;
+        }
+    }
+
     updatePlayerFacingFromAngleInternal(player, direction);
 
     if (arcConfig.isRanged) {
@@ -3567,7 +3841,15 @@ function performMouseAttack(player, fromBuffer = false) {
 
     mouseAttackState.comboCount = (comboCount % 3) + 1;
     mouseAttackState.comboResetTimer = mouseAttackState.comboDecayDuration;
-    mouseAttackState.cooldown = getAttackCooldown(player);
+
+    // Set cooldown (with exhaustion penalty if applicable)
+    let cooldown = getAttackCooldown(player);
+    if (typeof StaminaSystem !== 'undefined' && StaminaSystem.isExhausted()) {
+        // Exhaustion slows down attacks
+        const exhaustionMod = StaminaSystem.getExhaustionModifier();
+        cooldown = cooldown / exhaustionMod; // Dividing by 0.7 makes cooldown ~43% longer
+    }
+    mouseAttackState.cooldown = cooldown;
 
     if (player.gcd) { player.gcd.active = true; player.gcd.remaining = player.gcd.duration || 0.5; }
     return true;
@@ -3744,6 +4026,24 @@ function applyMeleeDamageInternal(player, enemy, isSpecial) {
 
     if (isNaN(damageResult.finalDamage)) damageResult.finalDamage = Math.max(1, baseDamage);
 
+    // TIME EFFECTS: Dramatic slow on critical hits (mouse attack path)
+    if (damageResult.isCrit) {
+        if (typeof TimeEffects !== 'undefined') {
+            TimeEffects.triggerDramaticSlow(150); // 0.3x for 150ms
+        }
+        if (typeof game !== 'undefined' && game.runStats) {
+            game.runStats.criticalHits = (game.runStats.criticalHits || 0) + 1;
+        }
+        if (typeof EventBus !== 'undefined') {
+            EventBus.emit('player:critical_hit', {
+                target: enemy,
+                damage: damageResult.finalDamage,
+                damageType: weapon?.damageType || 'physical'
+            });
+        }
+    }
+
+    // Trigger hitstop
     triggerHitstopInternal(damageResult.isCrit, isSpecial);
     triggerDirectionalShakeInternal(mouseAttackState.swingDirection, damageResult.isCrit, isSpecial);
 
@@ -3752,11 +4052,16 @@ function applyMeleeDamageInternal(player, enemy, isSpecial) {
 
     if (typeof showDamageNumber === 'function') {
         let color = '#ffffff';
+
+        // Show special combat text based on result
         if (damageResult.isAmbush) {
             color = typeof COMBAT_TEXT_COLORS !== 'undefined' ? COMBAT_TEXT_COLORS.ambush : '#ffd700';
             showDamageNumber(enemy, 'AMBUSH!', color, { isCrit: true });
-        } else if (damageResult.isCrit) color = '#ffff00';
-        showDamageNumber(enemy, damageResult.finalDamage, color, { isCrit: damageResult.isCrit || damageResult.isAmbush });
+            showDamageNumber(enemy, damageResult.finalDamage, color, { isCrit: damageResult.isCrit || damageResult.isAmbush });
+        } else {
+            if (damageResult.isCrit) color = '#ffff00';
+            showDamageNumber(enemy, damageResult.finalDamage, color, { isCrit: damageResult.isCrit });
+        }
     }
 
     if (typeof onCombatHit === 'function') {
@@ -3769,7 +4074,12 @@ function applyMeleeDamageInternal(player, enemy, isSpecial) {
         if (!enemy.combat) {
             enemy.combat = { isInCombat: false, currentTarget: null, attackCooldown: 0, attackSpeed: enemy.attackSpeed || 1.0, autoRetaliate: true, attackRange: enemy.attackRange || 1 };
         }
-        if (typeof engageCombat === 'function') engageCombat(enemy, player);
+        // FIXED: Engage both sides of combat so player.combat.currentTarget is set
+        // This allows proper disengagement when target dies
+        if (typeof engageCombat === 'function') {
+            engageCombat(player, enemy);  // Player attacks enemy
+            engageCombat(enemy, player);  // Enemy retaliates
+        }
     }
 
     if (enemy.hp <= 0) {
@@ -3983,6 +4293,21 @@ const CombatEnhancementsSystem = {
         updateStagger(deltaTime);
         updateMouseAttackSystem(deltaTime);
         updateDamageNumbers(deltaTime);
+
+        // Update ability effect animations (telegraph, impact, channel phases)
+        if (typeof EffectAnimator !== 'undefined') {
+            EffectAnimator.update(deltaTime);
+        }
+
+        // Update heal pulse effects (life drain caster feedback)
+        if (typeof HealPulseEffects !== 'undefined') {
+            HealPulseEffects.update(deltaTime);
+        }
+
+        // Update lingering hazard zones (poison clouds, etc.)
+        if (typeof LingeringHazards !== 'undefined' && typeof game !== 'undefined' && game.player) {
+            LingeringHazards.update(deltaTime, game.player);
+        }
     },
 
     render(ctx, camera) {
@@ -4002,6 +4327,143 @@ if (typeof SystemManager !== 'undefined') {
 // ############################################################################
 
 // Export all functions and objects to window for global access
+// ============================================================================
+// MONSTER ATTACK EFFECTS
+// ============================================================================
+
+/**
+ * Create visual effect for monster attacks
+ * SIMPLIFIED: Auto-detects attack type from monster stats
+ * @param {Object} attacker - The attacking monster
+ * @param {Object} defender - The target (usually player)
+ * @param {string} [attackType] - Optional: 'melee', 'ranged', or 'magic'
+ * @param {Object} [result] - Optional: Damage calculation result
+ */
+function createMonsterAttackEffect(attacker, defender, attackType, result) {
+    console.log(`[MonsterAttack] createMonsterAttackEffect called for ${attacker?.name} -> ${defender?.name}`);
+    if (!attacker || !defender) {
+        console.log('[MonsterAttack] Missing attacker or defender, aborting');
+        return;
+    }
+
+    // Get attacker position (tile coordinates, centered)
+    const ax = (attacker.displayX ?? attacker.gridX) + 0.5;
+    const ay = (attacker.displayY ?? attacker.gridY) + 0.5;
+
+    // Get target position
+    const tx = (defender.displayX ?? defender.gridX) + 0.5;
+    const ty = (defender.displayY ?? defender.gridY) + 0.5;
+
+    // Calculate facing angle
+    const facingAngle = Math.atan2(ty - ay, tx - ax);
+
+    // Auto-detect attack type if not provided
+    if (!attackType) {
+        const range = attacker.stats?.range || attacker.attackRange || 1;
+        if (range > 2) {
+            // Check if magic or ranged based on element
+            if (attacker.element && ['fire', 'ice', 'arcane', 'void', 'death'].includes(attacker.element)) {
+                attackType = 'magic';
+            } else {
+                attackType = 'ranged';
+            }
+        } else {
+            attackType = 'melee';
+        }
+    }
+
+    // Default result if not provided
+    if (!result) {
+        result = { isCrit: false };
+    }
+
+    switch (attackType) {
+        case 'melee':
+            createMonsterMeleeEffect(ax, ay, facingAngle, attacker, result);
+            break;
+        case 'magic':
+            createMonsterMagicEffect(ax, ay, tx, ty, attacker, result);
+            break;
+        case 'ranged':
+            createMonsterRangedEffect(ax, ay, tx, ty, attacker, result);
+            break;
+    }
+}
+
+/**
+ * Create melee slash effect for monster
+ */
+function createMonsterMeleeEffect(ax, ay, facingAngle, attacker, result) {
+    console.log(`[MonsterAttack] createMonsterMeleeEffect at (${ax.toFixed(2)}, ${ay.toFixed(2)}), MeleeSlashEffect exists:`, typeof MeleeSlashEffect !== 'undefined');
+    if (typeof MeleeSlashEffect === 'undefined') {
+        console.log('[MonsterAttack] MeleeSlashEffect not defined!');
+        return;
+    }
+
+    // Base options for monster melee
+    const options = {
+        range: attacker.attackRange || 1.0,
+        arcDegrees: 70,
+        windupDuration: 0,  // No windup (already done)
+        slashDuration: 6,
+        particlesPerFrame: 4,
+        color: '#CC4444',       // Red-ish for enemy attacks
+        particleColor: '#FF6666'
+    };
+
+    // Customize by monster element
+    if (attacker.element) {
+        const elementColors = {
+            fire: { color: '#FF6B35', particleColor: '#FFAA00', glowColor: '#FF4400' },
+            ice: { color: '#74B9FF', particleColor: '#A8E6CF', glowColor: '#0984E3' },
+            water: { color: '#0984E3', particleColor: '#74B9FF', glowColor: '#0056B3' },
+            earth: { color: '#C4A35A', particleColor: '#8B7355', glowColor: '#6B4423' },
+            nature: { color: '#2ECC71', particleColor: '#A8E6CF', glowColor: '#27AE60' },
+            death: { color: '#6C5CE7', particleColor: '#A29BFE', glowColor: '#5B4FCF' },
+            void: { color: '#1E1E2E', particleColor: '#4A4A6A', glowColor: '#2D2D4D' },
+            arcane: { color: '#A29BFE', particleColor: '#DDA0DD', glowColor: '#9B59B6' }
+        };
+        if (elementColors[attacker.element]) {
+            Object.assign(options, elementColors[attacker.element]);
+        }
+    }
+
+    // Stronger effect for crits
+    if (result.isCrit) {
+        options.slashDuration = 8;
+        options.particlesPerFrame = 6;
+    }
+
+    MeleeSlashEffect.create(ax, ay, facingAngle, options);
+}
+
+/**
+ * Create magic attack effect for monster
+ */
+function createMonsterMagicEffect(ax, ay, tx, ty, attacker, result) {
+    if (typeof MonsterMagicEffect === 'undefined') return;
+
+    // Get element-specific options
+    const element = attacker.element || 'arcane';
+    MonsterMagicEffect.create(ax, ay, tx, ty, {
+        element: element,
+        isCrit: result.isCrit
+    });
+}
+
+/**
+ * Create ranged attack effect for monster
+ */
+function createMonsterRangedEffect(ax, ay, tx, ty, attacker, result) {
+    if (typeof MonsterRangedEffect === 'undefined') return;
+
+    MonsterRangedEffect.create(ax, ay, tx, ty, {
+        color: attacker.element ? undefined : '#AA6633',
+        element: attacker.element,
+        isCrit: result.isCrit
+    });
+}
+
 if (typeof window !== 'undefined') {
     // Configuration exports
     window.COMBAT_CONFIG = COMBAT_CONFIG;
@@ -4011,7 +4473,7 @@ if (typeof window !== 'undefined') {
     window.DEFAULT_ARC_CONFIG = DEFAULT_ARC_CONFIG;
     window.MAGIC_CONFIG = MAGIC_CONFIG;
 
-    // Damage Calculator exports
+    // Damage Calculator exports (DamageResolver loaded via damage-resolver.js)
     window.DamageCalculator = DamageCalculator;
     window.calculateDamageSimple = calculateDamageSimple;
     window.calculateDamageWithRoom = calculateDamageWithRoom;
@@ -4028,7 +4490,7 @@ if (typeof window !== 'undefined') {
     window.getStatusEffects = getStatusEffects;
     window.clearStatusEffects = clearStatusEffects;
 
-    // Projectile exports
+    // Projectile exports (ProjectileManager facade loaded via projectile-manager.js)
     window.projectiles = projectiles;
     window.createProjectile = createProjectile;
     window.updateProjectiles = updateProjectiles;
@@ -4051,6 +4513,12 @@ if (typeof window !== 'undefined') {
     window.getAttackAnimationState = getAttackAnimationState;
     window.checkAmbush = checkAmbush;
 
+    // Monster Attack Effect exports
+    window.createMonsterAttackEffect = createMonsterAttackEffect;
+    window.createMonsterMeleeEffect = createMonsterMeleeEffect;
+    window.createMonsterMagicEffect = createMonsterMagicEffect;
+    window.createMonsterRangedEffect = createMonsterRangedEffect;
+
     // Damage Numbers exports
     window.damageNumbers = damageNumbers;
     window.showDamageNumber = showDamageNumber;
@@ -4072,6 +4540,7 @@ if (typeof window !== 'undefined') {
     window.triggerScreenShake = triggerScreenShake;
     window.updateScreenShake = updateScreenShake;
     window.getScreenShakeOffset = getScreenShakeOffset;
+    window.triggerAbilityScreenShake = triggerAbilityScreenShake;
     window.applyStagger = applyStagger;
     window.updateStagger = updateStagger;
     window.isEnemyStaggered = isEnemyStaggered;

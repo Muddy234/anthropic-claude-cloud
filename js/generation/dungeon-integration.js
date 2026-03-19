@@ -6,58 +6,103 @@
 
 /**
  * Create an enemy at the specified position (for blob dungeon spawning)
- * Different from enemy-spawner.js createEnemy which takes monsterType explicitly
+ * Now uses unified EnemyFactory for consistent stats across all spawn systems
  * @param {number} x - Grid X position
  * @param {number} y - Grid Y position
  * @param {string} element - Element type for selecting appropriate monsters
- * @param {number} difficulty - Difficulty scaling factor
+ * @param {number} difficulty - Difficulty scaling factor (1-10)
  * @returns {object} The created enemy
  */
 function createEnemyAtPosition(x, y, element, difficulty) {
-    // Get element-appropriate monsters from MONSTER_DATA
+    // Select monster type based on element
+    const monsterType = selectMonsterByElement(element);
+    if (!monsterType) {
+        console.warn('[createEnemyAtPosition] No monster type could be selected');
+        return null;
+    }
+
+    // Use EnemyFactory for unified enemy creation
+    if (typeof EnemyFactory !== 'undefined') {
+        // Convert difficulty (1-10) to a scale factor
+        // difficulty 1 = 1.0x, difficulty 10 = 2.35x (matching old formula: 1 + (10-1) * 0.15)
+        const difficultyScale = 1 + (difficulty - 1) * 0.15;
+
+        const enemy = EnemyFactory.createAndRegister({
+            monsterType: monsterType,
+            x: x,
+            y: y,
+            room: null,
+            difficultyScale: difficultyScale
+        });
+
+        return enemy;
+    }
+
+    // Fallback to legacy creation (deprecated)
+    console.warn('[createEnemyAtPosition] EnemyFactory not available, using legacy creation');
+    return createEnemyAtPositionLegacy(x, y, element, difficulty);
+}
+
+/**
+ * Select a monster type appropriate for the given element
+ * @param {string} element - Element type
+ * @returns {string|null} Monster type ID
+ */
+function selectMonsterByElement(element) {
+    if (typeof MONSTER_DATA === 'undefined') {
+        console.warn('[selectMonsterByElement] MONSTER_DATA not available');
+        return null;
+    }
+
     const elementMonsters = [];
     const fallbackMonsters = [];
 
-    if (typeof MONSTER_DATA !== 'undefined') {
-        for (const [name, data] of Object.entries(MONSTER_DATA)) {
-            if (data.elite) continue; // Skip elites for regular spawning
+    for (const [name, data] of Object.entries(MONSTER_DATA)) {
+        if (data.elite) continue; // Skip elites for regular spawning
 
-            if (data.element === element) {
-                elementMonsters.push({ name, data });
-            } else {
-                fallbackMonsters.push({ name, data });
-            }
+        if (data.element === element) {
+            elementMonsters.push({ name, data });
+        } else {
+            fallbackMonsters.push({ name, data });
         }
     }
 
-    // Pick a monster - prefer element-matching, fallback to any
+    // Prefer element-matching, fallback to any
     const pool = elementMonsters.length > 0 ? elementMonsters : fallbackMonsters;
 
     if (pool.length === 0) {
-        console.warn('[createEnemy] No monsters available in MONSTER_DATA');
         return null;
     }
 
     // Weight-based selection
     const totalWeight = pool.reduce((sum, m) => sum + (m.data.spawnWeight || 10), 0);
     let roll = Math.random() * totalWeight;
-    let selected = pool[0];
 
     for (const monster of pool) {
         roll -= monster.data.spawnWeight || 10;
         if (roll <= 0) {
-            selected = monster;
-            break;
+            return monster.name;
         }
     }
 
-    const template = selected.data;
+    return pool[0].name;
+}
+
+/**
+ * Legacy enemy creation - deprecated, kept for fallback
+ * @deprecated Use EnemyFactory.createAndRegister() instead
+ */
+function createEnemyAtPositionLegacy(x, y, element, difficulty) {
+    const monsterType = selectMonsterByElement(element);
+    if (!monsterType) return null;
+
+    const template = MONSTER_DATA[monsterType];
     const difficultyScale = 1 + (difficulty - 1) * 0.15;
 
     const enemy = {
         id: `enemy_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-        name: selected.name,
-        typeId: selected.name,
+        name: monsterType,
+        typeId: monsterType,
         gridX: x,
         gridY: y,
         x: x,
@@ -71,15 +116,8 @@ function createEnemyAtPosition(x, y, element, difficulty) {
         int: template.int || 5,
         pDef: Math.floor((template.pDef || 5) * difficultyScale),
         mDef: Math.floor((template.mDef || 5) * difficultyScale),
-        damage: Math.floor((template.str || 10) * difficultyScale),
-        defense: Math.floor((template.pDef || 5) * difficultyScale),
         element: template.element || 'physical',
         xp: Math.floor((template.xp || 20) * difficultyScale),
-        attackRange: template.attackRange || 1,
-        attackSpeed: template.attackSpeed || 2.0,
-        moveInterval: template.moveInterval || 2,
-        aggression: template.aggression || 3,
-        loot: template.loot || [],
         combat: {
             isInCombat: false,
             currentTarget: null,
@@ -91,12 +129,10 @@ function createEnemyAtPosition(x, y, element, difficulty) {
         }
     };
 
-    // Register with AI system
     if (typeof AIManager !== 'undefined') {
         AIManager.registerEnemy(enemy);
     }
 
-    // Initialize abilities
     if (typeof EnemyAbilitySystem !== 'undefined') {
         EnemyAbilitySystem.initializeEnemy(enemy);
     }
@@ -557,9 +593,7 @@ function placeExitInFarthestRoom() {
         }
     }
 
-    // SURVIVAL EXTRACTION UPDATE: Old exit system disabled
-    // Extraction points are now used instead (see ExtractionSystem)
-    // Keeping exitPosition for potential legacy compatibility
+    // Store exit position for the descent system and legacy compatibility
     game.exitPosition = { x: exitX, y: exitY };
 
     // Sync with sessionState.pathDown for the new system
@@ -601,6 +635,7 @@ if (typeof window !== 'undefined') {
     window.spawnEnemiesInDungeon = spawnEnemiesInDungeon;
     window.placeExitInFarthestRoom = placeExitInFarthestRoom;
     window.createEnemyAtPosition = createEnemyAtPosition;
+    window.selectMonsterByElement = selectMonsterByElement;
 }
 
-// Dungeon integration adapter loaded
+// Dungeon integration adapter loaded (uses EnemyFactory for unified enemy creation)

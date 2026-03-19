@@ -1,5 +1,5 @@
 // === js/core/save-manager.js ===
-// SURVIVAL EXTRACTION UPDATE: Save/Load system with 3 slots
+// Save/Load system with 3 slots
 
 // ============================================================================
 // SAVE MANAGER
@@ -33,7 +33,6 @@ const SaveManager = {
                         deepestFloor: parsed.persistent.stats.deepestFloor,
                         gold: parsed.persistent.bank.gold,
                         deaths: parsed.persistent.stats.deaths,
-                        extractions: parsed.persistent.stats.successfulExtractions,
                         hasActiveRun: parsed.session && parsed.session.active,
                         version: parsed.version || 1
                     });
@@ -160,8 +159,11 @@ const SaveManager = {
             // Version migration
             const migrated = this._migrateVersion(parsed);
 
+            // Restore special types (Sets, etc.) that were serialized
+            const restored = this._restoreTypes(migrated);
+
             console.log(`[SaveManager] Loaded from slot ${slot}`);
-            return migrated;
+            return restored;
         } catch (e) {
             console.error('[SaveManager] Load failed:', e);
             return null;

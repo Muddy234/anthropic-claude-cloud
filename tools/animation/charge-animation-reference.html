@@ -1,0 +1,1580 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>charge — Animation Implementation Reference</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&family=Space+Grotesk:wght@400;500;600;700&display=swap');
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  :root {
+    --bg: #0a0a0f;
+    --surface: #12121a;
+    --surface2: #1a1a26;
+    --border: #2a2a3a;
+    --text: #e0e0e8;
+    --text-dim: #8888a0;
+    --accent: #ff4444;
+    --accent2: #cc2222;
+    --warn: #ffaa00;
+    --success: #2ecc71;
+    --blue: #74b9ff;
+    --purple: #a29bfe;
+    --stun: #ffff00;
+  }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Space Grotesk', sans-serif;
+    line-height: 1.6;
+    padding: 2rem;
+    max-width: 1400px;
+    margin: 0 auto;
+  }
+
+  h1 {
+    font-size: 2.2rem;
+    font-weight: 700;
+    margin-bottom: 0.25rem;
+    background: linear-gradient(135deg, var(--accent), var(--warn));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+
+  h1 span {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 1.4rem;
+  }
+
+  .subtitle {
+    color: var(--text-dim);
+    font-size: 1rem;
+    margin-bottom: 2.5rem;
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 1.5rem;
+  }
+
+  h2 {
+    font-size: 1.3rem;
+    font-weight: 600;
+    margin-top: 2.5rem;
+    margin-bottom: 1rem;
+    color: var(--accent);
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+
+  h2 .phase-num {
+    background: var(--accent);
+    color: #fff;
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.85rem;
+    font-weight: 700;
+    flex-shrink: 0;
+  }
+
+  h3 {
+    font-size: 1rem;
+    font-weight: 600;
+    margin: 1.5rem 0 0.75rem;
+    color: var(--blue);
+  }
+
+  p, li {
+    color: var(--text);
+    font-size: 0.92rem;
+    margin-bottom: 0.5rem;
+  }
+
+  ul { padding-left: 1.25rem; margin-bottom: 1rem; }
+  li { margin-bottom: 0.35rem; }
+
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 1.5rem;
+    margin: 1rem 0;
+  }
+
+  .callout {
+    background: var(--surface2);
+    border-left: 3px solid var(--warn);
+    padding: 1rem 1.25rem;
+    margin: 1rem 0;
+    border-radius: 0 6px 6px 0;
+    font-size: 0.9rem;
+  }
+
+  .callout.critical {
+    border-left-color: var(--accent);
+  }
+
+  .callout.success {
+    border-left-color: var(--success);
+  }
+
+  .callout strong {
+    color: var(--warn);
+  }
+
+  .callout.critical strong {
+    color: var(--accent);
+  }
+
+  .callout.success strong {
+    color: var(--success);
+  }
+
+  /* ── CANVAS AREA ── */
+  .demo-area {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 1.5rem;
+    margin: 1.5rem 0;
+  }
+
+  .demo-area canvas {
+    display: block;
+    margin: 0 auto;
+    image-rendering: pixelated;
+    image-rendering: crisp-edges;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    background: #08080c;
+  }
+
+  .demo-controls {
+    display: flex;
+    gap: 0.75rem;
+    justify-content: center;
+    margin-top: 1rem;
+    flex-wrap: wrap;
+  }
+
+  .demo-controls button {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.8rem;
+    padding: 0.5rem 1.25rem;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    background: var(--surface2);
+    color: var(--text);
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+
+  .demo-controls button:hover {
+    border-color: var(--accent);
+    color: var(--accent);
+  }
+
+  .phase-label {
+    text-align: center;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.85rem;
+    color: var(--text-dim);
+    margin-top: 0.5rem;
+    min-height: 1.4em;
+  }
+
+  /* ── CODE BLOCKS ── */
+  pre {
+    background: #0d0d14;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 1.25rem;
+    overflow-x: auto;
+    margin: 1rem 0;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.78rem;
+    line-height: 1.55;
+    color: #c8c8d8;
+  }
+
+  .kw { color: #c792ea; }
+  .str { color: #c3e88d; }
+  .num { color: #f78c6c; }
+  .cm { color: #546e7a; font-style: italic; }
+  .fn { color: #82aaff; }
+  .prop { color: #f07178; }
+  .op { color: #89ddff; }
+
+  /* ── TIMELINE ── */
+  .timeline {
+    display: flex;
+    gap: 0;
+    margin: 1.5rem 0;
+    border-radius: 6px;
+    overflow: hidden;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.75rem;
+  }
+
+  .timeline-seg {
+    padding: 0.75rem 0.5rem;
+    text-align: center;
+    color: var(--bg);
+    font-weight: 600;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.2rem;
+  }
+
+  .timeline-seg .t-label { font-size: 0.65rem; opacity: 0.7; }
+
+  .t-telegraph { background: var(--accent); flex: 0.8; color: #fff; }
+  .t-dash { background: var(--warn); flex: 0.3; }
+  .t-resolve { background: #ff6b35; flex: 0.1; }
+  .t-recovery { background: var(--success); flex: 1.0; }
+  .t-idle { background: var(--border); flex: 4.2; color: var(--text-dim); }
+
+  /* ── SPLIT LAYOUT ── */
+  .split {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1.5rem;
+    margin: 1rem 0;
+  }
+
+  @media (max-width: 900px) {
+    .split { grid-template-columns: 1fr; }
+  }
+
+  .tag {
+    display: inline-block;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.7rem;
+    padding: 0.15rem 0.5rem;
+    border-radius: 3px;
+    font-weight: 600;
+  }
+
+  .tag-telegraph { background: rgba(255,68,68,0.2); color: var(--accent); }
+  .tag-dash { background: rgba(255,170,0,0.2); color: var(--warn); }
+  .tag-resolve { background: rgba(255,107,53,0.2); color: #ff6b35; }
+  .tag-recovery { background: rgba(46,204,113,0.2); color: var(--success); }
+  .tag-idle { background: rgba(136,136,160,0.15); color: var(--text-dim); }
+
+  /* ── COMPARISON TABLE ── */
+  .compare-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 1rem 0;
+    font-size: 0.85rem;
+  }
+
+  .compare-table th {
+    background: var(--surface2);
+    padding: 0.5rem 0.75rem;
+    text-align: left;
+    color: var(--text-dim);
+    font-weight: 600;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .compare-table td {
+    padding: 0.5rem 0.75rem;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .compare-table tr:hover td {
+    background: rgba(255,255,255,0.02);
+  }
+
+  .diff { color: var(--warn); font-weight: 600; }
+
+  /* ── SPRITE FRAMES ── */
+  .sprite-grid-container {
+    display: flex;
+    gap: 1.5rem;
+    flex-wrap: wrap;
+    justify-content: center;
+    margin: 1rem 0;
+  }
+
+  .sprite-frame {
+    text-align: center;
+  }
+
+  .sprite-frame canvas {
+    image-rendering: pixelated;
+    image-rendering: crisp-edges;
+    border: 1px solid var(--border);
+    border-radius: 3px;
+    background: #08080c;
+  }
+
+  .sprite-frame .frame-label {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.7rem;
+    color: var(--text-dim);
+    margin-top: 0.3rem;
+  }
+</style>
+</head>
+<body>
+
+<h1>Ability Animation Reference: <span>charge</span></h1>
+<p class="subtitle">
+  Demon Knight signature ability — a line telegraph with enemy movement, stun on hit, and wall collision.
+  This covers mechanics that ground_slam didn't: directional targeting, physical movement during resolve, and conditional outcomes.
+</p>
+
+<!-- ════════════════════════════════════════════ -->
+<h2><span class="phase-num">0</span> What is charge?</h2>
+
+<div class="card">
+  <p><strong>Used by:</strong> Demon Knight (primary)</p>
+  <p><strong>Shape:</strong> Line, width 2 tiles, length 10 tiles — aimed at the player's position when telegraph begins</p>
+  <p><strong>Damage:</strong> 35 base (scaled by tier)</p>
+  <p><strong>Telegraph:</strong> 800ms — a red line appears on the ground showing the exact path</p>
+  <p><strong>Resolve:</strong> ~300ms — the Knight physically moves along the line at high speed</p>
+  <p><strong>Recovery:</strong> 1000ms — the Knight is staggered after charging (longest punish window of any regular enemy)</p>
+  <p><strong>Cooldown:</strong> 6000ms</p>
+  <p><strong>Effect on hit:</strong> Stun (1 second) — the player can't act</p>
+  <p><strong>Wall collision:</strong> If the Knight hits a wall, it takes 10-15 self-damage and is stunned for 500ms-1000ms</p>
+  <p style="margin-top:0.75rem; color: var(--accent);"><strong>The player experience:</strong> You hear a roar and see a red line lock onto the ground. You have 0.8 seconds to sidestep. The Knight rockets down the line — if it hits you, you're stunned and in trouble. If you dodge, the Knight overshoots and is vulnerable for a full second. If you bait it into a wall, the Knight stuns itself. This is the most satisfying enemy to outplay in the game.</p>
+</div>
+
+<div class="callout success">
+  <strong>Why charge is different from ground_slam:</strong> ground_slam is stationary — the enemy doesn't move, the danger zone is a circle around it. Charge is <em>directional and mobile</em> — the enemy physically travels across the arena, the danger zone is a line from point A to point B, and where the enemy ends up after the charge matters. This introduces five new animation problems: drawing a line telegraph, moving the enemy sprite during resolve, handling a hit vs miss outcome, handling wall collision, and showing a stun effect on the player.
+</div>
+
+<!-- ════════════════════════════════════════════ -->
+<h2><span class="phase-num">1</span> The Animation Lifecycle</h2>
+
+<p>Charge has one more sub-phase than ground_slam because the enemy <strong>moves during resolve</strong>. The movement itself is the attack — it's not instant like ground_slam's damage application.</p>
+
+<div class="timeline">
+  <div class="timeline-seg t-telegraph">
+    TELEGRAPH<br>
+    <span class="t-label">800ms</span>
+  </div>
+  <div class="timeline-seg t-dash">
+    DASH<br>
+    <span class="t-label">~300ms</span>
+  </div>
+  <div class="timeline-seg t-resolve">
+    HIT<br>
+    <span class="t-label">instant</span>
+  </div>
+  <div class="timeline-seg t-recovery">
+    RECOVERY<br>
+    <span class="t-label">1000ms</span>
+  </div>
+  <div class="timeline-seg t-idle">
+    IDLE (cooldown ticking)<br>
+    <span class="t-label">~3900ms remaining</span>
+  </div>
+</div>
+
+<div class="split">
+  <div class="card">
+    <h3><span class="tag tag-telegraph">TELEGRAPH</span> Warning phase (800ms)</h3>
+    <ul>
+      <li>The Knight stops moving and <strong>locks its facing direction</strong> toward the target</li>
+      <li>A <strong>red rectangle</strong> appears on the ground from the Knight to 10 tiles ahead</li>
+      <li>The rectangle <strong>fades in over 200ms</strong> then pulses</li>
+      <li>The Knight plays a <strong>wind-up animation</strong>: leans back, weapon raised</li>
+      <li>A <strong>rising growl/roar sound</strong> builds during the windup</li>
+      <li>The line is <strong>locked in place</strong> — if the player moves, the line does NOT follow</li>
+    </ul>
+    <p style="color:var(--accent);">The line locks on to where the player IS, not where they're going. The player must move sideways off the line before 800ms expires.</p>
+  </div>
+  <div class="card">
+    <h3><span class="tag tag-dash">DASH</span> Movement phase (~300ms)</h3>
+    <ul>
+      <li>The telegraph line <strong>disappears</strong></li>
+      <li>The Knight <strong>physically moves</strong> from its start position along the line at high speed</li>
+      <li>A <strong>speed blur trail</strong> follows behind the Knight (3-4 afterimages that fade)</li>
+      <li><strong>Dust particles</strong> kick up along the path</li>
+      <li>The Knight moves until it <strong>hits a player, hits a wall, or reaches the end of the line</strong></li>
+      <li>Dash speed: ~33 tiles/sec (10 tiles in ~300ms)</li>
+    </ul>
+    <p style="color:var(--warn);">This is the only phase where the enemy's position actually changes. The animation system must interpolate the Knight's grid position smoothly along the charge path.</p>
+  </div>
+</div>
+<div class="split">
+  <div class="card">
+    <h3><span class="tag tag-resolve">RESOLVE</span> Three possible outcomes</h3>
+    <p><strong>Outcome A — Hit player:</strong></p>
+    <ul>
+      <li>35 damage applied to the player</li>
+      <li>Player is <strong>stunned for 1 second</strong> (yellow stars above head)</li>
+      <li>The Knight stops at the player's position</li>
+      <li><strong>Impact shockwave</strong> visual (small ring burst, like a mini ground_slam)</li>
+      <li>Heavy <strong>impact sound</strong></li>
+    </ul>
+    <p><strong>Outcome B — Hit wall:</strong></p>
+    <ul>
+      <li>The <strong>Knight</strong> takes 10-15 self-damage</li>
+      <li>The Knight is stunned for 500-1000ms (longer recovery)</li>
+      <li><strong>Wall crack visual</strong> at impact point</li>
+      <li>Different <strong>crash sound</strong> (metallic clang + stone crack)</li>
+      <li>Screen shake (2px, 150ms)</li>
+    </ul>
+    <p><strong>Outcome C — Miss (reach end of line):</strong></p>
+    <ul>
+      <li>The Knight <strong>skids to a stop</strong> at the end of the charge path</li>
+      <li>Small <strong>dust cloud</strong> at feet</li>
+      <li>Enters normal recovery</li>
+    </ul>
+  </div>
+  <div class="card">
+    <h3><span class="tag tag-recovery">RECOVERY</span> The punish window (1000ms)</h3>
+    <ul>
+      <li>The Knight plays a <strong>staggered/off-balance animation</strong> — hunched forward, weapon dragging</li>
+      <li>Takes <strong>1.25x damage</strong> during this window</li>
+      <li><strong>Cannot move</strong> or start another ability</li>
+      <li>If wall collision: recovery is <strong>extended</strong> (1500-2000ms) and Knight shows <strong>"dizzy stars"</strong> visual</li>
+    </ul>
+    <p style="color:var(--success);">This is the longest punish window in the regular roster. The charge is devastating if it hits, but the Knight is extremely vulnerable afterward. The entire Demon Knight fight is built around this cycle: dodge the charge, punish the recovery, reposition before the next one.</p>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════════ -->
+<h2><span class="phase-num">2</span> Key Differences from ground_slam</h2>
+
+<p>If your team already built ground_slam, here's exactly what's new about charge. Everything not listed here works the same way.</p>
+
+<table class="compare-table">
+  <tr><th>Mechanic</th><th>ground_slam</th><th>charge</th><th>What changes</th></tr>
+  <tr>
+    <td>Telegraph shape</td>
+    <td>Circle (radius)</td>
+    <td class="diff">Rectangle (line)</td>
+    <td>New telegraph type: <code>line_fixed</code>. Needs start point, end point, and width instead of center + radius.</td>
+  </tr>
+  <tr>
+    <td>Telegraph direction</td>
+    <td>Omnidirectional</td>
+    <td class="diff">Aimed at target</td>
+    <td>Must calculate angle from enemy to target at telegraph start, then lock it. Telegraph does NOT rotate to follow target.</td>
+  </tr>
+  <tr>
+    <td>Enemy movement</td>
+    <td>None — stays in place</td>
+    <td class="diff">Moves along charge line</td>
+    <td>New resolve sub-phase: <code>dash</code>. Enemy position interpolates from start to end over ~300ms. Grid position must update each frame.</td>
+  </tr>
+  <tr>
+    <td>Damage application</td>
+    <td>Instant AoE at resolve</td>
+    <td class="diff">Collision check during dash</td>
+    <td>Damage happens when the Knight's moving hitbox overlaps a player, not at a fixed time. Must check collision each frame of the dash.</td>
+  </tr>
+  <tr>
+    <td>Resolve outcome</td>
+    <td>Always the same</td>
+    <td class="diff">Three branches</td>
+    <td>Hit player, hit wall, or miss. Each has different visual and gameplay consequences. The animation system must handle all three.</td>
+  </tr>
+  <tr>
+    <td>Impact visual</td>
+    <td>Expanding rings from center</td>
+    <td class="diff">Shockwave at collision point OR skid dust at end</td>
+    <td>Impact position is wherever the Knight stops, not where the attack started. Different visuals per outcome.</td>
+  </tr>
+  <tr>
+    <td>Status effect</td>
+    <td>None</td>
+    <td class="diff">Stun (1s) on player</td>
+    <td>Must show stun visual on affected player (yellow stars, frozen pose). The stun visual is a separate effect that attaches to the player entity, not the ability.</td>
+  </tr>
+  <tr>
+    <td>Trail visual</td>
+    <td>None</td>
+    <td class="diff">Speed blur afterimages</td>
+    <td>3-4 translucent copies of the Knight sprite trailing behind during dash, each progressively more transparent. Fade over 200ms after dash ends.</td>
+  </tr>
+  <tr>
+    <td>Self-damage</td>
+    <td>None</td>
+    <td class="diff">Wall collision hurts enemy</td>
+    <td>If charge path hits a wall tile, Knight stops at wall, takes damage, extended recovery. Must ray-cast along charge path to find wall intersection.</td>
+  </tr>
+  <tr>
+    <td>Recovery duration</td>
+    <td>800ms (fixed)</td>
+    <td class="diff">1000ms normal / 1500-2000ms wall</td>
+    <td>Recovery length depends on outcome. Wall collision extends vulnerability window — this is the player's reward for baiting the charge into a wall.</td>
+  </tr>
+</table>
+
+<!-- ════════════════════════════════════════════ -->
+<h2><span class="phase-num">3</span> Live Animation Preview</h2>
+
+<p>Working pixel simulation of the full charge cycle. The Knight charges from left to right. Try each scenario to see how the animation differs.</p>
+
+<div class="demo-area">
+  <canvas id="demoCanvas" width="480" height="240"></canvas>
+  <div class="phase-label" id="phaseLabel">Click a button to start</div>
+  <div class="demo-controls">
+    <button onclick="playScenario('miss')">▶ Charge — Miss</button>
+    <button onclick="playScenario('hit')">▶ Charge — Hit Player</button>
+    <button onclick="playScenario('wall')">▶ Charge — Hit Wall</button>
+    <button onclick="stopAnim()">⏹ Stop</button>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════════ -->
+<h2><span class="phase-num">4</span> Visual Frame Breakdowns</h2>
+
+<h3>A. Telegraph Frames (red line on ground — 800ms)</h3>
+<p>A red rectangle from the Knight to the charge target. Fades in over 200ms, then pulses for the remaining 600ms. The line is <strong>locked in place</strong> the moment it appears — it never rotates.</p>
+<div id="telegraphFrames" class="sprite-grid-container"></div>
+
+<h3>B. Dash Trail Frames (speed blur — ~300ms)</h3>
+<p>The Knight moves along the line. 3-4 afterimages trail behind, each more transparent. Dust particles kick up along the path.</p>
+<div id="dashFrames" class="sprite-grid-container"></div>
+
+<h3>C. Impact Frames (hit/wall/miss — plays once on contact)</h3>
+<div id="impactFrames" class="sprite-grid-container"></div>
+
+<!-- ════════════════════════════════════════════ -->
+<h2><span class="phase-num">5</span> JavaScript Implementation</h2>
+
+<h3>Part A — The Data: Define what charge looks like</h3>
+
+<pre><span class="cm">// ─── In effect-sprites.js ───</span>
+<span class="cm">// Add this entry to the ABILITY_EFFECTS object alongside ground_slam</span>
+
+<span class="kw">const</span> ABILITY_EFFECTS <span class="op">=</span> {
+  ground_slam: { <span class="cm">/* ... existing ... */</span> },
+
+  charge: {
+    <span class="cm">// ── TELEGRAPH: red line on the ground ──</span>
+    telegraph: {
+      <span class="prop">type</span>: <span class="str">'line_fixed'</span>,          <span class="cm">// New type — rectangle from A to B</span>
+      <span class="prop">color</span>: <span class="str">'#FF4444'</span>,             <span class="cm">// Red fill — danger color</span>
+      <span class="prop">borderColor</span>: <span class="str">'#CC2222'</span>,       <span class="cm">// Darker red border</span>
+      <span class="prop">fillOpacity</span>: <span class="num">0.3</span>,
+      <span class="prop">borderWidth</span>: <span class="num">2</span>,
+      <span class="prop">width</span>: <span class="num">2</span>,                    <span class="cm">// 2 tiles wide</span>
+      <span class="prop">length</span>: <span class="num">10</span>,                  <span class="cm">// 10 tiles long</span>
+      <span class="prop">fadeInTime</span>: <span class="num">200</span>,              <span class="cm">// Line fades in over first 200ms</span>
+      <span class="prop">pulseSpeed</span>: <span class="num">4</span>,               <span class="cm">// Pulses per second after fade-in</span>
+      <span class="prop">locksDirection</span>: <span class="kw">true</span>,        <span class="cm">// Direction fixed at telegraph start — does NOT track</span>
+    },
+
+    <span class="cm">// ── DASH: the movement phase ──</span>
+    dash: {
+      <span class="prop">speed</span>: <span class="num">33</span>,                   <span class="cm">// Tiles per second — 10 tiles in ~300ms</span>
+      <span class="prop">trail</span>: {
+        <span class="prop">count</span>: <span class="num">4</span>,                  <span class="cm">// 4 afterimage copies of the enemy sprite</span>
+        <span class="prop">spacing</span>: <span class="num">0.8</span>,              <span class="cm">// Tiles between each afterimage</span>
+        <span class="prop">startAlpha</span>: <span class="num">0.6</span>,           <span class="cm">// Nearest afterimage opacity</span>
+        <span class="prop">endAlpha</span>: <span class="num">0.1</span>,             <span class="cm">// Farthest afterimage opacity</span>
+        <span class="prop">fadeTime</span>: <span class="num">200</span>,             <span class="cm">// ms for trail to fade after dash ends</span>
+        <span class="prop">tint</span>: <span class="str">'#FF6B35'</span>,           <span class="cm">// Orange tint on afterimages</span>
+      },
+      <span class="prop">dustParticles</span>: {
+        <span class="prop">count</span>: <span class="num">6</span>,                  <span class="cm">// Particles kicked up along path</span>
+        <span class="prop">sprite</span>: {
+          <span class="prop">width</span>: <span class="num">2</span>, <span class="prop">height</span>: <span class="num">2</span>,
+          <span class="prop">pixels</span>: [<span class="str">'DD'</span>, <span class="str">'DD'</span>],
+          <span class="prop">palette</span>: { <span class="str">'D'</span>: <span class="str">'#AA9977'</span> }
+        },
+        <span class="prop">velocity</span>: { <span class="prop">xRange</span>: [<span class="num">-20</span>, <span class="num">20</span>], <span class="prop">yRange</span>: [<span class="num">-40</span>, <span class="num">-15</span>] },
+        <span class="prop">gravity</span>: <span class="num">120</span>,
+        <span class="prop">lifetime</span>: <span class="num">400</span>,
+      }
+    },
+
+    <span class="cm">// ── IMPACT: different visuals per outcome ──</span>
+    impact: {
+      <span class="cm">// Outcome A: hit a player</span>
+      hitPlayer: {
+        <span class="prop">type</span>: <span class="str">'ring_burst'</span>,        <span class="cm">// Reuse the ring_burst renderer from ground_slam!</span>
+        <span class="prop">rings</span>: <span class="num">2</span>,
+        <span class="prop">colors</span>: [<span class="str">'#FFCC00'</span>, <span class="str">'#FF6B35'</span>],
+        <span class="prop">startRadius</span>: <span class="num">0</span>,
+        <span class="prop">endRadius</span>: <span class="num">1.5</span>,            <span class="cm">// Smaller than ground_slam — this is a point impact</span>
+        <span class="prop">duration</span>: <span class="num">250</span>,
+        <span class="prop">ringWidth</span>: <span class="num">2</span>,
+        <span class="prop">fadeStart</span>: <span class="num">0.5</span>,
+        <span class="prop">screenShake</span>: { <span class="prop">intensity</span>: <span class="num">3</span>, <span class="prop">duration</span>: <span class="num">150</span>, <span class="prop">decay</span>: <span class="str">'linear'</span> },
+      },
+      <span class="cm">// Outcome B: hit a wall</span>
+      hitWall: {
+        <span class="prop">type</span>: <span class="str">'wall_crack'</span>,         <span class="cm">// New type — radiating crack lines from impact point</span>
+        <span class="prop">crackCount</span>: <span class="num">5</span>,              <span class="cm">// 5 lines radiating out</span>
+        <span class="prop">crackLength</span>: <span class="num">12</span>,            <span class="cm">// Pixel length per crack</span>
+        <span class="prop">color</span>: <span class="str">'#888888'</span>,
+        <span class="prop">duration</span>: <span class="num">2000</span>,             <span class="cm">// Cracks linger for 2 seconds then fade</span>
+        <span class="prop">screenShake</span>: { <span class="prop">intensity</span>: <span class="num">5</span>, <span class="prop">duration</span>: <span class="num">200</span>, <span class="prop">decay</span>: <span class="str">'linear'</span> },
+        <span class="prop">debrisParticles</span>: {         <span class="cm">// Stone chunks fly off the wall</span>
+          <span class="prop">count</span>: <span class="num">8</span>,
+          <span class="prop">sprite</span>: { <span class="prop">width</span>: <span class="num">3</span>, <span class="prop">height</span>: <span class="num">3</span>, <span class="prop">pixels</span>: [<span class="str">'.S.'</span>,<span class="str">'SSS'</span>,<span class="str">'.S.'</span>], <span class="prop">palette</span>: { <span class="str">'S'</span>: <span class="str">'#999999'</span> } },
+          <span class="prop">velocity</span>: { <span class="prop">xRange</span>: [<span class="num">-80</span>, <span class="num">80</span>], <span class="prop">yRange</span>: [<span class="num">-100</span>, <span class="num">-30</span>] },
+          <span class="prop">gravity</span>: <span class="num">250</span>,
+          <span class="prop">lifetime</span>: <span class="num">500</span>,
+        }
+      },
+      <span class="cm">// Outcome C: miss (reach end of line)</span>
+      miss: {
+        <span class="prop">type</span>: <span class="str">'dust_skid'</span>,          <span class="cm">// Small dust cloud at feet</span>
+        <span class="prop">color</span>: <span class="str">'#AA9977'</span>,
+        <span class="prop">duration</span>: <span class="num">300</span>,
+        <span class="prop">radius</span>: <span class="num">0.5</span>,               <span class="cm">// Tiny — just a skid mark</span>
+      }
+    },
+
+    <span class="cm">// ── STATUS EFFECT VISUAL ──</span>
+    stunEffect: {
+      <span class="prop">type</span>: <span class="str">'stun_stars'</span>,          <span class="cm">// Orbiting yellow stars above target's head</span>
+      <span class="prop">starCount</span>: <span class="num">3</span>,
+      <span class="prop">orbitRadius</span>: <span class="num">8</span>,             <span class="cm">// Pixels above head</span>
+      <span class="prop">orbitSpeed</span>: <span class="num">4</span>,              <span class="cm">// Rotations per second</span>
+      <span class="prop">color</span>: <span class="str">'#FFFF00'</span>,
+      <span class="prop">duration</span>: <span class="num">1000</span>,             <span class="cm">// Matches stun duration</span>
+    },
+
+    <span class="cm">// ── AUDIO CUES ──</span>
+    audio: {
+      <span class="prop">telegraph</span>: <span class="str">'sfx_charge_roar'</span>,        <span class="cm">// Growling roar that builds</span>
+      <span class="prop">dash</span>: <span class="str">'sfx_charge_whoosh'</span>,           <span class="cm">// Rushing wind during movement</span>
+      <span class="prop">impactPlayer</span>: <span class="str">'sfx_heavy_impact'</span>,     <span class="cm">// Same heavy impact as ground_slam — reuse!</span>
+      <span class="prop">impactWall</span>: <span class="str">'sfx_wall_crash'</span>,         <span class="cm">// Metallic clang + stone crack</span>
+      <span class="prop">miss</span>: <span class="str">'sfx_skid'</span>,                     <span class="cm">// Quick scraping sound</span>
+    }
+  }
+};</pre>
+
+<div class="callout">
+  <strong>Notice how the data structure grew to handle new complexity:</strong> ground_slam had telegraph + impact + particles. Charge has telegraph + dash (with trail and dust) + three impact variants + a stun visual + five audio cues. The <em>controller and renderer</em> need to be smart enough to handle these additional components, but the data format stays consistent — it's always "here's what this phase looks like, here are the numbers."
+</div>
+
+<h3>Part B — The Controller: Managing charge state</h3>
+<p>The EffectAnimator from ground_slam needs new logic for the <code>dash</code> phase and branching outcomes. Here's what changes.</p>
+
+<pre><span class="cm">// ─── In effect-animator.js ───</span>
+<span class="cm">// New method: startChargeEffect — called instead of startEffect for line abilities</span>
+
+<span class="fn">startChargeEffect</span>(abilityId, enemy, targetX, targetY) {
+  <span class="kw">const</span> id <span class="op">=</span> <span class="kw">this</span>.nextId++;
+  <span class="kw">const</span> config <span class="op">=</span> ABILITY_EFFECTS[abilityId];
+  <span class="kw">if</span> (!config) <span class="kw">return</span> <span class="num">-1</span>;
+
+  <span class="cm">// ── Calculate the charge path ──</span>
+  <span class="cm">// Direction from enemy to target, locked at this moment</span>
+  <span class="kw">const</span> dx <span class="op">=</span> targetX <span class="op">-</span> enemy.worldX;
+  <span class="kw">const</span> dy <span class="op">=</span> targetY <span class="op">-</span> enemy.worldY;
+  <span class="kw">const</span> angle <span class="op">=</span> Math.<span class="fn">atan2</span>(dy, dx);
+
+  <span class="cm">// Charge endpoint: 10 tiles in this direction (or wall, whichever is first)</span>
+  <span class="kw">const</span> maxLength <span class="op">=</span> config.telegraph.length <span class="op">*</span> TILE_SIZE;
+  <span class="kw">const</span> wallCheck <span class="op">=</span> <span class="kw">this</span>.<span class="fn">raycastToWall</span>(enemy.worldX, enemy.worldY, angle, maxLength);
+
+  <span class="kw">const</span> endX <span class="op">=</span> wallCheck.hitWall
+    <span class="op">?</span> wallCheck.wallX <span class="op">-</span> Math.<span class="fn">cos</span>(angle) <span class="op">*</span> (TILE_SIZE <span class="op">*</span> <span class="num">0.5</span>)  <span class="cm">// Stop just before wall</span>
+    <span class="op">:</span> enemy.worldX <span class="op">+</span> Math.<span class="fn">cos</span>(angle) <span class="op">*</span> maxLength;
+
+  <span class="kw">const</span> endY <span class="op">=</span> wallCheck.hitWall
+    <span class="op">?</span> wallCheck.wallY <span class="op">-</span> Math.<span class="fn">sin</span>(angle) <span class="op">*</span> (TILE_SIZE <span class="op">*</span> <span class="num">0.5</span>)
+    <span class="op">:</span> enemy.worldY <span class="op">+</span> Math.<span class="fn">sin</span>(angle) <span class="op">*</span> maxLength;
+
+  <span class="kw">const</span> actualLength <span class="op">=</span> Math.<span class="fn">hypot</span>(endX <span class="op">-</span> enemy.worldX, endY <span class="op">-</span> enemy.worldY);
+  <span class="kw">const</span> dashDuration <span class="op">=</span> (actualLength <span class="op">/</span> TILE_SIZE) <span class="op">/</span> config.dash.speed <span class="op">*</span> <span class="num">1000</span>;
+
+  <span class="kw">this</span>.activeEffects.<span class="fn">set</span>(id, {
+    id,
+    abilityId,
+    config,
+    angle,                              <span class="cm">// Locked direction</span>
+
+    <span class="cm">// ── Path definition ──</span>
+    startX: enemy.worldX,
+    startY: enemy.worldY,
+    endX, endY,
+    hitsWall: wallCheck.hitWall,
+    actualLength,
+
+    <span class="cm">// ── Phase tracking ──</span>
+    phase: <span class="str">'telegraph'</span>,                <span class="cm">// 'telegraph' | 'dash' | 'impact' | 'done'</span>
+    phaseTimer: <span class="num">0</span>,
+    telegraphDuration: <span class="num">800</span>,
+    dashDuration,
+
+    <span class="cm">// ── Trail state (populated during dash) ──</span>
+    trailPositions: [],                <span class="cm">// Array of {x, y, alpha, age}</span>
+    particles: [],
+    enemy,                             <span class="cm">// Reference to move the enemy during dash</span>
+  });
+
+  <span class="kw">return</span> id;
+},
+
+<span class="cm">// ── In the update() method, add a 'dash' case: ──</span>
+
+<span class="kw">case</span> <span class="str">'dash'</span>: {
+  <span class="cm">// Interpolate enemy position along the charge path</span>
+  <span class="kw">const</span> dashProgress <span class="op">=</span> Math.<span class="fn">min</span>(effect.phaseTimer <span class="op">/</span> effect.dashDuration, <span class="num">1.0</span>);
+  <span class="kw">const</span> currentX <span class="op">=</span> effect.startX <span class="op">+</span> (effect.endX <span class="op">-</span> effect.startX) <span class="op">*</span> dashProgress;
+  <span class="kw">const</span> currentY <span class="op">=</span> effect.startY <span class="op">+</span> (effect.endY <span class="op">-</span> effect.startY) <span class="op">*</span> dashProgress;
+
+  <span class="cm">// Move the actual enemy entity</span>
+  effect.enemy.worldX <span class="op">=</span> currentX;
+  effect.enemy.worldY <span class="op">=</span> currentY;
+
+  <span class="cm">// Record position for trail afterimages</span>
+  effect.trailPositions.<span class="fn">push</span>({
+    x: currentX, y: currentY,
+    alpha: effect.config.dash.trail.startAlpha,
+    age: <span class="num">0</span>
+  });
+
+  <span class="cm">// Trim trail to max count</span>
+  <span class="kw">while</span> (effect.trailPositions.length <span class="op">></span> effect.config.dash.trail.count) {
+    effect.trailPositions.<span class="fn">shift</span>();
+  }
+
+  <span class="cm">// ── Collision check each frame ──</span>
+  <span class="kw">const</span> hitPlayer <span class="op">=</span> <span class="kw">this</span>.<span class="fn">checkPlayerCollision</span>(currentX, currentY, effect.config.telegraph.width);
+
+  <span class="kw">if</span> (hitPlayer) {
+    <span class="cm">// HIT PLAYER — stop here, apply damage + stun</span>
+    effect.outcome <span class="op">=</span> <span class="str">'hitPlayer'</span>;
+    effect.impactX <span class="op">=</span> currentX;
+    effect.impactY <span class="op">=</span> currentY;
+    effect.phase <span class="op">=</span> <span class="str">'impact'</span>;
+    effect.phaseTimer <span class="op">=</span> <span class="num">0</span>;
+    <span class="kw">break</span>;
+  }
+
+  <span class="kw">if</span> (dashProgress <span class="op">>=</span> <span class="num">1.0</span>) {
+    <span class="cm">// Reached end of path — wall or miss</span>
+    effect.outcome <span class="op">=</span> effect.hitsWall <span class="op">?</span> <span class="str">'hitWall'</span> <span class="op">:</span> <span class="str">'miss'</span>;
+    effect.impactX <span class="op">=</span> effect.endX;
+    effect.impactY <span class="op">=</span> effect.endY;
+    effect.phase <span class="op">=</span> <span class="str">'impact'</span>;
+    effect.phaseTimer <span class="op">=</span> <span class="num">0</span>;
+  }
+
+  <span class="cm">// Update dust particles</span>
+  <span class="kw">this</span>.<span class="fn">updateParticles</span>(effect, deltaTime);
+  <span class="kw">break</span>;
+}</pre>
+
+<div class="callout critical">
+  <strong>The enemy position changes during dash.</strong> This is the biggest architectural difference from ground_slam. During ground_slam, the enemy stays put and only the visual effect moves. During charge, the enemy entity <em>physically relocates</em> across the grid. This means the EnemyAI, pathfinding, and collision systems must all respect the new position after the charge ends. The effect controller writes directly to <code>enemy.worldX/worldY</code> — this is intentional and necessary. The abilityLockout flag prevents the AI from fighting over the position during the dash.
+</div>
+
+<h3>Part C — The Renderer: Drawing charge visuals</h3>
+<p>The renderer needs new drawing functions for line telegraphs and afterimage trails. The impact ring and particles reuse the ground_slam renderer.</p>
+
+<pre><span class="cm">// ─── In effect-renderer.js ───</span>
+<span class="cm">// New telegraph type: line_fixed</span>
+
+<span class="fn">drawTelegraph</span>(ctx, effect, camX, camY) {
+  <span class="kw">const</span> cfg <span class="op">=</span> effect.config.telegraph;
+
+  <span class="kw">if</span> (cfg.type <span class="op">===</span> <span class="str">'circle_grow'</span>) {
+    <span class="kw">this</span>.<span class="fn">drawCircleTelegraph</span>(ctx, effect, camX, camY);  <span class="cm">// Existing ground_slam code</span>
+  }
+  <span class="kw">else if</span> (cfg.type <span class="op">===</span> <span class="str">'line_fixed'</span>) {
+    <span class="kw">this</span>.<span class="fn">drawLineTelegraph</span>(ctx, effect, camX, camY);     <span class="cm">// New</span>
+  }
+  <span class="cm">// Future: 'cone_grow' for fire_breath, etc.</span>
+},
+
+<span class="fn">drawLineTelegraph</span>(ctx, effect, camX, camY) {
+  <span class="kw">const</span> cfg <span class="op">=</span> effect.config.telegraph;
+  <span class="kw">const</span> progress <span class="op">=</span> Math.<span class="fn">min</span>(effect.phaseTimer <span class="op">/</span> effect.telegraphDuration, <span class="num">1.0</span>);
+
+  <span class="cm">// Fade in during first 200ms</span>
+  <span class="kw">const</span> fadeIn <span class="op">=</span> Math.<span class="fn">min</span>(effect.phaseTimer <span class="op">/</span> cfg.fadeInTime, <span class="num">1.0</span>);
+
+  <span class="cm">// Pulse after fade-in completes</span>
+  <span class="kw">const</span> pulse <span class="op">=</span> fadeIn <span class="op">>=</span> <span class="num">1.0</span>
+    <span class="op">?</span> <span class="num">0.7</span> <span class="op">+</span> <span class="num">0.3</span> <span class="op">*</span> Math.<span class="fn">sin</span>(effect.phaseTimer <span class="op">/</span> <span class="num">1000</span> <span class="op">*</span> cfg.pulseSpeed <span class="op">*</span> Math.PI <span class="op">*</span> <span class="num">2</span>)
+    <span class="op">:</span> fadeIn;
+
+  <span class="cm">// Calculate rectangle corners</span>
+  <span class="cm">// The line goes from (startX, startY) to (endX, endY)</span>
+  <span class="cm">// Width is perpendicular to the charge direction</span>
+  <span class="kw">const</span> halfWidth <span class="op">=</span> (cfg.width <span class="op">*</span> TILE_SIZE) <span class="op">/</span> <span class="num">2</span>;
+  <span class="kw">const</span> perpX <span class="op">=</span> Math.<span class="fn">cos</span>(effect.angle <span class="op">+</span> Math.PI <span class="op">/</span> <span class="num">2</span>) <span class="op">*</span> halfWidth;
+  <span class="kw">const</span> perpY <span class="op">=</span> Math.<span class="fn">sin</span>(effect.angle <span class="op">+</span> Math.PI <span class="op">/</span> <span class="num">2</span>) <span class="op">*</span> halfWidth;
+
+  <span class="kw">const</span> sx <span class="op">=</span> effect.startX <span class="op">-</span> camX;
+  <span class="kw">const</span> sy <span class="op">=</span> effect.startY <span class="op">-</span> camY;
+  <span class="kw">const</span> ex <span class="op">=</span> effect.endX <span class="op">-</span> camX;
+  <span class="kw">const</span> ey <span class="op">=</span> effect.endY <span class="op">-</span> camY;
+
+  ctx.<span class="fn">save</span>();
+  ctx.globalAlpha <span class="op">=</span> cfg.fillOpacity <span class="op">*</span> pulse;
+
+  <span class="cm">// Draw filled rectangle as a path (4 corners)</span>
+  ctx.fillStyle <span class="op">=</span> cfg.color;
+  ctx.<span class="fn">beginPath</span>();
+  ctx.<span class="fn">moveTo</span>(sx <span class="op">+</span> perpX, sy <span class="op">+</span> perpY);
+  ctx.<span class="fn">lineTo</span>(ex <span class="op">+</span> perpX, ey <span class="op">+</span> perpY);
+  ctx.<span class="fn">lineTo</span>(ex <span class="op">-</span> perpX, ey <span class="op">-</span> perpY);
+  ctx.<span class="fn">lineTo</span>(sx <span class="op">-</span> perpX, sy <span class="op">-</span> perpY);
+  ctx.<span class="fn">closePath</span>();
+  ctx.<span class="fn">fill</span>();
+
+  <span class="cm">// Draw border</span>
+  ctx.globalAlpha <span class="op">=</span> pulse;
+  ctx.strokeStyle <span class="op">=</span> cfg.borderColor;
+  ctx.lineWidth <span class="op">=</span> cfg.borderWidth;
+  ctx.<span class="fn">stroke</span>();
+
+  ctx.<span class="fn">restore</span>();
+},
+
+<span class="cm">// ── Draw afterimage trail during dash ──</span>
+
+<span class="fn">drawDashTrail</span>(ctx, effect, camX, camY) {
+  <span class="kw">const</span> trailCfg <span class="op">=</span> effect.config.dash.trail;
+
+  <span class="kw">for</span> (<span class="kw">let</span> i <span class="op">=</span> <span class="num">0</span>; i <span class="op"><</span> effect.trailPositions.length; i<span class="op">++</span>) {
+    <span class="kw">const</span> pos <span class="op">=</span> effect.trailPositions[i];
+    <span class="kw">const</span> sx <span class="op">=</span> pos.x <span class="op">-</span> camX;
+    <span class="kw">const</span> sy <span class="op">=</span> pos.y <span class="op">-</span> camY;
+
+    <span class="cm">// Each trail image is progressively more transparent</span>
+    <span class="kw">const</span> trailIndex <span class="op">=</span> effect.trailPositions.length <span class="op">-</span> <span class="num">1</span> <span class="op">-</span> i;  <span class="cm">// 0 = newest</span>
+    <span class="kw">const</span> alpha <span class="op">=</span> trailCfg.startAlpha <span class="op">-</span>
+      (trailIndex <span class="op">/</span> trailCfg.count) <span class="op">*</span> (trailCfg.startAlpha <span class="op">-</span> trailCfg.endAlpha);
+
+    ctx.<span class="fn">save</span>();
+    ctx.globalAlpha <span class="op">=</span> alpha;
+
+    <span class="cm">// Draw a tinted copy of the enemy sprite</span>
+    <span class="cm">// Use your existing SpriteRenderer with a tint option</span>
+    SpriteRenderer.<span class="fn">draw</span>(ctx, effect.enemy.sprite, sx, sy, <span class="num">2</span>, {
+      <span class="prop">palette</span>: <span class="kw">this</span>.<span class="fn">tintPalette</span>(effect.enemy.sprite.palette, trailCfg.tint, <span class="num">0.4</span>),
+    });
+
+    ctx.<span class="fn">restore</span>();
+  }
+},
+
+<span class="cm">// ── Updated drawOverlay to handle dash phase ──</span>
+
+<span class="fn">drawOverlay</span>(ctx, camX, camY) {
+  <span class="kw">for</span> (<span class="kw">const</span> [id, effect] <span class="kw">of</span> EffectAnimator.activeEffects) {
+    <span class="kw">if</span> (effect.phase <span class="op">===</span> <span class="str">'dash'</span>) {
+      <span class="kw">this</span>.<span class="fn">drawDashTrail</span>(ctx, effect, camX, camY);
+      <span class="kw">this</span>.<span class="fn">drawParticles</span>(ctx, effect, camX, camY);
+    }
+    <span class="kw">if</span> (effect.phase <span class="op">===</span> <span class="str">'impact'</span>) {
+      <span class="cm">// Choose impact visual based on outcome</span>
+      <span class="kw">const</span> impactCfg <span class="op">=</span> effect.config.impact[effect.outcome];
+      <span class="kw">if</span> (impactCfg?.type <span class="op">===</span> <span class="str">'ring_burst'</span>) {
+        <span class="kw">this</span>.<span class="fn">drawImpact</span>(ctx, effect, camX, camY);  <span class="cm">// Reuse ground_slam's ring renderer!</span>
+      } <span class="kw">else if</span> (impactCfg?.type <span class="op">===</span> <span class="str">'wall_crack'</span>) {
+        <span class="kw">this</span>.<span class="fn">drawWallCrack</span>(ctx, effect, camX, camY);
+      }
+      <span class="kw">this</span>.<span class="fn">drawParticles</span>(ctx, effect, camX, camY);
+    }
+  }
+},</pre>
+
+<h3>Part D — The Glue: Connecting to the ability system</h3>
+<p>Charge needs slightly different hooks than ground_slam because of the dash phase and branching outcomes.</p>
+
+<pre><span class="cm">// ─── In enemy-ability-system.js ───</span>
+<span class="cm">// Modified executeAbility() — detect charge-type abilities</span>
+
+<span class="fn">executeAbility</span>(enemy, target, ability, abilitySet) {
+  <span class="kw">const</span> telegraphTime <span class="op">=</span> <span class="cm">/* ... existing calculation ... */</span>;
+  <span class="kw">const</span> recoveryTime <span class="op">=</span> ability.recoveryTime <span class="op">||</span> <span class="num">600</span>;
+
+  abilitySet.cooldowns[ability.id] <span class="op">=</span> ability.cooldown;
+  abilitySet.globalCooldown <span class="op">=</span> <span class="num">1000</span>;
+  enemy.abilityState <span class="op">=</span> <span class="str">'telegraph'</span>;
+  enemy.abilityLockout <span class="op">=</span> <span class="kw">true</span>;
+
+  <span class="cm">// ── Start the correct effect type ──</span>
+  <span class="kw">let</span> effectId;
+  <span class="kw">if</span> (ability.movementType <span class="op">===</span> <span class="str">'charge'</span>) {
+    <span class="cm">// Charge needs direction + path calculation</span>
+    effectId <span class="op">=</span> EffectAnimator.<span class="fn">startChargeEffect</span>(
+      ability.id, enemy, target.worldX, target.worldY
+    );
+  } <span class="kw">else</span> {
+    <span class="cm">// Static abilities (ground_slam, stomp, etc.)</span>
+    effectId <span class="op">=</span> EffectAnimator.<span class="fn">startEffect</span>(
+      ability.id, enemy.worldX, enemy.worldY, telegraphTime, ability.radius
+    );
+  }
+  enemy._currentEffectId <span class="op">=</span> effectId;
+
+  <span class="cm">// Telegraph timeout — same structure, but resolve triggers dash instead of damage</span>
+  <span class="kw">const</span> enemyId <span class="op">=</span> enemy.id;
+  <span class="fn">setTimeout</span>(() <span class="op">=></span> {
+    <span class="kw">if</span> (!enemy <span class="op">||</span> enemy.hp <span class="op"><=</span> <span class="num">0</span>) {
+      EffectAnimator.<span class="fn">cancel</span>(effectId);
+      <span class="kw">this</span>.<span class="fn">cleanupAbilityState</span>(enemy);
+      <span class="kw">return</span>;
+    }
+    <span class="kw">if</span> (enemy.isStunned <span class="op">||</span> enemy.isRooted) {
+      EffectAnimator.<span class="fn">cancel</span>(effectId);
+      abilitySet.cooldowns[ability.id] <span class="op">=</span> ability.cooldown <span class="op">*</span> <span class="num">0.5</span>;
+      <span class="kw">this</span>.<span class="fn">enterRecovery</span>(enemy, recoveryTime <span class="op">*</span> <span class="num">0.5</span>, enemyId);
+      <span class="kw">return</span>;
+    }
+
+    <span class="kw">if</span> (ability.movementType <span class="op">===</span> <span class="str">'charge'</span>) {
+      <span class="cm">// ── Start the dash phase ──</span>
+      <span class="cm">// The EffectAnimator handles movement + collision during dash.</span>
+      <span class="cm">// It calls back to us when the dash resolves.</span>
+      enemy.abilityState <span class="op">=</span> <span class="str">'resolving'</span>;
+      EffectAnimator.<span class="fn">resolveToDash</span>(effectId, {
+        <span class="prop">onHitPlayer</span>: (player) <span class="op">=></span> {
+          <span class="kw">this</span>.<span class="fn">applyDamage</span>(player, ability.damage, ability.damageType);
+          <span class="kw">this</span>.<span class="fn">applyStun</span>(player, ability.stunDuration <span class="op">||</span> <span class="num">1000</span>);
+          <span class="kw">this</span>.<span class="fn">enterRecovery</span>(enemy, recoveryTime, enemyId);
+        },
+        <span class="prop">onHitWall</span>: () <span class="op">=></span> {
+          <span class="kw">this</span>.<span class="fn">applyDamage</span>(enemy, <span class="num">12</span>, <span class="str">'collision'</span>);  <span class="cm">// Self-damage</span>
+          <span class="kw">this</span>.<span class="fn">enterRecovery</span>(enemy, recoveryTime <span class="op">*</span> <span class="num">1.8</span>, enemyId);  <span class="cm">// Extended recovery</span>
+        },
+        <span class="prop">onMiss</span>: () <span class="op">=></span> {
+          <span class="kw">this</span>.<span class="fn">enterRecovery</span>(enemy, recoveryTime, enemyId);
+        }
+      });
+    } <span class="kw">else</span> {
+      <span class="cm">// Static ability (ground_slam path — unchanged)</span>
+      EffectAnimator.<span class="fn">resolve</span>(effectId);
+      <span class="kw">this</span>.<span class="fn">resolveAbility</span>(enemy, target, ability);
+      <span class="kw">this</span>.<span class="fn">enterRecovery</span>(enemy, recoveryTime, enemyId);
+    }
+  }, telegraphTime);
+},</pre>
+
+<div class="callout critical">
+  <strong>Charge uses callbacks instead of a single resolve() call.</strong> With ground_slam, the ability system calls <code>resolve()</code> and immediately applies damage — the outcome is always the same. With charge, the outcome depends on what the Knight hits during the dash, which isn't known until the dash completes. So the ability system passes three callbacks (<code>onHitPlayer</code>, <code>onHitWall</code>, <code>onMiss</code>) and the EffectAnimator calls the right one when the dash ends. This keeps damage/stun application in the ability system (where it belongs) while letting the animation system control movement and collision detection (where that belongs).
+</div>
+
+<!-- ════════════════════════════════════════════ -->
+<h2><span class="phase-num">6</span> Adapting This for Other Movement Abilities</h2>
+
+<p>Charge is the template for all abilities where the enemy moves. Here's how the same system handles the others:</p>
+
+<div class="card">
+  <h3>lunge (Tide Serpent, Frozen Husk)</h3>
+  <p>Same as charge but <strong>shorter and faster</strong>: 3 tiles instead of 10, 400ms telegraph instead of 800ms, no stun on hit. The data entry is almost identical — change <code>length: 3</code>, <code>width: 1</code>, remove stunEffect, reduce trail count to 2. The entire controller and renderer code is reused without changes.</p>
+</div>
+
+<div class="card">
+  <h3>pounce (Flame Sprite)</h3>
+  <p>Instead of a straight line, pounce follows an <strong>arc trajectory</strong>. The telegraph is a circle at the landing zone (like ground_slam) rather than a line. During the dash phase, the enemy sprite moves along a parabolic arc (add a <code>jumpHeight</code> property). The controller interpolates position using a quadratic curve instead of linear. On landing, play a small impact ring. This is a hybrid of ground_slam's telegraph + charge's movement.</p>
+</div>
+
+<div class="card">
+  <h3>shadow_step (Shadow Stalker)</h3>
+  <p><strong>No visible movement between positions.</strong> The enemy vanishes at point A and appears at point B. Instead of a dash phase with interpolation, use a "vanish" particle burst at the origin (purple smoke), then after 100ms, a "materialize" particle burst at the destination + immediate strike. The 200ms telegraph is the vanish puff itself — by the time the player sees it, the Stalker is already behind them. This is the fastest, most dangerous ability in the game and the animation should feel instantaneous.</p>
+</div>
+
+<script>
+// ════════════════════════════════════════════
+// LIVE DEMO — charge animation
+// ════════════════════════════════════════════
+
+const canvas = document.getElementById('demoCanvas');
+const ctx = canvas.getContext('2d');
+const TILE = 32;
+const W = canvas.width;
+const H = canvas.height;
+
+let anim = null;
+let frameId = null;
+
+const C = {
+  ground: '#1a1a22',
+  grid: '#222230',
+  telegraphFill: '#FF4444',
+  telegraphBorder: '#CC2222',
+  knight: '#884444',
+  knightDark: '#662222',
+  knightHelm: '#FFAA00',
+  player: '#4488CC',
+  playerDark: '#336699',
+  wall: '#555566',
+  wallLight: '#666677',
+  trail: '#FF6B35',
+  dust: '#AA9977',
+  ring1: '#FFCC00',
+  ring2: '#FF6B35',
+  stun: '#FFFF00',
+  crack: '#888888',
+};
+
+function drawScene(shakeX, shakeY) {
+  shakeX = shakeX || 0;
+  shakeY = shakeY || 0;
+  ctx.save();
+  ctx.translate(shakeX, shakeY);
+
+  // Ground
+  ctx.fillStyle = C.ground;
+  ctx.fillRect(0, 0, W, H);
+  ctx.strokeStyle = C.grid;
+  ctx.lineWidth = 1;
+  for (let x = 0; x < W; x += TILE) {
+    ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, H); ctx.stroke();
+  }
+  for (let y = 0; y < H; y += TILE) {
+    ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke();
+  }
+
+  // Wall on right side
+  if (anim && anim.scenario === 'wall') {
+    ctx.fillStyle = C.wall;
+    ctx.fillRect(W - TILE, 0, TILE, H);
+    ctx.fillStyle = C.wallLight;
+    ctx.fillRect(W - TILE, 0, 4, H);
+    for (let y = 0; y < H; y += TILE) {
+      ctx.fillStyle = C.wallLight;
+      ctx.fillRect(W - TILE + 4, y + 2, TILE - 8, 2);
+    }
+  }
+
+  ctx.restore();
+}
+
+function drawKnight(x, y, windupProgress, recovery, wallStun) {
+  // Body
+  const bodyC = recovery ? (wallStun ? '#666644' : '#558844') : C.knight;
+  ctx.fillStyle = bodyC;
+
+  if (windupProgress !== null && windupProgress !== undefined) {
+    // Windup lean-back
+    const lean = windupProgress * 4;
+    ctx.fillRect(x - 9 - lean, y - 14, 18, 24);
+    ctx.fillStyle = C.knightDark;
+    ctx.fillRect(x - 6 - lean, y - 20, 12, 8);
+    // Helm
+    ctx.fillStyle = C.knightHelm;
+    ctx.fillRect(x - 4 - lean, y - 18, 8, 3);
+    // Weapon raised
+    ctx.fillStyle = '#888888';
+    ctx.fillRect(x + 8 - lean, y - 26 - windupProgress * 6, 3, 16);
+  } else {
+    ctx.fillRect(x - 9, y - 14, 18, 24);
+    ctx.fillStyle = C.knightDark;
+    ctx.fillRect(x - 6, y - 20, 12, 8);
+    ctx.fillStyle = C.knightHelm;
+    ctx.fillRect(x - 4, y - 18, 8, 3);
+    ctx.fillStyle = '#888888';
+    ctx.fillRect(x + 10, y - 8, 3, 14);
+  }
+
+  // Wall stun stars
+  if (wallStun) {
+    const time = performance.now() / 1000;
+    for (let i = 0; i < 3; i++) {
+      const a = time * 4 + (i * Math.PI * 2 / 3);
+      const sx = x + Math.cos(a) * 10;
+      const sy = y - 26 + Math.sin(a) * 4;
+      ctx.fillStyle = C.stun;
+      ctx.fillRect(sx - 2, sy - 2, 4, 4);
+    }
+  }
+}
+
+function drawPlayer(x, y, stunned) {
+  ctx.fillStyle = stunned ? '#666688' : C.player;
+  ctx.fillRect(x - 8, y - 12, 16, 20);
+  ctx.fillStyle = stunned ? '#555577' : C.playerDark;
+  ctx.fillRect(x - 5, y - 17, 10, 7);
+
+  if (stunned) {
+    const time = performance.now() / 1000;
+    for (let i = 0; i < 3; i++) {
+      const a = time * 4 + (i * Math.PI * 2 / 3);
+      const sx = x + Math.cos(a) * 8;
+      const sy = y - 22 + Math.sin(a) * 3;
+      ctx.fillStyle = C.stun;
+      ctx.fillRect(sx - 1.5, sy - 1.5, 3, 3);
+    }
+  }
+}
+
+function drawTelegraphLine(startX, startY, endX, endY, width, alpha) {
+  const angle = Math.atan2(endY - startY, endX - startX);
+  const hw = width / 2;
+  const px = Math.cos(angle + Math.PI / 2) * hw;
+  const py = Math.sin(angle + Math.PI / 2) * hw;
+
+  ctx.save();
+  ctx.globalAlpha = 0.3 * alpha;
+  ctx.fillStyle = C.telegraphFill;
+  ctx.beginPath();
+  ctx.moveTo(startX + px, startY + py);
+  ctx.lineTo(endX + px, endY + py);
+  ctx.lineTo(endX - px, endY - py);
+  ctx.lineTo(startX - px, startY - py);
+  ctx.closePath();
+  ctx.fill();
+
+  ctx.globalAlpha = alpha;
+  ctx.strokeStyle = C.telegraphBorder;
+  ctx.lineWidth = 2;
+  ctx.stroke();
+  ctx.restore();
+}
+
+function drawTrail(positions) {
+  for (let i = 0; i < positions.length; i++) {
+    const p = positions[i];
+    const alpha = 0.5 - (i / positions.length) * 0.4;
+    ctx.save();
+    ctx.globalAlpha = alpha;
+    ctx.fillStyle = C.trail;
+    ctx.fillRect(p.x - 8, p.y - 12, 16, 20);
+    ctx.restore();
+  }
+}
+
+function drawImpactRing(x, y, progress, small) {
+  const maxR = small ? 1.2 * TILE : 1.5 * TILE;
+  const fadeStart = 0.5;
+  const alpha = progress > fadeStart ? 1.0 - ((progress - fadeStart) / (1.0 - fadeStart)) : 1.0;
+  ctx.save();
+  ctx.globalAlpha = alpha;
+  const colors = [C.ring1, C.ring2];
+  for (let i = 0; i < 2; i++) {
+    const d = i * 0.15;
+    const rp = Math.max(0, Math.min(1, (progress - d) / (1 - d)));
+    ctx.strokeStyle = colors[i];
+    ctx.lineWidth = 2 * (1 - rp * 0.5);
+    ctx.beginPath();
+    ctx.arc(x, y, maxR * rp, 0, Math.PI * 2);
+    ctx.stroke();
+  }
+  ctx.restore();
+}
+
+function drawWallCracks(x, progress) {
+  if (progress > 1) return;
+  ctx.save();
+  ctx.globalAlpha = 1 - progress * 0.5;
+  ctx.strokeStyle = C.crack;
+  ctx.lineWidth = 1.5;
+  const cracks = [
+    [-8, -15, -18, -30],
+    [-3, -5, -12, -20],
+    [0, 8, -5, 18],
+    [-5, 12, -15, 25],
+    [-2, -8, 8, -12],
+  ];
+  for (const [dx1, dy1, dx2, dy2] of cracks) {
+    ctx.beginPath();
+    ctx.moveTo(x + dx1, H/2 + dy1);
+    ctx.lineTo(x + dx2, H/2 + dy2);
+    ctx.stroke();
+  }
+  ctx.restore();
+}
+
+function getShake(timer, intensity, duration) {
+  if (timer > duration) return { x: 0, y: 0 };
+  const mag = intensity * (1 - timer / duration);
+  return {
+    x: (Math.random() - 0.5) * 2 * mag,
+    y: (Math.random() - 0.5) * 2 * mag,
+  };
+}
+
+// ── Particle system ──
+let particles = [];
+
+function spawnDust(x, y, count) {
+  for (let i = 0; i < count; i++) {
+    particles.push({
+      x, y: y + 8,
+      vx: -20 + Math.random() * 40,
+      vy: -40 + Math.random() * -15,
+      life: 400, maxLife: 400,
+      color: C.dust,
+      size: 2
+    });
+  }
+}
+
+function spawnWallDebris(x, y) {
+  for (let i = 0; i < 8; i++) {
+    particles.push({
+      x, y: y + (Math.random() - 0.5) * 30,
+      vx: -60 + Math.random() * -20,
+      vy: -100 + Math.random() * 60,
+      life: 500, maxLife: 500,
+      color: '#999999',
+      size: 3
+    });
+  }
+}
+
+function updateParticles(dt) {
+  for (const p of particles) {
+    if (p.life <= 0) continue;
+    p.x += p.vx * (dt / 1000);
+    p.y += p.vy * (dt / 1000);
+    p.vy += 250 * (dt / 1000);
+    p.life -= dt;
+  }
+  particles = particles.filter(p => p.life > 0);
+}
+
+function renderParticles() {
+  for (const p of particles) {
+    const alpha = Math.max(0, p.life / p.maxLife);
+    ctx.save();
+    ctx.globalAlpha = alpha;
+    ctx.fillStyle = p.color;
+    ctx.fillRect(p.x - p.size/2, p.y - p.size/2, p.size, p.size);
+    ctx.restore();
+  }
+}
+
+// ── Scenarios ──
+
+function playScenario(scenario) {
+  stopAnim();
+  particles = [];
+
+  const knightStart = { x: 60, y: H / 2 };
+  let playerPos, chargeEnd, hitsWall;
+
+  switch (scenario) {
+    case 'miss':
+      playerPos = { x: 280, y: H / 2 };
+      chargeEnd = { x: 380, y: H / 2 };
+      hitsWall = false;
+      break;
+    case 'hit':
+      playerPos = { x: 300, y: H / 2 };
+      chargeEnd = { x: 300, y: H / 2 };
+      hitsWall = false;
+      break;
+    case 'wall':
+      playerPos = { x: 280, y: H / 2 - 50 };
+      chargeEnd = { x: W - TILE - 10, y: H / 2 };
+      hitsWall = true;
+      break;
+  }
+
+  const dist = Math.hypot(chargeEnd.x - knightStart.x, chargeEnd.y - knightStart.y);
+
+  anim = {
+    scenario,
+    phase: 'telegraph',
+    timer: 0,
+    lastTime: performance.now(),
+    knightPos: { ...knightStart },
+    knightStart: { ...knightStart },
+    playerPos: { ...playerPos },
+    playerOrigPos: { ...playerPos },
+    chargeEnd: { ...chargeEnd },
+    telegraphDuration: 800,
+    dashDuration: dist / (33 * TILE / 1000),
+    recoveryDuration: hitsWall ? 1800 : 1000,
+    hitsWall,
+    trail: [],
+    shakeTimer: 9999,
+    shakeDuration: 0,
+    shakeIntensity: 0,
+    playerStunned: false,
+    playerStunTimer: 0,
+    wallCrackTimer: null,
+    impactRing: null,
+    dustSpawned: false,
+  };
+
+  // Player dodges in miss/wall scenarios
+  if (scenario === 'miss' || scenario === 'wall') {
+    anim.playerDodgeTime = 500; // dodge at 500ms into telegraph
+    anim.playerDodgeTarget = { x: playerPos.x, y: playerPos.y - 60 };
+  }
+
+  frameId = requestAnimationFrame(tick);
+}
+
+function tick(now) {
+  if (!anim) return;
+  const dt = Math.min(now - anim.lastTime, 32);
+  anim.lastTime = now;
+  anim.timer += dt;
+  anim.shakeTimer += dt;
+
+  // Player dodge animation
+  if (anim.playerDodgeTarget && anim.phase === 'telegraph' && anim.timer >= anim.playerDodgeTime) {
+    const dodgeProgress = Math.min((anim.timer - anim.playerDodgeTime) / 300, 1);
+    anim.playerPos.x = anim.playerOrigPos.x + (anim.playerDodgeTarget.x - anim.playerOrigPos.x) * dodgeProgress;
+    anim.playerPos.y = anim.playerOrigPos.y + (anim.playerDodgeTarget.y - anim.playerOrigPos.y) * dodgeProgress;
+  }
+
+  // Phase transitions
+  if (anim.phase === 'telegraph' && anim.timer >= anim.telegraphDuration) {
+    anim.phase = 'dash';
+    anim.timer = 0;
+    anim.trail = [];
+  }
+  else if (anim.phase === 'dash') {
+    const progress = Math.min(anim.timer / anim.dashDuration, 1.0);
+    anim.knightPos.x = anim.knightStart.x + (anim.chargeEnd.x - anim.knightStart.x) * progress;
+    anim.knightPos.y = anim.knightStart.y + (anim.chargeEnd.y - anim.knightStart.y) * progress;
+
+    // Trail
+    if (anim.trail.length === 0 || Math.hypot(
+      anim.knightPos.x - anim.trail[anim.trail.length-1].x,
+      anim.knightPos.y - anim.trail[anim.trail.length-1].y) > 12) {
+      anim.trail.push({ x: anim.knightPos.x, y: anim.knightPos.y });
+      if (anim.trail.length > 4) anim.trail.shift();
+      spawnDust(anim.knightPos.x, anim.knightPos.y, 1);
+    }
+
+    // Hit check for 'hit' scenario
+    if (anim.scenario === 'hit' && progress >= 0.7 && !anim.hitTriggered) {
+      anim.hitTriggered = true;
+      anim.phase = 'impact';
+      anim.timer = 0;
+      anim.playerStunned = true;
+      anim.playerStunTimer = 1000;
+      anim.shakeTimer = 0;
+      anim.shakeIntensity = 3;
+      anim.shakeDuration = 150;
+      anim.impactRing = { x: anim.knightPos.x, y: anim.knightPos.y, timer: 0, duration: 250 };
+    }
+
+    if (progress >= 1.0 && anim.phase === 'dash') {
+      anim.phase = 'impact';
+      anim.timer = 0;
+      if (anim.hitsWall) {
+        anim.shakeTimer = 0;
+        anim.shakeIntensity = 5;
+        anim.shakeDuration = 200;
+        anim.wallCrackTimer = 0;
+        spawnWallDebris(W - TILE, H / 2);
+      } else {
+        spawnDust(anim.knightPos.x, anim.knightPos.y, 4);
+      }
+    }
+  }
+  else if (anim.phase === 'impact' && anim.timer >= 300) {
+    anim.phase = 'recovery';
+    anim.timer = 0;
+    anim.trail = [];
+  }
+  else if (anim.phase === 'recovery' && anim.timer >= anim.recoveryDuration) {
+    anim.phase = 'done';
+  }
+  else if (anim.phase === 'done') {
+    document.getElementById('phaseLabel').textContent = `Cycle complete — ${anim.scenario === 'hit' ? 'player stunned + damaged' : anim.scenario === 'wall' ? 'Knight stunned itself!' : 'Knight whiffed, free punish window'}`;
+    anim = null;
+    frameId = null;
+    return;
+  }
+
+  // Stun timer
+  if (anim.playerStunned) {
+    anim.playerStunTimer -= dt;
+    if (anim.playerStunTimer <= 0) anim.playerStunned = false;
+  }
+
+  // Impact ring timer
+  if (anim.impactRing) {
+    anim.impactRing.timer += dt;
+    if (anim.impactRing.timer >= anim.impactRing.duration) anim.impactRing = null;
+  }
+
+  if (anim.wallCrackTimer !== null) anim.wallCrackTimer += dt;
+
+  updateParticles(dt);
+
+  // ── RENDER ──
+  const shake = getShake(anim.shakeTimer, anim.shakeIntensity, anim.shakeDuration);
+
+  ctx.save();
+  ctx.translate(shake.x, shake.y);
+
+  drawScene(0, 0);
+
+  // Telegraph
+  if (anim.phase === 'telegraph') {
+    const progress = anim.timer / anim.telegraphDuration;
+    const fadeIn = Math.min(anim.timer / 200, 1.0);
+    const pulse = fadeIn >= 1 ? 0.7 + 0.3 * Math.sin(anim.timer / 1000 * 4 * Math.PI * 2) : fadeIn;
+    drawTelegraphLine(
+      anim.knightStart.x, anim.knightStart.y,
+      anim.chargeEnd.x, anim.chargeEnd.y,
+      TILE * 2, pulse
+    );
+    drawKnight(anim.knightPos.x, anim.knightPos.y, progress, false, false);
+    drawPlayer(anim.playerPos.x, anim.playerPos.y, false);
+    document.getElementById('phaseLabel').textContent = `TELEGRAPH — red line locked, ${Math.ceil(anim.telegraphDuration - anim.timer)}ms to dodge`;
+  }
+  // Dash
+  else if (anim.phase === 'dash') {
+    drawTrail(anim.trail);
+    drawKnight(anim.knightPos.x, anim.knightPos.y, null, false, false);
+    drawPlayer(anim.playerPos.x, anim.playerPos.y, false);
+    renderParticles();
+    document.getElementById('phaseLabel').textContent = 'DASH — Knight charging at 33 tiles/sec';
+  }
+  // Impact
+  else if (anim.phase === 'impact') {
+    drawTrail(anim.trail);
+    drawKnight(anim.knightPos.x, anim.knightPos.y, null, false, anim.hitsWall);
+    drawPlayer(anim.playerPos.x, anim.playerPos.y, anim.playerStunned);
+    if (anim.impactRing) {
+      drawImpactRing(anim.impactRing.x, anim.impactRing.y, anim.impactRing.timer / anim.impactRing.duration, true);
+    }
+    if (anim.wallCrackTimer !== null) {
+      drawWallCracks(W - TILE, anim.wallCrackTimer / 2000);
+    }
+    renderParticles();
+    document.getElementById('phaseLabel').textContent = `IMPACT — ${anim.scenario === 'hit' ? 'Player hit! 35 dmg + 1s stun' : anim.scenario === 'wall' ? 'WALL CRASH! Knight takes 12 self-damage' : 'Miss — skidding to a stop'}`;
+  }
+  // Recovery
+  else if (anim.phase === 'recovery') {
+    drawKnight(anim.knightPos.x, anim.knightPos.y, null, true, anim.hitsWall && anim.timer < 800);
+    drawPlayer(anim.playerPos.x, anim.playerPos.y, anim.playerStunned);
+    if (anim.wallCrackTimer !== null) {
+      drawWallCracks(W - TILE, anim.wallCrackTimer / 2000);
+    }
+    renderParticles();
+    const remaining = Math.ceil(anim.recoveryDuration - anim.timer);
+    const label = anim.hitsWall
+      ? `RECOVERY (EXTENDED) — Knight dazed, ${remaining}ms punish window!`
+      : `RECOVERY — Knight staggered, ${remaining}ms punish window`;
+    document.getElementById('phaseLabel').textContent = label;
+  }
+
+  ctx.restore();
+  frameId = requestAnimationFrame(tick);
+}
+
+function stopAnim() {
+  if (frameId) cancelAnimationFrame(frameId);
+  frameId = null;
+  anim = null;
+  particles = [];
+  drawScene();
+  document.getElementById('phaseLabel').textContent = 'Click a button to start';
+}
+
+// ── Frame previews ──
+function drawFramePreview(containerId, frames) {
+  const container = document.getElementById(containerId);
+  container.innerHTML = '';
+  frames.forEach((frame) => {
+    const div = document.createElement('div');
+    div.className = 'sprite-frame';
+    const c = document.createElement('canvas');
+    c.width = frame.w;
+    c.height = frame.h;
+    c.style.width = (frame.w * 2) + 'px';
+    c.style.height = (frame.h * 2) + 'px';
+    const fctx = c.getContext('2d');
+    fctx.fillStyle = '#08080c';
+    fctx.fillRect(0, 0, frame.w, frame.h);
+    frame.draw(fctx);
+    div.appendChild(c);
+    const label = document.createElement('div');
+    label.className = 'frame-label';
+    label.textContent = frame.label;
+    div.appendChild(label);
+    container.appendChild(div);
+  });
+}
+
+// Telegraph frames
+drawFramePreview('telegraphFrames', [
+  { w: 120, h: 40, label: 'T=0ms (fade in)', draw: (c) => {
+    c.globalAlpha = 0.08; c.fillStyle = '#FF4444';
+    c.fillRect(10, 8, 100, 24);
+    c.globalAlpha = 0.2; c.strokeStyle = '#CC2222'; c.lineWidth = 1; c.strokeRect(10, 8, 100, 24);
+  }},
+  { w: 120, h: 40, label: 'T=200ms (locked)', draw: (c) => {
+    c.globalAlpha = 0.3; c.fillStyle = '#FF4444';
+    c.fillRect(10, 8, 100, 24);
+    c.globalAlpha = 0.9; c.strokeStyle = '#CC2222'; c.lineWidth = 2; c.strokeRect(10, 8, 100, 24);
+  }},
+  { w: 120, h: 40, label: 'T=500ms (pulse)', draw: (c) => {
+    c.globalAlpha = 0.22; c.fillStyle = '#FF4444';
+    c.fillRect(10, 8, 100, 24);
+    c.globalAlpha = 0.6; c.strokeStyle = '#CC2222'; c.lineWidth = 2; c.strokeRect(10, 8, 100, 24);
+  }},
+  { w: 120, h: 40, label: 'T=750ms (bright)', draw: (c) => {
+    c.globalAlpha = 0.35; c.fillStyle = '#FF4444';
+    c.fillRect(10, 8, 100, 24);
+    c.globalAlpha = 1.0; c.strokeStyle = '#FF2222'; c.lineWidth = 2; c.strokeRect(10, 8, 100, 24);
+  }},
+]);
+
+// Dash trail frames
+drawFramePreview('dashFrames', [
+  { w: 120, h: 50, label: 'Dash start', draw: (c) => {
+    c.globalAlpha = 0.15; c.fillStyle = '#FF6B35'; c.fillRect(15, 14, 14, 20);
+    c.globalAlpha = 0.3; c.fillRect(35, 14, 14, 20);
+    c.globalAlpha = 0.5; c.fillRect(55, 14, 14, 20);
+    c.globalAlpha = 1.0; c.fillStyle = '#884444'; c.fillRect(75, 14, 14, 20);
+    c.fillStyle = '#AA9977'; c.fillRect(78, 36, 3, 3); c.fillRect(84, 38, 2, 2);
+  }},
+  { w: 120, h: 50, label: 'Mid-dash', draw: (c) => {
+    c.globalAlpha = 0.1; c.fillStyle = '#FF6B35'; c.fillRect(30, 14, 14, 20);
+    c.globalAlpha = 0.25; c.fillRect(48, 14, 14, 20);
+    c.globalAlpha = 0.45; c.fillRect(66, 14, 14, 20);
+    c.globalAlpha = 1.0; c.fillStyle = '#884444'; c.fillRect(86, 14, 14, 20);
+    c.fillStyle = '#AA9977';
+    c.fillRect(50, 37, 2, 2); c.fillRect(68, 35, 3, 3); c.fillRect(88, 38, 2, 2);
+  }},
+  { w: 120, h: 50, label: 'Trail fading', draw: (c) => {
+    c.globalAlpha = 0.05; c.fillStyle = '#FF6B35'; c.fillRect(50, 14, 14, 20);
+    c.globalAlpha = 0.12; c.fillRect(66, 14, 14, 20);
+    c.globalAlpha = 0.25; c.fillRect(82, 14, 14, 20);
+    c.globalAlpha = 1.0; c.fillStyle = '#884444'; c.fillRect(98, 14, 14, 20);
+  }},
+]);
+
+// Impact frames
+drawFramePreview('impactFrames', [
+  { w: 80, h: 60, label: 'Hit Player', draw: (c) => {
+    c.strokeStyle = '#FFCC00'; c.lineWidth = 2; c.beginPath(); c.arc(40, 30, 12, 0, Math.PI*2); c.stroke();
+    c.strokeStyle = '#FF6B35'; c.lineWidth = 1.5; c.beginPath(); c.arc(40, 30, 6, 0, Math.PI*2); c.stroke();
+    c.fillStyle = '#FFFF00';
+    for (let i = 0; i < 3; i++) {
+      const a = i * Math.PI * 2 / 3;
+      c.fillRect(40 + Math.cos(a) * 8 - 1.5, 12 + Math.sin(a) * 3 - 1.5, 3, 3);
+    }
+  }},
+  { w: 80, h: 60, label: 'Hit Wall', draw: (c) => {
+    c.fillStyle = '#555566'; c.fillRect(64, 0, 16, 60);
+    c.strokeStyle = '#888888'; c.lineWidth = 1.5;
+    const cracks = [[64,20,52,12],[64,28,50,32],[64,35,55,45],[64,24,58,16],[64,32,56,40]];
+    cracks.forEach(([x1,y1,x2,y2]) => { c.beginPath(); c.moveTo(x1,y1); c.lineTo(x2,y2); c.stroke(); });
+    c.fillStyle = '#999999';
+    c.fillRect(50, 18, 3, 3); c.fillRect(54, 36, 3, 3); c.fillRect(48, 28, 2, 2);
+  }},
+  { w: 80, h: 60, label: 'Miss (skid)', draw: (c) => {
+    c.globalAlpha = 0.4; c.fillStyle = '#AA9977';
+    c.beginPath(); c.arc(40, 38, 8, 0, Math.PI*2); c.fill();
+    c.globalAlpha = 0.2;
+    c.beginPath(); c.arc(40, 38, 14, 0, Math.PI*2); c.fill();
+  }},
+]);
+
+// Initial
+drawScene();
+</script>
+
+</body>
+</html>

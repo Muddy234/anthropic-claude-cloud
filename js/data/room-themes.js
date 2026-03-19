@@ -83,6 +83,14 @@ const ROOM_THEMES = {
         monsters: ['Crystal Spider', 'Stone Lurker', 'Cave Bat']
     },
 
+    'ice_cave': {
+        name: 'Ice Cave',
+        floorColor: '#1a2a3a',
+        wallColor: '#0d1a2a',
+        accentColor: '#81d4fa',
+        monsters: ['Frost Elemental', 'Ice Golem', 'Frozen Husk', 'Blizzard Spirit']
+    },
+
     'bone_pit': {
         name: 'Bone Pit',
         floorColor: '#2a2520',
@@ -120,10 +128,10 @@ function getThemeByDepth(depth) {
         const mid1 = ['volcanic_chamber', 'ancient_crypt', 'fungal_cavern'];
         return mid1[Math.floor(Math.random() * mid1.length)];
     } else if (depth <= 6) {
-        const mid2 = ['obsidian_halls', 'flooded_depths', 'crystal_caves'];
+        const mid2 = ['obsidian_halls', 'flooded_depths', 'crystal_caves', 'ice_cave'];
         return mid2[Math.floor(Math.random() * mid2.length)];
     } else if (depth <= 8) {
-        const late = ['shadow_realm', 'bone_pit'];
+        const late = ['shadow_realm', 'bone_pit', 'ice_cave'];
         return late[Math.floor(Math.random() * late.length)];
     } else {
         return 'molten_forge';

@@ -1326,6 +1326,142 @@ function addPlayerImpulse(ix, iy) {
     playerVelocity.y += iy;
 }
 
+// ############################################################################
+// PLAYER KNOCKBACK SYSTEM
+// ############################################################################
+
+// Player knockback state
+const playerKnockback = {
+    active: false,
+    velX: 0,
+    velY: 0,
+    duration: 0,
+    elapsed: 0,
+    source: null
+};
+
+/**
+ * Apply knockback to the player
+ * @param {number} sourceX - X position of knockback source
+ * @param {number} sourceY - Y position of knockback source
+ * @param {number} force - Knockback force (tiles per second)
+ * @param {number} duration - Knockback duration in milliseconds
+ * @param {object} source - Entity that caused the knockback (optional)
+ */
+function applyPlayerKnockback(sourceX, sourceY, force, duration, source = null) {
+    const player = game.player;
+    if (!player) return;
+
+    // Calculate knockback direction (away from source)
+    const dx = player.gridX - sourceX;
+    const dy = player.gridY - sourceY;
+    const dist = Math.sqrt(dx * dx + dy * dy);
+
+    if (dist < 0.01) return; // Too close, can't determine direction
+
+    // Normalize direction and apply force
+    const dirX = dx / dist;
+    const dirY = dy / dist;
+
+    playerKnockback.active = true;
+    playerKnockback.velX = dirX * force;
+    playerKnockback.velY = dirY * force;
+    playerKnockback.duration = duration;
+    playerKnockback.elapsed = 0;
+    playerKnockback.source = source;
+
+    // Disable player input temporarily
+    player.knockbackActive = true;
+
+    console.log(`[Movement] Player knockback applied: force=${force}, duration=${duration}ms, direction=(${dirX.toFixed(2)}, ${dirY.toFixed(2)})`);
+}
+
+/**
+ * Update player knockback movement
+ * @param {number} deltaTime - Time since last frame in milliseconds
+ */
+function updatePlayerKnockback(deltaTime) {
+    const player = game.player;
+    if (!player || !playerKnockback.active) return;
+
+    const dt = deltaTime / 1000; // Convert to seconds
+
+    // Update elapsed time
+    playerKnockback.elapsed += deltaTime;
+
+    // Calculate decay factor (knockback weakens over time)
+    const progress = playerKnockback.elapsed / playerKnockback.duration;
+    const decay = Math.max(0, 1 - progress);
+
+    // Calculate movement delta
+    const deltaX = playerKnockback.velX * decay * dt;
+    const deltaY = playerKnockback.velY * decay * dt;
+
+    // Calculate new position
+    const newX = player.gridX + deltaX;
+    const newY = player.gridY + deltaY;
+
+    // Check for wall collision
+    const tileX = Math.floor(newX);
+    const tileY = Math.floor(newY);
+
+    if (typeof canMoveToAxis === 'function' && canMoveToAxis(newX, newY, false)) {
+        // No wall - apply movement
+        player.gridX = newX;
+        player.gridY = newY;
+        player.displayX = newX;
+        player.displayY = newY;
+        player.x = newX;
+        player.y = newY;
+    } else {
+        // Wall collision - stop knockback
+        playerKnockback.active = false;
+        player.knockbackActive = false;
+
+        // Optionally apply wall damage
+        if (playerKnockback.source && typeof applyDamage === 'function') {
+            const wallDamage = 5; // Base wall collision damage
+            // applyDamage(player, wallDamage, null, 'wall_collision');
+            // Show message
+            if (typeof addMessage === 'function') {
+                addMessage(`You slam into the wall!`);
+            }
+        }
+
+        console.log('[Movement] Player knockback stopped - wall collision');
+        return;
+    }
+
+    // Check if knockback finished
+    if (playerKnockback.elapsed >= playerKnockback.duration) {
+        playerKnockback.active = false;
+        player.knockbackActive = false;
+        console.log('[Movement] Player knockback complete');
+    }
+}
+
+/**
+ * Check if player is currently being knocked back
+ * @returns {boolean} True if knockback is active
+ */
+function isPlayerKnockedBack() {
+    return playerKnockback.active;
+}
+
+/**
+ * Cancel any active player knockback
+ */
+function cancelPlayerKnockback() {
+    const player = game.player;
+    playerKnockback.active = false;
+    playerKnockback.velX = 0;
+    playerKnockback.velY = 0;
+    playerKnockback.elapsed = 0;
+    if (player) {
+        player.knockbackActive = false;
+    }
+}
+
 /**
  * Cancel current movement, reset velocity, and snap player to nearest tile increment
  */
@@ -1605,6 +1741,13 @@ if (typeof window !== 'undefined') {
     window.addPlayerImpulse = addPlayerImpulse;
     window.getInputVector = getInputVector;
     window.tryCornerNudge = tryCornerNudge;
+
+    // Player knockback system
+    window.playerKnockback = playerKnockback;
+    window.applyPlayerKnockback = applyPlayerKnockback;
+    window.updatePlayerKnockback = updatePlayerKnockback;
+    window.isPlayerKnockedBack = isPlayerKnockedBack;
+    window.cancelPlayerKnockback = cancelPlayerKnockback;
 
     // Entity movement updates
     window.updateEntityMovement = updateEntityMovement;

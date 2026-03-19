@@ -2,7 +2,7 @@
 // GAME INITIALIZATION - The Shifting Chasm
 // ============================================================================
 // Updated: Registers all new systems, element-based initialization
-// Now supports starting in village hub (Survival Extraction Update)
+// Now supports starting in village hub
 // ============================================================================
 
 // ============================================================================
@@ -11,7 +11,7 @@
 
 /**
  * Start the game in the village hub (default start)
- * This is the new default entry point for the Survival Extraction update
+ * This is the default entry point
  */
 function startInVillage() {
     cleanupPreviousGame();
@@ -19,6 +19,9 @@ function startInVillage() {
     initializeVillage();
     initializeVillagePlayer();
     initializeVillageSystems();
+
+    // Auto-save when entering village
+    if (typeof SaveManager !== 'undefined') SaveManager.save();
 }
 
 /**
@@ -59,10 +62,7 @@ function initializeVillageSystems() {
     const villageSystems = [
         'BankingSystem',
         'QuestSystem',
-        'CraftingSystem',
-        'ShortcutSystem',
-        'DegradationSystem',
-        'RescueSystem'
+        'CraftingSystem'
     ];
 
     villageSystems.forEach(systemName => {
@@ -135,10 +135,12 @@ function applyLoadoutToPlayer(loadout) {
             }
         });
     }
+    // Note: Spell selection is applied in initializeDungeonCore AFTER initializeAllSystems()
+    // to ensure SpellSystem.init() doesn't reset it back to 'dash'
 }
 
 /**
- * Return to village from dungeon (after extraction or death)
+ * Return to village from dungeon (after death)
  */
 function returnToVillage() {
     cleanupPreviousGame();
@@ -151,11 +153,13 @@ function returnToVillage() {
     if (typeof sessionState !== 'undefined') {
         sessionState.active = false;
     }
+
+    // Auto-save when returning to village
+    if (typeof SaveManager !== 'undefined') SaveManager.save();
 }
 
 /**
- * Start a new game - now starts in village by default
- * For Survival Extraction update
+ * Start a new game - starts in village by default
  */
 function startNewGame() {
     // Start in village hub by default
@@ -166,7 +170,7 @@ function startNewGame() {
  * Legacy function: Start directly in dungeon (for testing or quick play)
  */
 function startNewGameDungeon() {
-    // Start session (CRITICAL for extraction to work)
+    // Start session (CRITICAL for dungeon run tracking)
     if (typeof SessionManager !== 'undefined') {
         SessionManager.startRun(1, [], 0);
     } else if (typeof sessionState !== 'undefined') {
@@ -210,7 +214,7 @@ function initializeDungeonCore(options = {}) {
     // Step 4: Initialize player
     initializePlayer();
 
-    // Step 5: Apply loadout if provided
+    // Step 5: Apply loadout equipment (weapon, armor, consumables)
     if (loadout) {
         applyLoadoutToPlayer(loadout);
     }
@@ -218,13 +222,14 @@ function initializeDungeonCore(options = {}) {
     // Step 6: Initialize all systems
     initializeAllSystems();
 
-    // Step 7: Initialize extraction points
-    if (typeof ExtractionSystem !== 'undefined' && game.rooms) {
-        const spawnRoom = game.rooms.find(r => r.type === 'entrance');
-        ExtractionSystem.init(floor, game.rooms, spawnRoom);
+    // Step 6b: Apply spell selection AFTER systems are initialized
+    // (SpellSystem.init() resets state, so we must set spell after)
+    if (loadout && loadout.selectedSpell && typeof SpellSystem !== 'undefined') {
+        SpellSystem.selectSpell(loadout.selectedSpell);
+        console.log(`[GameInit] Applied spell after init: ${loadout.selectedSpell}`);
     }
 
-    // Step 8: Post-initialization
+    // Step 7: Post-initialization
     postInitialization();
 
     logGameStats();
@@ -265,6 +270,27 @@ function resetGameState() {
     game.eruption = { timer: 180, lastDamage: 0 };
     game._intervals = [];
     game._timeouts = [];
+
+    // Initialize run statistics (sole tracker - persistentState.stats is deprecated)
+    game.runStats = {
+        floorsReached: 0,
+        enemiesKilled: 0,
+        damageDealt: 0,
+        damageTaken: 0,
+        goldEarned: 0,
+        itemsCollected: 0,
+        boonsCollected: [],
+        ancestorSynergies: [],
+        highestStreak: 0,
+        highestStreakTier: '',
+        totalStreaks: 0,
+        spellsCast: 0,
+        criticalHits: 0,
+        hazardsTriggered: 0,
+        hazardsAvoided: 0,
+        timePlayed: 0,
+        causeOfDeath: null
+    };
 }
 
 /**
@@ -637,6 +663,61 @@ function registerNewSystems() {
             cleanup: () => {}
         }, 5); // High priority - runs early each frame
     }
+
+    // ====================================================================
+    // WAVE 0: Systems migrated from manual updateDungeon() calls
+    // These systems expect dt in SECONDS, so the wrapper converts ms->s.
+    // ====================================================================
+
+    // TimeEffects - priority 8 (before all gameplay systems)
+    if (typeof TimeEffects !== 'undefined' && !SystemManager.has('time-effects')) {
+        SystemManager.register('time-effects', {
+            name: 'time-effects',
+            init: () => { if (TimeEffects.init) TimeEffects.init(); },
+            update: (dt) => TimeEffects.update(dt / 1000),
+            cleanup: () => { if (TimeEffects.cleanup) TimeEffects.cleanup(); }
+        }, 8);
+    }
+
+    // StaminaSystem - priority 28
+    if (typeof StaminaSystem !== 'undefined' && !SystemManager.has('stamina')) {
+        SystemManager.register('stamina', {
+            name: 'stamina',
+            init: () => { if (StaminaSystem.init) StaminaSystem.init(); },
+            update: (dt) => StaminaSystem.update(dt / 1000),
+            cleanup: () => { if (StaminaSystem.cleanup) StaminaSystem.cleanup(); }
+        }, 28);
+    }
+
+    // KillStreakSystem - priority 62
+    if (typeof KillStreakSystem !== 'undefined' && !SystemManager.has('kill-streaks')) {
+        SystemManager.register('kill-streaks', {
+            name: 'kill-streaks',
+            init: () => { if (KillStreakSystem.init) KillStreakSystem.init(); },
+            update: (dt) => KillStreakSystem.update(dt / 1000),
+            cleanup: () => { if (KillStreakSystem.cleanup) KillStreakSystem.cleanup(); }
+        }, 62);
+    }
+
+    // KillStreakUI - priority 82
+    if (typeof KillStreakUI !== 'undefined' && !SystemManager.has('kill-streak-ui')) {
+        SystemManager.register('kill-streak-ui', {
+            name: 'kill-streak-ui',
+            init: () => { if (KillStreakUI.init) KillStreakUI.init(); },
+            update: (dt) => KillStreakUI.update(dt / 1000),
+            cleanup: () => { if (KillStreakUI.cleanup) KillStreakUI.cleanup(); }
+        }, 82);
+    }
+
+    // AbilityProjectileSystem - priority 45 (uses ms directly)
+    if (typeof AbilityProjectileSystem !== 'undefined' && !SystemManager.has('ability-projectiles')) {
+        SystemManager.register('ability-projectiles', {
+            name: 'ability-projectiles',
+            init: () => { if (AbilityProjectileSystem.init) AbilityProjectileSystem.init(); },
+            update: (dt) => AbilityProjectileSystem.update(dt),
+            cleanup: () => { if (AbilityProjectileSystem.cleanup) AbilityProjectileSystem.cleanup(); }
+        }, 45);
+    }
 }
 
 // ============================================================================
@@ -742,13 +823,31 @@ function logEnemyTierDistribution() {
  * Advance to next floor (preserves player state)
  */
 function advanceToNextFloor() {
-    const nextFloor = game.floor + 1;
+    const currentFloor = game.floor;
+    const nextFloor = currentFloor + 1;
+
+    // Award floor completion HP bonus (replaces Vitality proficiency)
+    // +15 max HP per floor cleared
+    const hpBonus = 15;
+    if (game.player) {
+        game.player.maxHp += hpBonus;
+        game.player.hp += hpBonus; // Heal the bonus amount too
+        if (typeof addMessage === 'function') {
+            addMessage(`Floor ${currentFloor} cleared! +${hpBonus} max HP`);
+        }
+        console.log(`[Floor Complete] Floor ${currentFloor} cleared. +${hpBonus} max HP (now ${game.player.maxHp})`);
+    }
 
     // Cleanup systems
     cleanupPreviousGame();
 
     // Reset floor-specific state (keep player, gold, etc.)
     game.floor = nextFloor;
+
+    // Update runStats floor tracking
+    if (game.runStats) {
+        game.runStats.floorsReached = nextFloor;
+    }
     game.enemies = [];
     game.decorations = [];
     game._altarsPlacedThisFloor = 0;
@@ -774,20 +873,47 @@ function advanceToNextFloor() {
     initializeCamera();
     initializeAllSystems();
 
-    // Re-initialize extraction points
-    if (typeof ExtractionSystem !== 'undefined' && game.rooms) {
-        ExtractionSystem.init(nextFloor, game.rooms, entranceRoom);
-    }
-
     postInitialization();
     logGameStats();
+
+    // Emit floor advance event for systems that need to react
+    if (typeof EventBus !== 'undefined') {
+        EventBus.emit('floor:advance', { newFloor: nextFloor, previousFloor: currentFloor });
+    }
 }
 
 /**
- * Restart game after death
+ * Restart game after death - TRUE PERMADEATH
+ * Wipes all state and starts a completely fresh game.
  */
 function restartGame() {
-    startNewGame();
+    // Full permadeath reset
+    const fresh = createNewPersistentState();
+    Object.keys(fresh).forEach(key => {
+        persistentState[key] = fresh[key];
+    });
+    resetSessionState();
+
+    // Reset village state
+    if (typeof createNewVillageState === 'function') {
+        const freshVillage = createNewVillageState();
+        Object.keys(freshVillage).forEach(key => {
+            villageState[key] = freshVillage[key];
+        });
+    }
+
+    // Initialize starting kit for new character
+    if (typeof initializeStartingKit === 'function') {
+        initializeStartingKit();
+    }
+
+    // Clear any saved data
+    if (typeof SaveManager !== 'undefined') {
+        SaveManager.deleteSave();
+    }
+
+    // Start fresh in village
+    startInVillage();
 }
 
 // ============================================================================
@@ -795,7 +921,7 @@ function restartGame() {
 // ============================================================================
 
 if (typeof window !== 'undefined') {
-    // Village start functions (Survival Extraction Update)
+    // Village start functions
     window.startInVillage = startInVillage;
     window.startDungeonRun = startDungeonRun;
     window.returnToVillage = returnToVillage;

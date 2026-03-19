@@ -1,6 +1,6 @@
 // === js/core/main.js ===
 // Main game loop - now orchestrated through SystemManager
-// SURVIVAL EXTRACTION UPDATE: Added auto-save and village state support
+// Added auto-save and village state support
 
 // ============================================================================
 // AUTO-SAVE TRACKING
@@ -112,16 +112,24 @@ function updateDungeon(dt) {
     const systemCount = typeof SystemManager !== 'undefined' ? SystemManager.count : 0;
     const effectCount = typeof activeEffects !== 'undefined' ? activeEffects.length : 0;
 
-    // Show extraction status if available
-    const extractionInfo = typeof sessionState !== 'undefined' && sessionState.active
+    // Show current floor if in an active session
+    const floorInfo = typeof sessionState !== 'undefined' && sessionState.active
         ? `Floor: ${sessionState.currentFloor}`
         : '';
 
     const enemyCount = game.enemies ? game.enemies.length : 0;
     document.getElementById('debug').innerText =
-        `${extractionInfo} | Enemies: ${enemyCount} | ${aiStatus} | Systems: ${systemCount} | DT: ${dt.toFixed(1)}ms | FX: ${effectCount}`;
+        `${floorInfo} | Enemies: ${enemyCount} | ${aiStatus} | Systems: ${systemCount} | DT: ${dt.toFixed(1)}ms | FX: ${effectCount}`;
+
+    // === Track run time (dt is in ms) ===
+    if (typeof game !== 'undefined' && game.runStats) {
+        game.runStats.timePlayed = (game.runStats.timePlayed || 0) + dt / 1000;
+    }
 
     // === Run all registered systems in priority order ===
+    // TimeEffects, StaminaSystem, KillStreakSystem, KillStreakUI, and
+    // AbilityProjectileSystem are now registered with SystemManager
+    // (see registerNewSystems in game-init.js) and no longer need manual calls.
     if (typeof SystemManager !== 'undefined') {
         SystemManager.updateAll(dt);
     }
@@ -150,6 +158,11 @@ function updateVillage(dt) {
             npc.showInteraction = dist <= interactionRange;
         });
     }
+
+    // Update village systems (bark system, etc.)
+    if (typeof VillageSystem !== 'undefined') {
+        VillageSystem.update(dt);
+    }
 }
 
 /**
@@ -169,18 +182,29 @@ function loop(timestamp) {
         return;
     }
 
-    const dt = timestamp - lastTime;
+    const rawDt = timestamp - lastTime;
     lastTime = timestamp;
 
-    // Performance monitoring
-    perfMonitor.check(dt, timestamp);
+    // Apply TimeEffects time scale to gameplay systems.
+    // TimeEffects.timeScale is < 1 during slow-mo and 1.0 normally.
+    // Raw dt is preserved for perf monitoring; scaled dt feeds gameplay.
+    const scaledDt = rawDt * (typeof TimeEffects !== 'undefined' && TimeEffects.state && TimeEffects.state.timeScale
+        ? TimeEffects.state.timeScale : 1.0);
 
-    update(dt);
+    // Performance monitoring uses raw (wall-clock) dt
+    perfMonitor.check(rawDt, timestamp);
+
+    update(scaledDt);
     render();
 
     requestAnimationFrame(loop);
 }
 
 requestAnimationFrame(loop);
+
+// Enable crash recovery now that all scripts have loaded and the game loop is running
+if (typeof enableCrashRecovery === 'function') {
+    enableCrashRecovery();
+}
 
 console.log('✅ Main loop loaded. Enable perf monitoring with: perfMonitor.enabled = true');

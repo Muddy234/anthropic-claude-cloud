@@ -1,8 +1,9 @@
 // ============================================================================
 // THE SHIFTING CHASM - ARMOR TYPES
 // ============================================================================
-// Seven armor types for damage calculation
+// Eight armor types for damage calculation
 // Each monster and piece of player armor has one armor type
+// Player-wearable types have defense modifiers and HP tier multipliers
 // ============================================================================
 
 const ARMOR_TYPES = {
@@ -13,7 +14,24 @@ const ARMOR_TYPES = {
         weakTo: ['blade'],
         resistantTo: [],
         examples: ['Cinder Wisp', 'Spore Drone', 'Gutter Rat'],
-        defensiveRole: 'Fast/evasive, vulnerable to blades'
+        defensiveRole: 'Fast/evasive, vulnerable to blades',
+        playerWearable: false,
+        monsterOnly: true,
+        defenseModifier: 0.0,
+        hpTierModifier: 0.0
+    },
+    cloth: {
+        id: 'cloth',
+        name: 'Cloth',
+        description: 'Light fabric protection. Minimal defense but allows for maximum mobility and spellcasting.',
+        weakTo: ['blade', 'pierce'],
+        resistantTo: [],
+        examples: ['Mage Robes', 'Apprentice Garb'],
+        defensiveRole: 'Caster gear, minimal protection',
+        playerWearable: true,
+        monsterOnly: false,
+        defenseModifier: 0.5,
+        hpTierModifier: 0.3
     },
     hide: {
         id: 'hide',
@@ -22,7 +40,11 @@ const ARMOR_TYPES = {
         weakTo: ['pierce'],
         resistantTo: [],
         examples: ['Magma Hound', 'Frost Stalker'],
-        defensiveRole: 'Balanced, weak to pierce'
+        defensiveRole: 'Balanced, weak to pierce',
+        playerWearable: true,
+        monsterOnly: false,
+        defenseModifier: 0.8,
+        hpTierModifier: 0.6
     },
     scaled: {
         id: 'scaled',
@@ -31,7 +53,11 @@ const ARMOR_TYPES = {
         weakTo: ['pierce'],
         resistantTo: [],
         examples: ['Drowned Revenant', 'Blighted Treant'],
-        defensiveRole: 'Natural armor, weak to pierce'
+        defensiveRole: 'Natural armor, weak to pierce',
+        playerWearable: false,
+        monsterOnly: true,
+        defenseModifier: 0.9,
+        hpTierModifier: 0.8
     },
     armored: {
         id: 'armored',
@@ -40,7 +66,11 @@ const ARMOR_TYPES = {
         weakTo: ['blunt'],
         resistantTo: ['blade'],
         examples: ['Grave Knight', 'Templar Remnant'],
-        defensiveRole: 'Heavy protection, weak to blunt'
+        defensiveRole: 'Heavy protection, weak to blunt',
+        playerWearable: true,
+        monsterOnly: false,
+        defenseModifier: 1.0,
+        hpTierModifier: 1.0
     },
     stone: {
         id: 'stone',
@@ -49,7 +79,11 @@ const ARMOR_TYPES = {
         weakTo: ['blunt'],
         resistantTo: ['blade', 'pierce'],
         examples: ['Crystal Golem', 'Mud Shambler'],
-        defensiveRole: 'Extreme resistance, weak to blunt'
+        defensiveRole: 'Extreme resistance, weak to blunt',
+        playerWearable: true,
+        monsterOnly: false,
+        defenseModifier: 1.1,
+        hpTierModifier: 1.0
     },
     bone: {
         id: 'bone',
@@ -58,7 +92,11 @@ const ARMOR_TYPES = {
         weakTo: ['blunt'],
         resistantTo: [],
         examples: ['Husk', 'Lich Acolyte'],
-        defensiveRole: 'Undead, weak to blunt'
+        defensiveRole: 'Undead, weak to blunt',
+        playerWearable: false,
+        monsterOnly: true,
+        defenseModifier: 0.7,
+        hpTierModifier: 0.5
     },
     ethereal: {
         id: 'ethereal',
@@ -67,8 +105,26 @@ const ARMOR_TYPES = {
         weakTo: ['pierce'],
         resistantTo: ['blunt'],
         examples: ['Void Touched', 'Shadow Creeper'],
-        defensiveRole: 'Magic-based, weak to pierce'
+        defensiveRole: 'Magic-based, weak to pierce',
+        playerWearable: true,
+        monsterOnly: false,
+        defenseModifier: 0.6,
+        hpTierModifier: 0.3
     }
+};
+
+// ============================================================================
+// PLAYER ARMOR TYPE CONSTANTS
+// ============================================================================
+
+const PLAYER_ARMOR_TYPES = ['cloth', 'hide', 'armored', 'stone', 'ethereal'];
+
+const ARMOR_STAT_ALLOCATION = {
+    cloth: { primary: 'int', secondary: 'agi' },
+    ethereal: { primary: 'int', secondary: 'agi' },
+    hide: { primary: 'agi', secondary: 'str' },
+    armored: { primary: 'str', secondary: 'agi' },
+    stone: { primary: 'str', secondary: 'str' } // Double primary
 };
 
 // ============================================================================
@@ -90,6 +146,14 @@ function getArmorType(id) {
  */
 function getAllArmorTypeIds() {
     return Object.keys(ARMOR_TYPES);
+}
+
+/**
+ * Get all player-wearable armor type IDs
+ * @returns {string[]} Array of player armor type IDs
+ */
+function getPlayerArmorTypeIds() {
+    return PLAYER_ARMOR_TYPES;
 }
 
 /**
@@ -156,18 +220,61 @@ function getArmorTypesWeakTo(weaponType) {
         .map(([id]) => id);
 }
 
+/**
+ * Check if armor type is wearable by players
+ * @param {string} armorType - Armor type ID
+ * @returns {boolean} True if players can wear this armor type
+ */
+function isPlayerWearable(armorType) {
+    return ARMOR_TYPES[armorType]?.playerWearable || false;
+}
+
+/**
+ * Get defense modifier for armor type
+ * @param {string} armorType - Armor type ID
+ * @returns {number} Defense modifier (0.0 to 1.1)
+ */
+function getArmorDefenseModifier(armorType) {
+    return ARMOR_TYPES[armorType]?.defenseModifier || 1.0;
+}
+
+/**
+ * Get HP tier modifier for armor type
+ * @param {string} armorType - Armor type ID
+ * @returns {number} HP tier modifier (0.0 to 1.0)
+ */
+function getArmorHpTierModifier(armorType) {
+    return ARMOR_TYPES[armorType]?.hpTierModifier || 1.0;
+}
+
+/**
+ * Get stat allocation for armor type
+ * @param {string} armorType - Armor type ID
+ * @returns {Object} Object with primary and secondary stat names
+ */
+function getArmorStatAllocation(armorType) {
+    return ARMOR_STAT_ALLOCATION[armorType] || { primary: 'str', secondary: 'agi' };
+}
+
 // ============================================================================
 // EXPORTS
 // ============================================================================
 
 window.ARMOR_TYPES = ARMOR_TYPES;
+window.PLAYER_ARMOR_TYPES = PLAYER_ARMOR_TYPES;
+window.ARMOR_STAT_ALLOCATION = ARMOR_STAT_ALLOCATION;
 window.getArmorType = getArmorType;
 window.getAllArmorTypeIds = getAllArmorTypeIds;
+window.getPlayerArmorTypeIds = getPlayerArmorTypeIds;
 window.getArmorTypeName = getArmorTypeName;
 window.isArmorWeakToWeapon = isArmorWeakToWeapon;
 window.isArmorResistantToWeapon = isArmorResistantToWeapon;
 window.getArmorEffectiveness = getArmorEffectiveness;
 window.getRecommendedWeaponsForArmor = getRecommendedWeaponsForArmor;
 window.getArmorTypesWeakTo = getArmorTypesWeakTo;
+window.isPlayerWearable = isPlayerWearable;
+window.getArmorDefenseModifier = getArmorDefenseModifier;
+window.getArmorHpTierModifier = getArmorHpTierModifier;
+window.getArmorStatAllocation = getArmorStatAllocation;
 
-console.log('[ArmorTypes] Loaded 7 armor types');
+console.log('[ArmorTypes] Loaded 8 armor types (5 player-wearable)');

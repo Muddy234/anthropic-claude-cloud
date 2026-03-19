@@ -47,6 +47,8 @@ const ELEMENT_COLORS = {
     'PHYSICAL': '#ccc'
 };
 
+let controlsOverlayVisible = false;
+
 function drawInventoryOverlay() {
     // Initialize scroll offsets if not exists
     if (!game.inventoryScroll) {
@@ -104,36 +106,106 @@ function drawInventoryOverlay() {
         ctx.strokeRect(x, y, w, h);
     }
 
-    // Updated tabs - CotDG style
+    // Updated tabs - CotDG Stone Tablet Style
     const tabs = ['WEAPONS', 'ARMOR', 'CONSUME', 'ITEMS', 'EQUIPPED'];
     const tabW = w / tabs.length;
-    const tabH = 36;
-    ctx.font = 'bold 14px monospace';
+    const tabH = 40;
+
+    // Get frame colors
+    const frameGold = colors.frameGold || (typeof UI_COLORS !== 'undefined' ? UI_COLORS.frameGold : '#b8860b');
+    const frameGoldBright = colors.frameGoldBright || (typeof UI_COLORS !== 'undefined' ? UI_COLORS.frameGoldBright : '#daa520');
+    const frameGoldDark = colors.frameGoldDark || (typeof UI_COLORS !== 'undefined' ? UI_COLORS.frameGoldDark : '#8b6914');
+    const templeStone = colors.templeStone || (typeof UI_COLORS !== 'undefined' ? UI_COLORS.templeStone : '#4a4a40');
+    const templeStoneDark = colors.templeStoneDark || (typeof UI_COLORS !== 'undefined' ? UI_COLORS.templeStoneDark : '#2a2a25');
+
+    const fontFamily = typeof UI_FONT_FAMILY !== 'undefined' ? UI_FONT_FAMILY.display : 'Georgia, serif';
     ctx.textAlign = 'center';
 
     for (let i = 0; i < tabs.length; i++) {
-        const tx = x + i * tabW;
+        const tx = x + i * tabW + 3;
+        const tw = tabW - 6;
         const isActive = game.inventoryTab === i;
 
-        // Tab background
+        ctx.save();
+
+        // Tab shadow (pressed effect for inactive)
+        if (!isActive) {
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.4)';
+            ctx.fillRect(tx + 2, y + 4, tw, tabH - 2);
+        }
+
+        // Tab background - stone texture
         if (isActive) {
+            // Active: gold-highlighted stone
             const tabGrad = ctx.createLinearGradient(tx, y, tx, y + tabH);
-            tabGrad.addColorStop(0, colors.gold || '#d4af37');
-            tabGrad.addColorStop(1, '#8b6914');
+            tabGrad.addColorStop(0, frameGoldBright);
+            tabGrad.addColorStop(0.3, frameGold);
+            tabGrad.addColorStop(0.7, frameGold);
+            tabGrad.addColorStop(1, frameGoldDark);
             ctx.fillStyle = tabGrad;
         } else {
-            ctx.fillStyle = colors.bgMedium || '#1a1a24';
+            // Inactive: weathered stone
+            const tabGrad = ctx.createLinearGradient(tx, y, tx, y + tabH);
+            tabGrad.addColorStop(0, templeStone);
+            tabGrad.addColorStop(0.5, templeStoneDark);
+            tabGrad.addColorStop(1, '#1a1a18');
+            ctx.fillStyle = tabGrad;
         }
-        ctx.fillRect(tx + 2, y + 2, tabW - 4, tabH - 4);
+        ctx.fillRect(tx, y + 2, tw, tabH - 4);
+
+        // Top highlight
+        ctx.fillStyle = isActive ? 'rgba(255, 255, 255, 0.3)' : 'rgba(255, 255, 255, 0.08)';
+        ctx.fillRect(tx, y + 2, tw, 2);
+
+        // Bottom shadow
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.3)';
+        ctx.fillRect(tx, y + tabH - 4, tw, 2);
 
         // Tab border
-        ctx.strokeStyle = isActive ? (colors.gold || '#d4af37') : (colors.border || '#3a3a4a');
-        ctx.lineWidth = 1;
-        ctx.strokeRect(tx + 2, y + 2, tabW - 4, tabH - 4);
+        ctx.strokeStyle = isActive ? frameGoldBright : frameGoldDark;
+        ctx.lineWidth = isActive ? 2 : 1;
+        ctx.strokeRect(tx, y + 2, tw, tabH - 4);
 
-        // Tab text
-        ctx.fillStyle = isActive ? (colors.bgDarkest || '#0a0a0f') : (colors.textMuted || '#888');
-        ctx.fillText(tabs[i], tx + tabW / 2, y + 23);
+        // Decorative notch at top of active tab
+        if (isActive) {
+            ctx.fillStyle = frameGoldBright;
+            const notchW = 30;
+            const notchX = tx + tw / 2 - notchW / 2;
+            ctx.fillRect(notchX, y, notchW, 4);
+
+            // Small diamond indicator
+            ctx.beginPath();
+            ctx.moveTo(tx + tw / 2, y + tabH + 2);
+            ctx.lineTo(tx + tw / 2 + 6, y + tabH - 4);
+            ctx.lineTo(tx + tw / 2, y + tabH - 10);
+            ctx.lineTo(tx + tw / 2 - 6, y + tabH - 4);
+            ctx.closePath();
+            ctx.fillStyle = colors.bgDark || '#141414';
+            ctx.fill();
+        }
+
+        // Tab text with shadow
+        ctx.font = `bold 13px ${fontFamily}`;
+
+        // Text shadow
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.6)';
+        ctx.fillText(tabs[i], tx + tw / 2 + 1, y + 26);
+
+        // Main text
+        ctx.fillStyle = isActive ? '#000' : (colors.textSecondary || '#b8a878');
+        ctx.fillText(tabs[i], tx + tw / 2, y + 25);
+
+        ctx.restore();
+    }
+
+    // Divider line below tabs
+    if (typeof drawOrnateDivider === 'function') {
+        drawOrnateDivider(ctx, x + 20, y + tabH + 8, w - 40, {
+            color: frameGoldDark,
+            colorDark: 'rgba(139, 105, 20, 0.3)',
+            emblem: 'diamond',
+            emblemSize: 8
+        });
     }
 
     const contentY = y + 60;
@@ -209,19 +281,47 @@ function drawInventoryOverlay() {
         const listX = x + 20;
         const inspectX = x + listW + 20;
 
-        // Draw divider
-        ctx.strokeStyle = '#333';
-        ctx.lineWidth = 2;
-        ctx.beginPath();
-        ctx.moveTo(x + listW, y + 40);
-        ctx.lineTo(x + listW, y + h);
-        ctx.stroke();
+        // Draw ornate divider line between list and inspect panel
+        if (typeof drawOrnateDivider === 'function') {
+            // Vertical divider as series of diamonds
+            const dividerX = x + listW;
+            ctx.strokeStyle = frameGoldDark;
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.moveTo(dividerX, y + 55);
+            ctx.lineTo(dividerX, y + h - 10);
+            ctx.stroke();
+
+            // Diamond accents along divider
+            ctx.fillStyle = frameGold;
+            for (let dy = y + 80; dy < y + h - 30; dy += 60) {
+                ctx.beginPath();
+                ctx.moveTo(dividerX, dy - 6);
+                ctx.lineTo(dividerX + 4, dy);
+                ctx.lineTo(dividerX, dy + 6);
+                ctx.lineTo(dividerX - 4, dy);
+                ctx.closePath();
+                ctx.fill();
+            }
+        } else {
+            ctx.strokeStyle = frameGoldDark;
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.moveTo(x + listW, y + 55);
+            ctx.lineTo(x + listW, y + h - 10);
+            ctx.stroke();
+        }
 
         if (filteredItems.length === 0) {
             ctx.textAlign = 'center';
-            ctx.fillStyle = '#888';
-            ctx.font = '18px monospace';
+            ctx.fillStyle = colors.textMuted || '#706850';
+            ctx.font = typeof UI_FONTS !== 'undefined' ? UI_FONTS.body : '16px Georgia, serif';
             ctx.fillText('No items in this category', x + listW / 2, cy);
+
+            // Empty slot indicator
+            ctx.font = '40px Georgia, serif';
+            ctx.fillStyle = 'rgba(184, 134, 11, 0.2)';
+            ctx.fillText('?', x + listW / 2, cy - 50);
         } else {
             // Ensure selected index is valid
             if (game.selectedItemIndex >= filteredItems.length) {
@@ -232,7 +332,7 @@ function drawInventoryOverlay() {
             }
 
             // Scrolling: keep selected item in view
-            const itemsPerPage = 15;
+            const itemsPerPage = 14;
             const scrollOffset = game.inventoryScroll[game.inventoryTab];
             const maxScroll = Math.max(0, filteredItems.length - itemsPerPage);
 
@@ -246,36 +346,114 @@ function drawInventoryOverlay() {
             const startIdx = Math.max(0, Math.min(game.inventoryScroll[game.inventoryTab], maxScroll));
             const visibleItems = filteredItems.slice(startIdx, startIdx + itemsPerPage);
 
-            // Draw item list with scrollbar
+            // Draw item list with rarity borders
+            const fontFamily = typeof UI_FONT_FAMILY !== 'undefined' ? UI_FONT_FAMILY.body : 'Georgia, serif';
             ctx.textAlign = 'left';
-            ctx.font = '18px monospace';
-            const itemHeight = 35;
+            const itemHeight = 38;
 
             visibleItems.forEach((item, idx) => {
                 const realIdx = startIdx + idx;
                 const isSelected = realIdx === game.selectedItemIndex;
                 const itemY = contentY + idx * itemHeight;
 
-                // Highlight selected item
-                if (isSelected) {
-                    ctx.fillStyle = '#3498db';
-                    ctx.fillRect(listX - 10, itemY - 22, listW - 20, itemHeight - 2);
-                }
-
                 // Get item data for rarity
-                const itemData = EQUIPMENT_DATA[item.name] || ITEMS_DATA[item.name] || item;
+                const itemData = (typeof getItemData === 'function' ? getItemData(item.name) : null) ||
+                                (typeof EQUIPMENT_DATA !== 'undefined' ? EQUIPMENT_DATA[item.name] : null) ||
+                                (typeof ITEMS_DATA !== 'undefined' ? ITEMS_DATA[item.name] : null) || item;
                 const rarity = itemData.rarity || 'common';
 
-                ctx.fillStyle = RARITY_COLORS[rarity] || '#ffffff';
-                ctx.font = isSelected ? 'bold 18px monospace' : '18px monospace';
-                ctx.fillText(`${item.name}`, listX, itemY);
+                // Item slot background
+                const slotX = listX - 8;
+                const slotW = listW - 35;
+                const slotH = itemHeight - 4;
 
-                // Show count if stackable
+                // Draw rarity frame around item slot
+                if (isSelected) {
+                    // Selected item background
+                    ctx.fillStyle = colors.bgMedium || '#1c1c1c';
+                    ctx.fillRect(slotX, itemY - 24, slotW, slotH);
+
+                    // Draw rarity border with glow
+                    if (typeof drawRarityFrame === 'function') {
+                        drawRarityFrame(ctx, slotX, itemY - 24, slotW, slotH, rarity, {
+                            thickness: 2,
+                            glow: true,
+                            cornerRadius: 0
+                        });
+                    } else {
+                        // Fallback: simple rarity border
+                        const rarityColors = typeof UI_COLORS !== 'undefined' ? {
+                            common: UI_COLORS.rarityCommon,
+                            uncommon: UI_COLORS.rarityUncommon,
+                            rare: UI_COLORS.rarityRare,
+                            epic: UI_COLORS.rarityEpic,
+                            legendary: UI_COLORS.rarityLegendary,
+                            mythic: UI_COLORS.rarityMythic
+                        } : {};
+                        ctx.strokeStyle = rarityColors[rarity] || '#6b6b6b';
+                        ctx.lineWidth = 2;
+                        ctx.strokeRect(slotX, itemY - 24, slotW, slotH);
+                    }
+
+                    // Selection arrow
+                    ctx.fillStyle = frameGoldBright;
+                    ctx.beginPath();
+                    ctx.moveTo(slotX - 10, itemY - 18);
+                    ctx.lineTo(slotX - 10, itemY - 8);
+                    ctx.lineTo(slotX - 4, itemY - 13);
+                    ctx.closePath();
+                    ctx.fill();
+                } else {
+                    // Unselected: subtle background
+                    ctx.fillStyle = 'rgba(20, 20, 20, 0.5)';
+                    ctx.fillRect(slotX, itemY - 24, slotW, slotH);
+
+                    // Subtle rarity indicator (left border only)
+                    const rarityColors = typeof UI_COLORS !== 'undefined' ? {
+                        common: UI_COLORS.rarityCommon,
+                        uncommon: UI_COLORS.rarityUncommon,
+                        rare: UI_COLORS.rarityRare,
+                        epic: UI_COLORS.rarityEpic,
+                        legendary: UI_COLORS.rarityLegendary,
+                        mythic: UI_COLORS.rarityMythic
+                    } : { common: '#6b6b6b' };
+                    ctx.fillStyle = rarityColors[rarity] || '#6b6b6b';
+                    ctx.fillRect(slotX, itemY - 24, 3, slotH);
+                }
+
+                // Get rarity color for text
+                const RARITY_TEXT_COLORS = typeof UI_COLORS !== 'undefined' ? {
+                    common: UI_COLORS.textSecondary || '#b8a878',
+                    uncommon: UI_COLORS.rarityUncommon || '#2e8b57',
+                    rare: UI_COLORS.rarityRare || '#4169e1',
+                    epic: UI_COLORS.rarityEpic || '#9932cc',
+                    legendary: UI_COLORS.rarityLegendary || '#ffd700',
+                    mythic: UI_COLORS.rarityMythic || '#ff4500'
+                } : { common: '#ffffff' };
+
+                ctx.fillStyle = RARITY_TEXT_COLORS[rarity] || '#ffffff';
+                ctx.font = isSelected ? `bold 15px ${fontFamily}` : `14px ${fontFamily}`;
+
+                // Text shadow for readability
+                ctx.shadowColor = 'rgba(0, 0, 0, 0.6)';
+                ctx.shadowBlur = 2;
+                ctx.fillText(`${item.name}`, slotX + 10, itemY - 8);
+                ctx.shadowBlur = 0;
+
+                // Show count if stackable (in gold badge)
                 if (item.count > 1) {
-                    ctx.fillStyle = '#888';
-                    ctx.font = '14px monospace';
-                    ctx.textAlign = 'right';
-                    ctx.fillText(`x${item.count}`, listX + listW - 40, itemY);
+                    const countX = slotX + slotW - 25;
+                    const countY = itemY - 13;
+
+                    ctx.fillStyle = frameGoldDark;
+                    ctx.beginPath();
+                    ctx.arc(countX, countY, 10, 0, Math.PI * 2);
+                    ctx.fill();
+
+                    ctx.font = 'bold 10px monospace';
+                    ctx.textAlign = 'center';
+                    ctx.fillStyle = colors.textPrimary || '#efe4b0';
+                    ctx.fillText(`${item.count}`, countX, countY + 3);
                     ctx.textAlign = 'left';
                 }
             });
@@ -305,7 +483,8 @@ function drawInventoryOverlay() {
 }
 
 function drawItemInspectPanel(item, x, y, w, h, itemType) {
-    const itemData = EQUIPMENT_DATA[item.name] || ITEMS_DATA[item.name] || item;
+    const itemData = (typeof getItemData === 'function' ? getItemData(item.name) : null) ||
+                     EQUIPMENT_DATA[item.name] || ITEMS_DATA[item.name] || item;
     let dy = y;
 
     // Item name with rarity color
@@ -656,7 +835,7 @@ function renderLightCookies(ctx, camX, camY, tileSize, offsetX) {
 
 /**
  * Render decorations (shrines, chests, etc.) in the game world
- * Called from the main render loop between loot and extraction points
+ * Called from the main render loop after loot rendering
  */
 function renderDecorations(ctx, camX, camY, tileSize, offsetX) {
     if (!game.decorations || game.decorations.length === 0) return;
@@ -802,16 +981,35 @@ function renderChest(ctx, chest, screenX, screenY, tileSize, alpha) {
 }
 
 function render() {
-    ctx.fillStyle = '#000'; 
+    ctx.fillStyle = '#000';
     ctx.fillRect(0, 0, canvas.width, canvas.height);
-    
- if (!game.player) {
+
+    // Menu and game over screens don't require player
+    if (game.state === 'menu') {
+        drawMainMenuScreen(ctx, canvas.width, canvas.height);
+        return;
+    }
+
+    if (game.state === 'gameover') {
+        drawGameOverScreen(ctx, canvas.width, canvas.height);
+        return;
+    }
+
+    if (game.state === 'victory') {
+        drawVictoryScreen(ctx, canvas.width, canvas.height);
+        return;
+    }
+
+    if (game.state === 'paused') {
+        drawPauseMenu(ctx, canvas.width, canvas.height);
+        return;
+    }
+
+    if (!game.player) {
         return; // Don't render if player doesn't exist yet
     }
 
-if (game.state === 'menu') {
-        ctx.fillStyle = '#fff'; ctx.font = '64px monospace'; ctx.textAlign = 'center'; ctx.fillText('THE SHIFTING CHASM', canvas.width / 2, 400); ctx.font = '32px monospace'; ctx.fillText('Press SPACE to Start', canvas.width / 2, 500);
-    } else if (game.state === 'village' || game.state === 'dialogue' || game.state === 'bank' || game.state === 'loadout' || game.state === 'shop' || game.state === 'crafting') {
+    if (game.state === 'village' || game.state === 'dialogue' || game.state === 'bank' || game.state === 'loadout' || game.state === 'shop' || game.state === 'crafting') {
         // VILLAGE STATE RENDERING
         if (typeof VillageSystem !== 'undefined' && VillageSystem.initialized) {
             VillageSystem.render(ctx);
@@ -836,7 +1034,7 @@ if (game.state === 'menu') {
         if (game.state === 'crafting' && typeof CraftingUI !== 'undefined') {
             CraftingUI.render(ctx);
         }
-    } else if (game.state === 'playing' || game.state === 'inventory' || game.state === 'map' || game.state === 'skills' || game.state === 'levelup' || game.state === 'character' || game.state === 'shift' || game.state === 'chest' || game.state === 'shrine' || game.state === 'extraction') {
+    } else if (game.state === 'playing' || game.state === 'inventory' || game.state === 'map' || game.state === 'skills' || game.state === 'levelup' || game.state === 'character' || game.state === 'shift' || game.state === 'chest' || game.state === 'shrine') {
 
 const effectiveTileSize = TILE_SIZE * currentZoom;
 const viewW = canvas.width - TRACKER_WIDTH;
@@ -966,11 +1164,6 @@ const camY = game.camera.y + (shakeOffset.y / (TILE_SIZE * currentZoom));
         // LAYER 2.3: Draw decorations (shrines, etc.)
         renderDecorations(ctx, camX, camY, effectiveTileSize, TRACKER_WIDTH);
 
-        // LAYER 2.5: Draw extraction points
-        if (typeof renderExtractionPoints === 'function') {
-            renderExtractionPoints(ctx, camX, camY, effectiveTileSize, TRACKER_WIDTH);
-        }
-
         // Merchant rendering (only if visible within light sources)
         if (game.merchant) {
             let merchantVisibility = 0;
@@ -998,6 +1191,14 @@ const camY = game.camera.y + (shakeOffset.y / (TILE_SIZE * currentZoom));
 
 
 
+        // === GROUND PASS: Enemy ability telegraphs (render BELOW entities) ===
+        if (typeof EnemyAbilitySystem !== 'undefined' && EnemyAbilitySystem.renderTelegraphs) {
+            EnemyAbilitySystem.renderTelegraphs(ctx, camX, camY, effectiveTileSize, TRACKER_WIDTH);
+        }
+        if (typeof EffectRenderer !== 'undefined' && EffectRenderer.drawGround) {
+            EffectRenderer.drawGround(ctx, camX, camY, effectiveTileSize, TRACKER_WIDTH);
+        }
+
         // Player rendering with spritesheet animation
         const px = (game.player.displayX - camX) * effectiveTileSize + TRACKER_WIDTH;
         const py = (game.player.displayY - camY) * effectiveTileSize;
@@ -1008,6 +1209,12 @@ const camY = game.camera.y + (shakeOffset.y / (TILE_SIZE * currentZoom));
         if (typeof renderAllEnemies === 'function') {
             renderAllEnemies(ctx, camX, camY, effectiveTileSize, TRACKER_WIDTH);
         }
+
+        // Render status effect visuals on entities (after sprites, before projectiles)
+        if (typeof renderAllStatusEffectVisuals === 'function') {
+            renderAllStatusEffectVisuals(ctx, camX, camY, effectiveTileSize, TRACKER_WIDTH);
+        }
+
         // Projectiles (arrows, bolts, magic)
         if (typeof renderProjectiles === 'function') { renderProjectiles(ctx, camX, camY, effectiveTileSize, TRACKER_WIDTH); }
 
@@ -1038,8 +1245,30 @@ const camY = game.camera.y + (shakeOffset.y / (TILE_SIZE * currentZoom));
             ParticleSystemManager.render(camX, camY, effectiveTileSize, TRACKER_WIDTH);
         }
 
+        // === OVERLAY PASS: Ability impacts, slash arcs, ring bursts (render ABOVE entities) ===
+        if (typeof EffectRenderer !== 'undefined' && EffectRenderer.drawOverlay) {
+            EffectRenderer.drawOverlay(ctx, camX, camY, effectiveTileSize, TRACKER_WIDTH);
+        }
+
+        // Heal pulse effects (life drain caster feedback)
+        if (typeof HealPulseEffects !== 'undefined') {
+            HealPulseEffects.render(ctx, camX, camY, effectiveTileSize, TRACKER_WIDTH);
+        }
+
+        // Ability projectiles (homing orbs, tracking missiles, etc.)
+        if (typeof AbilityProjectileSystem !== 'undefined') {
+            AbilityProjectileSystem.render(ctx, camX, camY, effectiveTileSize, TRACKER_WIDTH);
+        }
+
         if (typeof renderDamageNumbers === 'function') { renderDamageNumbers(ctx, camX, camY, effectiveTileSize, TRACKER_WIDTH); }
         ctx.restore();
+
+        // DANGER VIGNETTE: Low health warning effect
+        // Renders a pulsing red border when player health is below 30%
+        if (typeof DangerVignette !== 'undefined' && game.player) {
+            DangerVignette.render(ctx, canvas.width, canvas.height,
+                game.player.health, game.player.maxHealth);
+        }
 
         // NEW UI: Icon sidebar (replaces old tracker)
         if (typeof renderIconSidebar === 'function') {
@@ -1051,17 +1280,24 @@ const camY = game.camera.y + (shakeOffset.y / (TILE_SIZE * currentZoom));
             renderUnitFrames(ctx);
         }
 
+        // Kill streak UI (counter, tier announcements, decay ring)
+        if (typeof KillStreakUI !== 'undefined') {
+            KillStreakUI.render(ctx);
+        }
+
         // NEW UI: Mini-map (top-right)
         if (typeof renderMiniMap === 'function') {
             renderMiniMap(ctx, canvas.width);
         }
 
+        // Combat Log UI - color-coded message system
         if (!game.merchant && game.state !== 'inventory' && game.state !== 'map' && game.state !== 'skills' && game.state !== 'moveset' && game.state !== 'levelup') {
-            ctx.fillStyle = '#fff'; ctx.font = '20px monospace'; ctx.textAlign = 'left'; const msgX = TRACKER_WIDTH + 20; const msgY = canvas.height - 40;
-            if (game.messageLog.length > 0 && Date.now() - game.lastMessageTime < 3000) { ctx.fillText(game.messageLog[game.messageLog.length - 1].text, msgX, msgY); }
+            if (typeof CombatLogUI !== 'undefined') {
+                CombatLogUI.render(ctx, canvas.height);
+            }
         }
     } else if (game.state === 'gameover') {
-        ctx.fillStyle = '#e74c3c'; ctx.font = '64px monospace'; ctx.textAlign = 'center'; ctx.fillText('GAME OVER', canvas.width / 2, 500); ctx.fillStyle = '#fff'; ctx.font = '32px monospace'; ctx.fillText('Press SPACE to Restart', canvas.width / 2, 600);
+        drawGameOverScreen(ctx, canvas.width, canvas.height);
     }
     if (typeof renderUIOverlays === 'function') { renderUIOverlays(ctx); }
 
@@ -1079,10 +1315,16 @@ const camY = game.camera.y + (shakeOffset.y / (TILE_SIZE * currentZoom));
     if (game.state === 'levelup') drawLevelUpScreen();
     if (game.state === 'chest' && typeof renderChestUI === 'function') renderChestUI(ctx);
     if (game.state === 'shrine' && typeof renderShrineUI === 'function') renderShrineUI(ctx);
-    if (game.state === 'extraction' && typeof ExtractionUI !== 'undefined') ExtractionUI.render(ctx);
-
     // Draw shift countdown timer at top of screen
     drawShiftCountdown();
+
+    // Controls overlay (F1/?) - drawn last so it appears on top of everything
+    drawControlsOverlay(ctx);
+
+    // Playtest reporter toast (F9 dump notification) - always on top
+    if (typeof PlaytestReporter !== 'undefined') {
+        PlaytestReporter.renderToast(ctx);
+    }
 }
 
 /**
@@ -1221,3 +1463,860 @@ function drawShiftCountdown() {
         }
     }
 }
+
+// ============================================================================
+// MENU SCREENS - CotDG Style
+// ============================================================================
+
+/**
+ * Draw the main menu screen - CotDG Atmospheric Style
+ */
+function drawMainMenuScreen(ctx, width, height) {
+    const colors = typeof UI_COLORS !== 'undefined' ? UI_COLORS : {};
+    const frameGold = colors.frameGold || '#b8860b';
+    const frameGoldBright = colors.frameGoldBright || '#daa520';
+    const frameGoldDark = colors.frameGoldDark || '#8b6914';
+    const bloodRed = colors.bloodRed || '#8b0000';
+    const parchment = colors.textPrimary || '#efe4b0';
+    const textMuted = colors.textMuted || '#706850';
+
+    // Get menu state
+    const menuState = game.menuState || { selectedIndex: 0, currentScreen: 'main', hasSaveData: false, embers: [] };
+
+    // Check for save data on first render
+    if (menuState.hasSaveData === false && typeof localStorage !== 'undefined') {
+        const savedData = localStorage.getItem('shiftingChasm_persistent');
+        menuState.hasSaveData = savedData !== null;
+    }
+
+    ctx.save();
+
+    // === DARK ATMOSPHERIC BACKGROUND ===
+    const bgGrad = ctx.createRadialGradient(width / 2, height / 2, 0, width / 2, height / 2, height);
+    bgGrad.addColorStop(0, '#1a1510');
+    bgGrad.addColorStop(0.5, '#0d0a08');
+    bgGrad.addColorStop(1, '#050403');
+    ctx.fillStyle = bgGrad;
+    ctx.fillRect(0, 0, width, height);
+
+    // === VOLCANIC GLOW FROM BOTTOM ===
+    const volcanicGrad = ctx.createLinearGradient(0, height, 0, height * 0.6);
+    volcanicGrad.addColorStop(0, 'rgba(139, 0, 0, 0.25)');
+    volcanicGrad.addColorStop(0.4, 'rgba(139, 69, 19, 0.1)');
+    volcanicGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
+    ctx.fillStyle = volcanicGrad;
+    ctx.fillRect(0, 0, width, height);
+
+    // === EMBER PARTICLE SYSTEM ===
+    updateAndDrawEmbers(ctx, width, height, menuState);
+
+    // === DRAMATIC VIGNETTE (with breathing effect) ===
+    const breathe = (Math.sin(Date.now() * 0.001) + 1) / 2;
+    const vignetteSize = height * (0.85 + breathe * 0.05);
+    const vignetteGrad = ctx.createRadialGradient(width / 2, height * 0.4, height * 0.2, width / 2, height * 0.4, vignetteSize);
+    vignetteGrad.addColorStop(0, 'rgba(0, 0, 0, 0)');
+    vignetteGrad.addColorStop(0.6, 'rgba(0, 0, 0, 0.4)');
+    vignetteGrad.addColorStop(1, 'rgba(0, 0, 0, 0.85)');
+    ctx.fillStyle = vignetteGrad;
+    ctx.fillRect(0, 0, width, height);
+
+    // Route to appropriate screen
+    if (menuState.currentScreen === 'settings') {
+        drawSettingsScreen(ctx, width, height, menuState, colors);
+    } else if (menuState.currentScreen === 'credits') {
+        drawCreditsScreen(ctx, width, height, menuState, colors);
+    } else {
+        // Main menu screen
+        drawMainMenuContent(ctx, width, height, menuState, colors);
+    }
+
+    // === CORNER FLOURISHES (all screens) ===
+    if (typeof drawOrnateCorners === 'function') {
+        drawOrnateCorners(ctx, 40, 40, width - 80, height - 80, { size: 30 });
+    } else {
+        ctx.strokeStyle = frameGoldDark;
+        ctx.lineWidth = 2;
+        const cs = 40;
+        // Top-left
+        ctx.beginPath();
+        ctx.moveTo(50, 50 + cs);
+        ctx.lineTo(50, 50);
+        ctx.lineTo(50 + cs, 50);
+        ctx.stroke();
+        // Top-right
+        ctx.beginPath();
+        ctx.moveTo(width - 50 - cs, 50);
+        ctx.lineTo(width - 50, 50);
+        ctx.lineTo(width - 50, 50 + cs);
+        ctx.stroke();
+        // Bottom-left
+        ctx.beginPath();
+        ctx.moveTo(50, height - 50 - cs);
+        ctx.lineTo(50, height - 50);
+        ctx.lineTo(50 + cs, height - 50);
+        ctx.stroke();
+        // Bottom-right
+        ctx.beginPath();
+        ctx.moveTo(width - 50 - cs, height - 50);
+        ctx.lineTo(width - 50, height - 50);
+        ctx.lineTo(width - 50, height - 50 - cs);
+        ctx.stroke();
+    }
+
+    ctx.restore();
+}
+
+/**
+ * Update and draw ember particles for atmospheric effect
+ */
+function updateAndDrawEmbers(ctx, width, height, menuState) {
+    const embers = menuState.embers;
+    const now = Date.now();
+
+    // Initialize embers if empty
+    if (embers.length === 0) {
+        for (let i = 0; i < 40; i++) {
+            embers.push({
+                x: Math.random() * width,
+                y: height + Math.random() * 100,
+                size: Math.random() * 3 + 1,
+                speed: Math.random() * 0.5 + 0.3,
+                drift: (Math.random() - 0.5) * 0.3,
+                brightness: Math.random() * 0.5 + 0.3,
+                phase: Math.random() * Math.PI * 2
+            });
+        }
+    }
+
+    // Update and draw embers
+    for (let i = 0; i < embers.length; i++) {
+        const ember = embers[i];
+
+        // Update position
+        ember.y -= ember.speed;
+        ember.x += ember.drift + Math.sin(now * 0.002 + ember.phase) * 0.2;
+
+        // Reset when off screen
+        if (ember.y < -10) {
+            ember.y = height + 10;
+            ember.x = Math.random() * width;
+        }
+
+        // Flicker effect
+        const flicker = (Math.sin(now * 0.01 + ember.phase) + 1) / 2;
+        const alpha = ember.brightness * (0.7 + flicker * 0.3);
+
+        // Draw ember with glow
+        ctx.beginPath();
+        ctx.arc(ember.x, ember.y, ember.size, 0, Math.PI * 2);
+
+        // Core
+        ctx.fillStyle = `rgba(255, ${150 + flicker * 80}, 50, ${alpha})`;
+        ctx.fill();
+
+        // Glow
+        ctx.shadowColor = `rgba(255, 100, 0, ${alpha * 0.5})`;
+        ctx.shadowBlur = ember.size * 3;
+        ctx.fill();
+        ctx.shadowBlur = 0;
+    }
+}
+
+/**
+ * Draw the main menu content (title, menu options)
+ */
+function drawMainMenuContent(ctx, width, height, menuState, colors) {
+    const frameGold = colors.frameGold || '#b8860b';
+    const frameGoldBright = colors.frameGoldBright || '#daa520';
+    const textMuted = colors.textMuted || '#706850';
+    const parchment = colors.textPrimary || '#efe4b0';
+
+    // === TITLE ===
+    const titleY = height * 0.28;
+    const pulse = (Math.sin(Date.now() * 0.002) + 1) / 2;
+
+    // Title glow
+    ctx.shadowColor = frameGold;
+    ctx.shadowBlur = 20 + pulse * 15;
+
+    // Title text
+    ctx.font = 'bold 72px serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+
+    // Title shadow
+    ctx.fillStyle = '#000';
+    ctx.fillText('THE SHIFTING CHASM', width / 2 + 3, titleY + 3);
+
+    // Title main
+    ctx.fillStyle = frameGoldBright;
+    ctx.fillText('THE SHIFTING CHASM', width / 2, titleY);
+
+    ctx.shadowBlur = 0;
+
+    // Subtitle
+    ctx.font = '20px serif';
+    ctx.fillStyle = textMuted;
+    ctx.fillText('A Descent Into Darkness', width / 2, titleY + 55);
+
+    // === DECORATIVE DIVIDER ===
+    const divY = titleY + 90;
+    ctx.strokeStyle = frameGold;
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(width / 2 - 150, divY);
+    ctx.lineTo(width / 2 + 150, divY);
+    ctx.stroke();
+
+    // Center emblem
+    ctx.fillStyle = frameGold;
+    ctx.beginPath();
+    ctx.arc(width / 2, divY, 6, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = '#0d0a08';
+    ctx.beginPath();
+    ctx.arc(width / 2, divY, 3, 0, Math.PI * 2);
+    ctx.fill();
+
+    // === MENU OPTIONS ===
+    const menuOptions = [
+        { label: 'NEW GAME', enabled: true },
+        { label: 'CONTINUE', enabled: menuState.hasSaveData },
+        { label: 'SETTINGS', enabled: true },
+        { label: 'CREDITS', enabled: true }
+    ];
+
+    const menuStartY = height * 0.5;
+    const menuSpacing = 50;
+
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+
+    menuOptions.forEach((option, index) => {
+        const y = menuStartY + index * menuSpacing;
+        const isSelected = menuState.selectedIndex === index;
+        const isEnabled = option.enabled;
+
+        // Selection highlight
+        if (isSelected && isEnabled) {
+            const selPulse = (Math.sin(Date.now() * 0.005) + 1) / 2;
+
+            // Glowing background bar
+            const barWidth = 200;
+            const barHeight = 36;
+            ctx.fillStyle = `rgba(184, 134, 11, ${0.15 + selPulse * 0.1})`;
+            ctx.fillRect(width / 2 - barWidth / 2, y - barHeight / 2, barWidth, barHeight);
+
+            // Border
+            ctx.strokeStyle = `rgba(218, 165, 32, ${0.5 + selPulse * 0.3})`;
+            ctx.lineWidth = 1;
+            ctx.strokeRect(width / 2 - barWidth / 2, y - barHeight / 2, barWidth, barHeight);
+
+            // Arrow indicators
+            ctx.font = 'bold 20px serif';
+            ctx.fillStyle = frameGoldBright;
+            ctx.fillText('>', width / 2 - barWidth / 2 - 20, y);
+            ctx.fillText('<', width / 2 + barWidth / 2 + 20, y);
+        }
+
+        // Text
+        ctx.font = isSelected ? 'bold 26px serif' : '24px serif';
+
+        if (!isEnabled) {
+            // Disabled state
+            ctx.fillStyle = 'rgba(112, 104, 80, 0.4)';
+        } else if (isSelected) {
+            // Selected state - glowing
+            ctx.shadowColor = frameGold;
+            ctx.shadowBlur = 10;
+            ctx.fillStyle = frameGoldBright;
+        } else {
+            // Normal state
+            ctx.fillStyle = parchment;
+        }
+
+        ctx.fillText(option.label, width / 2, y);
+        ctx.shadowBlur = 0;
+    });
+
+    // === NAVIGATION HINT ===
+    ctx.font = '14px serif';
+    ctx.fillStyle = textMuted;
+    ctx.fillText('Use Arrow Keys or W/S to navigate, Enter to select', width / 2, height - 60);
+
+    // === VERSION ===
+    ctx.font = '12px serif';
+    ctx.fillStyle = textMuted;
+    ctx.fillText('v0.1 - The Shifting Chasm', width / 2, height - 30);
+}
+
+/**
+ * Draw the settings screen
+ */
+function drawSettingsScreen(ctx, width, height, menuState, colors) {
+    const frameGold = colors.frameGold || '#b8860b';
+    const frameGoldBright = colors.frameGoldBright || '#daa520';
+    const textMuted = colors.textMuted || '#706850';
+    const parchment = colors.textPrimary || '#efe4b0';
+
+    // Title
+    ctx.font = 'bold 48px serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.shadowColor = frameGold;
+    ctx.shadowBlur = 15;
+    ctx.fillStyle = frameGoldBright;
+    ctx.fillText('SETTINGS', width / 2, height * 0.2);
+    ctx.shadowBlur = 0;
+
+    // Settings options
+    const settingsOptions = [
+        { label: 'Music Volume', type: 'slider', value: menuState.musicVolume || 70, key: 'musicVolume' },
+        { label: 'SFX Volume', type: 'slider', value: menuState.sfxVolume || 80, key: 'sfxVolume' },
+        { label: 'BACK', type: 'button' }
+    ];
+
+    const settingsStartY = height * 0.4;
+    const settingsSpacing = 70;
+
+    settingsOptions.forEach((option, index) => {
+        const y = settingsStartY + index * settingsSpacing;
+        const isSelected = menuState.selectedIndex === index;
+
+        if (option.type === 'slider') {
+            // Label
+            ctx.font = '20px serif';
+            ctx.textAlign = 'right';
+            ctx.fillStyle = isSelected ? frameGoldBright : parchment;
+            ctx.fillText(option.label, width / 2 - 20, y);
+
+            // Slider track
+            const sliderX = width / 2 + 20;
+            const sliderWidth = 200;
+            const sliderHeight = 8;
+
+            ctx.fillStyle = '#2a2520';
+            ctx.fillRect(sliderX, y - sliderHeight / 2, sliderWidth, sliderHeight);
+
+            // Slider fill
+            const fillWidth = (option.value / 100) * sliderWidth;
+            ctx.fillStyle = isSelected ? frameGoldBright : frameGold;
+            ctx.fillRect(sliderX, y - sliderHeight / 2, fillWidth, sliderHeight);
+
+            // Slider border
+            ctx.strokeStyle = isSelected ? frameGoldBright : frameGold;
+            ctx.lineWidth = 1;
+            ctx.strokeRect(sliderX, y - sliderHeight / 2, sliderWidth, sliderHeight);
+
+            // Value text
+            ctx.textAlign = 'left';
+            ctx.font = '16px serif';
+            ctx.fillStyle = textMuted;
+            ctx.fillText(`${option.value}%`, sliderX + sliderWidth + 15, y);
+
+            // Selection indicator
+            if (isSelected) {
+                ctx.font = '20px serif';
+                ctx.fillStyle = frameGoldBright;
+                ctx.textAlign = 'right';
+                ctx.fillText('>', width / 2 - sliderWidth / 2 - 40, y);
+            }
+        } else {
+            // Button style (Back)
+            ctx.textAlign = 'center';
+            const selPulse = (Math.sin(Date.now() * 0.005) + 1) / 2;
+
+            if (isSelected) {
+                ctx.shadowColor = frameGold;
+                ctx.shadowBlur = 10;
+                ctx.font = 'bold 26px serif';
+                ctx.fillStyle = frameGoldBright;
+
+                // Arrow indicators
+                ctx.fillText('> ' + option.label + ' <', width / 2, y);
+            } else {
+                ctx.font = '24px serif';
+                ctx.fillStyle = parchment;
+                ctx.fillText(option.label, width / 2, y);
+            }
+            ctx.shadowBlur = 0;
+        }
+    });
+
+    // Navigation hint
+    ctx.font = '14px serif';
+    ctx.textAlign = 'center';
+    ctx.fillStyle = textMuted;
+    ctx.fillText('Left/Right to adjust, Enter or ESC to go back', width / 2, height - 60);
+}
+
+/**
+ * Draw the credits screen
+ */
+function drawCreditsScreen(ctx, width, height, menuState, colors) {
+    const frameGold = colors.frameGold || '#b8860b';
+    const frameGoldBright = colors.frameGoldBright || '#daa520';
+    const textMuted = colors.textMuted || '#706850';
+    const parchment = colors.textPrimary || '#efe4b0';
+
+    // Title
+    ctx.font = 'bold 48px serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.shadowColor = frameGold;
+    ctx.shadowBlur = 15;
+    ctx.fillStyle = frameGoldBright;
+    ctx.fillText('CREDITS', width / 2, height * 0.18);
+    ctx.shadowBlur = 0;
+
+    // Credits content
+    const credits = [
+        { text: 'THE SHIFTING CHASM', style: 'title' },
+        { text: '', style: 'space' },
+        { text: 'A Roguelike Dungeon Crawler', style: 'subtitle' },
+        { text: '', style: 'space' },
+        { text: 'Created with Claude Code', style: 'normal' },
+        { text: '', style: 'space' },
+        { text: 'Game Design & Programming', style: 'header' },
+        { text: 'Built with AI Assistance', style: 'normal' },
+        { text: '', style: 'space' },
+        { text: 'Inspired by classic roguelikes', style: 'normal' },
+        { text: '', style: 'space' },
+        { text: '"The map changes beneath your feet."', style: 'quote' }
+    ];
+
+    let y = height * 0.3;
+    const lineSpacing = 28;
+
+    credits.forEach(credit => {
+        switch (credit.style) {
+            case 'title':
+                ctx.font = 'bold 28px serif';
+                ctx.fillStyle = frameGoldBright;
+                break;
+            case 'subtitle':
+                ctx.font = 'italic 18px serif';
+                ctx.fillStyle = textMuted;
+                break;
+            case 'header':
+                ctx.font = 'bold 18px serif';
+                ctx.fillStyle = frameGold;
+                break;
+            case 'quote':
+                ctx.font = 'italic 16px serif';
+                ctx.fillStyle = `rgba(239, 228, 176, 0.7)`;
+                break;
+            case 'space':
+                y += 10;
+                return;
+            default:
+                ctx.font = '16px serif';
+                ctx.fillStyle = parchment;
+        }
+        ctx.fillText(credit.text, width / 2, y);
+        y += lineSpacing;
+    });
+
+    // Back button
+    const backY = height * 0.85;
+    const isSelected = menuState.selectedIndex === 0;
+
+    if (isSelected) {
+        ctx.shadowColor = frameGold;
+        ctx.shadowBlur = 10;
+        ctx.font = 'bold 24px serif';
+        ctx.fillStyle = frameGoldBright;
+        ctx.fillText('> BACK <', width / 2, backY);
+    } else {
+        ctx.font = '22px serif';
+        ctx.fillStyle = parchment;
+        ctx.fillText('BACK', width / 2, backY);
+    }
+    ctx.shadowBlur = 0;
+
+    // Navigation hint
+    ctx.font = '14px serif';
+    ctx.fillStyle = textMuted;
+    ctx.fillText('Press Enter or ESC to return', width / 2, height - 40);
+}
+
+/**
+ * Format seconds into Xm Ys string
+ */
+function formatRunTime(seconds) {
+    const mins = Math.floor(seconds / 60);
+    const secs = Math.floor(seconds % 60);
+    return mins + 'm ' + secs + 's';
+}
+
+/**
+ * Draw the game over screen - Full Run Summary with streaks, boons, and stats
+ */
+function drawGameOverScreen(ctx, width, height) {
+    const colors = typeof UI_COLORS !== 'undefined' ? UI_COLORS : {};
+    const bloodRed = colors.bloodRed || '#8b0000';
+    const healthCritical = colors.healthCritical || '#ff2222';
+
+    ctx.save();
+
+    // === DARK BLOOD-TINGED BACKGROUND ===
+    const bgGrad = ctx.createRadialGradient(width / 2, height / 2, 0, width / 2, height / 2, height);
+    bgGrad.addColorStop(0, '#1a0808');
+    bgGrad.addColorStop(0.5, '#0d0505');
+    bgGrad.addColorStop(1, '#050202');
+    ctx.fillStyle = bgGrad;
+    ctx.fillRect(0, 0, width, height);
+
+    // === BLOOD VIGNETTE ===
+    const vignetteGrad = ctx.createRadialGradient(width / 2, height / 2, height * 0.2, width / 2, height / 2, height * 0.8);
+    vignetteGrad.addColorStop(0, 'rgba(0, 0, 0, 0)');
+    vignetteGrad.addColorStop(0.5, 'rgba(139, 0, 0, 0.15)');
+    vignetteGrad.addColorStop(1, 'rgba(139, 0, 0, 0.5)');
+    ctx.fillStyle = vignetteGrad;
+    ctx.fillRect(0, 0, width, height);
+
+    // === DEATH TITLE ===
+    const pulse = (Math.sin(Date.now() * 0.003) + 1) / 2;
+
+    ctx.shadowColor = healthCritical;
+    ctx.shadowBlur = 20 + pulse * 15;
+    ctx.font = 'bold 32px monospace';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'alphabetic';
+
+    // Title shadow
+    ctx.fillStyle = '#000';
+    ctx.fillText('YOU HAVE FALLEN', width / 2 + 2, 52);
+    // Title main
+    ctx.fillStyle = '#ef5350';
+    ctx.fillText('YOU HAVE FALLEN', width / 2, 50);
+    ctx.shadowBlur = 0;
+
+    // === RUN SUMMARY DATA ===
+    const stats = (typeof game !== 'undefined' && game.runStats) ? game.runStats : {};
+    const lineHeight = 22;
+
+    // Calculate panel layout - two columns for wider screens
+    const panelWidth = Math.min(600, width - 60);
+    const leftCol = (width - panelWidth) / 2;
+    const colWidth = panelWidth;
+
+    let y = 90;
+
+    // --- Run Statistics Section ---
+    ctx.fillStyle = '#ffd54f';
+    ctx.font = 'bold 15px monospace';
+    ctx.textAlign = 'left';
+    ctx.fillText('Run Statistics', leftCol, y);
+
+    // Divider line
+    y += 6;
+    ctx.strokeStyle = 'rgba(255, 213, 79, 0.3)';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(leftCol, y);
+    ctx.lineTo(leftCol + colWidth, y);
+    ctx.stroke();
+    y += lineHeight - 2;
+
+    ctx.font = '13px monospace';
+    const statLines = [
+        ['Floor Reached', String(stats.floorsReached || game.floor || 1)],
+        ['Enemies Killed', String(stats.enemiesKilled || 0)],
+        ['Damage Dealt', String(stats.damageDealt || 0)],
+        ['Damage Taken', String(stats.damageTaken || 0)],
+        ['Gold Earned', String(stats.goldEarned || 0)],
+        ['Spells Cast', String(stats.spellsCast || 0)],
+        ['Critical Hits', String(stats.criticalHits || 0)],
+        ['Time Survived', formatRunTime(stats.timePlayed || 0)]
+    ];
+
+    statLines.forEach(function(pair) {
+        var label = pair[0];
+        var value = pair[1];
+        ctx.fillStyle = '#999';
+        ctx.textAlign = 'left';
+        ctx.fillText(label + ':', leftCol, y);
+        ctx.fillStyle = '#fff';
+        ctx.textAlign = 'right';
+        ctx.fillText(value, leftCol + colWidth, y);
+        ctx.textAlign = 'left';
+        y += lineHeight;
+    });
+
+    // --- Kill Streaks Section ---
+    y += 10;
+    ctx.fillStyle = '#ffd54f';
+    ctx.font = 'bold 15px monospace';
+    ctx.textAlign = 'left';
+    ctx.fillText('Kill Streaks', leftCol, y);
+
+    y += 6;
+    ctx.strokeStyle = 'rgba(255, 213, 79, 0.3)';
+    ctx.beginPath();
+    ctx.moveTo(leftCol, y);
+    ctx.lineTo(leftCol + colWidth, y);
+    ctx.stroke();
+    y += lineHeight - 2;
+
+    ctx.font = '13px monospace';
+    var streakData = (typeof KillStreakSystem !== 'undefined' && typeof KillStreakSystem.getStreakData === 'function')
+        ? KillStreakSystem.getStreakData() : {};
+
+    var bestStreak = streakData.highestStreak || stats.highestStreak || 0;
+    var streakChains = streakData.totalStreaks || stats.totalStreaks || 0;
+    var bestTierName = stats.highestStreakTier || '';
+
+    ctx.fillStyle = '#999';
+    ctx.textAlign = 'left';
+    ctx.fillText('Best Streak:', leftCol, y);
+    ctx.fillStyle = '#ff9800';
+    ctx.textAlign = 'right';
+    ctx.fillText(bestStreak + ' kills' + (bestTierName ? ' (' + bestTierName + ')' : ''), leftCol + colWidth, y);
+    ctx.textAlign = 'left';
+    y += lineHeight;
+
+    ctx.fillStyle = '#999';
+    ctx.fillText('Streak Chains (3+):', leftCol, y);
+    ctx.fillStyle = '#fff';
+    ctx.textAlign = 'right';
+    ctx.fillText(String(streakChains), leftCol + colWidth, y);
+    ctx.textAlign = 'left';
+    y += lineHeight;
+
+    // --- Boons Collected Section ---
+    y += 10;
+    var boons = stats.finalBoons || stats.boonsCollected || [];
+    // If boons is empty, try to get from BoonSystem directly
+    if (boons.length === 0 && typeof BoonSystem !== 'undefined' && typeof BoonSystem.getCollectedBoons === 'function') {
+        boons = BoonSystem.getCollectedBoons() || [];
+    }
+
+    ctx.fillStyle = '#ffd54f';
+    ctx.font = 'bold 15px monospace';
+    ctx.textAlign = 'left';
+    ctx.fillText('Boons (' + boons.length + '/8)', leftCol, y);
+
+    y += 6;
+    ctx.strokeStyle = 'rgba(255, 213, 79, 0.3)';
+    ctx.beginPath();
+    ctx.moveTo(leftCol, y);
+    ctx.lineTo(leftCol + colWidth, y);
+    ctx.stroke();
+    y += lineHeight - 2;
+
+    ctx.font = '12px monospace';
+
+    if (boons.length > 0) {
+        // Group by ancestor
+        var boonGroups = {};
+        boons.forEach(function(b) {
+            var key = b.ancestor || b.ancestorId || 'unknown';
+            if (!boonGroups[key]) boonGroups[key] = [];
+            boonGroups[key].push(b);
+        });
+
+        var ancestorData = typeof ANCESTORS !== 'undefined' ? ANCESTORS : {};
+        var synergies = stats.finalSynergies || stats.ancestorSynergies || [];
+
+        for (var ancestorId in boonGroups) {
+            if (!boonGroups.hasOwnProperty(ancestorId)) continue;
+            var group = boonGroups[ancestorId];
+            var ancestor = ancestorData[ancestorId];
+            var aColor = ancestor ? ancestor.color : '#888';
+            var aName = ancestor ? ancestor.name : ancestorId;
+
+            // Ancestor header
+            ctx.fillStyle = aColor;
+            ctx.textAlign = 'left';
+            ctx.fillText('* ' + aName, leftCol, y);
+
+            // Check for synergy
+            if (synergies.indexOf(ancestorId) >= 0 || synergies.indexOf(aName) >= 0) {
+                ctx.fillStyle = '#ffd700';
+                ctx.fillText(' SYNERGY', leftCol + 200, y);
+            }
+            y += lineHeight - 4;
+
+            // List boons under this ancestor
+            group.forEach(function(boon) {
+                ctx.fillStyle = '#bbb';
+                ctx.fillText('  ' + (boon.name || boon.boonName || '?') + ' (Tier ' + (boon.tier || '?') + ')', leftCol + 10, y);
+                y += lineHeight - 6;
+            });
+            y += 4;
+        }
+    } else {
+        ctx.fillStyle = '#666';
+        ctx.fillText('  No boons collected', leftCol, y);
+        y += lineHeight;
+    }
+
+    // --- Cause of Death ---
+    y += 12;
+    if (stats.causeOfDeath) {
+        ctx.fillStyle = '#ef5350';
+        ctx.font = '13px monospace';
+        ctx.textAlign = 'left';
+        ctx.fillText('Slain by: ' + (stats.causeOfDeath.enemyName || stats.causeOfDeath || 'Unknown'), leftCol, y);
+    }
+
+    // === RESTART PROMPT ===
+    var promptPulse = (Math.sin(Date.now() * 0.004) + 1) / 2;
+    ctx.font = '16px monospace';
+    ctx.fillStyle = 'rgba(200, 200, 200, ' + (0.4 + promptPulse * 0.6) + ')';
+    ctx.textAlign = 'center';
+    ctx.fillText('Press SPACE to return to village', width / 2, height - 50);
+
+    // Somber quote
+    ctx.font = 'italic 12px serif';
+    ctx.fillStyle = 'rgba(139, 0, 0, 0.5)';
+    ctx.fillText('"The chasm claims another soul..."', width / 2, height - 22);
+
+    ctx.restore();
+}
+
+// ============================================================================
+// VICTORY SCREEN
+// ============================================================================
+
+function drawVictoryScreen(ctx, w, h) {
+    ctx.fillStyle = '#0a0a14';
+    ctx.fillRect(0, 0, w, h);
+
+    // Title
+    ctx.fillStyle = '#d4af37';
+    ctx.font = 'bold 32px monospace';
+    ctx.textAlign = 'center';
+    ctx.fillText('VICTORY!', w / 2, h / 2 - 100);
+
+    ctx.font = '18px monospace';
+    ctx.fillStyle = '#b0b0b0';
+    ctx.fillText('The Chasm Has Been Conquered', w / 2, h / 2 - 60);
+
+    // Run summary
+    ctx.font = '14px monospace';
+    ctx.textAlign = 'left';
+    const summaryX = w / 2 - 120;
+    let y = h / 2 - 10;
+    const stats = [
+        ['Floors Cleared', '10'],
+        ['Enemies Slain', String(persistentState?.stats?.totalKills || 0)],
+        ['Gold Earned', String(game?.player?.gold || 0)],
+        ['Items Found', String(game?.player?.inventory?.length || 0)]
+    ];
+    stats.forEach(([label, value]) => {
+        ctx.fillStyle = '#888';
+        ctx.fillText(label + ':', summaryX, y);
+        ctx.fillStyle = '#d4af37';
+        ctx.fillText(value, summaryX + 180, y);
+        y += 24;
+    });
+
+    // Return button
+    ctx.font = '16px monospace';
+    ctx.fillStyle = '#d4af37';
+    ctx.textAlign = 'center';
+    ctx.fillText('[ Press Enter to Return to Village ]', w / 2, h / 2 + 120);
+}
+
+// ============================================================================
+// PAUSE MENU
+// ============================================================================
+
+function drawPauseMenu(ctx, w, h) {
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+    ctx.fillRect(0, 0, w, h);
+
+    ctx.fillStyle = '#d4af37';
+    ctx.font = 'bold 28px monospace';
+    ctx.textAlign = 'center';
+    ctx.fillText('PAUSED', w / 2, h / 2 - 80);
+
+    const options = ['Resume', 'Settings', 'Quit to Village'];
+    const idx = window._pauseMenuIndex || 0;
+    options.forEach((option, i) => {
+        const selected = i === idx;
+        ctx.fillStyle = selected ? '#d4af37' : '#888';
+        ctx.font = (selected ? 'bold ' : '') + '20px monospace';
+        ctx.fillText(option, w / 2, h / 2 - 20 + i * 40);
+    });
+
+    if (idx === 2) {
+        ctx.font = '12px monospace';
+        ctx.fillStyle = '#ff6666';
+        ctx.fillText('Warning: This will end your run (permadeath)', w / 2, h / 2 + 110);
+    }
+}
+
+// ============================================================================
+// CONTROLS OVERLAY (F1 / ?)
+// ============================================================================
+
+function drawControlsOverlay(ctx) {
+    if (!controlsOverlayVisible) return;
+    const w = 500, h = 520;
+    const x = (canvas.width - w) / 2;
+    const y = (canvas.height - h) / 2;
+
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.85)';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    ctx.fillStyle = '#12121a';
+    ctx.strokeStyle = '#4a4a5a';
+    ctx.lineWidth = 2;
+    ctx.fillRect(x, y, w, h);
+    ctx.strokeRect(x, y, w, h);
+
+    ctx.fillStyle = '#d4af37';
+    ctx.font = 'bold 20px monospace';
+    ctx.textAlign = 'center';
+    ctx.fillText('CONTROLS', canvas.width / 2, y + 35);
+
+    ctx.font = '14px monospace';
+    ctx.textAlign = 'left';
+    const controls = [
+        ['WASD / Arrows', 'Move'],
+        ['Mouse Click', 'Attack / Interact'],
+        ['Right Click', 'Inspect'],
+        ['Q', 'Weapon Ability 1'],
+        ['E', 'Interact / Weapon Ability 2'],
+        ['Space', 'Dash (i-frames)'],
+        ['1-4', 'Use Consumables'],
+        ['I / Tab', 'Inventory'],
+        ['C', 'Character Sheet'],
+        ['K', 'Skills Menu'],
+        ['M', 'Map Overlay'],
+        ['T', 'Toggle Torch'],
+        ['Escape', 'Pause / Close Menu'],
+        ['F1 / ?', 'Toggle This Menu'],
+        ['F9', 'Copy Game State (Bug Report)']
+    ];
+
+    let lineY = y + 70;
+    controls.forEach(([key, action]) => {
+        ctx.fillStyle = '#d4af37';
+        ctx.fillText(key, x + 30, lineY);
+        ctx.fillStyle = '#b0b0b0';
+        ctx.fillText(action, x + 220, lineY);
+        lineY += 28;
+    });
+
+    ctx.fillStyle = '#666';
+    ctx.textAlign = 'center';
+    ctx.fillText('Press F1 to close', canvas.width / 2, y + h - 20);
+}
+
+// Controls overlay toggle listener
+window.addEventListener('keydown', (e) => {
+    if (e.key === 'F1' || (e.key === '?' && !e.ctrlKey)) {
+        controlsOverlayVisible = !controlsOverlayVisible;
+        e.preventDefault();
+    }
+});
+
+// Export menu functions
+window.drawMainMenuScreen = drawMainMenuScreen;
+window.drawGameOverScreen = drawGameOverScreen;
+window.drawVictoryScreen = drawVictoryScreen;
+window.drawPauseMenu = drawPauseMenu;

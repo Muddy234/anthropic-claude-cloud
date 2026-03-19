@@ -11,7 +11,9 @@ const DynamicTileSystem = {
     // ========================================================================
     config: {
         debugLogging: false,
-        maxSpreadPerFrame: 50  // Limit tiles processed per frame for performance
+        maxSpreadPerFrame: 50,  // Limit tiles processed per frame for performance
+        warningTime: 500,        // ms warning before first damage tick
+        warningPulseSpeed: 200   // ms between warning pulses
     },
 
     // ========================================================================
@@ -20,6 +22,7 @@ const DynamicTileSystem = {
     dynamicTiles: new Map(),  // key: "x,y" -> tile state object
     spreadQueue: [],          // Tiles queued for spread processing
     activeEffects: new Map(), // Tracked spread effects by ID
+    entityWarnings: new Map(), // key: "entityId,x,y" -> { warningShown, warningTimer, damageApplied }
 
     // ========================================================================
     // TILE TYPES
@@ -433,6 +436,66 @@ const DynamicTileSystem = {
     },
 
     /**
+     * Get or create warning state for an entity on a tile
+     * @param {object} entity - The entity
+     * @param {number} x - Tile X
+     * @param {number} y - Tile Y
+     * @returns {object} Warning state
+     */
+    getEntityWarningState(entity, x, y) {
+        const entityId = entity.id || (entity === game.player ? 'player' : 'unknown');
+        const warningKey = `${entityId},${x},${y}`;
+
+        if (!this.entityWarnings.has(warningKey)) {
+            this.entityWarnings.set(warningKey, {
+                warningShown: false,
+                warningTimer: 0,
+                firstDamageApplied: false,
+                pulseTimer: 0
+            });
+        }
+
+        return this.entityWarnings.get(warningKey);
+    },
+
+    /**
+     * Clear warning state when entity leaves a tile
+     * @param {object} entity - The entity
+     * @param {number} x - Tile X
+     * @param {number} y - Tile Y
+     */
+    clearEntityWarningState(entity, x, y) {
+        const entityId = entity.id || (entity === game.player ? 'player' : 'unknown');
+        const warningKey = `${entityId},${x},${y}`;
+        this.entityWarnings.delete(warningKey);
+    },
+
+    /**
+     * Emit a visual warning event for a tile
+     * @param {number} x - Tile X
+     * @param {number} y - Tile Y
+     * @param {string} tileType - Type of hazard tile
+     * @param {object} config - Tile configuration
+     */
+    emitDamageWarning(x, y, tileType, config) {
+        // Dispatch event for visual systems (renderer, particle system) to handle
+        window.dispatchEvent(new CustomEvent('tileDamageWarning', {
+            detail: {
+                x: x,
+                y: y,
+                tileType: tileType,
+                element: config.element || 'physical',
+                damagePerTick: config.damagePerTick || 0,
+                warningTime: this.config.warningTime
+            }
+        }));
+
+        if (this.config.debugLogging) {
+            console.log(`[DynamicTile] Emitted damage warning at (${x},${y}) for ${tileType}`);
+        }
+    },
+
+    /**
      * Apply tile effects to a specific entity
      * @param {object} entity - The entity to affect
      * @param {number} dt - Delta time in ms
@@ -443,7 +506,12 @@ const DynamicTileSystem = {
         const key = `${x},${y}`;
 
         const tracked = this.dynamicTiles.get(key);
-        if (!tracked) return;
+        if (!tracked) {
+            // Entity left hazard tile - clear any warning state
+            // (We'd need to track previous position to do this properly, but
+            // the warning will naturally expire after warningTime)
+            return;
+        }
 
         const config = this.TILE_CONFIG[tracked.type];
         if (!config) return;
@@ -451,30 +519,76 @@ const DynamicTileSystem = {
         const tile = game.map[y]?.[x];
         if (!tile?.dynamicState) return;
 
+        // Get warning state for this entity on this tile
+        const warningState = this.getEntityWarningState(entity, x, y);
+
         // Update tick timer
         tile.dynamicState.tickTimer = (tile.dynamicState.tickTimer || 0) + dt;
 
-        // Apply damage over time
+        // Apply damage over time (with warning system)
         if (config.damagePerTick && config.tickRate) {
-            if (tile.dynamicState.tickTimer >= config.tickRate) {
-                tile.dynamicState.tickTimer -= config.tickRate;
+            // Don't damage entities immune to this element
+            const isImmune = entity.immunities?.includes(config.element);
 
-                // Don't damage entities immune to this element
-                const isImmune = entity.immunities?.includes(config.element);
-                if (!isImmune) {
-                    entity.hp = (entity.hp || 0) - config.damagePerTick;
+            if (!isImmune) {
+                // First time on this tile: show warning before damage
+                if (!warningState.firstDamageApplied) {
+                    warningState.warningTimer += dt;
 
-                    if (entity === game.player) {
-                        addMessage(`Standing in ${tracked.type} deals ${config.damagePerTick} damage!`);
-                        if (entity.hp <= 0) {
-                            game.state = 'gameover';
+                    // Show visual warning if not already shown
+                    if (!warningState.warningShown) {
+                        this.emitDamageWarning(x, y, tracked.type, config);
+                        warningState.warningShown = true;
+
+                        // Show message to player
+                        if (entity === game.player) {
+                            addMessage(`Warning: Standing in ${tracked.type} will deal ${config.damagePerTick} damage!`, 'warning');
+                        }
+                    }
+
+                    // Pulse warning effect periodically
+                    warningState.pulseTimer += dt;
+                    if (warningState.pulseTimer >= this.config.warningPulseSpeed) {
+                        warningState.pulseTimer -= this.config.warningPulseSpeed;
+                        // Emit pulse event for visual feedback
+                        window.dispatchEvent(new CustomEvent('tileDamageWarningPulse', {
+                            detail: { x, y, tileType: tracked.type }
+                        }));
+                    }
+
+                    // After warning time, apply first damage
+                    if (warningState.warningTimer >= this.config.warningTime) {
+                        warningState.firstDamageApplied = true;
+                        entity.hp = (entity.hp || 0) - config.damagePerTick;
+
+                        if (entity === game.player) {
+                            addMessage(`Standing in ${tracked.type} deals ${config.damagePerTick} damage!`);
+                            if (entity.hp <= 0) {
+                                game.state = 'gameover';
+                            }
+                        }
+
+                        // Reset tick timer to start regular damage ticks
+                        tile.dynamicState.tickTimer = 0;
+                    }
+                } else {
+                    // Regular damage ticks after first damage
+                    if (tile.dynamicState.tickTimer >= config.tickRate) {
+                        tile.dynamicState.tickTimer -= config.tickRate;
+                        entity.hp = (entity.hp || 0) - config.damagePerTick;
+
+                        if (entity === game.player) {
+                            addMessage(`Standing in ${tracked.type} deals ${config.damagePerTick} damage!`);
+                            if (entity.hp <= 0) {
+                                game.state = 'gameover';
+                            }
                         }
                     }
                 }
             }
         }
 
-        // Apply healing over time (sanctified tiles)
+        // Apply healing over time (sanctified tiles) - no warning needed for healing
         if (config.healPerTick && config.tickRate) {
             if (tile.dynamicState.tickTimer >= config.tickRate) {
                 tile.dynamicState.tickTimer -= config.tickRate;
@@ -625,6 +739,7 @@ const DynamicTileSystem = {
         this.dynamicTiles.clear();
         this.spreadQueue = [];
         this.activeEffects.clear();
+        this.entityWarnings.clear();
 
         if (this.config.debugLogging) {
             console.log('[DynamicTile] System cleaned up');

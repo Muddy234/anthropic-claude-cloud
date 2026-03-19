@@ -1,0 +1,1292 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>melee_swing — Animation Implementation Reference</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&family=Space+Grotesk:wght@400;500;600;700&display=swap');
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  :root {
+    --bg: #0a0a0f;
+    --surface: #12121a;
+    --surface2: #1a1a26;
+    --border: #2a2a3a;
+    --text: #e0e0e8;
+    --text-dim: #8888a0;
+    --accent: #ffaa00;
+    --accent2: #ff6b35;
+    --danger: #ff4444;
+    --success: #2ecc71;
+    --blue: #74b9ff;
+    --purple: #a29bfe;
+  }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Space Grotesk', sans-serif;
+    line-height: 1.6;
+    padding: 2rem;
+    max-width: 1400px;
+    margin: 0 auto;
+  }
+
+  h1 {
+    font-size: 2.2rem;
+    font-weight: 700;
+    margin-bottom: 0.25rem;
+    background: linear-gradient(135deg, var(--accent), var(--accent2));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+
+  h1 span {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 1.4rem;
+  }
+
+  .subtitle {
+    color: var(--text-dim);
+    font-size: 1rem;
+    margin-bottom: 2.5rem;
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 1.5rem;
+  }
+
+  h2 {
+    font-size: 1.3rem;
+    font-weight: 600;
+    margin-top: 2.5rem;
+    margin-bottom: 1rem;
+    color: var(--accent);
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+
+  h2 .phase-num {
+    background: var(--accent);
+    color: var(--bg);
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.85rem;
+    font-weight: 700;
+    flex-shrink: 0;
+  }
+
+  h3 {
+    font-size: 1rem;
+    font-weight: 600;
+    margin: 1.5rem 0 0.75rem;
+    color: var(--blue);
+  }
+
+  p, li {
+    color: var(--text);
+    font-size: 0.92rem;
+    margin-bottom: 0.5rem;
+  }
+
+  ul { padding-left: 1.25rem; margin-bottom: 1rem; }
+  li { margin-bottom: 0.35rem; }
+
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 1.5rem;
+    margin: 1rem 0;
+  }
+
+  .callout {
+    background: var(--surface2);
+    border-left: 3px solid var(--accent);
+    padding: 1rem 1.25rem;
+    margin: 1rem 0;
+    border-radius: 0 6px 6px 0;
+    font-size: 0.9rem;
+  }
+
+  .callout.warn {
+    border-left-color: var(--danger);
+  }
+
+  .callout strong {
+    color: var(--accent);
+  }
+
+  .callout.warn strong {
+    color: var(--danger);
+  }
+
+  /* ── CANVAS AREA ── */
+  .demo-area {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 1.5rem;
+    margin: 1.5rem 0;
+  }
+
+  .demo-area canvas {
+    display: block;
+    margin: 0 auto;
+    image-rendering: pixelated;
+    image-rendering: crisp-edges;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    background: #08080c;
+  }
+
+  .demo-controls {
+    display: flex;
+    gap: 0.75rem;
+    justify-content: center;
+    margin-top: 1rem;
+    flex-wrap: wrap;
+  }
+
+  .demo-controls button {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.8rem;
+    padding: 0.5rem 1.25rem;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    background: var(--surface2);
+    color: var(--text);
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+
+  .demo-controls button:hover {
+    border-color: var(--accent);
+    color: var(--accent);
+  }
+
+  .demo-controls button.active {
+    background: var(--accent);
+    color: var(--bg);
+    border-color: var(--accent);
+  }
+
+  .phase-label {
+    text-align: center;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.85rem;
+    color: var(--text-dim);
+    margin-top: 0.5rem;
+    min-height: 1.4em;
+  }
+
+  /* ── CODE BLOCKS ── */
+  pre {
+    background: #0d0d14;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 1.25rem;
+    overflow-x: auto;
+    margin: 1rem 0;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.78rem;
+    line-height: 1.55;
+    color: #c8c8d8;
+  }
+
+  .kw { color: #c792ea; }
+  .str { color: #c3e88d; }
+  .num { color: #f78c6c; }
+  .cm { color: #546e7a; font-style: italic; }
+  .fn { color: #82aaff; }
+  .prop { color: #f07178; }
+  .op { color: #89ddff; }
+
+  /* ── TIMELINE ── */
+  .timeline {
+    display: flex;
+    gap: 0;
+    margin: 1.5rem 0;
+    border-radius: 6px;
+    overflow: hidden;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.75rem;
+  }
+
+  .timeline-seg {
+    padding: 0.75rem 0.5rem;
+    text-align: center;
+    color: var(--bg);
+    font-weight: 600;
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.2rem;
+  }
+
+  .timeline-seg .t-label { font-size: 0.65rem; opacity: 0.7; }
+
+  .t-telegraph { background: var(--accent); flex: 0.5; }
+  .t-resolve { background: var(--danger); flex: 0.12; }
+  .t-recovery { background: var(--success); flex: 0.4; }
+  .t-idle { background: var(--border); flex: 2.5; color: var(--text-dim); }
+
+  /* ── SPRITE GRID ── */
+  .sprite-grid-container {
+    display: flex;
+    gap: 1.5rem;
+    flex-wrap: wrap;
+    justify-content: center;
+    margin: 1rem 0;
+  }
+
+  .sprite-frame {
+    text-align: center;
+  }
+
+  .sprite-frame canvas {
+    image-rendering: pixelated;
+    image-rendering: crisp-edges;
+    border: 1px solid var(--border);
+    border-radius: 3px;
+    background: #08080c;
+  }
+
+  .sprite-frame .frame-label {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.7rem;
+    color: var(--text-dim);
+    margin-top: 0.3rem;
+  }
+
+  /* ── SPLIT LAYOUT ── */
+  .split {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1.5rem;
+    margin: 1rem 0;
+  }
+
+  @media (max-width: 900px) {
+    .split { grid-template-columns: 1fr; }
+  }
+
+  .tag {
+    display: inline-block;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.7rem;
+    padding: 0.15rem 0.5rem;
+    border-radius: 3px;
+    font-weight: 600;
+  }
+
+  .tag-telegraph { background: rgba(255,170,0,0.2); color: var(--accent); }
+  .tag-resolve { background: rgba(255,68,68,0.2); color: var(--danger); }
+  .tag-recovery { background: rgba(46,204,113,0.2); color: var(--success); }
+  .tag-idle { background: rgba(136,136,160,0.15); color: var(--text-dim); }
+</style>
+</head>
+<body>
+
+<h1>Ability Animation Reference: <span>melee_swing</span></h1>
+<p class="subtitle">
+  Complete implementation guide for one ability — covering design intent, sprite frames, JavaScript code, and system integration.
+  Use this as the template for all 22 abilities.
+</p>
+
+<!-- ════════════════════════════════════════════ -->
+<h2><span class="phase-num">0</span> What is melee_swing?</h2>
+
+<div class="card">
+  <p><strong>Used by:</strong> Skeleton Warrior (primary), Ember Knight (primary), Obsidian Sentry (secondary)</p>
+  <p><strong>Shape:</strong> Arc (90° cone), range 1.5 tiles from enemy center, aimed toward target</p>
+  <p><strong>Damage:</strong> 18 base (scaled by tier)</p>
+  <p><strong>Telegraph:</strong> 500ms (half a second — faster than ground_slam, a short windup)</p>
+  <p><strong>Recovery:</strong> 400ms (shorter punish window — melee attacks recover quickly)</p>
+  <p><strong>Cooldown:</strong> 2000ms</p>
+  <p><strong>Effect:</strong> Slash arc visual, metal sparks on impact, slight screen nudge</p>
+  <p style="margin-top:0.75rem; color: var(--accent);"><strong>The player experience:</strong> You see the enemy raise its weapon — the arc telegraph flashes briefly on the ground showing the swing's reach. You have half a second to step out of the cone or dodge sideways. If you get hit, sparks fly and the screen nudges. The enemy recovers quickly, so the punish window is tight — you get a couple of hits in before it's ready to swing again.</p>
+</div>
+
+<div class="callout">
+  <strong>How melee_swing differs from ground_slam:</strong> This is a <em>directional</em> attack, not a radial one. The telegraph is a cone aimed at the player, not a circle centered on the enemy. It's faster (500ms vs 1000ms telegraph) and has a shorter recovery (400ms vs 800ms). This means the player has less warning but also less punishment for getting hit — it's a bread-and-butter attack that enemies use frequently, not a big commitment slam.
+</div>
+
+<!-- ════════════════════════════════════════════ -->
+<h2><span class="phase-num">1</span> The Animation Lifecycle</h2>
+
+<p>Every ability in the game follows this exact four-phase lifecycle. melee_swing is faster and tighter than ground_slam — the whole cycle is snappier, reflecting a quick melee strike rather than a heavy windup.</p>
+
+<div class="timeline">
+  <div class="timeline-seg t-telegraph">
+    TELEGRAPH<br>
+    <span class="t-label">500ms</span>
+  </div>
+  <div class="timeline-seg t-resolve">
+    HIT<br>
+    <span class="t-label">instant</span>
+  </div>
+  <div class="timeline-seg t-recovery">
+    RECOVERY<br>
+    <span class="t-label">400ms</span>
+  </div>
+  <div class="timeline-seg t-idle">
+    IDLE (cooldown ticking down)<br>
+    <span class="t-label">~1100ms remaining</span>
+  </div>
+</div>
+
+<div class="split">
+  <div class="card">
+    <h3><span class="tag tag-telegraph">TELEGRAPH</span> What the player sees (500ms)</h3>
+    <ul>
+      <li>A <strong>90° arc</strong> appears on the ground, extending 1.5 tiles from the enemy, aimed at the player's position when the swing starts</li>
+      <li>The arc fills in from the inner edge outward (the weapon traces its path)</li>
+      <li>The enemy raises its weapon arm to the <strong>high-guard position</strong> (weapon up and back)</li>
+      <li>The arc <strong>does NOT track</strong> — the direction is locked when the telegraph starts</li>
+      <li>A short metallic <strong>scraping/ringing</strong> sound plays (weapon being drawn back)</li>
+    </ul>
+    <p style="color:var(--accent);">This is the warning. The player can sidestep out of the cone — the key counter is to circle around the enemy, not retreat backwards.</p>
+  </div>
+  <div class="card">
+    <h3><span class="tag tag-resolve">RESOLVE</span> What happens on impact (instant)</h3>
+    <ul>
+      <li>A <strong>slash arc line</strong> sweeps across the cone in 1–2 frames (the actual blade path)</li>
+      <li>The slash line is bright white with a colored trail matching the weapon type</li>
+      <li><strong>Metal sparks</strong> burst from the leading edge of the slash arc</li>
+      <li>A short <strong>screen nudge</strong> (2px, 100ms) — lighter than ground_slam's full shake</li>
+      <li>A sharp <strong>slashing sound</strong> plays (metal cutting through air)</li>
+      <li>Damage is applied to all players within the arc</li>
+    </ul>
+  </div>
+</div>
+<div class="split">
+  <div class="card">
+    <h3><span class="tag tag-recovery">RECOVERY</span> The punish window (400ms)</h3>
+    <ul>
+      <li>The enemy's weapon arm follows through to a <strong>low position</strong> (overextended)</li>
+      <li>Brief pause as the enemy resets its stance</li>
+      <li>Enemy takes <strong>1.15x damage</strong> during this window (less than ground_slam's 1.25x — melee attacks are less committal)</li>
+      <li>Enemy <strong>cannot move</strong> or start another ability</li>
+    </ul>
+    <p style="color:var(--success);">A tighter punish window than ground_slam. You get 1–2 quick hits, not a full combo. Players learn to weave attacks between swings.</p>
+  </div>
+  <div class="card">
+    <h3><span class="tag tag-idle">IDLE</span> Cooldown period (~1100ms)</h3>
+    <ul>
+      <li>No animation effect — the enemy returns to combat-ready idle stance</li>
+      <li>Enemy repositions to face the player (AI takes over)</li>
+      <li>Cooldown ticks down in the background</li>
+      <li>With a 2000ms total cooldown, the enemy can swing roughly every 2 seconds — this gives a steady, rhythmic combat feel</li>
+    </ul>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════════ -->
+<h2><span class="phase-num">2</span> Live Animation Preview</h2>
+
+<p>This is a working pixel-art simulation of melee_swing running in JavaScript. Click the buttons to see each phase individually, or play the full cycle. The enemy faces right and swings its weapon in a downward arc. This is <em>exactly</em> what the in-game animation should look like.</p>
+
+<div class="demo-area">
+  <canvas id="demoCanvas" width="320" height="280"></canvas>
+  <div class="phase-label" id="phaseLabel">Click a button to start</div>
+  <div class="demo-controls">
+    <button onclick="playFullCycle()">▶ Full Cycle</button>
+    <button onclick="showPhase('telegraph')">Telegraph Only</button>
+    <button onclick="showPhase('impact')">Impact Only</button>
+    <button onclick="showPhase('recovery')">Recovery Only</button>
+    <button onclick="stopAnim()">⏹ Stop</button>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════════ -->
+<h2><span class="phase-num">3</span> Sprite Frames (What to Draw)</h2>
+
+<p>These are the individual frames the animation system draws. For melee_swing, there are three visual components that play at different times. Unlike ground_slam's radial symmetry, these are all <em>directional</em> — they point toward the target.</p>
+
+<h3>A. Telegraph Frames (arc indicator — drawn below all entities)</h3>
+<p>A filling arc on the floor showing the swing's reach. 4 key frames over 500ms. The arc fills from inner edge outward.</p>
+<div id="telegraphFrames" class="sprite-grid-container"></div>
+
+<h3>B. Impact Frames (the slash effect — drawn above the enemy)</h3>
+<p>A sweeping slash line that traces the arc path. 5 frames, plays once on resolve. Bright leading edge with a fading trail.</p>
+<div id="impactFrames" class="sprite-grid-container"></div>
+
+<h3>C. Particle Frames (sparks — drawn above everything)</h3>
+<p>Small bright sparks that burst from the leading edge of the slash. Each spark has a fast outward trajectory with quick falloff. 6–8 sparks, each a 2x2 pixel bright point.</p>
+<div id="particleFrames" class="sprite-grid-container"></div>
+
+<!-- ════════════════════════════════════════════ -->
+<h2><span class="phase-num">4</span> JavaScript Implementation</h2>
+
+<p>This is the actual code your team writes. It's split into three parts: <strong>the data</strong> (what the animation looks like), <strong>the controller</strong> (manages animation state), and <strong>the renderer</strong> (draws it on screen).</p>
+
+<h3>Part A — The Data: Define what melee_swing looks like</h3>
+<p>This goes in <code>effect-sprites.js</code> alongside ground_slam and all other ability entries.</p>
+
+<pre><span class="cm">// ─── effect-sprites.js (add to ABILITY_EFFECTS) ───</span>
+<span class="cm">// melee_swing: A directional arc attack with a slash visual.</span>
+<span class="cm">// Key difference from ground_slam: this uses 'arc_fill' instead of 'circle_grow'.</span>
+<span class="cm">// The telegraph is cone-shaped and aimed at the target.</span>
+
+<span class="kw">const</span> ABILITY_EFFECTS <span class="op">=</span> {
+
+  <span class="cm">// ... ground_slam (already defined) ...</span>
+
+  melee_swing: {
+    <span class="cm">// ── TELEGRAPH: arc on the ground showing swing reach ──</span>
+    telegraph: {
+      <span class="prop">type</span>: <span class="str">'arc_fill'</span>,             <span class="cm">// Shape type — renderer draws a pie-slice arc</span>
+      <span class="prop">color</span>: <span class="str">'#FF6B6B'</span>,              <span class="cm">// Red-tinted fill (danger — melee hit incoming)</span>
+      <span class="prop">borderColor</span>: <span class="str">'#FF4444'</span>,        <span class="cm">// Brighter red border edge</span>
+      <span class="prop">fillOpacity</span>: <span class="num">0.20</span>,             <span class="cm">// Slightly less opaque than ground_slam</span>
+      <span class="prop">borderWidth</span>: <span class="num">2</span>,                <span class="cm">// Pixel width of the arc border</span>
+      <span class="prop">startScale</span>: <span class="num">0.4</span>,               <span class="cm">// Starts at 40% of full reach</span>
+      <span class="prop">endScale</span>: <span class="num">1.0</span>,                 <span class="cm">// Grows to full reach over telegraph duration</span>
+      <span class="prop">arcAngle</span>: Math.PI <span class="op">/</span> <span class="num">2</span>,        <span class="cm">// 90° cone (π/2 radians)</span>
+      <span class="prop">radius</span>: <span class="num">1.5</span>,                   <span class="cm">// 1.5 tiles — melee range, MUST match ability hit range</span>
+      <span class="prop">pulseSpeed</span>: <span class="num">8</span>,                 <span class="cm">// Faster pulse than ground_slam (shorter telegraph)</span>
+      <span class="prop">directed</span>: <span class="kw">true</span>,                <span class="cm">// Needs a direction (angle toward target)</span>
+      <span class="prop">lockDirection</span>: <span class="kw">true</span>,           <span class="cm">// Direction locks when telegraph starts — does NOT track</span>
+    },
+
+    <span class="cm">// ── IMPACT: sweeping slash arc ──</span>
+    impact: {
+      <span class="prop">type</span>: <span class="str">'slash_arc'</span>,
+      <span class="prop">color</span>: <span class="str">'#FFFFFF'</span>,              <span class="cm">// Bright white leading edge</span>
+      <span class="prop">trailColor</span>: <span class="str">'#FFCCAA'</span>,        <span class="cm">// Warm trail behind the slash</span>
+      <span class="prop">trailFade</span>: <span class="num">0.6</span>,               <span class="cm">// Trail opacity (fades behind the leading edge)</span>
+      <span class="prop">arcAngle</span>: Math.PI <span class="op">/</span> <span class="num">2</span>,        <span class="cm">// Same 90° as telegraph</span>
+      <span class="prop">sweepDirection</span>: <span class="str">'cw'</span>,         <span class="cm">// Clockwise sweep (top-right to bottom-right)</span>
+      <span class="prop">radius</span>: <span class="num">1.6</span>,                   <span class="cm">// Slightly past hit range (visual overshoot)</span>
+      <span class="prop">lineWidth</span>: <span class="num">3</span>,                  <span class="cm">// Width of the slash line</span>
+      <span class="prop">duration</span>: <span class="num">150</span>,                 <span class="cm">// 150ms — very fast, a quick slash</span>
+      <span class="prop">fadeStart</span>: <span class="num">0.5</span>,                <span class="cm">// Trail starts fading at 50% of duration</span>
+      <span class="prop">screenNudge</span>: {                <span class="cm">// Lighter than ground_slam's shake</span>
+        <span class="prop">intensity</span>: <span class="num">2</span>,                <span class="cm">// Max 2px offset (half of ground_slam)</span>
+        <span class="prop">duration</span>: <span class="num">100</span>,               <span class="cm">// 100ms (half of ground_slam)</span>
+        <span class="prop">decay</span>: <span class="str">'linear'</span>,
+        <span class="prop">direction</span>: <span class="str">'swing'</span>,          <span class="cm">// Nudge follows the swing direction, not random</span>
+      }
+    },
+
+    <span class="cm">// ── PARTICLES: metal sparks from the slash ──</span>
+    particles: {
+      <span class="prop">count</span>: <span class="num">7</span>,                      <span class="cm">// Fewer than ground_slam's 10 — lighter effect</span>
+      <span class="prop">sprite</span>: {
+        <span class="prop">width</span>: <span class="num">2</span>, <span class="prop">height</span>: <span class="num">2</span>,
+        <span class="prop">pixels</span>: [<span class="str">'SS'</span>, <span class="str">'SS'</span>],            <span class="cm">// Tiny 2x2 bright square</span>
+        <span class="prop">palette</span>: { <span class="str">'S'</span>: <span class="str">'#FFEECC'</span> }      <span class="cm">// Hot white-yellow spark</span>
+      },
+      <span class="prop">spawnMode</span>: <span class="str">'arc_edge'</span>,           <span class="cm">// Sparks spawn along the leading edge of the slash</span>
+      <span class="prop">spawnRadius</span>: <span class="num">1.5</span>,               <span class="cm">// At the slash's reach</span>
+      <span class="prop">velocity</span>: {
+        <span class="prop">radialRange</span>: [<span class="num">40</span>, <span class="num">100</span>],       <span class="cm">// Sparks fly outward from slash center</span>
+        <span class="prop">tangentialRange</span>: [<span class="num">-30</span>, <span class="num">80</span>],   <span class="cm">// Some spread along the arc direction</span>
+      },
+      <span class="prop">gravity</span>: <span class="num">150</span>,                   <span class="cm">// Lighter gravity — sparks float briefly</span>
+      <span class="prop">lifetime</span>: <span class="num">350</span>,                  <span class="cm">// Short-lived — 350ms (snappy, not lingering)</span>
+      <span class="prop">fadeOut</span>: <span class="num">0.4</span>,                   <span class="cm">// Start fading at 40% of lifetime</span>
+      <span class="prop">sizeDecay</span>: <span class="kw">true</span>,                <span class="cm">// Sparks shrink as they fade</span>
+    },
+
+    <span class="cm">// ── AUDIO CUES ──</span>
+    audio: {
+      <span class="prop">telegraph</span>: <span class="str">'sfx_blade_draw'</span>,         <span class="cm">// Short metallic scrape as weapon is raised</span>
+      <span class="prop">impact</span>: <span class="str">'sfx_slash_hit'</span>,             <span class="cm">// Sharp slicing sound on resolve</span>
+    }
+  }
+};</pre>
+
+<div class="callout">
+  <strong>Key difference from ground_slam:</strong> The <code>directed: true</code> and <code>lockDirection: true</code> flags tell the renderer this telegraph needs a target angle. The renderer draws a pie-slice arc instead of a full circle. <code>lockDirection</code> means the direction is captured once when <code>startEffect()</code> is called and doesn't update — this is critical for fairness because the player can dodge sideways after seeing the telegraph.
+</div>
+
+<h3>Part B — The Controller: Manage animation state (additions for directed abilities)</h3>
+<p>The existing EffectAnimator from ground_slam handles most of this. melee_swing adds a <code>direction</code> parameter and a different particle spawn mode.</p>
+
+<pre><span class="cm">// ─── effect-animator.js (modified startEffect for directed abilities) ───</span>
+
+<span class="fn">startEffect</span>(abilityId, x, y, telegraphMs, radius, <span class="cm">/* NEW → */</span> direction) {
+  <span class="kw">const</span> id <span class="op">=</span> <span class="kw">this</span>.nextId++;
+  <span class="kw">const</span> config <span class="op">=</span> ABILITY_EFFECTS[abilityId];
+
+  <span class="kw">if</span> (!config) {
+    console.<span class="fn">warn</span>(<span class="str">`No effect defined for ability: ${abilityId}`</span>);
+    <span class="kw">return</span> <span class="num">-1</span>;
+  }
+
+  <span class="kw">this</span>.activeEffects.<span class="fn">set</span>(id, {
+    id,
+    abilityId,
+    config,
+    x, y,
+    radius,
+
+    <span class="cm">// ── Phase tracking ──</span>
+    phase: <span class="str">'telegraph'</span>,
+    phaseTimer: <span class="num">0</span>,
+    telegraphDuration: telegraphMs,
+
+    <span class="cm">// ════ NEW: Direction for aimed abilities ════</span>
+    <span class="cm">// For ground_slam this is undefined (radial).</span>
+    <span class="cm">// For melee_swing this is the angle from enemy → target in radians.</span>
+    direction: direction <span class="op">||</span> <span class="num">0</span>,
+
+    <span class="cm">// ── Particle state ──</span>
+    particles: [],
+  });
+
+  <span class="kw">return</span> id;
+},
+
+<span class="cm">// ── Modified spawnParticles for 'arc_edge' mode ──</span>
+
+<span class="fn">spawnParticles</span>(effect) {
+  <span class="kw">const</span> cfg <span class="op">=</span> effect.config.particles;
+  <span class="kw">if</span> (!cfg) <span class="kw">return</span>;
+
+  <span class="kw">if</span> (cfg.spawnMode <span class="op">===</span> <span class="str">'arc_edge'</span>) {
+    <span class="cm">// Sparks spawn along the arc's outer edge</span>
+    <span class="kw">const</span> arcAngle <span class="op">=</span> effect.config.telegraph.arcAngle;
+    <span class="kw">const</span> startAngle <span class="op">=</span> effect.direction <span class="op">-</span> arcAngle <span class="op">/</span> <span class="num">2</span>;
+
+    <span class="kw">for</span> (<span class="kw">let</span> i <span class="op">=</span> <span class="num">0</span>; i <span class="op"><</span> cfg.count; i<span class="op">++</span>) {
+      <span class="kw">const</span> angle <span class="op">=</span> startAngle <span class="op">+</span> Math.<span class="fn">random</span>() <span class="op">*</span> arcAngle;
+      <span class="kw">const</span> dist <span class="op">=</span> cfg.spawnRadius <span class="op">*</span> TILE_SIZE <span class="op">*</span> (<span class="num">0.8</span> <span class="op">+</span> Math.<span class="fn">random</span>() <span class="op">*</span> <span class="num">0.2</span>);
+
+      <span class="cm">// Radial + tangential velocity</span>
+      <span class="kw">const</span> radialSpeed <span class="op">=</span> cfg.velocity.radialRange[<span class="num">0</span>]
+        <span class="op">+</span> Math.<span class="fn">random</span>() <span class="op">*</span> (cfg.velocity.radialRange[<span class="num">1</span>] <span class="op">-</span> cfg.velocity.radialRange[<span class="num">0</span>]);
+      <span class="kw">const</span> tangentSpeed <span class="op">=</span> cfg.velocity.tangentialRange[<span class="num">0</span>]
+        <span class="op">+</span> Math.<span class="fn">random</span>() <span class="op">*</span> (cfg.velocity.tangentialRange[<span class="num">1</span>] <span class="op">-</span> cfg.velocity.tangentialRange[<span class="num">0</span>]);
+
+      effect.particles.<span class="fn">push</span>({
+        x: effect.x <span class="op">+</span> Math.<span class="fn">cos</span>(angle) <span class="op">*</span> dist,
+        y: effect.y <span class="op">+</span> Math.<span class="fn">sin</span>(angle) <span class="op">*</span> dist,
+        vx: Math.<span class="fn">cos</span>(angle) <span class="op">*</span> radialSpeed <span class="op">+</span> Math.<span class="fn">cos</span>(angle <span class="op">+</span> Math.PI<span class="op">/</span><span class="num">2</span>) <span class="op">*</span> tangentSpeed,
+        vy: Math.<span class="fn">sin</span>(angle) <span class="op">*</span> radialSpeed <span class="op">+</span> Math.<span class="fn">sin</span>(angle <span class="op">+</span> Math.PI<span class="op">/</span><span class="num">2</span>) <span class="op">*</span> tangentSpeed,
+        life: cfg.lifetime,
+        maxLife: cfg.lifetime,
+        sprite: cfg.sprite,
+      });
+    }
+  } <span class="kw">else</span> {
+    <span class="cm">// Original radial spawn for ground_slam-style abilities</span>
+    <span class="cm">// ... (existing code unchanged) ...</span>
+  }
+}</pre>
+
+<div class="callout warn">
+  <strong>Critical — direction parameter:</strong> When the ability system calls <code>startEffect()</code>, it must compute the angle from the enemy to the target at that moment: <code>Math.atan2(target.y - enemy.y, target.x - enemy.x)</code>. This angle is stored once and never updated. If you accidentally update it during the telegraph, the arc will track the player and become impossible to dodge — this destroys the fairness contract.
+</div>
+
+<h3>Part C — The Renderer: Draw the arc telegraph and slash</h3>
+<p>New rendering functions for <code>arc_fill</code> telegraphs and <code>slash_arc</code> impact visuals. These supplement (not replace) the existing circle renderers.</p>
+
+<pre><span class="cm">// ─── effect-renderer.js (add to EffectRenderer) ───</span>
+
+<span class="cm">// ── TELEGRAPH: Filling arc on the ground ──</span>
+<span class="fn">drawTelegraph</span>(ctx, effect, camX, camY) {
+  <span class="kw">const</span> cfg <span class="op">=</span> effect.config.telegraph;
+
+  <span class="cm">// Dispatch to the right shape renderer</span>
+  <span class="kw">if</span> (cfg.type <span class="op">===</span> <span class="str">'circle_grow'</span>) {
+    <span class="kw">this</span>.<span class="fn">drawTelegraphCircle</span>(ctx, effect, camX, camY);   <span class="cm">// existing</span>
+    <span class="kw">return</span>;
+  }
+
+  <span class="kw">if</span> (cfg.type <span class="op">===</span> <span class="str">'arc_fill'</span>) {
+    <span class="kw">this</span>.<span class="fn">drawTelegraphArc</span>(ctx, effect, camX, camY);      <span class="cm">// NEW</span>
+    <span class="kw">return</span>;
+  }
+},
+
+<span class="fn">drawTelegraphArc</span>(ctx, effect, camX, camY) {
+  <span class="kw">const</span> cfg <span class="op">=</span> effect.config.telegraph;
+
+  <span class="cm">// How far through the telegraph? 0.0 → 1.0</span>
+  <span class="kw">const</span> progress <span class="op">=</span> Math.<span class="fn">min</span>(effect.phaseTimer <span class="op">/</span> effect.telegraphDuration, <span class="num">1.0</span>);
+
+  <span class="cm">// Current radius: lerp from startScale to endScale</span>
+  <span class="kw">const</span> scale <span class="op">=</span> cfg.startScale <span class="op">+</span> (cfg.endScale <span class="op">-</span> cfg.startScale) <span class="op">*</span> progress;
+  <span class="kw">const</span> radiusPx <span class="op">=</span> cfg.radius <span class="op">*</span> TILE_SIZE <span class="op">*</span> scale;
+
+  <span class="cm">// Screen position</span>
+  <span class="kw">const</span> sx <span class="op">=</span> effect.x <span class="op">-</span> camX;
+  <span class="kw">const</span> sy <span class="op">=</span> effect.y <span class="op">-</span> camY;
+
+  <span class="cm">// Arc angles: centered on effect.direction, spanning cfg.arcAngle</span>
+  <span class="kw">const</span> halfArc <span class="op">=</span> cfg.arcAngle <span class="op">/</span> <span class="num">2</span>;
+  <span class="kw">const</span> startAngle <span class="op">=</span> effect.direction <span class="op">-</span> halfArc;
+  <span class="kw">const</span> endAngle <span class="op">=</span> effect.direction <span class="op">+</span> halfArc;
+
+  <span class="cm">// Pulsing border</span>
+  <span class="kw">const</span> pulse <span class="op">=</span> <span class="num">0.5</span> <span class="op">+</span> <span class="num">0.5</span> <span class="op">*</span> Math.<span class="fn">sin</span>(effect.phaseTimer <span class="op">/</span> <span class="num">1000</span> <span class="op">*</span> cfg.pulseSpeed <span class="op">*</span> Math.PI <span class="op">*</span> <span class="num">2</span>);
+  <span class="kw">const</span> borderAlpha <span class="op">=</span> <span class="num">0.5</span> <span class="op">+</span> pulse <span class="op">*</span> <span class="num">0.5</span>;
+
+  <span class="cm">// Draw filled arc (pie slice)</span>
+  ctx.<span class="fn">save</span>();
+  ctx.globalAlpha <span class="op">=</span> cfg.fillOpacity;
+  ctx.fillStyle <span class="op">=</span> cfg.color;
+  ctx.<span class="fn">beginPath</span>();
+  ctx.<span class="fn">moveTo</span>(sx, sy);                               <span class="cm">// Start at center</span>
+  ctx.<span class="fn">arc</span>(sx, sy, radiusPx, startAngle, endAngle);   <span class="cm">// Arc to outer edge</span>
+  ctx.<span class="fn">closePath</span>();                                   <span class="cm">// Line back to center</span>
+  ctx.<span class="fn">fill</span>();
+
+  <span class="cm">// Draw border</span>
+  ctx.globalAlpha <span class="op">=</span> borderAlpha;
+  ctx.strokeStyle <span class="op">=</span> cfg.borderColor;
+  ctx.lineWidth <span class="op">=</span> cfg.borderWidth;
+  ctx.<span class="fn">stroke</span>();
+  ctx.<span class="fn">restore</span>();
+},
+
+<span class="cm">// ── IMPACT: Sweeping slash line ──</span>
+<span class="fn">drawImpact</span>(ctx, effect, camX, camY) {
+  <span class="kw">const</span> cfg <span class="op">=</span> effect.config.impact;
+
+  <span class="kw">if</span> (cfg.type <span class="op">===</span> <span class="str">'ring_burst'</span>) {
+    <span class="kw">this</span>.<span class="fn">drawImpactRings</span>(ctx, effect, camX, camY);    <span class="cm">// existing</span>
+    <span class="kw">return</span>;
+  }
+
+  <span class="kw">if</span> (cfg.type <span class="op">===</span> <span class="str">'slash_arc'</span>) {
+    <span class="kw">this</span>.<span class="fn">drawSlashArc</span>(ctx, effect, camX, camY);       <span class="cm">// NEW</span>
+    <span class="kw">return</span>;
+  }
+},
+
+<span class="fn">drawSlashArc</span>(ctx, effect, camX, camY) {
+  <span class="kw">const</span> cfg <span class="op">=</span> effect.config.impact;
+  <span class="kw">const</span> progress <span class="op">=</span> Math.<span class="fn">min</span>(effect.phaseTimer <span class="op">/</span> cfg.duration, <span class="num">1.0</span>);
+
+  <span class="kw">const</span> sx <span class="op">=</span> effect.x <span class="op">-</span> camX;
+  <span class="kw">const</span> sy <span class="op">=</span> effect.y <span class="op">-</span> camY;
+  <span class="kw">const</span> radiusPx <span class="op">=</span> cfg.radius <span class="op">*</span> TILE_SIZE;
+
+  <span class="cm">// The slash sweeps across the arc over the duration</span>
+  <span class="kw">const</span> halfArc <span class="op">=</span> cfg.arcAngle <span class="op">/</span> <span class="num">2</span>;
+  <span class="kw">const</span> arcStart <span class="op">=</span> effect.direction <span class="op">-</span> halfArc;
+  <span class="kw">const</span> arcEnd <span class="op">=</span> effect.direction <span class="op">+</span> halfArc;
+
+  <span class="cm">// Leading edge position (sweeps from arcStart → arcEnd)</span>
+  <span class="kw">const</span> leadAngle <span class="op">=</span> arcStart <span class="op">+</span> (arcEnd <span class="op">-</span> arcStart) <span class="op">*</span> progress;
+
+  <span class="cm">// Trail: draw a thick arc from start up to the leading edge</span>
+  <span class="kw">const</span> trailStart <span class="op">=</span> Math.<span class="fn">max</span>(arcStart, leadAngle <span class="op">-</span> halfArc <span class="op">*</span> <span class="num">0.6</span>);
+
+  <span class="cm">// Fade based on progress</span>
+  <span class="kw">const</span> alpha <span class="op">=</span> progress <span class="op">></span> cfg.fadeStart
+    <span class="op">?</span> <span class="num">1.0</span> <span class="op">-</span> ((progress <span class="op">-</span> cfg.fadeStart) <span class="op">/</span> (<span class="num">1.0</span> <span class="op">-</span> cfg.fadeStart))
+    <span class="op">:</span> <span class="num">1.0</span>;
+
+  ctx.<span class="fn">save</span>();
+
+  <span class="cm">// Draw trail (faded, behind leading edge)</span>
+  ctx.globalAlpha <span class="op">=</span> alpha <span class="op">*</span> cfg.trailFade;
+  ctx.strokeStyle <span class="op">=</span> cfg.trailColor;
+  ctx.lineWidth <span class="op">=</span> cfg.lineWidth <span class="op">+</span> <span class="num">1</span>;
+  ctx.lineCap <span class="op">=</span> <span class="str">'round'</span>;
+  ctx.<span class="fn">beginPath</span>();
+  ctx.<span class="fn">arc</span>(sx, sy, radiusPx, trailStart, leadAngle);
+  ctx.<span class="fn">stroke</span>();
+
+  <span class="cm">// Draw leading edge (bright white, sharper)</span>
+  ctx.globalAlpha <span class="op">=</span> alpha;
+  ctx.strokeStyle <span class="op">=</span> cfg.color;
+  ctx.lineWidth <span class="op">=</span> cfg.lineWidth;
+  <span class="kw">const</span> edgeSpan <span class="op">=</span> <span class="num">0.15</span>;  <span class="cm">// Leading edge covers 15% of the arc</span>
+  ctx.<span class="fn">beginPath</span>();
+  ctx.<span class="fn">arc</span>(sx, sy, radiusPx, leadAngle <span class="op">-</span> edgeSpan, leadAngle);
+  ctx.<span class="fn">stroke</span>();
+
+  ctx.<span class="fn">restore</span>();
+}</pre>
+
+<div class="callout">
+  <strong>Why a sweeping slash instead of an instant flash?</strong> A single-frame flash would feel like a "pop" — the player wouldn't read it as a blade moving through space. By sweeping the slash line across the arc over 150ms, the player's eye tracks the motion and reads it as "a weapon just swung through here." The bright leading edge is the blade tip; the faded trail is the afterimage. This is the same technique used in games like Hades and Dead Cells to sell melee impacts.
+</div>
+
+<h3>Part D — The Glue: Connect it to the ability system</h3>
+<p>The only change from ground_slam's glue code is passing the <code>direction</code> parameter when starting the effect.</p>
+
+<pre><span class="cm">// ─── In enemy-ability-system.js ───</span>
+<span class="cm">// Modified executeAbility() — for directed abilities, compute and pass angle</span>
+
+<span class="fn">executeAbility</span>(enemy, target, ability, abilitySet) {
+  <span class="kw">const</span> telegraphTime <span class="op">=</span> <span class="cm">/* ... existing telegraph calculation ... */</span>;
+  <span class="kw">const</span> recoveryTime <span class="op">=</span> ability.recoveryTime <span class="op">||</span> <span class="num">600</span>;
+
+  <span class="cm">// ════ NEW: Compute direction for aimed abilities ════</span>
+  <span class="cm">// Capture the angle NOW — this is the direction the swing will face.</span>
+  <span class="cm">// For non-directed abilities (ground_slam), direction is undefined/ignored.</span>
+  <span class="kw">let</span> direction <span class="op">=</span> <span class="kw">undefined</span>;
+  <span class="kw">const</span> effectConfig <span class="op">=</span> ABILITY_EFFECTS[ability.id];
+  <span class="kw">if</span> (effectConfig?.telegraph?.directed) {
+    direction <span class="op">=</span> Math.<span class="fn">atan2</span>(
+      target.worldY <span class="op">-</span> enemy.worldY,
+      target.worldX <span class="op">-</span> enemy.worldX
+    );
+  }
+
+  <span class="cm">// Existing: set cooldowns, lock enemy state...</span>
+  abilitySet.cooldowns[ability.id] <span class="op">=</span> ability.cooldown;
+  abilitySet.globalCooldown <span class="op">=</span> <span class="num">1000</span>;
+  enemy.abilityState <span class="op">=</span> <span class="str">'telegraph'</span>;
+  enemy.abilityLockout <span class="op">=</span> <span class="kw">true</span>;
+
+  <span class="cm">// Start the visual effect (now with direction)</span>
+  <span class="kw">const</span> effectId <span class="op">=</span> EffectAnimator.<span class="fn">startEffect</span>(
+    ability.id,
+    enemy.worldX, enemy.worldY,
+    telegraphTime,
+    ability.radius <span class="op">||</span> <span class="num">0</span>,
+    direction                                   <span class="cm">// ← NEW param (undefined for radial)</span>
+  );
+
+  enemy._currentEffectId <span class="op">=</span> effectId;
+
+  <span class="cm">// ════ NEW: Face the enemy toward the swing direction ════</span>
+  <span class="cm">// So the enemy sprite visually matches the telegraph direction.</span>
+  <span class="kw">if</span> (direction <span class="op">!==</span> <span class="kw">undefined</span>) {
+    enemy.facingAngle <span class="op">=</span> direction;
+  }
+
+  <span class="cm">// ... rest is identical to ground_slam (setTimeout, resolve, etc.) ...</span>
+}</pre>
+
+<div class="callout warn">
+  <strong>Critical:</strong> The <code>direction</code> is computed ONCE in <code>executeAbility()</code> and passed into the effect. During the 500ms telegraph, the enemy does NOT rotate to track the player. The enemy's <code>facingAngle</code> is set at the start and stays locked. If you update <code>facingAngle</code> during the telegraph, both the enemy sprite and the telegraph arc will desync — the arc stays aimed at the original position but the enemy visually turns, which looks broken.
+</div>
+
+<!-- ════════════════════════════════════════════ -->
+<h2><span class="phase-num">5</span> How the Render Loop Calls It</h2>
+
+<p>No changes needed to the render loop from ground_slam. The existing two-pass system (drawGround + drawOverlay) handles melee_swing automatically because the renderer dispatches based on <code>type</code> — the new <code>arc_fill</code> and <code>slash_arc</code> types just plug in.</p>
+
+<pre><span class="cm">// ─── In your main game loop (unchanged from ground_slam setup) ───</span>
+
+<span class="fn">update</span>(deltaTime) {
+  <span class="cm">// ... existing game update code ...</span>
+  EnemyAbilitySystem.<span class="fn">update</span>(deltaTime);
+  EffectAnimator.<span class="fn">update</span>(deltaTime);          <span class="cm">// Handles both circle and arc effects</span>
+}
+
+<span class="fn">render</span>(ctx) {
+  TileRenderer.<span class="fn">draw</span>(ctx);                      <span class="cm">// 1. Floor tiles</span>
+  EffectRenderer.<span class="fn">drawGround</span>(ctx, camera.x, camera.y);  <span class="cm">// 2. Telegraphs (circles AND arcs)</span>
+  EntityRenderer.<span class="fn">draw</span>(ctx);                    <span class="cm">// 3. Entities</span>
+  EffectRenderer.<span class="fn">drawOverlay</span>(ctx, camera.x, camera.y);  <span class="cm">// 4. Impacts (rings AND slashes)</span>
+  UIRenderer.<span class="fn">draw</span>(ctx);                        <span class="cm">// 5. UI</span>
+}</pre>
+
+<div class="callout">
+  <strong>This is the power of the data-driven approach.</strong> Because ground_slam already established the rendering pipeline, adding melee_swing required zero changes to the main loop. The new <code>arc_fill</code> and <code>slash_arc</code> renderer functions just plug into the existing dispatch. Every future ability — cone, line, projectile — works the same way: define the data, add a renderer for the shape type, done.
+</div>
+
+<!-- ════════════════════════════════════════════ -->
+<h2><span class="phase-num">6</span> Adapting This for Other Melee Variants</h2>
+
+<p>melee_swing is the base case for all close-range weapon attacks. The same <code>arc_fill</code> telegraph and <code>slash_arc</code> impact work for variants with different feel:</p>
+
+<div class="card">
+  <h3>For heavy_cleave (two-handed axe, slower and wider):</h3>
+  <p>Same <code>arc_fill</code> type but wider arc (120° instead of 90°), longer range (2.0 tiles), slower telegraph (700ms), and heavier impact. Increase particle count to 12 and add a brief <strong>screen shake</strong> instead of a nudge. Recovery is longer (600ms) — bigger punish window for a bigger commitment. Change slash color to a darker orange for a "heavy iron" feel.</p>
+</div>
+
+<div class="card">
+  <h3>For quick_stab (dagger, fast and narrow):</h3>
+  <p>Narrow arc (45°), short range (1.0 tile), very fast telegraph (300ms). Impact type changes to <code>thrust_line</code> — a single line extending from the enemy center rather than a sweeping arc. Fewer sparks (3–4), smaller and faster. Almost no recovery (200ms). This attack is about volume, not damage — the enemy stabs often and the player weaves between strikes.</p>
+</div>
+
+<div class="card">
+  <h3>For spin_attack (360° melee sweep):</h3>
+  <p>Change arcAngle to <code>Math.PI * 2</code> (full circle) and the telegraph becomes a full ring — visually similar to ground_slam's circle but the impact is a <code>slash_arc</code> that sweeps 360° instead of <code>ring_burst</code>. The slash spins around the enemy. This bridges melee_swing and ground_slam — it's a melee attack with area-denial properties. Longer telegraph (800ms) since there's no safe angle.</p>
+</div>
+
+<div class="card">
+  <h3>For combo_strike (2-hit or 3-hit chain):</h3>
+  <p>Multiple melee_swings fired in rapid sequence with alternating directions. The first swing goes left-to-right (CW), the second right-to-left (CCW), optional third is an overhead slam (small circle). Each has its own telegraph/resolve cycle but with very short gaps (100ms) between them. The ability system queues them as separate effects. The chain can be interrupted between swings but not during a swing.</p>
+</div>
+
+<script>
+// ════════════════════════════════════════════
+// LIVE DEMO — melee_swing animation
+// ════════════════════════════════════════════
+
+const canvas = document.getElementById('demoCanvas');
+const ctx = canvas.getContext('2d');
+const TILE = 32;
+const CX = canvas.width / 2 - 20;
+const CY = canvas.height / 2;
+
+// Swing direction (enemy faces right → swing aims right)
+const SWING_DIR = 0; // 0 radians = right
+const ARC_ANGLE = Math.PI / 2; // 90°
+const SWING_RADIUS = 1.5 * TILE;
+
+let animState = null;
+let animFrame = null;
+
+const COLORS = {
+  telegraphFill: '#FF6B6B',
+  telegraphBorder: '#FF4444',
+  slashWhite: '#FFFFFF',
+  slashTrail: '#FFCCAA',
+  sparkBright: '#FFEECC',
+  sparkDim: '#FFAA66',
+  enemyBody: '#666688',
+  enemyDark: '#444466',
+  weaponMetal: '#AAAACC',
+  weaponEdge: '#DDDDEE',
+  ground: '#1a1a22',
+  gridLine: '#222230',
+};
+
+function drawGrid() {
+  ctx.fillStyle = COLORS.ground;
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.strokeStyle = COLORS.gridLine;
+  ctx.lineWidth = 1;
+  for (let x = 0; x < canvas.width; x += TILE) {
+    ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, canvas.height); ctx.stroke();
+  }
+  for (let y = 0; y < canvas.height; y += TILE) {
+    ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(canvas.width, y); ctx.stroke();
+  }
+}
+
+function drawEnemy(shakex, shakey, phase, progress) {
+  const ex = CX + (shakex || 0);
+  const ey = CY + (shakey || 0);
+  const recovery = phase === 'recovery';
+  const bodyColor = recovery ? '#558855' : COLORS.enemyBody;
+
+  // Body
+  ctx.fillStyle = bodyColor;
+  ctx.fillRect(ex - 10, ey - 14, 20, 24);
+  // Head
+  ctx.fillStyle = COLORS.enemyDark;
+  ctx.fillRect(ex - 7, ey - 20, 14, 8);
+
+  // Weapon arm + weapon
+  ctx.save();
+  ctx.translate(ex + 8, ey - 6);
+
+  if (phase === 'telegraph') {
+    // Raise weapon: arm rotates from resting (0°) to raised (-120°)
+    const raise = Math.min(1, (progress || 0));
+    const armAngle = -raise * 2.1; // radians, raise up and back
+    ctx.rotate(armAngle);
+    // Arm
+    ctx.fillStyle = bodyColor;
+    ctx.fillRect(0, -3, 14, 6);
+    // Weapon (sword blade)
+    ctx.fillStyle = COLORS.weaponMetal;
+    ctx.fillRect(12, -2, 18, 4);
+    ctx.fillStyle = COLORS.weaponEdge;
+    ctx.fillRect(12, -2, 18, 1);
+  } else if (phase === 'impact') {
+    // Swing through: weapon sweeps down rapidly
+    const swingProgress = Math.min(1, (progress || 0));
+    const armAngle = -2.1 + swingProgress * 3.2; // from raised to follow-through
+    ctx.rotate(armAngle);
+    ctx.fillStyle = bodyColor;
+    ctx.fillRect(0, -3, 14, 6);
+    ctx.fillStyle = COLORS.weaponMetal;
+    ctx.fillRect(12, -2, 18, 4);
+    ctx.fillStyle = COLORS.weaponEdge;
+    ctx.fillRect(12, -2, 18, 1);
+  } else if (phase === 'recovery') {
+    // Follow-through position (overextended down)
+    const recoverProgress = Math.min(1, (progress || 0));
+    const armAngle = 1.1 - recoverProgress * 0.6; // slowly returning
+    ctx.rotate(armAngle);
+    ctx.fillStyle = bodyColor;
+    ctx.fillRect(0, -3, 14, 6);
+    ctx.fillStyle = COLORS.weaponMetal;
+    ctx.fillRect(12, -2, 18, 4);
+    ctx.fillStyle = COLORS.weaponEdge;
+    ctx.fillRect(12, -2, 18, 1);
+  } else {
+    // Idle: weapon at rest
+    ctx.fillStyle = bodyColor;
+    ctx.fillRect(0, -3, 14, 6);
+    ctx.fillStyle = COLORS.weaponMetal;
+    ctx.fillRect(12, -2, 18, 4);
+    ctx.fillStyle = COLORS.weaponEdge;
+    ctx.fillRect(12, -2, 18, 1);
+  }
+  ctx.restore();
+
+  // Off-hand arm (left side, simple)
+  ctx.fillStyle = bodyColor;
+  ctx.fillRect(ex - 16, ey - 6, 6, 14);
+}
+
+function drawTelegraphArc(progress) {
+  const scale = 0.4 + 0.6 * progress;
+  const radius = SWING_RADIUS * scale;
+  const halfArc = ARC_ANGLE / 2;
+  const startAngle = SWING_DIR - halfArc;
+  const endAngle = SWING_DIR + halfArc;
+  const pulse = 0.5 + 0.5 * Math.sin(performance.now() / 1000 * 8 * Math.PI * 2);
+
+  ctx.save();
+  // Filled arc
+  ctx.globalAlpha = 0.20;
+  ctx.fillStyle = COLORS.telegraphFill;
+  ctx.beginPath();
+  ctx.moveTo(CX, CY);
+  ctx.arc(CX, CY, radius, startAngle, endAngle);
+  ctx.closePath();
+  ctx.fill();
+
+  // Border
+  ctx.globalAlpha = 0.5 + pulse * 0.5;
+  ctx.strokeStyle = COLORS.telegraphBorder;
+  ctx.lineWidth = 2;
+  ctx.stroke();
+  ctx.restore();
+}
+
+function drawSlashArc(progress) {
+  const radiusPx = SWING_RADIUS * 1.07;
+  const halfArc = ARC_ANGLE / 2;
+  const arcStart = SWING_DIR - halfArc;
+  const arcEnd = SWING_DIR + halfArc;
+
+  // Leading edge sweeps from arcStart to arcEnd
+  const leadAngle = arcStart + (arcEnd - arcStart) * progress;
+  const trailStart = Math.max(arcStart, leadAngle - halfArc * 0.6);
+
+  // Fade
+  const fadeStart = 0.5;
+  const alpha = progress > fadeStart
+    ? 1.0 - ((progress - fadeStart) / (1.0 - fadeStart))
+    : 1.0;
+
+  ctx.save();
+
+  // Trail
+  ctx.globalAlpha = alpha * 0.6;
+  ctx.strokeStyle = COLORS.slashTrail;
+  ctx.lineWidth = 4;
+  ctx.lineCap = 'round';
+  ctx.beginPath();
+  ctx.arc(CX, CY, radiusPx, trailStart, leadAngle);
+  ctx.stroke();
+
+  // Leading edge (bright)
+  ctx.globalAlpha = alpha;
+  ctx.strokeStyle = COLORS.slashWhite;
+  ctx.lineWidth = 3;
+  ctx.beginPath();
+  ctx.arc(CX, CY, radiusPx, leadAngle - 0.15, leadAngle);
+  ctx.stroke();
+
+  // Small glow at the tip
+  ctx.globalAlpha = alpha * 0.4;
+  ctx.strokeStyle = COLORS.slashWhite;
+  ctx.lineWidth = 8;
+  ctx.beginPath();
+  ctx.arc(CX, CY, radiusPx, leadAngle - 0.05, leadAngle);
+  ctx.stroke();
+
+  ctx.restore();
+}
+
+function spawnSparks() {
+  const sparks = [];
+  const halfArc = ARC_ANGLE / 2;
+  for (let i = 0; i < 8; i++) {
+    const angle = SWING_DIR - halfArc + Math.random() * ARC_ANGLE;
+    const dist = SWING_RADIUS * (0.8 + Math.random() * 0.2);
+    const radialSpeed = 40 + Math.random() * 60;
+    const tangentSpeed = -30 + Math.random() * 110;
+    sparks.push({
+      x: CX + Math.cos(angle) * dist,
+      y: CY + Math.sin(angle) * dist,
+      vx: Math.cos(angle) * radialSpeed + Math.cos(angle + Math.PI/2) * tangentSpeed,
+      vy: Math.sin(angle) * radialSpeed + Math.sin(angle + Math.PI/2) * tangentSpeed,
+      life: 350,
+      maxLife: 350,
+      size: 2 + Math.floor(Math.random() * 2),
+      color: Math.random() > 0.4 ? COLORS.sparkBright : COLORS.sparkDim,
+    });
+  }
+  return sparks;
+}
+
+function updateSparks(sparks, dt) {
+  for (const p of sparks) {
+    if (p.life <= 0) continue;
+    p.x += p.vx * (dt / 1000);
+    p.y += p.vy * (dt / 1000);
+    p.vy += 150 * (dt / 1000);
+    p.life -= dt;
+    // Size decay
+    p.size = Math.max(1, p.size - dt * 0.003);
+  }
+}
+
+function drawSparks(sparks) {
+  for (const p of sparks) {
+    if (p.life <= 0) continue;
+    const lifeRatio = p.life / p.maxLife;
+    const alpha = lifeRatio < 0.4 ? lifeRatio / 0.4 : 1.0;
+    ctx.save();
+    ctx.globalAlpha = alpha;
+    ctx.fillStyle = p.color;
+    const s = Math.max(1, Math.round(p.size));
+    ctx.fillRect(p.x - s/2, p.y - s/2, s, s);
+    ctx.restore();
+  }
+}
+
+function getScreenNudge(timer) {
+  if (timer > 100) return { x: 0, y: 0 };
+  const intensity = 2 * (1 - timer / 100);
+  // Nudge follows swing direction (rightward)
+  return {
+    x: Math.cos(SWING_DIR) * intensity * (0.5 + Math.random() * 0.5),
+    y: Math.sin(SWING_DIR) * intensity * (0.5 + Math.random() * 0.5),
+  };
+}
+
+function startAnim(phases) {
+  stopAnim();
+  animState = {
+    phases: phases,
+    phaseIndex: 0,
+    phase: phases[0],
+    timer: 0,
+    telegraphDuration: 500,
+    impactDuration: 150,
+    recoveryDuration: 400,
+    sparks: [],
+    nudgeTimer: 999,
+    lastTime: performance.now(),
+  };
+  animFrame = requestAnimationFrame(tick);
+}
+
+function tick(now) {
+  if (!animState) return;
+  const dt = now - animState.lastTime;
+  animState.lastTime = now;
+  animState.timer += dt;
+  animState.nudgeTimer += dt;
+
+  const phase = animState.phase;
+  let advance = false;
+
+  if (phase === 'telegraph' && animState.timer >= animState.telegraphDuration) advance = true;
+  if (phase === 'impact' && animState.timer >= animState.impactDuration &&
+      animState.sparks.every(p => p.life <= 0)) advance = true;
+  if (phase === 'recovery' && animState.timer >= animState.recoveryDuration) advance = true;
+
+  if (advance) {
+    animState.phaseIndex++;
+    if (animState.phaseIndex >= animState.phases.length) {
+      stopAnim();
+      drawGrid();
+      drawEnemy(0, 0, 'idle', 0);
+      document.getElementById('phaseLabel').textContent = 'Cycle complete';
+      return;
+    }
+    animState.phase = animState.phases[animState.phaseIndex];
+    animState.timer = 0;
+
+    if (animState.phase === 'impact') {
+      animState.sparks = spawnSparks();
+      animState.nudgeTimer = 0;
+    }
+  }
+
+  // Update
+  if (animState.phase === 'impact') {
+    updateSparks(animState.sparks, dt);
+  }
+
+  // Draw
+  const nudge = getScreenNudge(animState.nudgeTimer);
+
+  ctx.save();
+  ctx.translate(nudge.x, nudge.y);
+  drawGrid();
+
+  const progress = animState.phase === 'telegraph'
+    ? Math.min(animState.timer / animState.telegraphDuration, 1.0)
+    : animState.phase === 'impact'
+    ? Math.min(animState.timer / animState.impactDuration, 1.0)
+    : Math.min(animState.timer / animState.recoveryDuration, 1.0);
+
+  if (animState.phase === 'telegraph') {
+    drawTelegraphArc(progress);
+    drawEnemy(0, 0, 'telegraph', progress);
+    document.getElementById('phaseLabel').textContent =
+      `TELEGRAPH — ${Math.ceil(animState.telegraphDuration - animState.timer)}ms — arc locked on target`;
+  }
+  else if (animState.phase === 'impact') {
+    drawEnemy(0, 0, 'impact', progress);
+    drawSlashArc(progress);
+    drawSparks(animState.sparks);
+    document.getElementById('phaseLabel').textContent = 'IMPACT — slash arc sweeping, sparks flying';
+  }
+  else if (animState.phase === 'recovery') {
+    drawEnemy(0, 0, 'recovery', progress);
+    drawSparks(animState.sparks); // Remaining sparks fade out
+    const remaining = Math.ceil(animState.recoveryDuration - animState.timer);
+    document.getElementById('phaseLabel').textContent =
+      `RECOVERY — enemy overextended (1.15x damage) — ${remaining}ms`;
+  }
+
+  ctx.restore();
+  animFrame = requestAnimationFrame(tick);
+}
+
+function playFullCycle() {
+  startAnim(['telegraph', 'impact', 'recovery']);
+}
+
+function showPhase(phase) {
+  startAnim([phase]);
+}
+
+function stopAnim() {
+  if (animFrame) cancelAnimationFrame(animFrame);
+  animFrame = null;
+  animState = null;
+}
+
+// ── Sprite frame previews ──
+function drawFramePreview(containerId, frames) {
+  const container = document.getElementById(containerId);
+  container.innerHTML = '';
+
+  frames.forEach((frame, i) => {
+    const div = document.createElement('div');
+    div.className = 'sprite-frame';
+    const c = document.createElement('canvas');
+    c.width = frame.size;
+    c.height = frame.size;
+    c.style.width = (frame.size * 2) + 'px';
+    c.style.height = (frame.size * 2) + 'px';
+    const fctx = c.getContext('2d');
+    frame.draw(fctx, frame.size / 2, frame.size / 2);
+    div.appendChild(c);
+    const label = document.createElement('div');
+    label.className = 'frame-label';
+    label.textContent = frame.label;
+    div.appendChild(label);
+    container.appendChild(div);
+  });
+}
+
+// Telegraph frames
+const TR = 30; // preview arc radius
+drawFramePreview('telegraphFrames', [
+  { size: 80, label: 'T=0ms (40%)', draw: (c, cx, cy) => {
+    const r = TR * 0.4;
+    c.globalAlpha = 0.20; c.fillStyle = '#FF6B6B';
+    c.beginPath(); c.moveTo(cx, cy); c.arc(cx, cy, r, -Math.PI/4, Math.PI/4); c.closePath(); c.fill();
+    c.globalAlpha = 0.7; c.strokeStyle = '#FF4444'; c.lineWidth = 1.5; c.stroke();
+  }},
+  { size: 80, label: 'T=167ms (60%)', draw: (c, cx, cy) => {
+    const r = TR * 0.6;
+    c.globalAlpha = 0.20; c.fillStyle = '#FF6B6B';
+    c.beginPath(); c.moveTo(cx, cy); c.arc(cx, cy, r, -Math.PI/4, Math.PI/4); c.closePath(); c.fill();
+    c.globalAlpha = 0.85; c.strokeStyle = '#FF4444'; c.lineWidth = 1.5; c.stroke();
+  }},
+  { size: 80, label: 'T=333ms (80%)', draw: (c, cx, cy) => {
+    const r = TR * 0.8;
+    c.globalAlpha = 0.20; c.fillStyle = '#FF6B6B';
+    c.beginPath(); c.moveTo(cx, cy); c.arc(cx, cy, r, -Math.PI/4, Math.PI/4); c.closePath(); c.fill();
+    c.globalAlpha = 0.6; c.strokeStyle = '#FF4444'; c.lineWidth = 1.5; c.stroke();
+  }},
+  { size: 80, label: 'T=500ms (100%)', draw: (c, cx, cy) => {
+    const r = TR;
+    c.globalAlpha = 0.20; c.fillStyle = '#FF6B6B';
+    c.beginPath(); c.moveTo(cx, cy); c.arc(cx, cy, r, -Math.PI/4, Math.PI/4); c.closePath(); c.fill();
+    c.globalAlpha = 1.0; c.strokeStyle = '#FF4444'; c.lineWidth = 2; c.stroke();
+  }},
+]);
+
+// Impact frames (slash sweep)
+drawFramePreview('impactFrames', [
+  { size: 80, label: 'Slash start (0ms)', draw: (c, cx, cy) => {
+    const r = TR * 1.07;
+    c.strokeStyle = '#FFFFFF'; c.lineWidth = 3; c.lineCap = 'round';
+    c.beginPath(); c.arc(cx, cy, r, -Math.PI/4, -Math.PI/4 + 0.1); c.stroke();
+    // Glow
+    c.globalAlpha = 0.4; c.lineWidth = 7;
+    c.beginPath(); c.arc(cx, cy, r, -Math.PI/4, -Math.PI/4 + 0.05); c.stroke();
+  }},
+  { size: 80, label: 'Sweeping (50ms)', draw: (c, cx, cy) => {
+    const r = TR * 1.07;
+    // Trail
+    c.globalAlpha = 0.6; c.strokeStyle = '#FFCCAA'; c.lineWidth = 4; c.lineCap = 'round';
+    c.beginPath(); c.arc(cx, cy, r, -Math.PI/4, -0.05); c.stroke();
+    // Leading edge
+    c.globalAlpha = 1.0; c.strokeStyle = '#FFFFFF'; c.lineWidth = 3;
+    c.beginPath(); c.arc(cx, cy, r, -0.15, -0.0); c.stroke();
+  }},
+  { size: 80, label: 'Mid-swing (90ms)', draw: (c, cx, cy) => {
+    const r = TR * 1.07;
+    c.globalAlpha = 0.5; c.strokeStyle = '#FFCCAA'; c.lineWidth = 3.5; c.lineCap = 'round';
+    c.beginPath(); c.arc(cx, cy, r, -0.1, 0.2); c.stroke();
+    c.globalAlpha = 1.0; c.strokeStyle = '#FFFFFF'; c.lineWidth = 3;
+    c.beginPath(); c.arc(cx, cy, r, 0.1, 0.25); c.stroke();
+  }},
+  { size: 80, label: 'Follow-through (120ms)', draw: (c, cx, cy) => {
+    const r = TR * 1.07;
+    c.globalAlpha = 0.35; c.strokeStyle = '#FFCCAA'; c.lineWidth = 3; c.lineCap = 'round';
+    c.beginPath(); c.arc(cx, cy, r, 0.05, Math.PI/4 - 0.1); c.stroke();
+    c.globalAlpha = 0.8; c.strokeStyle = '#FFFFFF'; c.lineWidth = 2.5;
+    c.beginPath(); c.arc(cx, cy, r, Math.PI/4 - 0.2, Math.PI/4); c.stroke();
+  }},
+  { size: 80, label: 'Fading (150ms)', draw: (c, cx, cy) => {
+    const r = TR * 1.07;
+    c.globalAlpha = 0.15; c.strokeStyle = '#FFCCAA'; c.lineWidth = 2; c.lineCap = 'round';
+    c.beginPath(); c.arc(cx, cy, r, 0.1, Math.PI/4); c.stroke();
+  }},
+]);
+
+// Particle frames (sparks)
+drawFramePreview('particleFrames', [
+  { size: 50, label: 'Burst', draw: (c, cx, cy) => {
+    const sparks = [[cx+10,cy-6],[cx+14,cy+2],[cx+8,cy+8],[cx+16,cy-3],[cx+12,cy+5],[cx+6,cy-2]];
+    sparks.forEach(([x,y]) => { c.fillStyle = '#FFEECC'; c.fillRect(x-1,y-1,2,2); });
+  }},
+  { size: 50, label: 'Scatter', draw: (c, cx, cy) => {
+    const sparks = [[cx+14,cy-10],[cx+20,cy],[cx+12,cy+12],[cx+22,cy-6],[cx+16,cy+8],[cx+10,cy-4]];
+    sparks.forEach(([x,y]) => { c.fillStyle = '#FFEECC'; c.fillRect(x-1,y-1,2,2); });
+  }},
+  { size: 50, label: 'Falling', draw: (c, cx, cy) => {
+    c.globalAlpha = 0.6;
+    const sparks = [[cx+16,cy-4],[cx+22,cy+6],[cx+14,cy+16],[cx+24,cy],[cx+18,cy+12]];
+    sparks.forEach(([x,y]) => { c.fillStyle = '#FFAA66'; c.fillRect(x,y,1,1); });
+  }},
+  { size: 50, label: 'Fading', draw: (c, cx, cy) => {
+    c.globalAlpha = 0.25;
+    const sparks = [[cx+17,cy+4],[cx+23,cy+14],[cx+15,cy+20],[cx+25,cy+8]];
+    sparks.forEach(([x,y]) => { c.fillStyle = '#FFAA66'; c.fillRect(x,y,1,1); });
+  }},
+]);
+
+// Initial render
+drawGrid();
+drawEnemy(0, 0, 'idle', 0);
+</script>
+
+</body>
+</html>

@@ -1,5 +1,5 @@
 // === js/data/materials.js ===
-// SURVIVAL EXTRACTION UPDATE: Crafting materials and resources
+// Crafting materials and resources
 
 // ============================================================================
 // MATERIAL DATA
@@ -265,10 +265,10 @@ const MATERIAL_DATA = {
         stackable: true,
         maxStack: 3,
         sellValue: 1000,
-        description: 'The core of a floor guardian. Unlocks shortcuts.',
+        description: 'The core of a floor guardian. Used in legendary crafting.',
         dropFloors: [],  // Boss drop only
         dropChance: 0,
-        uses: ['shortcuts', 'legendary_crafting'],
+        uses: ['legendary_crafting'],
         bossOnly: true
     },
 

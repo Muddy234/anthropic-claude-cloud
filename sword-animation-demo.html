@@ -1,0 +1,651 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sword Animation Demo - Text-Based Sprite Animation</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            background: #1a1a2e;
+            color: #eee;
+            font-family: 'Courier New', monospace;
+            padding: 20px;
+            min-height: 100vh;
+        }
+
+        h1 {
+            text-align: center;
+            margin-bottom: 10px;
+            color: #FED66C;
+        }
+
+        .subtitle {
+            text-align: center;
+            color: #888;
+            margin-bottom: 30px;
+        }
+
+        .demo-container {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 30px;
+            justify-content: center;
+            margin-bottom: 40px;
+        }
+
+        .sprite-panel {
+            background: #252540;
+            border-radius: 8px;
+            padding: 20px;
+            text-align: center;
+        }
+
+        .sprite-panel h3 {
+            margin-bottom: 15px;
+            color: #88aaff;
+        }
+
+        canvas {
+            border: 2px solid #444;
+            image-rendering: pixelated;
+            image-rendering: crisp-edges;
+        }
+
+        .animation-panel {
+            background: #252540;
+            border-radius: 8px;
+            padding: 20px;
+            text-align: center;
+            min-width: 300px;
+        }
+
+        .animation-panel h3 {
+            margin-bottom: 15px;
+            color: #ffaa88;
+        }
+
+        .controls {
+            margin-top: 15px;
+            display: flex;
+            gap: 10px;
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+
+        button {
+            background: #4a4a6a;
+            color: #fff;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-family: inherit;
+        }
+
+        button:hover {
+            background: #6a6a8a;
+        }
+
+        button.active {
+            background: #88aaff;
+            color: #000;
+        }
+
+        .frame-indicator {
+            margin-top: 10px;
+            font-size: 14px;
+            color: #aaa;
+        }
+
+        .all-frames {
+            background: #252540;
+            border-radius: 8px;
+            padding: 20px;
+            margin-top: 30px;
+        }
+
+        .all-frames h3 {
+            text-align: center;
+            margin-bottom: 15px;
+            color: #88ff88;
+        }
+
+        .frames-row {
+            display: flex;
+            gap: 15px;
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+
+        .frame-box {
+            text-align: center;
+        }
+
+        .frame-box span {
+            display: block;
+            margin-top: 5px;
+            font-size: 12px;
+            color: #888;
+        }
+
+        .explanation {
+            background: #1e1e30;
+            border-radius: 8px;
+            padding: 20px;
+            margin-top: 30px;
+            max-width: 800px;
+            margin-left: auto;
+            margin-right: auto;
+        }
+
+        .explanation h3 {
+            color: #ffcc00;
+            margin-bottom: 10px;
+        }
+
+        .explanation p {
+            color: #aaa;
+            line-height: 1.6;
+            margin-bottom: 10px;
+        }
+
+        .explanation code {
+            background: #333;
+            padding: 2px 6px;
+            border-radius: 3px;
+            color: #88ff88;
+        }
+
+        .speed-control {
+            margin-top: 15px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+        }
+
+        .speed-control label {
+            color: #888;
+        }
+
+        .speed-control input {
+            width: 100px;
+        }
+    </style>
+</head>
+<body>
+    <h1>Sword Animation Demo</h1>
+    <p class="subtitle">Text-Based Sprite Animation System Test</p>
+
+    <div class="demo-container">
+        <!-- Base sprites -->
+        <div class="sprite-panel">
+            <h3>Base: Down</h3>
+            <canvas id="sprite-down" width="128" height="128"></canvas>
+        </div>
+
+        <div class="sprite-panel">
+            <h3>Base: Left</h3>
+            <canvas id="sprite-left" width="128" height="128"></canvas>
+        </div>
+
+        <div class="sprite-panel">
+            <h3>Base: Right (Mirrored)</h3>
+            <canvas id="sprite-right" width="128" height="128"></canvas>
+        </div>
+
+        <!-- Animation playback -->
+        <div class="animation-panel">
+            <h3>Attack Animation</h3>
+            <canvas id="animation-canvas" width="192" height="192"></canvas>
+            <div class="frame-indicator">Frame: <span id="frame-num">1</span> / 6</div>
+            <div class="controls">
+                <button id="btn-play" class="active">Play</button>
+                <button id="btn-pause">Pause</button>
+                <button id="btn-step">Step</button>
+            </div>
+            <div class="speed-control">
+                <label>Speed:</label>
+                <input type="range" id="speed-slider" min="50" max="500" value="150">
+                <span id="speed-value">150ms</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- All frames display -->
+    <div class="all-frames">
+        <h3>All 6 Animation Frames</h3>
+        <div class="frames-row">
+            <div class="frame-box">
+                <canvas id="frame-1" width="96" height="96"></canvas>
+                <span>1: Rest</span>
+            </div>
+            <div class="frame-box">
+                <canvas id="frame-2" width="96" height="96"></canvas>
+                <span>2: Wind-up</span>
+            </div>
+            <div class="frame-box">
+                <canvas id="frame-3" width="96" height="96"></canvas>
+                <span>3: Peak</span>
+            </div>
+            <div class="frame-box">
+                <canvas id="frame-4" width="96" height="96"></canvas>
+                <span>4: Swing</span>
+            </div>
+            <div class="frame-box">
+                <canvas id="frame-5" width="96" height="96"></canvas>
+                <span>5: Strike</span>
+            </div>
+            <div class="frame-box">
+                <canvas id="frame-6" width="96" height="96"></canvas>
+                <span>6: Recovery</span>
+            </div>
+        </div>
+    </div>
+
+    <div class="explanation">
+        <h3>How Text-Based Animation Works</h3>
+        <p>
+            Each frame is a 32x32 grid of characters. The character <code>.</code> is transparent,
+            and other characters map to colors via the palette.
+        </p>
+        <p>
+            <strong>Animation is created by manipulating the text:</strong>
+        </p>
+        <p>
+            - <strong>Shifting rows</strong>: Move pixels up/down for vertical motion<br>
+            - <strong>Shifting columns</strong>: Move pixels left/right for horizontal motion<br>
+            - <strong>Diagonal shifts</strong>: Combine both for rotation approximation<br>
+            - <strong>Key poses</strong>: Use different base sprites (down, left, right) as anchor frames
+        </p>
+        <p>
+            This demo generates 6 frames by programmatically shifting the base sword sprite
+            to simulate a swing animation. The same technique works for any body part.
+        </p>
+    </div>
+
+    <script>
+        // ============================================================================
+        // BASE SPRITE DEFINITIONS (converted from PNG)
+        // ============================================================================
+
+        const SWORD_DOWN = {
+            name: 'sword_down',
+            width: 32,
+            height: 32,
+            pixels: [
+                "................................",
+                "................................",
+                "................................",
+                "................................",
+                "..............oo................",
+                "..............DD................",
+                "..............DD................",
+                "..............DD................",
+                "..............DD................",
+                "..............DD................",
+                "..............DD................",
+                "...........oMMLLHHoo............",
+                "............oooooo..............",
+                "............oooooo..............",
+                "............BBBBBB..............",
+                "............BBBBBB..............",
+                "............SSBBBB..............",
+                "............SSBBBB..............",
+                "............SSSSBB..............",
+                "............SSSSBB..............",
+                "............SSSSSS..............",
+                "............CCSSSS..............",
+                "............CCSSSS..............",
+                "............CCCCSS..............",
+                "............CCCCSS..............",
+                "..............CCCC..............",
+                "..............CCCC..............",
+                "................CC..............",
+                "................................",
+                "................................",
+                "................................",
+                "................................",
+            ],
+            palette: {
+                'H': '#FED66C',
+                'L': '#D3B362',
+                'M': '#A88F57',
+                'B': '#6A6B6B',
+                'S': '#555656',
+                'D': '#805728',
+                'C': '#2D2C2B',
+                'o': '#1A1714',
+            }
+        };
+
+        const SWORD_LEFT = {
+            name: 'sword_left',
+            width: 32,
+            height: 32,
+            pixels: [
+                "................................",
+                "................................",
+                "................................",
+                "................................",
+                "............CC..................",
+                "............CCCC................",
+                "............CCCC................",
+                "............SSCCCC..............",
+                "............SSCCCC..............",
+                "............SSSSCC..............",
+                "............SSSSCC..............",
+                "............SSSSSS..............",
+                "............BBSSSS..............",
+                "............BBSSSS..............",
+                "............BBBBSS..............",
+                "............BBBBSS..............",
+                "............BBBBBB..............",
+                "............BBBBBB..............",
+                "............oooooo..............",
+                "............oooooo..............",
+                "...........oHHLLMMoo............",
+                "..............DD................",
+                "..............DD................",
+                "..............DD................",
+                "..............DD................",
+                "..............DD................",
+                "..............DD................",
+                "..............oo................",
+                "................................",
+                "................................",
+                "................................",
+                "................................",
+            ],
+            palette: {
+                'H': '#FED66C',
+                'L': '#D3B362',
+                'M': '#A88F57',
+                'B': '#6A6B6B',
+                'S': '#555656',
+                'D': '#805728',
+                'C': '#2D2C2B',
+                'o': '#1A1714',
+            }
+        };
+
+        // ============================================================================
+        // SPRITE MANIPULATION FUNCTIONS
+        // ============================================================================
+
+        // Shift all pixels in a sprite horizontally
+        function shiftHorizontal(pixels, amount) {
+            return pixels.map(row => {
+                if (amount > 0) {
+                    // Shift right: add dots on left, truncate right
+                    return '.'.repeat(amount) + row.slice(0, -amount);
+                } else if (amount < 0) {
+                    // Shift left: truncate left, add dots on right
+                    return row.slice(-amount) + '.'.repeat(-amount);
+                }
+                return row;
+            });
+        }
+
+        // Shift all pixels vertically
+        function shiftVertical(pixels, amount) {
+            const emptyRow = '.'.repeat(32);
+            const result = [...pixels];
+
+            if (amount > 0) {
+                // Shift down: add empty rows at top
+                for (let i = 0; i < amount; i++) {
+                    result.pop();
+                    result.unshift(emptyRow);
+                }
+            } else if (amount < 0) {
+                // Shift up: add empty rows at bottom
+                for (let i = 0; i < -amount; i++) {
+                    result.shift();
+                    result.push(emptyRow);
+                }
+            }
+
+            return result;
+        }
+
+        // Rotate sprite by shifting diagonally (approximation)
+        // angle: degrees, positive = clockwise
+        function rotateApprox(pixels, angle, pivotRow = 16, pivotCol = 16) {
+            // For small angles, we approximate rotation by differential shifting
+            // This is a simple linear interpolation approach
+            const radians = angle * Math.PI / 180;
+            const result = pixels.map(row => row.split(''));
+            const original = pixels.map(row => row.split(''));
+
+            // Clear result
+            for (let y = 0; y < 32; y++) {
+                for (let x = 0; x < 32; x++) {
+                    result[y][x] = '.';
+                }
+            }
+
+            // Rotate each pixel
+            for (let y = 0; y < 32; y++) {
+                for (let x = 0; x < 32; x++) {
+                    if (original[y][x] !== '.') {
+                        // Translate to pivot
+                        const dx = x - pivotCol;
+                        const dy = y - pivotRow;
+
+                        // Rotate
+                        const newX = Math.round(dx * Math.cos(radians) - dy * Math.sin(radians) + pivotCol);
+                        const newY = Math.round(dx * Math.sin(radians) + dy * Math.cos(radians) + pivotRow);
+
+                        // Place if in bounds
+                        if (newX >= 0 && newX < 32 && newY >= 0 && newY < 32) {
+                            result[newY][newX] = original[y][x];
+                        }
+                    }
+                }
+            }
+
+            return result.map(row => row.join(''));
+        }
+
+        // Mirror sprite horizontally
+        function mirrorHorizontal(pixels) {
+            return pixels.map(row => row.split('').reverse().join(''));
+        }
+
+        // ============================================================================
+        // GENERATE 6 ANIMATION FRAMES
+        // ============================================================================
+
+        function generateAttackFrames() {
+            const frames = [];
+
+            // Frame 1: Rest position (sword pointing down)
+            frames.push({
+                name: 'Rest',
+                pixels: [...SWORD_DOWN.pixels]
+            });
+
+            // Frame 2: Wind-up - rotate sword back (clockwise ~20 degrees)
+            // Pivot around the crossguard area (row 12)
+            frames.push({
+                name: 'Wind-up',
+                pixels: rotateApprox(SWORD_DOWN.pixels, 25, 12, 15)
+            });
+
+            // Frame 3: Peak wind-up - more rotation (~45 degrees)
+            frames.push({
+                name: 'Peak',
+                pixels: rotateApprox(SWORD_DOWN.pixels, 50, 12, 15)
+            });
+
+            // Frame 4: Mid-swing - sword coming through (~90 degrees = horizontal)
+            // Use a blend approaching horizontal
+            frames.push({
+                name: 'Swing',
+                pixels: rotateApprox(SWORD_DOWN.pixels, 90, 12, 15)
+            });
+
+            // Frame 5: Strike - past horizontal, sword angled down-left (~135 degrees)
+            frames.push({
+                name: 'Strike',
+                pixels: rotateApprox(SWORD_DOWN.pixels, 130, 12, 15)
+            });
+
+            // Frame 6: Recovery - returning toward rest (~30 degrees)
+            frames.push({
+                name: 'Recovery',
+                pixels: rotateApprox(SWORD_DOWN.pixels, 15, 12, 15)
+            });
+
+            return frames;
+        }
+
+        // ============================================================================
+        // RENDERING FUNCTIONS
+        // ============================================================================
+
+        function renderSprite(ctx, sprite, scale = 4, offsetX = 0, offsetY = 0) {
+            const pixels = sprite.pixels;
+            const palette = sprite.palette;
+
+            ctx.imageSmoothingEnabled = false;
+
+            for (let y = 0; y < pixels.length; y++) {
+                const row = pixels[y];
+                for (let x = 0; x < row.length; x++) {
+                    const char = row[x];
+                    if (char !== '.' && char !== ' ') {
+                        const color = palette[char] || '#FF00FF'; // Magenta for unknown
+                        ctx.fillStyle = color;
+                        ctx.fillRect(
+                            offsetX + x * scale,
+                            offsetY + y * scale,
+                            scale,
+                            scale
+                        );
+                    }
+                }
+            }
+        }
+
+        function renderPixels(ctx, pixels, palette, scale = 4, offsetX = 0, offsetY = 0) {
+            ctx.imageSmoothingEnabled = false;
+
+            for (let y = 0; y < pixels.length; y++) {
+                const row = pixels[y];
+                for (let x = 0; x < row.length; x++) {
+                    const char = row[x];
+                    if (char !== '.' && char !== ' ') {
+                        const color = palette[char] || '#FF00FF';
+                        ctx.fillStyle = color;
+                        ctx.fillRect(
+                            offsetX + x * scale,
+                            offsetY + y * scale,
+                            scale,
+                            scale
+                        );
+                    }
+                }
+            }
+        }
+
+        // ============================================================================
+        // INITIALIZATION
+        // ============================================================================
+
+        // Render base sprites
+        const ctxDown = document.getElementById('sprite-down').getContext('2d');
+        const ctxLeft = document.getElementById('sprite-left').getContext('2d');
+        const ctxRight = document.getElementById('sprite-right').getContext('2d');
+
+        renderSprite(ctxDown, SWORD_DOWN);
+        renderSprite(ctxLeft, SWORD_LEFT);
+        renderSprite(ctxRight, {
+            ...SWORD_LEFT,
+            pixels: mirrorHorizontal(SWORD_LEFT.pixels)
+        });
+
+        // Generate animation frames
+        const attackFrames = generateAttackFrames();
+
+        // Render all frames in the grid
+        for (let i = 0; i < 6; i++) {
+            const canvas = document.getElementById(`frame-${i + 1}`);
+            const ctx = canvas.getContext('2d');
+            ctx.fillStyle = '#1a1a2e';
+            ctx.fillRect(0, 0, 96, 96);
+            renderPixels(ctx, attackFrames[i].pixels, SWORD_DOWN.palette, 3, 0, 0);
+        }
+
+        // Animation playback
+        const animCanvas = document.getElementById('animation-canvas');
+        const animCtx = animCanvas.getContext('2d');
+        const frameNumSpan = document.getElementById('frame-num');
+        const speedSlider = document.getElementById('speed-slider');
+        const speedValue = document.getElementById('speed-value');
+
+        let currentFrame = 0;
+        let isPlaying = true;
+        let animationInterval = null;
+        let frameDelay = 150;
+
+        function renderAnimationFrame() {
+            animCtx.fillStyle = '#1a1a2e';
+            animCtx.fillRect(0, 0, 192, 192);
+            renderPixels(animCtx, attackFrames[currentFrame].pixels, SWORD_DOWN.palette, 6, 0, 0);
+            frameNumSpan.textContent = currentFrame + 1;
+        }
+
+        function nextFrame() {
+            currentFrame = (currentFrame + 1) % 6;
+            renderAnimationFrame();
+        }
+
+        function startAnimation() {
+            if (animationInterval) clearInterval(animationInterval);
+            animationInterval = setInterval(nextFrame, frameDelay);
+            isPlaying = true;
+            document.getElementById('btn-play').classList.add('active');
+            document.getElementById('btn-pause').classList.remove('active');
+        }
+
+        function stopAnimation() {
+            if (animationInterval) clearInterval(animationInterval);
+            animationInterval = null;
+            isPlaying = false;
+            document.getElementById('btn-play').classList.remove('active');
+            document.getElementById('btn-pause').classList.add('active');
+        }
+
+        // Event listeners
+        document.getElementById('btn-play').addEventListener('click', startAnimation);
+        document.getElementById('btn-pause').addEventListener('click', stopAnimation);
+        document.getElementById('btn-step').addEventListener('click', () => {
+            stopAnimation();
+            nextFrame();
+        });
+
+        speedSlider.addEventListener('input', () => {
+            frameDelay = parseInt(speedSlider.value);
+            speedValue.textContent = frameDelay + 'ms';
+            if (isPlaying) {
+                startAnimation(); // Restart with new speed
+            }
+        });
+
+        // Initial render and start
+        renderAnimationFrame();
+        startAnimation();
+
+        console.log('Sword Animation Demo loaded');
+        console.log('Generated', attackFrames.length, 'animation frames');
+    </script>
+</body>
+</html>

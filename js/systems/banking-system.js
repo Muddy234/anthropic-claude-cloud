@@ -1,5 +1,5 @@
 // === js/systems/banking-system.js ===
-// SURVIVAL EXTRACTION UPDATE: Bank storage and management
+// Bank storage and management
 
 // ============================================================================
 // BANKING SYSTEM
@@ -29,7 +29,14 @@ const BankingSystem = {
             }
         }
 
-        // Add new item (unlimited storage)
+        // Check capacity
+        const maxSlots = 30;
+        if (persistentState.bank.items.length >= maxSlots) {
+            console.warn('[BankingSystem] Bank is full!');
+            return false;
+        }
+
+        // Add new item
         persistentState.bank.items.push({ ...item, count: item.count || 1 });
         persistentState.bank.usedSlots++;
 
@@ -144,7 +151,7 @@ const BankingSystem = {
             gold: persistentState.bank.gold,
             items: [...persistentState.bank.items],
             usedSlots: persistentState.bank.usedSlots,
-            maxSlots: Infinity  // Unlimited storage
+            maxSlots: persistentState?.bank?.capacity || 30
         };
     },
 
@@ -191,7 +198,8 @@ const BankingSystem = {
      * @returns {number}
      */
     getAvailableSlots() {
-        return Infinity;  // Unlimited storage
+        const maxSlots = persistentState?.bank?.capacity || 30;
+        return maxSlots - (persistentState?.bank?.items?.length || 0);
     },
 
     /**
@@ -199,7 +207,8 @@ const BankingSystem = {
      * @returns {boolean}
      */
     isFull() {
-        return false;  // Unlimited storage - never full
+        const maxSlots = persistentState?.bank?.capacity || 30;
+        return (persistentState?.bank?.items?.length || 0) >= maxSlots;
     },
 
     // ========================================================================
@@ -384,7 +393,7 @@ const BankingSystem = {
             gold: persistentState.bank.gold,
             totalItems: items.length,
             usedSlots: persistentState.bank.usedSlots,
-            maxSlots: Infinity,  // Unlimited storage
+            maxSlots: 30,
             byType: {
                 weapons: items.filter(i => i.type === 'weapon').length,
                 armor: items.filter(i => i.type === 'armor').length,

@@ -1,0 +1,747 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Skeleton Sprite Walk Cycle Demo (Up Direction)</title>
+    <style>
+        body {
+            background: #1a1a2e;
+            color: #e0e0e0;
+            font-family: 'Segoe UI', system-ui, sans-serif;
+            margin: 0;
+            padding: 20px;
+        }
+        h1 { color: #e0e0e0; margin: 0 0 20px 0; font-size: 24px; }
+        h2 { color: #c0c0c0; margin: 0 0 10px 0; font-size: 16px; }
+        .container { max-width: 1200px; margin: 0 auto; }
+        .row { display: flex; gap: 20px; margin-bottom: 20px; flex-wrap: wrap; }
+        .panel {
+            background: #16213e;
+            border: 1px solid #0f3460;
+            border-radius: 8px;
+            padding: 16px;
+        }
+        canvas {
+            border: 1px solid #333;
+            image-rendering: pixelated;
+            image-rendering: crisp-edges;
+        }
+        .controls { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+        button {
+            background: #0f3460;
+            color: #e0e0e0;
+            border: 1px solid #1a5276;
+            padding: 8px 16px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+        }
+        button:hover { background: #1a5276; }
+        button.active { background: #e94560; border-color: #e94560; }
+        .speed-control { display: flex; align-items: center; gap: 8px; }
+        input[type="range"] { width: 120px; }
+        .frame-info {
+            font-family: monospace;
+            font-size: 12px;
+            background: #0d1b2a;
+            padding: 12px;
+            border-radius: 4px;
+            white-space: pre;
+            line-height: 1.4;
+        }
+        .parts-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+        .part-label { font-size: 11px; color: #888; text-align: center; margin-top: 4px; }
+        .frame-strip { display: flex; gap: 4px; }
+        .frame-num { font-size: 10px; color: #666; text-align: center; }
+        .status { font-size: 13px; color: #aaa; }
+    </style>
+</head>
+<body>
+<div class="container">
+    <h1>Skeleton Sprite Walk Cycle Demo (Up Direction Only)</h1>
+
+    <div class="row">
+        <!-- Large animated preview -->
+        <div class="panel">
+            <h2>Animated Preview (6x)</h2>
+            <canvas id="mainCanvas" width="192" height="192"></canvas>
+            <div class="status" id="stateInfo">State: idle | Direction: up | Frame: 0</div>
+        </div>
+
+        <!-- Individual parts -->
+        <div class="panel">
+            <h2>Individual Parts</h2>
+            <div class="parts-grid" id="partsGrid"></div>
+        </div>
+    </div>
+
+    <!-- Frame strip -->
+    <div class="panel" style="margin-bottom: 20px;">
+        <h2>Walk Cycle Frames (3x)</h2>
+        <div class="frame-strip" id="frameStrip"></div>
+    </div>
+
+    <!-- Controls -->
+    <div class="panel" style="margin-bottom: 20px;">
+        <div class="controls">
+            <button id="btnIdle" class="active">Idle</button>
+            <button id="btnWalk">Walk</button>
+            <span style="color:#555">|</span>
+            <button id="btnPlay">Play</button>
+            <button id="btnPause">Pause</button>
+            <button id="btnStepBack">&lt; Step</button>
+            <button id="btnStepFwd">Step &gt;</button>
+            <span style="color:#555">|</span>
+            <div class="speed-control">
+                <span style="font-size:13px">Speed:</span>
+                <input type="range" id="speedSlider" min="25" max="200" value="100">
+                <span id="speedLabel" style="font-size:13px">1.0x</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Frame info -->
+    <div class="panel">
+        <h2>Frame Offsets</h2>
+        <div class="frame-info" id="frameInfo">Select Walk mode to see offsets</div>
+    </div>
+</div>
+
+<script>
+// ========== SKELETON SPRITE DATA (UP DIRECTION) ==========
+
+const BODY_PART_SPRITES = {
+    name: 'skeleton',
+    width: 32,
+    height: 32,
+    directions: {
+        up: {
+            head: {
+                pixels: [
+                    "................................",
+                    "................................",
+                    "................................",
+                    ".............QQQQQQQ............",
+                    "............JJLUUZZQQ...........",
+                    "...........JJLUUZZZZQQ..........",
+                    "...........JLUUZZXXZZQ..........",
+                    "...........JUUZZXXZZZQ..........",
+                    "...........JUZZZXZZZZQ..........",
+                    "...........QUQQZZZQQZQ..........",
+                    "...........QUZQQZQQZZQ..........",
+                    "...........QQZXEZEXZQQ..........",
+                    "............QQZZZZZQQ...........",
+                    ".............QZQZQZQ............",
+                    ".............QQQQQQQ............",
+                    "................................",
+                    "................................",
+                    "................................",
+                    "................................",
+                    "................................",
+                    "................................",
+                    "................................",
+                    "................................",
+                    "................................",
+                    "................................",
+                    "................................",
+                    "................................",
+                    "................................",
+                    "................................",
+                    "................................",
+                    "................................",
+                    "................................",
+                ],
+                palette: {
+                    "L": "#8888a0",
+                    "E": "#f0e68c",
+                    "X": "#ffffff",
+                    "J": "#0a0a0a",
+                    "Q": "#000000",
+                    "U": "#b4b4c5",
+                    "Z": "#dcdce5",
+                }
+            },
+            body: {
+                pixels: [
+                    "................................",
+                    "................................",
+                    "................................",
+                    "................................",
+                    "................................",
+                    "................................",
+                    "................................",
+                    "................................",
+                    "................................",
+                    "................................",
+                    "................................",
+                    "................................",
+                    "................................",
+                    "................................",
+                    ".............QQQQQQQ............",
+                    ".............QLLWWUQ............",
+                    ".............QGGWGGQ............",
+                    ".............QLWWUUQ............",
+                    ".............QGGWGGQ............",
+                    ".............QQWWUQQ............",
+                    "..............QGUGQ.............",
+                    ".............QQWUUQQ............",
+                    ".............QQQQQQQ............",
+                    "................................",
+                    "................................",
+                    "................................",
+                    "................................",
+                    "................................",
+                    "................................",
+                    "................................",
+                    "................................",
+                    "................................",
+                ],
+                palette: {
+                    "G": "#4a4a5e",
+                    "L": "#8888a0",
+                    "W": "#c8c8d8",
+                    "Q": "#000000",
+                    "U": "#b4b4c5",
+                }
+            },
+            leftArm: {
+                pixels: [
+                    "................................",
+                    "................................",
+                    "................................",
+                    "................................",
+                    "................................",
+                    "................................",
+                    "................................",
+                    "................................",
+                    "................................",
+                    "................................",
+                    "................................",
+                    "................................",
+                    "................................",
+                    "................................",
+                    "................................",
+                    "................................",
+                    "..........QQQQ..................",
+                    ".........QQWXQ..................",
+                    "........QQWXQQ..................",
+                    ".......QQWXQQ...................",
+                    ".......QWXQQ....................",
+                    ".......QQQQ.....................",
+                    "................................",
+                    "................................",
+                    "................................",
+                    "................................",
+                    "................................",
+                    "................................",
+                    "................................",
+                    "................................",
+                    "................................",
+                    "................................",
+                ],
+                palette: {
+                    "W": "#c8c8d8",
+                    "X": "#ffffff",
+                    "Q": "#000000",
+                }
+            },
+            rightArm: {
+                pixels: [
+                    "................................",
+                    "................................",
+                    "................................",
+                    "................................",
+                    "................................",
+                    "................................",
+                    "................................",
+                    "................................",
+                    "................................",
+                    "................................",
+                    "................................",
+                    "................................",
+                    "................................",
+                    "................................",
+                    "................................",
+                    "................................",
+                    "...................QQQQ.........",
+                    "...................QXWQQ........",
+                    "...................QQXWQQ.......",
+                    "....................QQXWQQ......",
+                    ".....................QQXWQ......",
+                    "......................QQQQ......",
+                    "................................",
+                    "................................",
+                    "................................",
+                    "................................",
+                    "................................",
+                    "................................",
+                    "................................",
+                    "................................",
+                    "................................",
+                    "................................",
+                ],
+                palette: {
+                    "W": "#c8c8d8",
+                    "X": "#ffffff",
+                    "Q": "#000000",
+                }
+            },
+            leftLeg: {
+                pixels: [
+                    "................................",
+                    "................................",
+                    "................................",
+                    "................................",
+                    "................................",
+                    "................................",
+                    "................................",
+                    "................................",
+                    "................................",
+                    "................................",
+                    "................................",
+                    "................................",
+                    "................................",
+                    "................................",
+                    "................................",
+                    "................................",
+                    "................................",
+                    "................................",
+                    "................................",
+                    "................................",
+                    "................................",
+                    "................................",
+                    ".............QQQ................",
+                    ".............QXQ................",
+                    ".............QXQ................",
+                    ".............QXQ................",
+                    ".............QXQ................",
+                    "............QQZQ................",
+                    "............QZZQ................",
+                    "............QQQQ................",
+                    "................................",
+                    "................................",
+                ],
+                palette: {
+                    "X": "#ffffff",
+                    "Q": "#000000",
+                    "Z": "#dcdce5",
+                }
+            },
+            rightLeg: {
+                pixels: [
+                    "................................",
+                    "................................",
+                    "................................",
+                    "................................",
+                    "................................",
+                    "................................",
+                    "................................",
+                    "................................",
+                    "................................",
+                    "................................",
+                    "................................",
+                    "................................",
+                    "................................",
+                    "................................",
+                    "................................",
+                    "................................",
+                    "................................",
+                    "................................",
+                    "................................",
+                    "................................",
+                    "................................",
+                    "................................",
+                    ".................QQQ............",
+                    ".................QXQ............",
+                    ".................QXQ............",
+                    ".................QXQ............",
+                    ".................QXQ............",
+                    ".................QZQQ...........",
+                    ".................QZZQ...........",
+                    ".................QQQQ...........",
+                    "................................",
+                    "................................",
+                ],
+                palette: {
+                    "X": "#ffffff",
+                    "Q": "#000000",
+                    "Z": "#dcdce5",
+                }
+            }
+        }
+    }
+};
+
+// ========== CONFIG ==========
+
+const BODYPART_SPRITE_CONFIG = {
+    layerOrder: {
+        up: ['head', 'body', 'leftArm', 'rightArm', 'leftLeg', 'rightLeg']
+    },
+    states: {
+        idle:    { looping: true,  frameCount: 1 },
+        walking: { looping: true,  frameCount: 6 }
+    },
+    transitions: {
+        idle:    ['walking'],
+        walking: ['idle']
+    },
+    walkFPS: 8,
+    minFPS: 2,
+    maxFPS: 16,
+    minSpeedMult: 0.25,
+    maxSpeedMult: 2.0,
+    spriteWidth: 32,
+    spriteHeight: 32,
+    deriveRight: false,
+    mirrorSwaps: {
+        leftArm:  'rightArm',
+        rightArm: 'leftArm',
+        leftLeg:  'rightLeg',
+        rightLeg: 'leftLeg',
+        head:     'head',
+        body:     'body'
+    }
+};
+
+// ========== WALK ANIMATION (UP ONLY) ==========
+
+const BODYPART_WALK_ANIMATION = {
+    idle: {
+        up: { body: [0,0], head: [0,0], leftArm: [0,0], rightArm: [0,0], leftLeg: [0,0], rightLeg: [0,0] }
+    },
+    walk: {
+        // UP direction (back-facing, walking away)
+        // Arms: vertical swing (forward away = dy:-1, back = dy:+1)
+        // Legs: vertical stride
+        up: [
+            // Frame 0: Right foot contact
+            { body: [0,0],  head: [0,0],  leftArm: [0,-1], rightArm: [0,1],   leftLeg: [0,1],   rightLeg: [0,-1] },
+            // Frame 1: Weight settling
+            { body: [0,1],  head: [0,1],  leftArm: [0,-1], rightArm: [0,1],   leftLeg: [0,1],   rightLeg: [0,0] },
+            // Frame 2: Legs passing
+            { body: [0,0],  head: [0,-1], leftArm: [0,0],  rightArm: [0,0],   leftLeg: [0,0],   rightLeg: [0,0] },
+            // Frame 3: Left foot contact
+            { body: [0,0],  head: [0,0],  leftArm: [0,1],  rightArm: [0,-1],  leftLeg: [0,-1],  rightLeg: [0,1] },
+            // Frame 4: Weight settling
+            { body: [0,1],  head: [0,1],  leftArm: [0,1],  rightArm: [0,-1],  leftLeg: [0,0],   rightLeg: [0,1] },
+            // Frame 5: Legs passing
+            { body: [0,0],  head: [0,-1], leftArm: [0,0],  rightArm: [0,0],   leftLeg: [0,0],   rightLeg: [0,0] }
+        ]
+    }
+};
+
+// ========== RENDERER ==========
+
+class BodypartRenderer {
+    constructor(spriteData, config, animationData) {
+        this.spriteData = spriteData || BODY_PART_SPRITES;
+        this.config = config || BODYPART_SPRITE_CONFIG;
+        this.animData = animationData || BODYPART_WALK_ANIMATION;
+        this.state = {
+            current: 'idle',
+            direction: 'up',
+            frameIndex: 0,
+            elapsed: 0,
+            moveSpeed: 1.0,
+            onComplete: null
+        };
+    }
+
+    setState(newState) {
+        if (this.state.current === newState) return;
+        const allowed = this.config.transitions[this.state.current];
+        if (allowed && !allowed.includes(newState)) return;
+        this.state.current = newState;
+        this.state.frameIndex = 0;
+        this.state.elapsed = 0;
+    }
+
+    setDirection(direction) {
+        this.state.direction = direction;
+    }
+
+    reset() {
+        this.state.current = 'idle';
+        this.state.direction = 'up';
+        this.state.frameIndex = 0;
+        this.state.elapsed = 0;
+        this.state.moveSpeed = 1.0;
+    }
+
+    update(deltaTime) {
+        const stateConfig = this.config.states[this.state.current];
+        if (!stateConfig || stateConfig.frameCount <= 1) return;
+
+        const baseFPS = this.config.walkFPS;
+        const speedMult = Math.max(this.config.minSpeedMult, Math.min(this.config.maxSpeedMult, this.state.moveSpeed));
+        const effectiveFPS = Math.max(this.config.minFPS, Math.min(this.config.maxFPS, baseFPS * speedMult));
+        const frameDuration = 1000 / effectiveFPS;
+
+        this.state.elapsed += deltaTime;
+        if (this.state.elapsed >= frameDuration) {
+            this.state.elapsed -= frameDuration;
+            this.state.frameIndex++;
+            if (this.state.frameIndex >= stateConfig.frameCount) {
+                this.state.frameIndex = stateConfig.looping ? 0 : stateConfig.frameCount - 1;
+            }
+        }
+    }
+
+    draw(ctx, x, y, scale, directionOverride, frameOverride) {
+        if (!this.spriteData || !this.config || !this.animData) return;
+
+        const direction = directionOverride || this.state.direction;
+        const frameIdx = (frameOverride !== undefined) ? frameOverride : this.state.frameIndex;
+
+        const dirSprites = this.spriteData.directions[direction];
+        if (!dirSprites) return;
+
+        const layerOrder = this.config.layerOrder[direction];
+        if (!layerOrder) return;
+
+        const offsets = this._getOffsets(direction, frameIdx);
+
+        for (const partName of layerOrder) {
+            const partSprite = dirSprites[partName];
+            if (!partSprite) continue;
+            const offset = offsets[partName] || [0, 0];
+            this._renderPart(ctx, partSprite, offset, x, y, scale);
+        }
+    }
+
+    _getOffsets(direction, frameIdx) {
+        if (this.state.current === 'idle') {
+            return this.animData.idle[direction] || {};
+        }
+        if (this.state.current === 'walking') {
+            const walkFrames = this.animData.walk[direction];
+            if (!walkFrames) return {};
+            return walkFrames[frameIdx] || walkFrames[0];
+        }
+        return {};
+    }
+
+    _renderPart(ctx, partSprite, offset, x, y, scale) {
+        const pixels = partSprite.pixels;
+        const palette = partSprite.palette;
+        const dx = offset[0];
+        const dy = offset[1];
+
+        for (let py = 0; py < pixels.length; py++) {
+            const row = pixels[py];
+            for (let px = 0; px < row.length; px++) {
+                const char = row[px];
+                if (char === '.') continue;
+                const color = palette[char];
+                if (!color) continue;
+
+                ctx.fillStyle = color;
+                ctx.fillRect(
+                    x + (px + dx) * scale,
+                    y + (py + dy) * scale,
+                    scale,
+                    scale
+                );
+            }
+        }
+    }
+
+    getState() { return { ...this.state }; }
+
+    getCurrentOffsets() {
+        return this._getOffsets(this.state.direction, this.state.frameIndex);
+    }
+
+    getLayerOrder(direction) {
+        return this.config.layerOrder[direction || this.state.direction] || [];
+    }
+}
+</script>
+
+<script>
+// ========== DEMO LOGIC ==========
+(function() {
+    const renderer = new BodypartRenderer();
+    const SCALE_MAIN = 6;
+    const SCALE_PARTS = 3;
+    const SCALE_STRIP = 3;
+    const SIZE = 32;
+
+    // Main canvas
+    const mainCanvas = document.getElementById('mainCanvas');
+    const mainCtx = mainCanvas.getContext('2d');
+
+    // Setup individual parts canvases
+    const partsGrid = document.getElementById('partsGrid');
+    const partNames = ['head', 'body', 'leftArm', 'rightArm', 'leftLeg', 'rightLeg'];
+    const partCanvases = {};
+
+    partNames.forEach(name => {
+        const div = document.createElement('div');
+        const canvas = document.createElement('canvas');
+        canvas.width = SIZE * SCALE_PARTS;
+        canvas.height = SIZE * SCALE_PARTS;
+        const label = document.createElement('div');
+        label.className = 'part-label';
+        label.textContent = name;
+        div.appendChild(canvas);
+        div.appendChild(label);
+        partsGrid.appendChild(div);
+        partCanvases[name] = canvas;
+    });
+
+    // Setup frame strip
+    const frameStrip = document.getElementById('frameStrip');
+    const frameCanvases = [];
+    for (let i = 0; i < 6; i++) {
+        const div = document.createElement('div');
+        const canvas = document.createElement('canvas');
+        canvas.width = SIZE * SCALE_STRIP;
+        canvas.height = SIZE * SCALE_STRIP;
+        const label = document.createElement('div');
+        label.className = 'frame-num';
+        label.textContent = 'F' + i;
+        div.appendChild(canvas);
+        div.appendChild(label);
+        frameStrip.appendChild(div);
+        frameCanvases.push(canvas);
+    }
+
+    // State
+    let playing = true;
+    let lastTime = performance.now();
+
+    // Controls
+    const btnIdle = document.getElementById('btnIdle');
+    const btnWalk = document.getElementById('btnWalk');
+    const btnPlay = document.getElementById('btnPlay');
+    const btnPause = document.getElementById('btnPause');
+    const btnStepBack = document.getElementById('btnStepBack');
+    const btnStepFwd = document.getElementById('btnStepFwd');
+    const speedSlider = document.getElementById('speedSlider');
+    const speedLabel = document.getElementById('speedLabel');
+
+    function setActiveButton(group, activeBtn) {
+        group.forEach(b => b.classList.remove('active'));
+        activeBtn.classList.add('active');
+    }
+
+    btnIdle.addEventListener('click', () => {
+        renderer.setState('idle');
+        setActiveButton([btnIdle, btnWalk], btnIdle);
+    });
+
+    btnWalk.addEventListener('click', () => {
+        renderer.setState('walking');
+        setActiveButton([btnIdle, btnWalk], btnWalk);
+    });
+
+    btnPlay.addEventListener('click', () => { playing = true; });
+    btnPause.addEventListener('click', () => { playing = false; });
+
+    btnStepFwd.addEventListener('click', () => {
+        playing = false;
+        renderer.state.frameIndex = (renderer.state.frameIndex + 1) % 6;
+    });
+
+    btnStepBack.addEventListener('click', () => {
+        playing = false;
+        renderer.state.frameIndex = (renderer.state.frameIndex - 1 + 6) % 6;
+    });
+
+    speedSlider.addEventListener('input', () => {
+        const speed = speedSlider.value / 100;
+        speedLabel.textContent = speed.toFixed(1) + 'x';
+        renderer.state.moveSpeed = speed;
+    });
+
+    // Render individual parts
+    function renderParts() {
+        const direction = renderer.state.direction;
+        const dirSprites = BODY_PART_SPRITES.directions[direction];
+        if (!dirSprites) return;
+
+        const offsets = renderer.getCurrentOffsets();
+
+        partNames.forEach(name => {
+            const canvas = partCanvases[name];
+            const ctx = canvas.getContext('2d');
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            const sprite = dirSprites[name];
+            if (!sprite) return;
+
+            const offset = offsets[name] || [0, 0];
+            renderer._renderPart(ctx, sprite, offset, 0, 0, SCALE_PARTS);
+        });
+    }
+
+    // Render frame strip
+    function renderFrameStrip() {
+        const direction = renderer.state.direction;
+        for (let i = 0; i < 6; i++) {
+            const canvas = frameCanvases[i];
+            const ctx = canvas.getContext('2d');
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            const savedState = renderer.state.current;
+            renderer.state.current = 'walking';
+            renderer.draw(ctx, 0, 0, SCALE_STRIP, direction, i);
+            renderer.state.current = savedState;
+        }
+    }
+
+    // Update frame info
+    function updateFrameInfo() {
+        const info = document.getElementById('frameInfo');
+        const state = renderer.getState();
+        const offsets = renderer.getCurrentOffsets();
+
+        let text = 'State: ' + state.current + ' | Direction: ' + state.direction + ' | Frame: ' + state.frameIndex + '\n';
+        text += '\u2500'.repeat(50) + '\n';
+
+        if (state.current === 'idle') {
+            text += 'All offsets: [0, 0] (neutral pose)\n';
+        } else {
+            const parts = ['body', 'head', 'leftArm', 'rightArm', 'leftLeg', 'rightLeg'];
+            parts.forEach(part => {
+                const o = offsets[part] || [0, 0];
+                const dx = o[0] >= 0 ? '+' + o[0] : '' + o[0];
+                const dy = o[1] >= 0 ? '+' + o[1] : '' + o[1];
+                text += part.padEnd(10) + ' dx:' + dx.padStart(3) + ' dy:' + dy.padStart(3) + '\n';
+            });
+        }
+
+        info.textContent = text;
+
+        document.getElementById('stateInfo').textContent =
+            'State: ' + state.current + ' | Direction: ' + state.direction + ' | Frame: ' + state.frameIndex + ' | Speed: ' + state.moveSpeed.toFixed(1) + 'x';
+    }
+
+    // Main animation loop
+    function animate(now) {
+        const dt = now - lastTime;
+        lastTime = now;
+
+        if (playing) {
+            renderer.update(dt);
+        }
+
+        // Draw main preview
+        mainCtx.clearRect(0, 0, mainCanvas.width, mainCanvas.height);
+        renderer.draw(mainCtx, 0, 0, SCALE_MAIN);
+
+        // Draw individual parts and frame strip
+        renderParts();
+        renderFrameStrip();
+        updateFrameInfo();
+
+        requestAnimationFrame(animate);
+    }
+
+    requestAnimationFrame(animate);
+})();
+</script>
+</body>
+</html>

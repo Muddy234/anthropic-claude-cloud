@@ -1,6 +1,6 @@
 // === js/ui/skills-ui.js ===
 // Skills Menu Screen (Press K) and Action Bar HUD - CotDG Style
-// Features: Pentagon Radar Chart for proficiencies, specialty details below
+// Features: Triangle Radar Chart for proficiencies (melee, ranged, magic), specialty details below
 
 // ============================================================================
 // CONFIGURATION
@@ -23,27 +23,21 @@ const SKILLS_UI_CONFIG = {
         life_siphon: 'LS',
         power_shot: 'PS',
         piercing_bolt: 'PB',
-        fan_of_knives: 'FK',
-        spike_trap: 'ST',
-        volatile_flask: 'VF',
-        expose_weakness: 'EW',
-        deploy_turret: 'DT'
+        fan_of_knives: 'FK'
     },
 
-    // Proficiency configuration for radar chart (Soul & Body Model)
+    // Proficiency configuration for radar chart (Triangle Layout)
     proficiencies: {
-        melee:    { icon: 'M', name: 'MELEE',    angle: -90,  color: '#c0392b' },  // Top
-        ranged:   { icon: 'R', name: 'RANGED',   angle: -18,  color: '#27ae60' },  // Top-right
-        magic:    { icon: 'A', name: 'MAGIC',    angle: 54,   color: '#9b59b6' },  // Bottom-right
-        defense:  { icon: 'D', name: 'DEFENSE',  angle: 126,  color: '#3498db' },  // Bottom-left
-        vitality: { icon: 'V', name: 'VITALITY', angle: 198,  color: '#e74c3c' }   // Top-left
+        melee:  { icon: 'M', name: 'MELEE',  angle: -90,  color: '#c0392b' },  // Top
+        ranged: { icon: 'R', name: 'RANGED', angle: 30,   color: '#27ae60' },  // Bottom-right
+        magic:  { icon: 'A', name: 'MAGIC',  angle: 150,  color: '#9b59b6' }   // Bottom-left
     },
 
     // Radar chart settings
     radar: {
-        radius: 120,           // Base radius of chart
-        maxLevel: 100,         // Max proficiency level
-        rings: 4,              // Number of guide rings
+        radius: 105,           // Base radius of chart
+        maxLevel: 30,          // Max proficiency level
+        rings: 3,              // Number of guide rings
         iconOffset: 30,        // Distance of icons from edge
         glowIntensity: 0.8,
         pulseSpeed: 0.003
@@ -58,21 +52,26 @@ window.skillsUIState = {
     animationValues: {}         // For smooth transitions
 };
 
-// Animation state for action bar
-window.skillsBarState = {
-    pulsePhase: 0,
-    hoveredSlot: null
-};
+// Animation state for action bar - DISABLED: Expertise action bar removed
+// window.skillsBarState = {
+//     pulsePhase: 0,
+//     hoveredSlot: null
+// };
 
 // ============================================================================
-// SKILLS ACTION BAR HUD (During Gameplay) - CotDG Style
+// SKILLS ACTION BAR HUD (During Gameplay) - DISABLED
+// Expertise action bar has been removed - weapon skill is handled by action-bar-ui.js
 // ============================================================================
 
-/**
- * Draw the skills action bar - CotDG style
- * NOTE: Weapon skill slot is now rendered by action-bar-ui.js in the unified bar
- * This function now only renders ADDITIONAL expertise slots (6-9) if unlocked
- */
+// Stub function to prevent errors if called externally
+function drawActionBar() {
+    // DISABLED: Expertise action bar removed
+    // Weapon skill is now handled by action-bar-ui.js
+}
+
+/*
+ * DISABLED: Original drawActionBar() - Expertise action bar removed
+ *
 function drawActionBar() {
     const player = game.player;
     if (!player || !player.skills) return;
@@ -158,10 +157,11 @@ function drawActionBar() {
 
     ctx.restore();
 }
+*/
 
-/**
- * Draw skills bar background panel
- */
+/*
+ * DISABLED: drawSkillsBarBackground() - Part of expertise action bar
+ *
 function drawSkillsBarBackground(ctx, x, y, width, height, colors) {
     const radius = 6;
 
@@ -197,10 +197,11 @@ function drawSkillsBarBackground(ctx, x, y, width, height, colors) {
     ctx.lineTo(x + width - radius, y + 1);
     ctx.stroke();
 }
+*/
 
-/**
- * Draw a single skill action slot - CotDG style
- */
+/*
+ * DISABLED: drawSkillActionSlot() - Part of expertise action bar
+ *
 function drawSkillActionSlot(ctx, actionData, x, y, size, cooldowns, colors) {
     const action = actionData.action;
     const cooldown = cooldowns[action.id] || 0;
@@ -339,10 +340,11 @@ function drawSkillActionSlot(ctx, actionData, x, y, size, cooldowns, colors) {
 
     ctx.restore();
 }
+*/
 
-/**
- * Draw cooldown sweep for skill slot
- */
+/*
+ * DISABLED: drawSkillCooldownSweep() - Part of expertise action bar
+ *
 function drawSkillCooldownSweep(ctx, x, y, size, radius, remaining, max, colors) {
     const centerX = x + size / 2;
     const centerY = y + size / 2;
@@ -394,6 +396,7 @@ function drawSkillCooldownSweep(ctx, x, y, size, radius, remaining, max, colors)
 
     ctx.restore();
 }
+*/
 
 // ============================================================================
 // SKILLS MENU OVERLAY (Press K) - Pentagon Radar Chart
@@ -512,19 +515,19 @@ function drawSkillsOverlay() {
 }
 
 /**
- * Draw the pentagon radar chart - Occult style with rune background
+ * Draw the triangle radar chart - Occult style with rune background
  */
 function drawPentagonRadar(ctx, centerX, centerY, proficiencies, colors) {
     const cfg = SKILLS_UI_CONFIG.radar;
     const profConfig = SKILLS_UI_CONFIG.proficiencies;
     const radius = cfg.radius;
-    const profIds = ['melee', 'ranged', 'magic', 'defense', 'vitality'];
+    const profIds = ['melee', 'ranged', 'magic'];
 
     ctx.save();
 
-    // Calculate vertex positions
+    // Calculate vertex positions for triangle
     const vertices = [];
-    for (let i = 0; i < 5; i++) {
+    for (let i = 0; i < 3; i++) {
         const angle = (profConfig[profIds[i]].angle * Math.PI / 180);
         vertices.push({
             x: centerX + Math.cos(angle) * radius,
@@ -539,7 +542,7 @@ function drawPentagonRadar(ctx, centerX, centerY, proficiencies, colors) {
     // === BACKGROUND GRID (Chalky lines) ===
     drawRadarGrid(ctx, centerX, centerY, radius, vertices, colors);
 
-    // === PLAYER'S PROFICIENCY POLYGON ===
+    // === PLAYER'S PROFICIENCY TRIANGLE ===
     drawPlayerPolygon(ctx, centerX, centerY, radius, proficiencies, profConfig, profIds, colors);
 
     // === VERTEX GEM SOCKETS ===
@@ -634,11 +637,11 @@ function drawRuneBackground(ctx, centerX, centerY, radius, colors) {
             ctx.fillText(runeSymbols[i], rx, ry);
         }
 
-        // Cross/star lines through center
+        // Cross/star lines through center (6-fold hex symmetry)
         ctx.strokeStyle = runeColor;
         ctx.lineWidth = 1;
-        for (let i = 0; i < 5; i++) {
-            const angle = (i / 5) * Math.PI * 2 - Math.PI / 2;
+        for (let i = 0; i < 6; i++) {
+            const angle = (i / 6) * Math.PI * 2 - Math.PI / 2;
             ctx.beginPath();
             ctx.moveTo(centerX, centerY);
             ctx.lineTo(
@@ -648,11 +651,11 @@ function drawRuneBackground(ctx, centerX, centerY, radius, colors) {
             ctx.stroke();
         }
 
-        // Small decorative dots at intersections
+        // Small decorative dots at intersections (6-fold hex symmetry)
         ctx.fillStyle = runeColorBright;
         for (let ring = 1; ring <= 2; ring++) {
-            for (let i = 0; i < 5; i++) {
-                const angle = (i / 5) * Math.PI * 2 - Math.PI / 2;
+            for (let i = 0; i < 6; i++) {
+                const angle = (i / 6) * Math.PI * 2 - Math.PI / 2;
                 const dist = radius * (ring * 0.35);
                 const dx = centerX + Math.cos(angle) * dist;
                 const dy = centerY + Math.sin(angle) * dist;
@@ -667,25 +670,25 @@ function drawRuneBackground(ctx, centerX, centerY, radius, colors) {
 }
 
 /**
- * Draw the radar grid (pentagon outline + rings) - Chalky/rough style
+ * Draw the radar grid (triangle outline + rings) - Chalky/rough style
  */
 function drawRadarGrid(ctx, centerX, centerY, radius, vertices, colors) {
     const rings = SKILLS_UI_CONFIG.radar.rings;
-    const profIds = ['melee', 'ranged', 'magic', 'defense', 'vitality'];
+    const profIds = ['melee', 'ranged', 'magic'];
     const profConfig = SKILLS_UI_CONFIG.proficiencies;
 
     // Use chalky line drawing if available
     const useChalkLines = typeof drawChalkyLine === 'function';
 
-    // Concentric pentagon rings with chalky style
+    // Concentric triangle rings with chalky style (3 rings for levels 10, 20, 30)
     for (let ring = 1; ring <= rings; ring++) {
         const ringRadius = radius * (ring / rings);
         const alpha = 0.08 + (ring / rings) * 0.12;
         const lineColor = `rgba(239, 228, 176, ${alpha})`; // Parchment color
 
-        // Draw pentagon ring
+        // Draw triangle ring using 3 vertex angles: -90 (melee), 30 (ranged), 150 (magic)
         const ringPoints = [];
-        for (let i = 0; i < 5; i++) {
+        for (let i = 0; i < 3; i++) {
             const angle = (profConfig[profIds[i]].angle * Math.PI / 180);
             ringPoints.push({
                 x: centerX + Math.cos(angle) * ringRadius,
@@ -694,8 +697,8 @@ function drawRadarGrid(ctx, centerX, centerY, radius, vertices, colors) {
         }
 
         // Connect the points with chalky lines
-        for (let i = 0; i < 5; i++) {
-            const next = (i + 1) % 5;
+        for (let i = 0; i < 3; i++) {
+            const next = (i + 1) % 3;
             if (useChalkLines && ring === rings) {
                 // Outer ring gets chalky treatment
                 drawChalkyLine(ctx, ringPoints[i].x, ringPoints[i].y,
@@ -774,7 +777,7 @@ function drawRadarGrid(ctx, centerX, centerY, radius, vertices, colors) {
 }
 
 /**
- * Draw the player's proficiency polygon (filled shape)
+ * Draw the player's proficiency triangle (filled shape)
  * Minimum 12% radius to show "base soul" potential even at level 0
  */
 function drawPlayerPolygon(ctx, centerX, centerY, radius, proficiencies, profConfig, profIds, colors) {
@@ -782,13 +785,13 @@ function drawPlayerPolygon(ctx, centerX, centerY, radius, proficiencies, profCon
     const pulse = Math.sin(window.skillsUIState.pulsePhase) * 0.15 + 0.85;
     const MIN_RADIUS_PCT = 0.12; // 12% minimum - "base soul" shape
 
-    // Calculate polygon points based on proficiency levels
+    // Calculate triangle points based on proficiency levels (3 vertices)
     const points = [];
-    for (let i = 0; i < 5; i++) {
+    for (let i = 0; i < 3; i++) {
         const profId = profIds[i];
         const profData = proficiencies[profId];
         const level = profData ? profData.level : 0;
-        // Minimum 12% so the polygon is always visible with nice gold fill
+        // Minimum 12% so the triangle is always visible with nice gold fill
         const normalizedLevel = Math.max(MIN_RADIUS_PCT, level / maxLevel);
 
         const angle = (profConfig[profId].angle * Math.PI / 180);
@@ -847,13 +850,14 @@ function drawPlayerPolygon(ctx, centerX, centerY, radius, proficiencies, profCon
 }
 
 /**
- * Draw vertex gem sockets with icons
+ * Draw vertex gem sockets with icons (3 sockets for melee, ranged, magic)
  */
 function drawVertexGemSockets(ctx, centerX, centerY, radius, profConfig, profIds, proficiencies, colors) {
     const iconOffset = SKILLS_UI_CONFIG.radar.iconOffset;
     const selected = window.skillsUIState.selectedProficiency;
 
-    for (let i = 0; i < 5; i++) {
+    // Only draw 3 sockets for triangle layout
+    for (let i = 0; i < 3; i++) {
         const profId = profIds[i];
         const config = profConfig[profId];
         const profData = proficiencies[profId];
@@ -908,12 +912,12 @@ function drawVertexGemSockets(ctx, centerX, centerY, radius, profConfig, profIds
         ctx.font = `10px ${fontFamily}`;
         ctx.fillText(`Lv ${level}`, iconX, iconY + socketRadius + 10);
 
-        // Store clickable area for interaction
+        // Store clickable area for interaction (increased hover detection from +5 to +8)
         if (!window.skillsUIVertexAreas) window.skillsUIVertexAreas = {};
         window.skillsUIVertexAreas[profId] = {
             x: iconX,
             y: iconY,
-            radius: socketRadius + 5
+            radius: socketRadius + 8
         };
     }
 }
@@ -923,8 +927,8 @@ function drawVertexGemSockets(ctx, centerX, centerY, radius, profConfig, profIds
  * Active tab visually merges with content pane below (no bottom border)
  */
 function drawProficiencyTabs(ctx, x, y, width, selectedProf, proficiencies, colors) {
-    const profIds = ['melee', 'ranged', 'magic', 'defense', 'vitality'];
-    const tabWidth = width / 5;
+    const profIds = ['melee', 'ranged', 'magic'];
+    const tabWidth = width / 3;
     const tabHeight = 32;
     const fontFamily = typeof UI_FONT_FAMILY !== 'undefined' ? UI_FONT_FAMILY.display : 'Georgia, serif';
     const radius = 4;
@@ -939,7 +943,7 @@ function drawProficiencyTabs(ctx, x, y, width, selectedProf, proficiencies, colo
     ctx.fillStyle = colors.selectionGradientEnd || '#2a1010';
     ctx.fillRect(x, y + tabHeight - 2, width, 4);
 
-    for (let i = 0; i < 5; i++) {
+    for (let i = 0; i < 3; i++) {
         const profId = profIds[i];
         const config = SKILLS_UI_CONFIG.proficiencies[profId];
         const profData = proficiencies[profId];
@@ -1241,11 +1245,9 @@ function handleSkillsOverlayClick(mouseX, mouseY) {
 
 function getSpecialtiesForProficiency(profId) {
     const mapping = {
-        melee: ['sword', 'knife', 'axe', 'polearm'],
+        melee: ['sword', 'knife', 'axe', 'polearm', 'mace', 'staff', 'unarmed', 'shield'],
         ranged: ['bow', 'crossbow', 'throwing'],
-        magic: ['fire', 'ice', 'lightning', 'necromancy'],
-        defense: ['mace', 'staff', 'unarmed', 'shield'],
-        vitality: ['traps', 'potions', 'lockpicking', 'tinkering']
+        magic: ['fire', 'ice', 'lightning', 'necromancy', 'water', 'earth', 'nature', 'dark', 'holy', 'arcane', 'death']
     };
     return mapping[profId] || [];
 }
@@ -1256,30 +1258,31 @@ function getSpecialtiesForProficiency(profId) {
  */
 function getSpecialtyUnlockBonus(specId) {
     const bonuses = {
-        // Blade
+        // Melee
         sword: '+2% Damage',
         knife: '+3% Crit Chance',
-        axe: '+2% Cleave Damage',
+        axe: '+5% Cleave Damage',
         polearm: '+0.2 Range',
-        // Blunt
         mace: '+3% Stun Chance',
         staff: '+2% Spell Power',
         unarmed: '+5% Attack Speed',
         shield: '+2% Block Chance',
+        // Ranged
+        bow: '+2% Accuracy',
+        crossbow: '+3% Armor Penetration',
+        throwing: '+2% Multi-hit Chance',
         // Magic
         fire: '+3% Burn Damage',
         ice: '+2% Slow Effect',
         lightning: '+2% Chain Chance',
         necromancy: '+2% Life Steal',
-        // Ranged
-        bow: '+2% Accuracy',
-        crossbow: '+3% Armor Pierce',
-        throwing: '+2% Multi-hit',
-        // Expertise
-        traps: '+1 Trap Duration',
-        potions: '+10% Potion Effect',
-        lockpicking: '+5% Loot Quality',
-        tinkering: '+1 Gadget Charge'
+        water: '+2% Healing Power',
+        earth: '+2% Armor',
+        nature: '+2% Regen Rate',
+        dark: '+3% Curse Effect',
+        holy: '+3% vs Undead',
+        arcane: '+2% Spell Crit',
+        death: '+2% Execute Threshold'
     };
     return bonuses[specId] || '+2% Effectiveness';
 }
@@ -1294,6 +1297,7 @@ function getActionForSpecialtyById(specialtyId) {
     }
 
     const actionMap = {
+        // Melee
         sword: { id: 'blade_dancer', name: 'Blade Dancer', cooldown: 10 },
         knife: { id: 'arterial_strike', name: 'Arterial Strike', cooldown: 10 },
         axe: { id: 'cleaving_blow', name: 'Cleaving Blow', cooldown: 10 },
@@ -1302,17 +1306,16 @@ function getActionForSpecialtyById(specialtyId) {
         staff: { id: 'sweeping_arc', name: 'Sweeping Arc', cooldown: 10 },
         unarmed: { id: 'flurry_of_blows', name: 'Flurry of Blows', cooldown: 10 },
         shield: { id: 'shield_charge', name: 'Shield Charge', cooldown: 10 },
-        fire: { id: 'immolate', name: 'Immolate', cooldown: 10 },
-        ice: { id: 'frozen_grasp', name: 'Frozen Grasp', cooldown: 10 },
-        lightning: { id: 'chain_lightning', name: 'Chain Lightning', cooldown: 10 },
-        necromancy: { id: 'life_siphon', name: 'Life Siphon', cooldown: 10 },
+        // Ranged
         bow: { id: 'power_shot', name: 'Power Shot', cooldown: 10 },
         crossbow: { id: 'piercing_bolt', name: 'Piercing Bolt', cooldown: 10 },
         throwing: { id: 'fan_of_knives', name: 'Fan of Knives', cooldown: 10 },
-        traps: { id: 'spike_trap', name: 'Spike Trap', cooldown: 10 },
-        potions: { id: 'volatile_flask', name: 'Volatile Flask', cooldown: 10 },
-        lockpicking: { id: 'expose_weakness', name: 'Expose Weakness', cooldown: 10 },
-        tinkering: { id: 'deploy_turret', name: 'Deploy Turret', cooldown: 10 }
+        // Magic (only these have active abilities)
+        fire: { id: 'immolate', name: 'Immolate', cooldown: 10 },
+        ice: { id: 'frozen_grasp', name: 'Frozen Grasp', cooldown: 10 },
+        lightning: { id: 'chain_lightning', name: 'Chain Lightning', cooldown: 10 },
+        necromancy: { id: 'life_siphon', name: 'Life Siphon', cooldown: 10 }
+        // Note: water, earth, nature, dark, holy, arcane, death provide passive bonuses only (no actions)
     };
 
     return actionMap[specialtyId] || null;
@@ -1376,9 +1379,10 @@ function renderActionTooltip(ctx) {
 // ============================================================================
 
 function renderSkillsUI() {
-    if (game.state === 'playing') {
-        drawActionBar();
-    }
+    // DISABLED: Expertise action bar removed
+    // if (game.state === 'playing') {
+    //     drawActionBar();
+    // }
     renderActionTooltip(ctx);
 }
 

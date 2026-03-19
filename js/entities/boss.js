@@ -1964,7 +1964,11 @@ const BossSystem = {
         // Drop loot
         if (boss.loot) {
             if (boss.loot.bonus?.gold) {
-                game.gold += boss.loot.bonus.gold;
+                game.player.gold += boss.loot.bonus.gold;
+                // Track gold earned in runStats
+                if (typeof game !== 'undefined' && game.runStats) {
+                    game.runStats.goldEarned = (game.runStats.goldEarned || 0) + boss.loot.bonus.gold;
+                }
             }
             if (boss.loot.bonus?.xp && game.player) {
                 // Apply XP

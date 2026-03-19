@@ -32,6 +32,15 @@ const WEAPON_TYPES = {
         strongAgainst: ['hide', 'scaled', 'ethereal'],
         weakAgainst: ['armored', 'stone'],
         combatRole: 'Reach, anti-hide, anti-ethereal'
+    },
+    magic: {
+        id: 'magic',
+        name: 'Magic',
+        description: 'Arcane energy that bypasses physical armor but is resisted by magical wards.',
+        specialties: ['staff', 'wand', 'tome'],
+        strongAgainst: ['armored', 'stone', 'unarmored'],
+        weakAgainst: ['ethereal'],
+        combatRole: 'Anti-armor, bypasses physical defense, countered by magic resistance'
     }
 };
 
@@ -46,18 +55,22 @@ const SPECIALTY_DAMAGE_TYPE = {
     sword: 'blade',
     knife: 'blade',
     axe: 'blade',
-    
+
     // Blunt weapons
     mace: 'blunt',
-    staff: 'blunt',
     unarmed: 'blunt',
     shield: 'blunt',
-    
+
     // Pierce weapons
     polearm: 'pierce',
     bow: 'pierce',
     crossbow: 'pierce',
-    throwing: 'pierce'
+    throwing: 'pierce',
+
+    // Magic weapons
+    staff: 'magic',
+    wand: 'magic',
+    tome: 'magic'
 };
 
 // ============================================================================
@@ -140,4 +153,4 @@ window.getAllWeaponTypeIds = getAllWeaponTypeIds;
 window.getAllWeaponSpecialties = getAllWeaponSpecialties;
 window.getWeaponTypeName = getWeaponTypeName;
 
-console.log('[WeaponTypes] Loaded 3 weapon damage types with', Object.keys(SPECIALTY_DAMAGE_TYPE).length, 'specialties');
+console.log('[WeaponTypes] Loaded', Object.keys(WEAPON_TYPES).length, 'weapon damage types with', Object.keys(SPECIALTY_DAMAGE_TYPE).length, 'specialties');

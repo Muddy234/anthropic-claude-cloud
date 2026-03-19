@@ -1,5 +1,5 @@
 // === js/generation/core-generator.js ===
-// SURVIVAL EXTRACTION UPDATE: The Core arena generation
+// The Core arena generation
 
 // ============================================================================
 // CORE ARENA GENERATOR

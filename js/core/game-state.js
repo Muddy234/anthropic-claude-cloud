@@ -1,5 +1,67 @@
 // === js/core/game-state.js ===
-// SURVIVAL EXTRACTION UPDATE: Added persistent, session, and village state
+
+/**
+ * ============================================================================
+ * STATE AUTHORITY DOCUMENTATION
+ * ============================================================================
+ *
+ * This file defines four state objects. To avoid confusion about which object
+ * is authoritative for each piece of data, refer to this guide:
+ *
+ * ## State Objects Overview:
+ *
+ * 1. `game` - Legacy dungeon runtime state (during active gameplay)
+ *    - Authoritative during dungeon gameplay
+ *    - Contains live player data, map data, enemies, etc.
+ *    - NOT saved directly - synchronized to session/persistent on save
+ *
+ * 2. `persistentState` - Permanent progress (survives death)
+ *    - Bank storage, stats, quest progress
+ *    - SAVED to localStorage
+ *
+ * 3. `sessionState` - Current run data (lost on death)
+ *    - Run tracking, floor info
+ *    - SAVED to localStorage (for crash recovery)
+ *
+ * 4. `villageState` - Village instance (reset on village load)
+ *    - Player position in village, NPC interaction, map data
+ *    - SAVED to localStorage
+ *
+ * ## AUTHORITATIVE DATA SOURCES:
+ *
+ * | Data Type         | Authoritative Source        | Notes                           |
+ * |-------------------|-----------------------------|---------------------------------|
+ * | Player inventory  | `game.player.inventory`     | Use during dungeon gameplay     |
+ * | Player gold       | `game.player.gold`          | @deprecated Use bank for safety |
+ * | Player stats      | `game.player.stats`         | Derived from base + equipment   |
+ * | Current floor     | `sessionState.currentFloor` | Synced to game.floor on init    |
+ * | Bank items        | `persistentState.bank`      | Safe storage between runs       |
+ * | Run active status | `sessionState.active`       | True during dungeon run         |
+ * | Map/tiles         | `game.map`                  | Generated per floor             |
+ *
+ * ## DUPLICATE FIELDS (for compatibility):
+ *
+ * - `game.floor` mirrors `sessionState.currentFloor`
+ *   -> sessionState.currentFloor is authoritative
+ *
+ * - `game.gold` should NOT be used - use `game.player.gold` during run
+ *   -> @deprecated Will be removed
+ *
+ * - `sessionState.inventory` is synced FROM `game.player.inventory`
+ *   -> game.player.inventory is authoritative during gameplay
+ *   -> sessionState.inventory used for save/load
+ *
+ * - `sessionState.gold` is synced FROM `game.player.gold`
+ *   -> game.player.gold is authoritative during gameplay
+ *
+ * ## SYNCHRONIZATION POINTS:
+ *
+ * 1. Run Start: loadout -> sessionState.inventory -> game.player.inventory
+ * 2. During Gameplay: Items added directly to game.player.inventory
+ * 3. Save/AutoSave: game.player.inventory -> sessionState.inventory (sync)
+ *
+ * ============================================================================
+ */
 
 // ============================================================================
 // LEGACY GAME STATE (maintained for compatibility during transition)
@@ -7,7 +69,7 @@
 
 let game = {
     state: 'menu',
-    floor: 1,
+    floor: 1,  // @sync mirrors sessionState.currentFloor
     player: null,
     map: [],
     enemies: [],
@@ -29,7 +91,7 @@ let game = {
     keys: {},
     lastMoveTime: 0,
     moveDelay: 150,
-    gold: 50,
+    gold: 50,  // @deprecated Use game.player.gold during gameplay
     merchantVisited: false,
     doorways: [],
     lavaVents: [],
@@ -43,12 +105,43 @@ let game = {
     levelUpData: null,
     groundLoot: [],
 
-    // NEW: Extraction system additions
-    extractionPoints: [],
     pathDown: null,
     miniBoss: null,
-    activeExtractionPoint: null
+
+    // Main Menu State
+    menuState: {
+        selectedIndex: 0,
+        currentScreen: 'main',  // 'main', 'settings', 'credits'
+        hasSaveData: false,
+        musicVolume: 70,
+        sfxVolume: 80,
+        // Ember particle system for atmospheric effects
+        embers: []
+    }
 };
+
+// Load saved menu settings on startup
+(function loadMenuSettings() {
+    if (typeof localStorage !== 'undefined') {
+        try {
+            const savedSettings = localStorage.getItem('shiftingChasm_settings');
+            if (savedSettings) {
+                const settings = JSON.parse(savedSettings);
+                if (settings.musicVolume !== undefined) {
+                    game.menuState.musicVolume = settings.musicVolume;
+                }
+                if (settings.sfxVolume !== undefined) {
+                    game.menuState.sfxVolume = settings.sfxVolume;
+                }
+            }
+            // Check for save data
+            const savedData = localStorage.getItem('shiftingChasm_persistent');
+            game.menuState.hasSaveData = savedData !== null;
+        } catch (e) {
+            console.warn('[GameState] Failed to load menu settings:', e);
+        }
+    }
+})();
 
 // ============================================================================
 // PERSISTENT STATE (survives death, saved to localStorage)
@@ -65,32 +158,28 @@ let persistentState = {
     bank: {
         gold: 0,
         items: [],
-        usedSlots: 0
-    },
-
-    // Floor progression
-    shortcuts: {
-        unlockedFloors: [1],
-        extractedFrom: {}
-    },
-
-    // Floor degradation tracking
-    degradation: {
-        stage: 1,
-        floorMultipliers: {}
+        usedSlots: 0,
+        capacity: 30
     },
 
     // Player statistics
     stats: {
         totalRuns: 0,
-        successfulExtractions: 0,
         deaths: 0,
+        totalKills: 0,
+        totalGoldEarned: 0,
+        victories: 0,
         deepestFloor: 1,
-        totalGoldExtracted: 0,
-        totalMaterialsExtracted: 0,
         miniBossesDefeated: 0,
         playtime: 0,
-        coreDefeated: false
+        coreDefeated: false,
+        // Tavern game stats
+        tavernGamesPlayed: 0,
+        tavernGamesWon: 0,
+        tavernGoldWon: 0,
+        tavernGoldLost: 0,
+        // Run outcome tracking for barks
+        lastRunDied: false
     },
 
     // Quest tracking
@@ -100,6 +189,15 @@ let persistentState = {
         completed: []
     },
 
+    // Bounty board system
+    bounties: {
+        available: [],      // Current bounties on the board
+        active: [],         // Bounties the player has accepted
+        completed: [],      // IDs of completed bounties
+        lastRefresh: null   // Timestamp of last bounty refresh
+    },
+    rumorsHeard: [],        // IDs of rumors already seen
+
     // Crafting recipes
     recipes: {
         known: [],
@@ -108,7 +206,6 @@ let persistentState = {
 
     // Village state
     village: {
-        degradationStage: 1,
         improvements: [],
         npcStates: {}
     },
@@ -138,15 +235,12 @@ let persistentState = {
     victoryAchieved: false,
     victoryTimestamp: null,
 
-    // Death drop (for rescue runs)
-    deathDrop: null,
-
     // Soul & Body: Permanent skill progression (NEVER lost on death)
     skills: null  // Populated by skill-system.js when player is created
 };
 
 // ============================================================================
-// SESSION STATE (current run, lost on death unless rescued)
+// SESSION STATE (current run, lost on death)
 // ============================================================================
 
 let sessionState = {
@@ -157,17 +251,13 @@ let sessionState = {
 
     // Floor information
     startFloor: 1,
-    currentFloor: 1,
+    currentFloor: 1,  // @authoritative - synced to game.floor
     floorTime: 0,
     floorStartTime: null,
 
-    // Carried items (at risk)
+    // Carried items (at risk) - @sync from game.player.inventory on save
     inventory: [],
-    gold: 0,
-
-    // Extraction points for current floor
-    extractionPoints: [],
-    collapseQueue: [],
+    gold: 0,  // @sync from game.player.gold on save
 
     // Path to next floor
     pathDown: {
@@ -180,10 +270,6 @@ let sessionState = {
     // Mini-boss status
     miniBossDefeated: false,
     miniBossPosition: null,
-
-    // Rescue run tracking
-    isRescueRun: false,
-    deathDropCollected: false,
 
     // Auto-save tracking
     lastSaveTime: null,
@@ -216,8 +302,7 @@ let villageState = {
     npcs: [],
 
     // UI state
-    activeMenu: null,
-    selectedShortcutFloor: 1
+    activeMenu: null
 };
 
 // ============================================================================
@@ -237,26 +322,17 @@ function createNewPersistentState() {
         bank: {
             gold: BANKING_CONFIG ? BANKING_CONFIG.startingGold : 50,
             items: [],
-            usedSlots: 0
-        },
-
-        shortcuts: {
-            unlockedFloors: [1],
-            extractedFrom: {}
-        },
-
-        degradation: {
-            stage: 1,
-            floorMultipliers: {}
+            usedSlots: 0,
+            capacity: 30
         },
 
         stats: {
             totalRuns: 0,
-            successfulExtractions: 0,
             deaths: 0,
+            totalKills: 0,
+            totalGoldEarned: 0,
+            victories: 0,
             deepestFloor: 1,
-            totalGoldExtracted: 0,
-            totalMaterialsExtracted: 0,
             miniBossesDefeated: 0,
             playtime: 0,
             coreDefeated: false
@@ -274,7 +350,6 @@ function createNewPersistentState() {
         },
 
         village: {
-            degradationStage: 1,
             improvements: [],
             npcStates: {}
         },
@@ -304,8 +379,6 @@ function createNewPersistentState() {
         victoryAchieved: false,
         victoryTimestamp: null,
 
-        deathDrop: null,
-
         // Soul & Body: Permanent skill progression
         skills: null  // Initialized by skill-system.js
     };
@@ -328,9 +401,6 @@ function createNewSessionState() {
         inventory: [],
         gold: 0,
 
-        extractionPoints: [],
-        collapseQueue: [],
-
         pathDown: {
             x: null,
             y: null,
@@ -340,9 +410,6 @@ function createNewSessionState() {
 
         miniBossDefeated: false,
         miniBossPosition: null,
-
-        isRescueRun: false,
-        deathDropCollected: false,
 
         lastSaveTime: null,
         savedRoomId: null
@@ -370,8 +437,7 @@ function createNewVillageState() {
         buildings: [],
         npcs: [],
 
-        activeMenu: null,
-        selectedShortcutFloor: 1
+        activeMenu: null
     };
 }
 
@@ -408,6 +474,23 @@ function loadPersistentState(saveData) {
     });
 
     return true;
+}
+
+/**
+ * Synchronize session state from game state
+ * Call this before saving to ensure session reflects current gameplay
+ */
+function syncSessionFromGame() {
+    if (!game.player) return;
+
+    // Sync inventory from game.player (authoritative during gameplay)
+    sessionState.inventory = (game.player.inventory || []).map(item => ({ ...item }));
+
+    // Sync gold from game.player
+    sessionState.gold = game.player.gold || 0;
+
+    // Sync floor
+    sessionState.currentFloor = game.floor || sessionState.currentFloor;
 }
 
 /**
@@ -504,9 +587,10 @@ window.resetSessionState = resetSessionState;
 window.resetVillageState = resetVillageState;
 window.loadPersistentState = loadPersistentState;
 window.initializeStartingKit = initializeStartingKit;
+window.syncSessionFromGame = syncSessionFromGame;
 
 // Bestiary tracking functions
 window.discoverMonster = discoverMonster;
 window.trackMonsterKill = trackMonsterKill;
 
-console.log('[GameState] State management initialized (Survival Extraction v1)');
+console.log('[GameState] State management initialized');

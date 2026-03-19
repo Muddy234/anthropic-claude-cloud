@@ -415,6 +415,7 @@ const SpawnPointSystem = {
 
     /**
      * Create an enemy at a position
+     * Now uses unified EnemyFactory for consistent stats across all spawn systems
      * @param {string} enemyType - The enemy type ID
      * @param {number} x - Grid X
      * @param {number} y - Grid Y
@@ -422,19 +423,45 @@ const SpawnPointSystem = {
      * @returns {object|null}
      */
     createEnemy(enemyType, x, y, spawnPoint) {
-        // Check if MONSTER_DATA exists
-        const template = typeof MONSTER_DATA !== 'undefined' ? MONSTER_DATA[enemyType] : null;
+        // Calculate difficulty scaling
+        const floorBonus = 1 + ((game.floor || 1) - 1) * spawnPoint.floorScale;
+        const totalScale = spawnPoint.difficultyScale * floorBonus;
 
-        if (!template) {
-            // Create a basic enemy if template not found
-            if (this.config.debugLogging) {
-                console.warn(`[SpawnPoint] Unknown enemy type: ${enemyType}, using placeholder`);
+        // Use EnemyFactory for unified enemy creation
+        if (typeof EnemyFactory !== 'undefined') {
+            const enemy = EnemyFactory.createAndRegister({
+                monsterType: enemyType,
+                x: x,
+                y: y,
+                room: null,
+                spawnPointId: spawnPoint.id,
+                spawnPointType: spawnPoint.type,
+                difficultyScale: totalScale
+            });
+
+            if (enemy) {
+                // Add to game enemies array
+                game.enemies.push(enemy);
             }
+
+            return enemy;
         }
 
-        // Calculate difficulty scaling
-        const floorBonus = 1 + (game.floor - 1) * spawnPoint.floorScale;
-        const totalScale = spawnPoint.difficultyScale * floorBonus;
+        // Fallback to legacy creation if EnemyFactory not available
+        return this._createEnemyLegacy(enemyType, x, y, spawnPoint, totalScale);
+    },
+
+    /**
+     * Legacy enemy creation - deprecated, kept for fallback
+     * @deprecated Use EnemyFactory.createAndRegister() instead
+     * @private
+     */
+    _createEnemyLegacy(enemyType, x, y, spawnPoint, totalScale) {
+        const template = typeof MONSTER_DATA !== 'undefined' ? MONSTER_DATA[enemyType] : null;
+
+        if (!template && this.config.debugLogging) {
+            console.warn(`[SpawnPoint] Unknown enemy type: ${enemyType}, using placeholder`);
+        }
 
         const enemy = {
             id: `spawn_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
@@ -446,38 +473,33 @@ const SpawnPointSystem = {
             y: y,
             displayX: x,
             displayY: y,
-            hp: Math.floor((template?.stats?.health || 30) * totalScale),
-            maxHp: Math.floor((template?.stats?.health || 30) * totalScale),
-            damage: Math.floor((template?.stats?.attack || 5) * totalScale),
-            defense: Math.floor((template?.stats?.defense || 0) * totalScale),
+            hp: Math.floor((template?.hp || 30) * totalScale),
+            maxHp: Math.floor((template?.hp || 30) * totalScale),
+            str: Math.floor((template?.str || 10) * totalScale),
+            pDef: Math.floor((template?.pDef || 0) * totalScale),
+            mDef: Math.floor((template?.mDef || 0) * totalScale),
             element: template?.element || 'physical',
-            tier: template?.tier || 'common',
-            // Monster level equals floor number
+            tier: template?.tier || 'TIER_3',
             level: game.floor || 1,
-            ...template,
-            // Track spawn point origin
             spawnPointId: spawnPoint.id,
             spawnPointType: spawnPoint.type,
             combat: {
                 isInCombat: false,
                 currentTarget: null,
                 attackCooldown: 0,
-                attackSpeed: template?.combat?.attackSpeed || 2.0,
+                attackSpeed: template?.attackSpeed || 2.0,
                 autoRetaliate: true,
-                attackRange: template?.combat?.range || 1,
-                comboCount: 1  // Enemy combo system: 1 -> 2 -> 3 (special) -> 1
+                attackRange: template?.attackRange || 1,
+                comboCount: 1
             }
         };
 
-        // Add to game
         game.enemies.push(enemy);
 
-        // Register with AI system
         if (typeof AIManager !== 'undefined') {
             AIManager.registerEnemy(enemy);
         }
 
-        // Initialize abilities from repository
         if (typeof EnemyAbilitySystem !== 'undefined') {
             EnemyAbilitySystem.initializeEnemy(enemy);
         }
@@ -712,4 +734,4 @@ if (typeof SystemManager !== 'undefined') {
 // ============================================================================
 window.SpawnPointSystem = SpawnPointSystem;
 
-console.log('✅ Spawn Point System loaded');
+console.log('[SpawnPointSystem] Loaded (uses EnemyFactory for unified enemy creation)');

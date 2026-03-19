@@ -13,7 +13,15 @@ const ShrineUI = {
     currentShrine: null,
     boonChoices: [],      // Array of boon IDs being offered
     selectedIndex: 0,
-    hoveredIndex: -1
+    hoveredIndex: -1,
+
+    // Replacement mode (when player has max boons)
+    replacementMode: false,
+    selectedNewBoon: -1,      // Index of new boon chosen in step 1
+    replaceHoveredIndex: -1,  // Hovered existing boon for replacement
+
+    // Card entrance animation
+    shrineOpenTime: 0         // performance.now() when shrine opened
 };
 
 // ============================================================================
@@ -67,6 +75,14 @@ function openShrineUI(shrine) {
     ShrineUI.boonChoices = boonIds;
     ShrineUI.selectedIndex = 0;
     ShrineUI.hoveredIndex = -1;
+    ShrineUI.shrineOpenTime = performance.now();
+
+    // Check if replacement mode is needed (player at max boons)
+    const uniqueBoons = Object.keys(BoonSystem.activeBoons).length;
+    const maxBoons = typeof BOON_CONFIG !== 'undefined' ? BOON_CONFIG.maxBoons : 8;
+    ShrineUI.replacementMode = uniqueBoons >= maxBoons;
+    ShrineUI.selectedNewBoon = -1;
+    ShrineUI.replaceHoveredIndex = -1;
 
     // Pause game while UI is open
     game.state = 'shrine';
@@ -87,6 +103,9 @@ function closeShrineUI() {
     ShrineUI.boonChoices = [];
     ShrineUI.selectedIndex = 0;
     ShrineUI.hoveredIndex = -1;
+    ShrineUI.replacementMode = false;
+    ShrineUI.selectedNewBoon = -1;
+    ShrineUI.replaceHoveredIndex = -1;
 
     // Resume game
     game.state = 'playing';
@@ -98,6 +117,17 @@ function closeShrineUI() {
  */
 function selectShrineBoon(index) {
     if (index < 0 || index >= ShrineUI.boonChoices.length) return;
+
+    // In replacement mode, step 1: select the new boon, then wait for replacement target
+    if (ShrineUI.replacementMode && ShrineUI.selectedNewBoon === -1) {
+        ShrineUI.selectedNewBoon = index;
+        if (typeof addMessage === 'function') {
+            const boonId = ShrineUI.boonChoices[index];
+            const boon = typeof BOONS !== 'undefined' ? BOONS[boonId] : null;
+            addMessage(`Selected ${boon?.name || boonId}. Now choose a boon to replace.`, '#FFD700');
+        }
+        return;
+    }
 
     const boonId = ShrineUI.boonChoices[index];
 
@@ -112,16 +142,7 @@ function selectShrineBoon(index) {
             }
 
             // Mark shrine as used
-            if (ShrineUI.currentShrine) {
-                ShrineUI.currentShrine.used = true;
-                ShrineUI.currentShrine.interactable = false;
-
-                // Update visual
-                if (ShrineUI.currentShrine.data) {
-                    ShrineUI.currentShrine.data.glow = false;
-                    ShrineUI.currentShrine.data.color = '#666666';
-                }
-            }
+            markShrineUsed();
         } else {
             if (typeof addMessage === 'function') {
                 addMessage('Could not receive blessing.');
@@ -130,6 +151,59 @@ function selectShrineBoon(index) {
     }
 
     closeShrineUI();
+}
+
+/**
+ * Replace an existing boon with the selected new boon (replacement mode step 2)
+ * @param {number} existingIndex - Index into the active boon list
+ */
+function replaceBoonAtIndex(existingIndex) {
+    if (ShrineUI.selectedNewBoon < 0 || ShrineUI.selectedNewBoon >= ShrineUI.boonChoices.length) return;
+    if (typeof BoonSystem === 'undefined') return;
+
+    const activeBoonList = BoonSystem.getActiveBoonList();
+    if (existingIndex < 0 || existingIndex >= activeBoonList.length) return;
+
+    const oldBoon = activeBoonList[existingIndex].boon;
+    const newBoonId = ShrineUI.boonChoices[ShrineUI.selectedNewBoon];
+
+    // Remove the old boon
+    BoonSystem.removeBoon(oldBoon.id, true);
+
+    // Grant the new boon
+    const success = BoonSystem.grantBoon(newBoonId);
+
+    if (success) {
+        const newBoon = typeof BOONS !== 'undefined' ? BOONS[newBoonId] : null;
+        if (typeof addMessage === 'function') {
+            addMessage(`Replaced ${oldBoon.name} with ${newBoon?.name || newBoonId}!`, '#FFD700');
+        }
+        markShrineUsed();
+    } else {
+        // Re-grant old boon if replacement failed
+        BoonSystem.grantBoon(oldBoon.id);
+        if (typeof addMessage === 'function') {
+            addMessage('Could not replace blessing.');
+        }
+    }
+
+    closeShrineUI();
+}
+
+/**
+ * Mark the current shrine as used and update its visual
+ */
+function markShrineUsed() {
+    if (ShrineUI.currentShrine) {
+        ShrineUI.currentShrine.used = true;
+        ShrineUI.currentShrine.interactable = false;
+
+        // Update visual
+        if (ShrineUI.currentShrine.data) {
+            ShrineUI.currentShrine.data.glow = false;
+            ShrineUI.currentShrine.data.color = '#666666';
+        }
+    }
 }
 
 // ============================================================================
@@ -144,6 +218,36 @@ function selectShrineBoon(index) {
 function handleShrineInput(e) {
     if (!ShrineUI.isOpen) return false;
 
+    // Replacement mode step 2: selecting which existing boon to replace
+    if (ShrineUI.replacementMode && ShrineUI.selectedNewBoon >= 0) {
+        const activeBoonList = typeof BoonSystem !== 'undefined' ? BoonSystem.getActiveBoonList() : [];
+
+        switch (e.key) {
+            case 'Escape':
+                // Go back to step 1 (cancel replacement target selection)
+                ShrineUI.selectedNewBoon = -1;
+                return true;
+
+            case '1': case '2': case '3': case '4':
+            case '5': case '6': case '7': case '8': {
+                const idx = parseInt(e.key) - 1;
+                if (idx < activeBoonList.length) {
+                    replaceBoonAtIndex(idx);
+                }
+                return true;
+            }
+
+            case 'Enter':
+            case ' ':
+                if (ShrineUI.replaceHoveredIndex >= 0 && ShrineUI.replaceHoveredIndex < activeBoonList.length) {
+                    replaceBoonAtIndex(ShrineUI.replaceHoveredIndex);
+                }
+                return true;
+        }
+        return true;
+    }
+
+    // Normal mode (or replacement mode step 1)
     switch (e.key) {
         case 'Escape':
             closeShrineUI();
@@ -197,10 +301,50 @@ function handleShrineClick(mouseX, mouseY) {
     const centerX = canvas.width / 2;
     const centerY = canvas.height / 2;
 
-    const panelWidth = 400;
-    const panelHeight = 350;
+    // Panel dimensions depend on replacement mode
+    const panelWidth = ShrineUI.replacementMode ? 520 : 400;
+    const cardHeight = 110; // Taller cards with stat previews
+    const panelHeight = ShrineUI.replacementMode ? 520 : 80 + ShrineUI.boonChoices.length * cardHeight + 40;
     const panelX = centerX - panelWidth / 2;
     const panelY = centerY - panelHeight / 2;
+
+    // Replacement mode step 2: clicking on existing boons
+    if (ShrineUI.replacementMode && ShrineUI.selectedNewBoon >= 0) {
+        const activeBoonList = typeof BoonSystem !== 'undefined' ? BoonSystem.getActiveBoonList() : [];
+        const existingStartY = panelY + 80 + ShrineUI.boonChoices.length * cardHeight + 30;
+        const existingCardW = 55;
+        const existingCardH = 50;
+        const existingSpacing = 4;
+        const existingStartX = panelX + 15;
+
+        for (let i = 0; i < activeBoonList.length; i++) {
+            const ex = existingStartX + i * (existingCardW + existingSpacing);
+            const ey = existingStartY;
+            if (mouseX >= ex && mouseX <= ex + existingCardW &&
+                mouseY >= ey && mouseY <= ey + existingCardH) {
+                replaceBoonAtIndex(i);
+                return true;
+            }
+        }
+
+        // If clicking outside the existing boon area but inside panel, go back to step 1
+        if (mouseX >= panelX && mouseX <= panelX + panelWidth &&
+            mouseY >= panelY && mouseY <= panelY + panelHeight) {
+            // Check if clicking new boon cards to re-select
+            const optionStartY = panelY + 80;
+            for (let i = 0; i < ShrineUI.boonChoices.length; i++) {
+                const optY = optionStartY + i * cardHeight;
+                if (mouseY >= optY && mouseY < optY + cardHeight - 5) {
+                    ShrineUI.selectedNewBoon = i;
+                    return true;
+                }
+            }
+            return true;
+        }
+
+        closeShrineUI();
+        return true;
+    }
 
     // Check if click is outside panel (close)
     if (mouseX < panelX || mouseX > panelX + panelWidth ||
@@ -209,13 +353,11 @@ function handleShrineClick(mouseX, mouseY) {
         return true;
     }
 
-    // Check boon option clicks
+    // Check boon option clicks (new boons offered)
     const optionStartY = panelY + 80;
-    const optionHeight = 80;
-
     for (let i = 0; i < ShrineUI.boonChoices.length; i++) {
-        const optY = optionStartY + i * optionHeight;
-        if (mouseY >= optY && mouseY < optY + optionHeight - 5) {
+        const optY = optionStartY + i * cardHeight;
+        if (mouseY >= optY && mouseY < optY + cardHeight - 5) {
             selectShrineBoon(i);
             return true;
         }
@@ -238,24 +380,156 @@ function handleShrineMouseMove(mouseX, mouseY) {
     const centerX = canvas.width / 2;
     const centerY = canvas.height / 2;
 
-    const panelWidth = 400;
-    const panelHeight = 350;
+    const panelWidth = ShrineUI.replacementMode ? 520 : 400;
+    const cardHeight = 110;
+    const panelHeight = ShrineUI.replacementMode ? 520 : 80 + ShrineUI.boonChoices.length * cardHeight + 40;
     const panelX = centerX - panelWidth / 2;
     const panelY = centerY - panelHeight / 2;
 
     const optionStartY = panelY + 80;
-    const optionHeight = 80;
 
     ShrineUI.hoveredIndex = -1;
+    ShrineUI.replaceHoveredIndex = -1;
 
+    // Hover on new boon offerings
     for (let i = 0; i < ShrineUI.boonChoices.length; i++) {
-        const optY = optionStartY + i * optionHeight;
-        if (mouseY >= optY && mouseY < optY + optionHeight - 5 &&
+        const optY = optionStartY + i * cardHeight;
+        if (mouseY >= optY && mouseY < optY + cardHeight - 5 &&
             mouseX >= panelX + 10 && mouseX <= panelX + panelWidth - 10) {
             ShrineUI.hoveredIndex = i;
             break;
         }
     }
+
+    // Hover on existing boons in replacement mode step 2
+    if (ShrineUI.replacementMode && ShrineUI.selectedNewBoon >= 0) {
+        const activeBoonList = typeof BoonSystem !== 'undefined' ? BoonSystem.getActiveBoonList() : [];
+        const existingStartY = panelY + 80 + ShrineUI.boonChoices.length * cardHeight + 30;
+        const existingCardW = 55;
+        const existingCardH = 50;
+        const existingSpacing = 4;
+        const existingStartX = panelX + 15;
+
+        for (let i = 0; i < activeBoonList.length; i++) {
+            const ex = existingStartX + i * (existingCardW + existingSpacing);
+            const ey = existingStartY;
+            if (mouseX >= ex && mouseX <= ex + existingCardW &&
+                mouseY >= ey && mouseY <= ey + existingCardH) {
+                ShrineUI.replaceHoveredIndex = i;
+                break;
+            }
+        }
+    }
+}
+
+// ============================================================================
+// STAT PREVIEW
+// ============================================================================
+
+/**
+ * Compute a stat preview showing current vs projected values when a boon is applied
+ * @param {Object} boon - The boon definition from BOONS
+ * @param {Object} player - The player object with statStacks
+ * @returns {Array} Array of { statName, current, projected, isIncrease }
+ */
+function computeStatPreview(boon, player) {
+    const previews = [];
+    if (!player || !player.statStacks) return previews;
+
+    const STAT_DISPLAY_NAMES = {
+        maxHp: 'Max HP', damage: 'Damage', magicDamage: 'Magic Dmg',
+        defense: 'Defense', speed: 'Speed', attackSpeed: 'Atk Speed',
+        critChance: 'Crit %', critDamage: 'Crit Dmg',
+        fireDamagePercent: 'Fire Dmg', iceDamagePercent: 'Ice Dmg',
+        poisonDamagePercent: 'Poison Dmg', shadowDamagePercent: 'Shadow Dmg',
+        fireResist: 'Fire Res', iceResist: 'Ice Res',
+        poisonResist: 'Poison Res', shadowResist: 'Shadow Res',
+        maxStamina: 'Max Stamina', staminaRegenRate: 'Stam Regen',
+        staminaKillRefund: 'Kill Refund', healingReceived: 'Healing',
+        igniteChance: 'Ignite %', freezeChance: 'Freeze %',
+        poisonChance: 'Poison %', lifestealPercent: 'Lifesteal',
+        thornsDamage: 'Thorns', goldFindPercent: 'Gold Find',
+        lootRarityBonus: 'Loot Bonus', cooldownReduction: 'CDR',
+        aoeRadiusBonus: 'AoE Bonus'
+    };
+
+    // Gather effects from boon.effects (array) or boon.effect (singular)
+    let effects = [];
+    if (boon.effects && Array.isArray(boon.effects)) {
+        effects = boon.effects;
+    } else if (boon.effect && boon.effect.stat && boon.effect.type !== 'special' && boon.effect.type !== 'conditional') {
+        effects = [boon.effect];
+    }
+
+    // For boons without direct stat effects, try to extract from effect structure
+    if (effects.length === 0 && boon.effect) {
+        const eff = boon.effect;
+        // Handle tradeoff boons that have bonus/penalty with stat keys
+        if (eff.type === 'tradeoff' && eff.bonus) {
+            for (const [stat, val] of Object.entries(eff.bonus)) {
+                if (STAT_DISPLAY_NAMES[stat] || player.statStacks[stat]) {
+                    effects.push({ stat, value: val * 100, type: 'multiplicative' });
+                }
+            }
+            if (eff.penalty) {
+                for (const [stat, val] of Object.entries(eff.penalty)) {
+                    if (stat === 'damageTaken' || stat === 'hpDrain') continue;
+                    if (STAT_DISPLAY_NAMES[stat] || player.statStacks[stat]) {
+                        effects.push({ stat, value: -val * 100, type: 'multiplicative' });
+                    }
+                }
+            }
+        }
+    }
+
+    for (const effect of effects) {
+        if (effect.type === 'special' || effect.type === 'conditional') continue;
+        const statStack = player.statStacks[effect.stat];
+        if (!statStack) continue;
+
+        const currentValue = statStack.compute();
+        const projected = statStack.clone();
+        projected.addModifier(boon.id || 'preview', effect.value, effect.type);
+        const newValue = projected.compute();
+
+        previews.push({
+            statName: STAT_DISPLAY_NAMES[effect.stat] || effect.stat,
+            current: Math.round(currentValue * 10) / 10,
+            projected: Math.round(newValue * 10) / 10,
+            isIncrease: newValue > currentValue
+        });
+    }
+
+    return previews;
+}
+
+// ============================================================================
+// CARD ANIMATION HELPERS
+// ============================================================================
+
+/**
+ * Calculate card entrance animation values
+ * @param {number} cardIndex - Index of the card (0-based)
+ * @returns {{ offsetY: number, opacity: number }}
+ */
+function getCardAnimation(cardIndex) {
+    const elapsed = performance.now() - ShrineUI.shrineOpenTime;
+    const staggerDelay = cardIndex * 50; // 50ms stagger between cards
+    const animDuration = 300;
+    const cardElapsed = elapsed - staggerDelay;
+
+    if (cardElapsed <= 0) {
+        return { offsetY: 80, opacity: 0 };
+    }
+
+    const t = Math.min(1, cardElapsed / animDuration);
+    // Ease-out cubic
+    const eased = 1 - Math.pow(1 - t, 3);
+
+    return {
+        offsetY: 80 * (1 - eased),
+        opacity: eased
+    };
 }
 
 // ============================================================================
@@ -273,9 +547,12 @@ function renderShrineUI(ctx) {
     const centerX = canvas.width / 2;
     const centerY = canvas.height / 2;
 
-    // Panel dimensions
-    const panelWidth = 400;
-    const panelHeight = 350;
+    // Panel dimensions - larger to fit stat previews and replacement section
+    const cardHeight = 110;
+    const panelWidth = ShrineUI.replacementMode ? 520 : 400;
+    const baseContentHeight = 80 + ShrineUI.boonChoices.length * cardHeight + 40;
+    const replacementExtra = ShrineUI.replacementMode ? 100 : 0;
+    const panelHeight = Math.min(canvas.height - 40, baseContentHeight + replacementExtra);
     const panelX = centerX - panelWidth / 2;
     const panelY = centerY - panelHeight / 2;
 
@@ -303,14 +580,20 @@ function renderShrineUI(ctx) {
     ctx.textAlign = 'center';
     ctx.fillText('Divine Blessing', centerX, panelY + 40);
 
-    // Subtitle
+    // Subtitle - changes based on mode
     ctx.fillStyle = '#AAAAAA';
     ctx.font = '14px monospace';
-    ctx.fillText('Choose a boon (press 1-3 or click)', centerX, panelY + 65);
+    if (ShrineUI.replacementMode && ShrineUI.selectedNewBoon >= 0) {
+        ctx.fillStyle = '#FFD700';
+        ctx.fillText('Select a boon to REPLACE (1-8 or click)', centerX, panelY + 65);
+    } else if (ShrineUI.replacementMode) {
+        ctx.fillText('Boons full! Choose new, then replace (1-3)', centerX, panelY + 65);
+    } else {
+        ctx.fillText('Choose a boon (press 1-3 or click)', centerX, panelY + 65);
+    }
 
     // Boon options
     const optionStartY = panelY + 80;
-    const optionHeight = 80;
     const optionPadding = 10;
 
     for (let i = 0; i < ShrineUI.boonChoices.length; i++) {
@@ -319,22 +602,37 @@ function renderShrineUI(ctx) {
 
         if (!boon) continue;
 
-        const optY = optionStartY + i * optionHeight;
+        // Card entrance animation
+        const anim = getCardAnimation(i);
+        if (anim.opacity <= 0) continue;
+
+        ctx.save();
+        ctx.globalAlpha = anim.opacity;
+
+        const optY = optionStartY + i * cardHeight + anim.offsetY;
         const isSelected = i === ShrineUI.selectedIndex;
         const isHovered = i === ShrineUI.hoveredIndex;
+        const isChosenForReplace = ShrineUI.replacementMode && i === ShrineUI.selectedNewBoon;
 
         // Option background
-        if (isSelected || isHovered) {
+        if (isChosenForReplace) {
+            ctx.fillStyle = 'rgba(100, 255, 100, 0.2)';
+        } else if (isSelected || isHovered) {
             ctx.fillStyle = 'rgba(255, 215, 0, 0.2)';
         } else {
             ctx.fillStyle = 'rgba(40, 35, 50, 0.8)';
         }
-        ctx.fillRect(panelX + optionPadding, optY, panelWidth - optionPadding * 2, optionHeight - 5);
+        ctx.fillRect(panelX + optionPadding, optY, panelWidth - optionPadding * 2, cardHeight - 5);
 
         // Option border
-        ctx.strokeStyle = isSelected ? '#FFD700' : (isHovered ? '#FFEA70' : '#555555');
-        ctx.lineWidth = isSelected ? 2 : 1;
-        ctx.strokeRect(panelX + optionPadding, optY, panelWidth - optionPadding * 2, optionHeight - 5);
+        if (isChosenForReplace) {
+            ctx.strokeStyle = '#69f0ae';
+            ctx.lineWidth = 2;
+        } else {
+            ctx.strokeStyle = isSelected ? '#FFD700' : (isHovered ? '#FFEA70' : '#555555');
+            ctx.lineWidth = isSelected ? 2 : 1;
+        }
+        ctx.strokeRect(panelX + optionPadding, optY, panelWidth - optionPadding * 2, cardHeight - 5);
 
         // Number indicator
         ctx.fillStyle = '#FFD700';
@@ -369,6 +667,117 @@ function renderShrineUI(ctx) {
             ctx.fillText(`(${currentStacks}/${boon.maxStacks})`, panelX + panelWidth - optionPadding - 10, optY + 25);
             ctx.textAlign = 'left';
         }
+
+        // --- Stat Preview Section ---
+        if (game.player) {
+            const previews = computeStatPreview(boon, game.player);
+            if (previews.length > 0) {
+                // Divider line
+                const dividerY = optY + 66;
+                ctx.strokeStyle = 'rgba(255, 215, 0, 0.2)';
+                ctx.lineWidth = 1;
+                ctx.beginPath();
+                ctx.moveTo(panelX + optionPadding + 10, dividerY);
+                ctx.lineTo(panelX + panelWidth - optionPadding - 10, dividerY);
+                ctx.stroke();
+
+                // Stat preview entries
+                ctx.font = '10px monospace';
+                const previewStartY = dividerY + 13;
+                const previewColWidth = Math.floor((panelWidth - optionPadding * 2 - 20) / Math.min(previews.length, 3));
+
+                previews.forEach((preview, pi) => {
+                    const col = pi % 3;
+                    const row = Math.floor(pi / 3);
+                    const px = panelX + optionPadding + 15 + col * previewColWidth;
+                    const py = previewStartY + row * 13;
+
+                    // Stat name
+                    ctx.fillStyle = '#999';
+                    ctx.textAlign = 'left';
+                    ctx.fillText(preview.statName + ':', px, py);
+
+                    // Current -> Projected
+                    const valueText = `${preview.current} > ${preview.projected}`;
+                    ctx.fillStyle = preview.isIncrease ? '#69f0ae' : '#ef5350';
+                    ctx.fillText(valueText, px + ctx.measureText(preview.statName + ': ').width, py);
+                });
+            }
+        }
+
+        ctx.restore();
+    }
+
+    // --- Replacement Mode: Show existing boons below ---
+    if (ShrineUI.replacementMode && typeof BoonSystem !== 'undefined') {
+        const activeBoonList = BoonSystem.getActiveBoonList();
+        const existingStartY = optionStartY + ShrineUI.boonChoices.length * cardHeight + 10;
+
+        // Section divider
+        ctx.strokeStyle = 'rgba(255, 215, 0, 0.4)';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(panelX + 15, existingStartY);
+        ctx.lineTo(panelX + panelWidth - 15, existingStartY);
+        ctx.stroke();
+
+        // Section label
+        ctx.fillStyle = ShrineUI.selectedNewBoon >= 0 ? '#FFD700' : '#AAAAAA';
+        ctx.font = '12px monospace';
+        ctx.textAlign = 'center';
+        const replaceLabel = ShrineUI.selectedNewBoon >= 0
+            ? 'Click or press 1-8 to replace an existing boon:'
+            : 'Your current boons:';
+        ctx.fillText(replaceLabel, centerX, existingStartY + 16);
+
+        // Render existing boon cards as compact tiles
+        const existingCardW = 55;
+        const existingCardH = 50;
+        const existingSpacing = 4;
+        const totalExistingWidth = activeBoonList.length * (existingCardW + existingSpacing) - existingSpacing;
+        const existingStartX = centerX - totalExistingWidth / 2;
+        const existingCardsY = existingStartY + 25;
+
+        activeBoonList.forEach((entry, i) => {
+            const boon = entry.boon;
+            const ex = existingStartX + i * (existingCardW + existingSpacing);
+            const ey = existingCardsY;
+            const isReplaceHovered = i === ShrineUI.replaceHoveredIndex;
+
+            // Card entrance animation for existing cards
+            const existAnim = getCardAnimation(ShrineUI.boonChoices.length + i);
+            ctx.save();
+            ctx.globalAlpha = existAnim.opacity;
+
+            // Card background
+            const ancestor = typeof ANCESTORS !== 'undefined' && boon.ancestor ? ANCESTORS[boon.ancestor] : null;
+            ctx.fillStyle = isReplaceHovered ? 'rgba(239, 83, 80, 0.35)' : 'rgba(40, 35, 50, 0.9)';
+            ctx.fillRect(ex, ey + existAnim.offsetY * 0.5, existingCardW, existingCardH);
+
+            // Card border
+            ctx.strokeStyle = isReplaceHovered ? '#ef5350' : (ancestor ? ancestor.color : '#555');
+            ctx.lineWidth = isReplaceHovered ? 2 : 1;
+            ctx.strokeRect(ex, ey + existAnim.offsetY * 0.5, existingCardW, existingCardH);
+
+            // Number key hint
+            ctx.fillStyle = '#FFD700';
+            ctx.font = '8px monospace';
+            ctx.textAlign = 'left';
+            ctx.fillText(`[${i + 1}]`, ex + 2, ey + existAnim.offsetY * 0.5 + 10);
+
+            // Boon icon
+            ctx.font = '18px monospace';
+            ctx.textAlign = 'center';
+            ctx.fillText(boon.icon || '?', ex + existingCardW / 2, ey + existAnim.offsetY * 0.5 + 28);
+
+            // Boon name (truncated)
+            ctx.fillStyle = boon.color || '#fff';
+            ctx.font = '7px monospace';
+            const shortName = boon.name.length > 8 ? boon.name.substring(0, 7) + '.' : boon.name;
+            ctx.fillText(shortName, ex + existingCardW / 2, ey + existAnim.offsetY * 0.5 + 44);
+
+            ctx.restore();
+        });
     }
 
     // Close hint
@@ -387,6 +796,8 @@ if (typeof window !== 'undefined') {
     window.openShrineUI = openShrineUI;
     window.closeShrineUI = closeShrineUI;
     window.selectShrineBoon = selectShrineBoon;
+    window.replaceBoonAtIndex = replaceBoonAtIndex;
+    window.computeStatPreview = computeStatPreview;
     window.handleShrineInput = handleShrineInput;
     window.handleShrineClick = handleShrineClick;
     window.handleShrineMouseMove = handleShrineMouseMove;

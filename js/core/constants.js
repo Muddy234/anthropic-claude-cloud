@@ -217,14 +217,33 @@ const RENDER_CONFIG = {
 };
 
 // ============================================================================
-// AUDIO (placeholder for future)
+// AUDIO SYSTEM
 // ============================================================================
 
 const AUDIO_CONFIG = {
+    // Volume levels (0.0 - 1.0)
     masterVolume: 1.0,
     musicVolume: 0.7,
     sfxVolume: 1.0,
-    ambientVolume: 0.5
+    ambientVolume: 0.5,
+    uiVolume: 0.8,
+
+    // Voice management
+    maxVoices: 16,            // Maximum simultaneous sounds
+    maxSameSound: 3,          // Max instances of same sound
+    sameSoundCooldown: 50,    // Minimum ms between same sound plays
+
+    // Spatial audio
+    spatialEnabled: true,     // Enable position-based panning
+    maxHearingDistance: 20,   // Tiles for full falloff
+
+    // Adaptive music
+    tensionFadeTime: 2.0,     // Seconds to fade tension layers
+    musicCrossfade: 3.0,      // Seconds to crossfade tracks
+
+    // Performance
+    preloadAll: false,        // Load sounds on demand (true = preload all)
+    mobileOptimized: true     // Reduce polyphony on mobile devices
 };
 
 // ============================================================================
@@ -255,36 +274,6 @@ const RARITY_CONFIG = {
     rare: { color: '#2196f3', multiplier: 1.35 },
     epic: { color: '#9c27b0', multiplier: 1.6 },
     legendary: { color: '#ff9800', multiplier: 2.0 }
-};
-
-// ============================================================================
-// EXTRACTION SYSTEM (Survival Extraction Update)
-// ============================================================================
-
-const EXTRACTION_CONFIG = {
-    // Shafts per floor (scales slightly with floor)
-    shaftsPerFloor: {
-        1: 3, 2: 3, 3: 3,
-        4: 4, 5: 4, 6: 4
-    },
-
-    // Floor duration before all shafts collapse (12 minutes)
-    floorDuration: 720000,
-
-    // Collapse schedule as percentage of floor duration
-    // First at 40%, second at 65%, third at 83%, fourth at 92%
-    collapseSchedule: [0.40, 0.65, 0.83, 0.92],
-
-    // Warning timing (milliseconds before collapse)
-    warningDuration: 20000,
-    warningStages: {
-        rumble: 20000,    // First warning at 20s
-        debris: 10000,    // Visual debris at 10s
-        critical: 5000    // Critical shake at 5s
-    },
-
-    // Interaction
-    interactionRadius: 2.0  // Tiles from shaft to interact (increased for easier use)
 };
 
 // ============================================================================
@@ -349,29 +338,6 @@ const BANKING_CONFIG = {
 };
 
 // ============================================================================
-// FLOOR DEGRADATION
-// ============================================================================
-
-const DEGRADATION_CONFIG = {
-    // Village degradation stages based on deepest floor reached
-    stages: {
-        1: { floors: [1, 2], description: 'Peaceful' },
-        2: { floors: [3, 4], description: 'Smoke on Horizon' },
-        3: { floors: [5, 6], description: 'Ash Falling' },
-        4: { floors: ['core'], description: 'Final Hour' }
-    },
-
-    // Drop rate reduction per extraction from a floor
-    stepReduction: 0.15,
-
-    // Minimum drop rate (floor never goes below 40%)
-    minimum: 0.40,
-
-    // Initial drop rate
-    baseRate: 1.0
-};
-
-// ============================================================================
 // FLOOR TIERS
 // ============================================================================
 
@@ -402,7 +368,7 @@ const FLOOR_TIER_CONFIG = {
 
 const QUEST_CONFIG = {
     maxActive: 5,
-    types: ['fetch', 'improvement', 'rescue', 'lore'],
+    types: ['fetch', 'improvement', 'lore'],
 
     // Quest availability check interval (ms)
     checkInterval: 5000
@@ -438,7 +404,6 @@ const GAME_STATES = {
 
     // Dungeon overlays
     CHEST: 'chest',
-    EXTRACTION: 'extraction',
     INVENTORY: 'inventory',
     MAP: 'map',
     SKILLS: 'skills',
@@ -487,21 +452,6 @@ const PATH_DOWN_CONFIG = {
 };
 
 // ============================================================================
-// RESCUE RUN
-// ============================================================================
-
-const RESCUE_CONFIG = {
-    // Death drop persists for one run only
-    persistsForRuns: 1,
-
-    // Visual marker on minimap
-    showOnMinimap: true,
-
-    // Interaction radius to collect
-    collectRadius: 1.0
-};
-
-// ============================================================================
 // EXPORTS
 // ============================================================================
 
@@ -532,17 +482,14 @@ window.AUDIO_CONFIG = AUDIO_CONFIG;
 window.DEBUG_CONFIG = DEBUG_CONFIG;
 window.RARITY_CONFIG = RARITY_CONFIG;
 
-// Survival Extraction Update configs
-window.EXTRACTION_CONFIG = EXTRACTION_CONFIG;
+// Game system configs
 window.VILLAGE_CONFIG = VILLAGE_CONFIG;
 window.BANKING_CONFIG = BANKING_CONFIG;
-window.DEGRADATION_CONFIG = DEGRADATION_CONFIG;
 window.FLOOR_TIER_CONFIG = FLOOR_TIER_CONFIG;
 window.QUEST_CONFIG = QUEST_CONFIG;
 window.SAVE_CONFIG = SAVE_CONFIG;
 window.GAME_STATES = GAME_STATES;
 window.MINIBOSS_CONFIG = MINIBOSS_CONFIG;
 window.PATH_DOWN_CONFIG = PATH_DOWN_CONFIG;
-window.RESCUE_CONFIG = RESCUE_CONFIG;
 
-console.log('[Constants] Game configuration loaded (Survival Extraction v1)');
+console.log('[Constants] Game configuration loaded');

@@ -12,11 +12,14 @@ const LoadoutUI = {
     currentPanel: 1,        // 0=bank, 1=equipment, 2=inventory
     selectedIndex: 0,
     equipmentSlotIndex: 0,
-    startingFloor: 1,
 
     // Scroll positions
     bankScroll: 0,
     inventoryScroll: 0,
+
+    // Spell selection (Dash, Heal, Shield)
+    selectedSpell: 'dash',
+    SPELL_OPTIONS: ['dash', 'heal', 'shield'],
 
     // Layout
     PANEL_WIDTH: 1100,
@@ -52,7 +55,6 @@ const LoadoutUI = {
         this.currentPanel = 1;  // Start on equipment panel
         this.selectedIndex = 0;
         this.equipmentSlotIndex = 0;
-        this.startingFloor = 1;
         this.bankScroll = 0;
         this.inventoryScroll = 0;
 
@@ -63,6 +65,9 @@ const LoadoutUI = {
             MAIN: null, OFF: null
         };
         this.runGold = 0;
+
+        // Reset spell selection to default
+        this.selectedSpell = 'dash';
 
         game.state = GAME_STATES ? GAME_STATES.LOADOUT : 'loadout';
         console.log('[LoadoutUI] Opened - Arc Raiders style');
@@ -227,12 +232,18 @@ const LoadoutUI = {
                 this.close();
                 break;
 
-            case 'PageUp':
-                this._adjustStartingFloor(1);
+            // Spell selection (1-3)
+            case '1':
+                this.selectedSpell = 'dash';
+                console.log('[LoadoutUI] Spell selected: Dash');
                 break;
-
-            case 'PageDown':
-                this._adjustStartingFloor(-1);
+            case '2':
+                this.selectedSpell = 'heal';
+                console.log('[LoadoutUI] Spell selected: Heal');
+                break;
+            case '3':
+                this.selectedSpell = 'shield';
+                console.log('[LoadoutUI] Spell selected: Shield');
                 break;
         }
     },
@@ -423,15 +434,8 @@ const LoadoutUI = {
         console.log('[LoadoutUI] Basic loadout selected');
     },
 
-    _adjustStartingFloor(delta) {
-        const unlockedFloors = persistentState?.shortcuts?.unlockedFloors || [1];
-        const currentIdx = unlockedFloors.indexOf(this.startingFloor);
-        const newIdx = Math.max(0, Math.min(unlockedFloors.length - 1, currentIdx + delta));
-        this.startingFloor = unlockedFloors[newIdx] || 1;
-    },
-
     _startRun() {
-        console.log(`[LoadoutUI] Starting run from floor ${this.startingFloor}`);
+        console.log('[LoadoutUI] Starting run');
 
         // Withdraw items from bank that were selected
         const bankItems = persistentState?.bank?.items || [];
@@ -469,15 +473,18 @@ const LoadoutUI = {
             offhand: this.runEquipment.OFF,
             consumables: this.runInventory.filter(i => i.type === 'consumable'),
             materials: this.runInventory.filter(i => i.type === 'material'),
-            gold: this.runGold
+            gold: this.runGold,
+            selectedSpell: this.selectedSpell
         };
+
+        console.log(`[LoadoutUI] Starting with spell: ${this.selectedSpell}`);
 
         this.active = false;
 
         // Start dungeon run
         if (typeof startDungeonRun === 'function') {
             startDungeonRun({
-                startingFloor: this.startingFloor,
+                startingFloor: 1,
                 loadout: loadout
             });
         } else {
@@ -511,6 +518,9 @@ const LoadoutUI = {
         this._renderEquipmentPanel(ctx, panelX + 320, panelY + 60);
         this._renderInventoryPanel(ctx, panelX + 620, panelY + 60);
 
+        // Draw spell selection panel (above action bar)
+        this._renderSpellPanel(ctx, panelX, panelY + this.PANEL_HEIGHT - 180);
+
         // Draw bottom action bar
         this._renderActionBar(ctx, panelX, panelY + this.PANEL_HEIGHT - 100);
 
@@ -519,36 +529,96 @@ const LoadoutUI = {
     },
 
     _renderPanel(ctx, x, y) {
-        // Shadow
-        ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
-        ctx.fillRect(x + 5, y + 5, this.PANEL_WIDTH, this.PANEL_HEIGHT);
+        // Get design system colors
+        const colors = typeof UI_COLORS !== 'undefined' ? UI_COLORS : {};
+        const frameGold = colors.frameGold || '#b8860b';
+        const frameGoldBright = colors.frameGoldBright || '#daa520';
+        const frameGoldDark = colors.frameGoldDark || '#8b6914';
+        const templeStone = colors.templeStone || '#2a2622';
+        const templeStoneDark = colors.templeStoneDark || '#1a1816';
 
-        // Background
-        ctx.fillStyle = '#0d1117';
+        ctx.save();
+
+        // Heavy armory shadow
+        ctx.shadowColor = 'rgba(0, 0, 0, 0.7)';
+        ctx.shadowBlur = 25;
+        ctx.shadowOffsetY = 10;
+
+        // Stone armory background
+        const bgGrad = ctx.createLinearGradient(x, y, x, y + this.PANEL_HEIGHT);
+        bgGrad.addColorStop(0, '#1f1c18');
+        bgGrad.addColorStop(0.1, templeStoneDark);
+        bgGrad.addColorStop(0.9, '#0d0b0a');
+        bgGrad.addColorStop(1, '#050404');
+        ctx.fillStyle = bgGrad;
         ctx.fillRect(x, y, this.PANEL_WIDTH, this.PANEL_HEIGHT);
 
-        // Border
-        ctx.strokeStyle = '#30363d';
+        ctx.shadowBlur = 0;
+        ctx.shadowOffsetY = 0;
+
+        // Iron grate texture (subtle grid)
+        ctx.strokeStyle = 'rgba(60, 55, 50, 0.3)';
+        ctx.lineWidth = 1;
+        const gridSpacing = 40;
+        for (let gx = x + gridSpacing; gx < x + this.PANEL_WIDTH; gx += gridSpacing) {
+            ctx.beginPath();
+            ctx.moveTo(gx, y + 60);
+            ctx.lineTo(gx, y + this.PANEL_HEIGHT - 110);
+            ctx.stroke();
+        }
+        for (let gy = y + 60 + gridSpacing; gy < y + this.PANEL_HEIGHT - 110; gy += gridSpacing) {
+            ctx.beginPath();
+            ctx.moveTo(x, gy);
+            ctx.lineTo(x + this.PANEL_WIDTH, gy);
+            ctx.stroke();
+        }
+
+        // Use design system temple frame if available
+        if (typeof drawTempleFrame === 'function') {
+            drawTempleFrame(ctx, x, y, this.PANEL_WIDTH, this.PANEL_HEIGHT, {
+                cornerSize: 24, borderWidth: 5, pattern: true
+            });
+        } else {
+            // Heavy gold/iron frame
+            const frameGrad = ctx.createLinearGradient(x, y, x + this.PANEL_WIDTH, y + this.PANEL_HEIGHT);
+            frameGrad.addColorStop(0, frameGoldBright);
+            frameGrad.addColorStop(0.3, frameGold);
+            frameGrad.addColorStop(0.7, '#8b7355');
+            frameGrad.addColorStop(1, frameGold);
+            ctx.strokeStyle = frameGrad;
+            ctx.lineWidth = 5;
+            ctx.strokeRect(x, y, this.PANEL_WIDTH, this.PANEL_HEIGHT);
+        }
+
+        // Add ornate corners if available
+        if (typeof drawOrnateCorners === 'function') {
+            drawOrnateCorners(ctx, x, y, this.PANEL_WIDTH, this.PANEL_HEIGHT, { size: 24 });
+        }
+
+        // Title bar (armory plaque)
+        ctx.fillStyle = '#252220';
+        ctx.fillRect(x + 4, y + 4, this.PANEL_WIDTH - 8, 52);
+
+        // Inner title bar border
+        ctx.strokeStyle = frameGoldDark;
         ctx.lineWidth = 2;
-        ctx.strokeRect(x, y, this.PANEL_WIDTH, this.PANEL_HEIGHT);
+        ctx.strokeRect(x + 6, y + 6, this.PANEL_WIDTH - 12, 48);
 
-        // Title bar
-        ctx.fillStyle = '#161b22';
-        ctx.fillRect(x, y, this.PANEL_WIDTH, 50);
-
-        // Title
-        ctx.font = 'bold 24px Arial';
+        // Title with dramatic styling
+        ctx.font = 'bold 26px serif';
         ctx.textAlign = 'center';
-        ctx.fillStyle = '#58a6ff';
-        ctx.fillText('EXPEDITION LOADOUT', x + this.PANEL_WIDTH / 2, y + 35);
+        ctx.fillStyle = frameGoldDark;
+        ctx.fillText('EXPEDITION ARMORY', x + this.PANEL_WIDTH / 2 + 1, y + 38);
+        ctx.fillStyle = frameGoldBright;
+        ctx.fillText('EXPEDITION ARMORY', x + this.PANEL_WIDTH / 2, y + 37);
 
-        // Floor selector in title bar
-        ctx.font = '14px Arial';
-        ctx.textAlign = 'right';
-        ctx.fillStyle = '#8b949e';
-        ctx.fillText(`Floor ${this.startingFloor}`, x + this.PANEL_WIDTH - 20, y + 30);
-        ctx.font = '10px Arial';
-        ctx.fillText('[PgUp/PgDn]', x + this.PANEL_WIDTH - 20, y + 44);
+        // Crossed swords decoration
+        ctx.font = '20px serif';
+        ctx.fillStyle = frameGold;
+        ctx.fillText('⚔', x + this.PANEL_WIDTH / 2 - 140, y + 36);
+        ctx.fillText('⚔', x + this.PANEL_WIDTH / 2 + 140, y + 36);
+
+        ctx.restore();
     },
 
     _renderBankPanel(ctx, x, y) {
@@ -890,13 +960,8 @@ const LoadoutUI = {
             leftY += 13;
         }
 
-        // Block chance (shields)
-        const block = stats.block;
-        if (block) {
-            ctx.fillStyle = '#1abc9c';
-            ctx.fillText(`🛡 Block: ${Math.round(block * 100)}%`, leftCol, leftY);
-            leftY += 13;
-        }
+        // Block chance display removed - block mechanics are no longer in use
+        // Shields now provide defense bonuses instead
 
         // Physical/Magical Defense
         const pDef = stats.pDef || item.pDef;
@@ -1051,6 +1116,86 @@ const LoadoutUI = {
         return colors[rarity] || '#9e9e9e';
     },
 
+    _renderSpellPanel(ctx, x, y) {
+        const width = this.PANEL_WIDTH;
+        const height = 70;
+
+        // Background
+        ctx.fillStyle = '#1c2128';
+        ctx.fillRect(x, y, width, height);
+        ctx.strokeStyle = '#30363d';
+        ctx.lineWidth = 1;
+        ctx.strokeRect(x, y, width, height);
+
+        // Title
+        ctx.font = 'bold 12px Arial';
+        ctx.textAlign = 'left';
+        ctx.fillStyle = '#8b949e';
+        ctx.fillText('SPACEBAR SPELL:', x + 20, y + 18);
+
+        // Spell options
+        const spellData = {
+            dash: { name: 'Dash', desc: 'Dodge roll (1s CD)', icon: '⚡', color: '#00bcd4' },
+            heal: { name: 'Heal', desc: '+35% max HP (3min CD)', icon: '❤', color: '#4caf50' },
+            shield: { name: 'Shield', desc: '50% HP barrier (3min CD)', icon: '🛡', color: '#2196f3' }
+        };
+
+        const startX = x + 180;
+        const slotWidth = 280;
+        const slotHeight = 45;
+        const slotGap = 20;
+
+        this.SPELL_OPTIONS.forEach((spellId, index) => {
+            const spell = spellData[spellId];
+            const slotX = startX + index * (slotWidth + slotGap);
+            const slotY = y + 12;
+            const isSelected = this.selectedSpell === spellId;
+
+            // Slot background
+            ctx.fillStyle = isSelected ? '#2d3748' : '#161b22';
+            ctx.fillRect(slotX, slotY, slotWidth, slotHeight);
+
+            // Selection border
+            if (isSelected) {
+                ctx.strokeStyle = spell.color;
+                ctx.lineWidth = 3;
+                ctx.strokeRect(slotX, slotY, slotWidth, slotHeight);
+
+                // Glow effect
+                ctx.shadowColor = spell.color;
+                ctx.shadowBlur = 10;
+                ctx.strokeRect(slotX, slotY, slotWidth, slotHeight);
+                ctx.shadowBlur = 0;
+            } else {
+                ctx.strokeStyle = '#30363d';
+                ctx.lineWidth = 1;
+                ctx.strokeRect(slotX, slotY, slotWidth, slotHeight);
+            }
+
+            // Number key indicator
+            ctx.font = 'bold 14px Arial';
+            ctx.textAlign = 'center';
+            ctx.fillStyle = isSelected ? spell.color : '#6e7681';
+            ctx.fillText(`[${index + 1}]`, slotX + 22, slotY + 28);
+
+            // Icon
+            ctx.font = '20px Arial';
+            ctx.fillStyle = isSelected ? spell.color : '#8b949e';
+            ctx.fillText(spell.icon, slotX + 55, slotY + 32);
+
+            // Name
+            ctx.font = 'bold 14px Arial';
+            ctx.textAlign = 'left';
+            ctx.fillStyle = isSelected ? '#fff' : '#c9d1d9';
+            ctx.fillText(spell.name, slotX + 80, slotY + 20);
+
+            // Description
+            ctx.font = '11px Arial';
+            ctx.fillStyle = isSelected ? '#a0aec0' : '#6e7681';
+            ctx.fillText(spell.desc, slotX + 80, slotY + 36);
+        });
+    },
+
     _renderActionBar(ctx, x, y) {
         const width = this.PANEL_WIDTH;
         const height = 80;
@@ -1085,7 +1230,7 @@ const LoadoutUI = {
         ctx.strokeRect(x + width - 250, buttonY, 200, buttonHeight);
         ctx.font = 'bold 16px Arial';
         ctx.fillStyle = '#FFF';
-        ctx.fillText(`[R] START - Floor ${this.startingFloor}`, x + width - 150, buttonY + 27);
+        ctx.fillText('[R] START RUN', x + width - 150, buttonY + 27);
 
         // Value at risk
         let totalValue = 0;
@@ -1107,7 +1252,7 @@ const LoadoutUI = {
         ctx.textAlign = 'center';
         ctx.fillStyle = '#8b949e';
         ctx.fillText(
-            '[Arrows] Navigate | [E/Enter] Transfer/Equip | [Tab] Switch Panel | [Q] Basic Kit | [R] Start Run | [ESC] Close',
+            '[Arrows] Navigate | [E/Enter] Transfer | [Tab] Panel | [1-3] Spell | [Q] Basic Kit | [R] Start | [ESC] Close',
             panelX + this.PANEL_WIDTH / 2,
             panelY + this.PANEL_HEIGHT - 10
         );

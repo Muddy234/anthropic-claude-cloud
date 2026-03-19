@@ -20,7 +20,7 @@ const DUNGEON_CONFIG = {
     maxGrowthAttempts: 2000,
 
     // Corridor settings
-    corridorWidth: 2,
+    corridorWidth: 4,       // 4 tiles wide for comfortable navigation
     corridorWobble: 0.10,   // 10% chance to widen
     doglegThreshold: 15,    // Use dogleg for distances > 15
     doglegOffset: 5,        // Max chaotic offset for waypoints
@@ -45,8 +45,45 @@ const DUNGEON_STATE = {
     blobs: [],
     corridors: [],
     grid: null,
-    entranceBlob: null
+    entranceBlob: null,
+    seed: null  // Store seed for reproducibility
 };
+
+// ============================================================================
+// SEEDED RANDOM HELPER
+// ============================================================================
+
+/**
+ * Get a random number using SeededRNG if available, otherwise Math.random()
+ * This allows gradual migration to seeded RNG while maintaining compatibility
+ * @returns {number} Random float [0, 1)
+ */
+function dungeonRandom() {
+    if (typeof GenerationRNG !== 'undefined' && GenerationRNG.random) {
+        return GenerationRNG.random();
+    }
+    return Math.random();
+}
+
+/**
+ * Get a random integer using seeded RNG
+ * @param {number} min - Minimum value (inclusive)
+ * @param {number} max - Maximum value (inclusive)
+ * @returns {number} Random integer [min, max]
+ */
+function dungeonRandomInt(min, max) {
+    return Math.floor(dungeonRandom() * (max - min + 1)) + min;
+}
+
+/**
+ * Choose a random element from an array using seeded RNG
+ * @param {Array} array - Array to choose from
+ * @returns {*} Random element
+ */
+function dungeonRandomChoice(array) {
+    if (!array || array.length === 0) return undefined;
+    return array[Math.floor(dungeonRandom() * array.length)];
+}
 
 // ============================================================================
 // BSP TREE
@@ -70,7 +107,7 @@ class Leaf {
         if (this.child1 || this.child2) return false;
 
         // Determine split direction based on aspect ratio
-        let splitHorizontal = Math.random() < 0.5;
+        let splitHorizontal = dungeonRandom() < 0.5;
         if (this.w > this.h && this.w / this.h >= 1.25) {
             splitHorizontal = false;  // Split vertically
         } else if (this.h > this.w && this.h / this.w >= 1.25) {
@@ -81,7 +118,7 @@ class Leaf {
         if (maxSize <= DUNGEON_CONFIG.minLeafSize) return false;
 
         const splitLoc = DUNGEON_CONFIG.minLeafSize +
-            Math.floor(Math.random() * (maxSize - DUNGEON_CONFIG.minLeafSize));
+            dungeonRandomInt(0, maxSize - DUNGEON_CONFIG.minLeafSize - 1);
 
         if (splitHorizontal) {
             this.child1 = new Leaf(this.x, this.y, this.w, splitLoc, this.depth + 1);
@@ -126,8 +163,8 @@ function growBlob(leaf) {
     const padding = DUNGEON_CONFIG.leafPadding;
 
     // Pick seed point with padding from edges
-    const cx = leaf.x + padding + Math.floor(Math.random() * (leaf.w - padding * 2));
-    const cy = leaf.y + padding + Math.floor(Math.random() * (leaf.h - padding * 2));
+    const cx = leaf.x + padding + dungeonRandomInt(0, leaf.w - padding * 2 - 1);
+    const cy = leaf.y + padding + dungeonRandomInt(0, leaf.h - padding * 2 - 1);
 
     const tiles = new Set();
     tiles.add(`${cx},${cy}`);
@@ -146,12 +183,12 @@ function growBlob(leaf) {
         attempts++;
 
         // Pick random existing tile
-        const tileKey = tilesList[Math.floor(Math.random() * tilesList.length)];
+        const tileKey = dungeonRandomChoice(tilesList);
         const [currX, currY] = tileKey.split(',').map(Number);
 
         // Try to expand in random direction
         const directions = [[0, 1], [0, -1], [1, 0], [-1, 0]];
-        const [dx, dy] = directions[Math.floor(Math.random() * directions.length)];
+        const [dx, dy] = dungeonRandomChoice(directions);
         const nx = currX + dx;
         const ny = currY + dy;
 
@@ -195,7 +232,7 @@ function createCorridorPath(grid, blob1, blob2) {
         const midY = Math.floor((p1.y + p2.y) / 2);
 
         // Add chaotic offset
-        const offset = Math.floor(Math.random() * DUNGEON_CONFIG.doglegOffset * 2) - DUNGEON_CONFIG.doglegOffset;
+        const offset = dungeonRandomInt(-DUNGEON_CONFIG.doglegOffset, DUNGEON_CONFIG.doglegOffset);
         const waypoint = {
             x: Math.abs(p2.x - p1.x) > Math.abs(p2.y - p1.y)
                 ? midX
@@ -230,9 +267,9 @@ function digBiasedWalk(grid, p1, p2, corridorTiles, path) {
     const tx = p2.x;
     const ty = p2.y;
 
-    const corridorWidth = 4; // 4 tiles wide minimum
+    const corridorWidth = DUNGEON_CONFIG.corridorWidth; // Use config value
 
-    // Dig starting position (4 tiles wide)
+    // Dig starting position
     digWideCorridorTile(grid, x, y, corridorWidth, corridorTiles);
     path.push({ x, y });
 
@@ -245,7 +282,7 @@ function digBiasedWalk(grid, p1, p2, corridorTiles, path) {
 
         if (candidates.length === 0) break;
 
-        const [dx, dy] = candidates[Math.floor(Math.random() * candidates.length)];
+        const [dx, dy] = dungeonRandomChoice(candidates);
 
         x += dx;
         y += dy;
@@ -257,7 +294,12 @@ function digBiasedWalk(grid, p1, p2, corridorTiles, path) {
 }
 
 /**
- * Dig a wide corridor tile (4x4 area centered on x,y)
+ * Dig a wide corridor tile (width x width area centered on x,y)
+ * @param {Array} grid - The dungeon grid
+ * @param {number} cx - Center X position
+ * @param {number} cy - Center Y position
+ * @param {number} width - Corridor width from DUNGEON_CONFIG.corridorWidth
+ * @param {Set} corridorTiles - Set to track corridor tile positions
  */
 function digWideCorridorTile(grid, cx, cy, width, corridorTiles) {
     const halfWidth = Math.floor(width / 2);
@@ -355,7 +397,7 @@ function scoreBlobForShrine(blob, connections, medianSize, normalizedDist) {
  */
 function assignBlobElementAndTheme(blob) {
     const elements = ['fire', 'ice', 'water', 'earth', 'nature', 'death', 'arcane', 'dark', 'holy', 'physical'];
-    blob.element = elements[Math.floor(Math.random() * elements.length)];
+    blob.element = dungeonRandomChoice(elements);
 
     const elementThemes = {
         fire: ['magma_chamber', 'ember_crypts'],
@@ -371,7 +413,7 @@ function assignBlobElementAndTheme(blob) {
     };
 
     const themes = elementThemes[blob.element] || ['ancient_arena'];
-    blob.theme = themes[Math.floor(Math.random() * themes.length)];
+    blob.theme = dungeonRandomChoice(themes);
 }
 
 /**
@@ -674,33 +716,57 @@ function generateDungeonAttempt() {
     const { shrineCount } = assignBlobProperties(DUNGEON_STATE.blobs);
 
     // 8. Validate connectivity
-    validateConnectivity(DUNGEON_STATE.grid);
+    const isConnected = validateConnectivity(DUNGEON_STATE.grid);
 
-    return { state: DUNGEON_STATE, shrineCount, blobCount: DUNGEON_STATE.blobs.length };
+    return {
+        state: DUNGEON_STATE,
+        shrineCount,
+        blobCount: DUNGEON_STATE.blobs.length,
+        isConnected
+    };
 }
 
 /**
  * Main dungeon generation with shrine validation and regeneration
+ * @param {number|string|null} seed - Optional seed for reproducible generation
  */
-function generateBlobDungeonMap() {
+function generateBlobDungeonMap(seed = null) {
+    // Initialize seeded RNG if available
+    if (typeof initGenerationRNG === 'function') {
+        const actualSeed = initGenerationRNG(seed);
+        DUNGEON_STATE.seed = actualSeed;
+
+        if (DUNGEON_CONFIG.debugLogging) {
+            console.log(`[DungeonGen] Using seed: ${actualSeed}`);
+        }
+    }
+
     if (DUNGEON_CONFIG.debugLogging) {
-        console.log(`\n🗺️  GENERATING BLOB-BASED DUNGEON (${DUNGEON_CONFIG.mapWidth}×${DUNGEON_CONFIG.mapHeight})`);
+        console.log(`\n[DungeonGen] GENERATING BLOB-BASED DUNGEON (${DUNGEON_CONFIG.mapWidth}x${DUNGEON_CONFIG.mapHeight})`);
         console.log(`========================================`);
     }
 
     let attempt = 0;
     let result;
 
-    // Try to generate a valid dungeon with enough shrines
+    // Try to generate a valid dungeon with enough shrines AND full connectivity
     while (attempt < DUNGEON_CONFIG.maxRegenAttempts) {
         attempt++;
 
         result = generateDungeonAttempt();
 
+        // Check connectivity first (critical failure)
+        if (!result.isConnected) {
+            if (DUNGEON_CONFIG.debugLogging) {
+                console.warn(`[DungeonGen] Attempt ${attempt}: Connectivity validation failed, regenerating...`);
+            }
+            continue; // Must regenerate
+        }
+
         // Check if we have enough shrines
         if (result.shrineCount >= DUNGEON_CONFIG.minShrines) {
             if (DUNGEON_CONFIG.debugLogging && attempt > 1) {
-                console.log(`\n✅ Valid dungeon generated on attempt ${attempt}`);
+                console.log(`[DungeonGen] Valid dungeon generated on attempt ${attempt}`);
             }
             break;
         }
@@ -712,8 +778,14 @@ function generateBlobDungeonMap() {
         }
 
         if (DUNGEON_CONFIG.debugLogging) {
-            console.log(`\n⚠️ Attempt ${attempt}: Only ${result.shrineCount} shrines (need ${DUNGEON_CONFIG.minShrines}), regenerating...`);
+            console.log(`[DungeonGen] Attempt ${attempt}: Only ${result.shrineCount} shrines (need ${DUNGEON_CONFIG.minShrines}), regenerating...`);
         }
+    }
+
+    // Final validation warning
+    if (!result.isConnected) {
+        console.error(`[DungeonGen] WARNING: Generated dungeon has unreachable areas after ${attempt} attempts!`);
+        console.error(`[DungeonGen] Seed: ${DUNGEON_STATE.seed} - Consider reporting this seed for debugging.`);
     }
 
     // Log final statistics
@@ -825,6 +897,10 @@ if (typeof window !== 'undefined') {
     window.DUNGEON_STATE = DUNGEON_STATE;
     window.generateBlobDungeonMap = generateBlobDungeonMap;
     window.getThemeAtPosition = getThemeAtPosition;
+    // Seeded RNG helpers
+    window.dungeonRandom = dungeonRandom;
+    window.dungeonRandomInt = dungeonRandomInt;
+    window.dungeonRandomChoice = dungeonRandomChoice;
 }
 
-// Dungeon generator loaded (Blob-based BSP)
+// Dungeon generator loaded (Blob-based BSP with seeded RNG support)

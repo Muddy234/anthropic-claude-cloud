@@ -1,4 +1,0 @@
-res://scenes/main/main.gd
-res://scripts/systems/combat/arena/tactical_analyzer.gd
-res://scripts/systems/combat/arena/actions/pattern_attack_action.gd
-res://scenes/ui/combat/combat_arena_overlay.gd

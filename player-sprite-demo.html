@@ -1,0 +1,797 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Player Sprite Demo - 32x32 Layered Equipment System</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            background: #1a1a2e;
+            color: #eee;
+            font-family: 'Courier New', monospace;
+            padding: 20px;
+            min-height: 100vh;
+        }
+
+        h1 {
+            color: #FF6B35;
+            margin-bottom: 10px;
+        }
+
+        h2 {
+            color: #88CCFF;
+            margin: 20px 0 10px 0;
+            border-bottom: 1px solid #333;
+            padding-bottom: 5px;
+        }
+
+        h3 {
+            color: #AADDFF;
+            margin: 15px 0 10px 0;
+            font-size: 14px;
+        }
+
+        .subtitle {
+            color: #888;
+            margin-bottom: 30px;
+        }
+
+        .sprite-grid {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 15px;
+            margin-bottom: 30px;
+        }
+
+        .sprite-card {
+            background: #252540;
+            border: 2px solid #333;
+            border-radius: 8px;
+            padding: 12px;
+            text-align: center;
+            min-width: 100px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .sprite-card:hover {
+            border-color: #FF6B35;
+            background: #2a2a4a;
+            transform: translateY(-2px);
+        }
+
+        .sprite-card.selected {
+            border-color: #44FF44;
+            background: #2a4a2a;
+        }
+
+        .sprite-canvas {
+            background: #111122;
+            border: 1px solid #444;
+            margin-bottom: 8px;
+            image-rendering: pixelated;
+            image-rendering: crisp-edges;
+        }
+
+        .sprite-name {
+            font-size: 11px;
+            color: #aaa;
+            margin-top: 5px;
+        }
+
+        .sprite-size {
+            font-size: 10px;
+            color: #666;
+        }
+
+        .controls {
+            background: #252540;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 20px;
+            align-items: center;
+        }
+
+        .controls label {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .controls select, .controls input {
+            background: #1a1a2e;
+            color: #eee;
+            border: 1px solid #444;
+            padding: 5px 10px;
+            border-radius: 4px;
+        }
+
+        .scale-buttons {
+            display: flex;
+            gap: 8px;
+        }
+
+        .scale-buttons button, .direction-buttons button {
+            background: #FF6B35;
+            color: #fff;
+            border: none;
+            padding: 6px 12px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-family: inherit;
+            font-size: 12px;
+        }
+
+        .scale-buttons button:hover, .direction-buttons button:hover {
+            background: #FF8855;
+        }
+
+        .scale-buttons button.active, .direction-buttons button.active {
+            background: #44AA44;
+        }
+
+        .direction-buttons {
+            display: flex;
+            gap: 8px;
+        }
+
+        .main-content {
+            display: flex;
+            gap: 30px;
+        }
+
+        .equipment-panel {
+            flex: 1;
+            max-width: 500px;
+        }
+
+        .preview-panel {
+            flex: 1;
+            position: sticky;
+            top: 20px;
+            align-self: flex-start;
+        }
+
+        #preview-area {
+            background: #111122;
+            border: 2px solid #333;
+            border-radius: 8px;
+            padding: 30px;
+            min-height: 250px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 20px;
+        }
+
+        #preview-canvas {
+            image-rendering: pixelated;
+            image-rendering: crisp-edges;
+        }
+
+        .preview-directions {
+            display: flex;
+            gap: 20px;
+        }
+
+        .preview-direction {
+            text-align: center;
+        }
+
+        .preview-direction canvas {
+            image-rendering: pixelated;
+            image-rendering: crisp-edges;
+            background: #0a0a15;
+            border: 1px solid #333;
+        }
+
+        .preview-direction-label {
+            font-size: 11px;
+            color: #888;
+            margin-top: 5px;
+        }
+
+        .equipped-list {
+            background: #1a1a2e;
+            border-radius: 6px;
+            padding: 15px;
+            margin-top: 15px;
+        }
+
+        .equipped-list h4 {
+            color: #FF6B35;
+            margin-bottom: 10px;
+            font-size: 13px;
+        }
+
+        .equipped-item {
+            display: flex;
+            justify-content: space-between;
+            padding: 5px 0;
+            border-bottom: 1px solid #333;
+            font-size: 12px;
+        }
+
+        .equipped-item:last-child {
+            border-bottom: none;
+        }
+
+        .equipped-slot {
+            color: #888;
+        }
+
+        .equipped-name {
+            color: #88CCFF;
+        }
+
+        .equipped-name.empty {
+            color: #555;
+            font-style: italic;
+        }
+
+        .clear-btn {
+            background: #AA4444;
+            color: #fff;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-family: inherit;
+            margin-top: 10px;
+        }
+
+        .clear-btn:hover {
+            background: #CC5555;
+        }
+
+        .palette-demo {
+            display: flex;
+            gap: 4px;
+            margin-top: 8px;
+            justify-content: center;
+        }
+
+        .palette-color {
+            width: 16px;
+            height: 16px;
+            border: 1px solid #444;
+            border-radius: 2px;
+        }
+
+        .info-panel {
+            background: #252540;
+            padding: 15px;
+            border-radius: 8px;
+            margin-top: 20px;
+        }
+
+        .info-panel h3 {
+            color: #FF6B35;
+            margin-bottom: 10px;
+        }
+
+        .info-panel p {
+            color: #aaa;
+            line-height: 1.6;
+            font-size: 13px;
+        }
+
+        code {
+            background: #1a1a2e;
+            padding: 2px 6px;
+            border-radius: 3px;
+            color: #88CCFF;
+        }
+
+        .animation-controls {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+        }
+
+        .animation-controls button {
+            background: #6644AA;
+            color: #fff;
+            border: none;
+            padding: 6px 12px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-family: inherit;
+        }
+
+        .animation-controls button:hover {
+            background: #8866CC;
+        }
+
+        .animation-controls button.active {
+            background: #44AA44;
+        }
+    </style>
+</head>
+<body>
+    <h1>Player Sprite Demo</h1>
+    <p class="subtitle">Layered pixel-art equipment system with 4-directional sprites</p>
+
+    <div class="controls">
+        <label>
+            Scale:
+            <span class="scale-buttons">
+                <button onclick="setScale(2)">2x</button>
+                <button onclick="setScale(3)" class="active">3x</button>
+                <button onclick="setScale(4)">4x</button>
+                <button onclick="setScale(6)">6x</button>
+            </span>
+        </label>
+        <label>
+            Direction:
+            <span class="direction-buttons">
+                <button onclick="setDirection('down')" class="active">Down</button>
+                <button onclick="setDirection('up')">Up</button>
+                <button onclick="setDirection('left')">Left</button>
+                <button onclick="setDirection('right')">Right</button>
+            </span>
+        </label>
+        <label>
+            Background:
+            <select onchange="setBackground(this.value)">
+                <option value="#111122">Dark Blue</option>
+                <option value="#1a1a1a">Dark Gray</option>
+                <option value="#2d4a3e">Dungeon Green</option>
+                <option value="#3d2a2a">Cave Red</option>
+                <option value="#FFFFFF">White (debug)</option>
+            </select>
+        </label>
+        <label>
+            Animation:
+            <span class="animation-controls">
+                <button onclick="toggleAnimation('idle')" id="btn-idle" class="active">Idle</button>
+                <button onclick="toggleAnimation('walk')" id="btn-walk">Walk</button>
+            </span>
+        </label>
+    </div>
+
+    <div class="main-content">
+        <div class="equipment-panel">
+            <h2>Base Character</h2>
+            <div class="sprite-grid" id="player-grid"></div>
+
+            <h2>Weapons (Main Hand)</h2>
+            <h3>Swords</h3>
+            <div class="sprite-grid" id="swords-grid"></div>
+            <h3>Maces</h3>
+            <div class="sprite-grid" id="maces-grid"></div>
+            <h3>Axes</h3>
+            <div class="sprite-grid" id="axes-grid"></div>
+            <h3>Staffs</h3>
+            <div class="sprite-grid" id="staffs-grid"></div>
+            <h3>Bows</h3>
+            <div class="sprite-grid" id="bows-grid"></div>
+            <h3>Daggers</h3>
+            <div class="sprite-grid" id="daggers-grid"></div>
+            <h3>Polearms</h3>
+            <div class="sprite-grid" id="polearms-grid"></div>
+
+            <h2>Shields (Off Hand)</h2>
+            <div class="sprite-grid" id="shields-grid"></div>
+
+            <h2>Armor</h2>
+            <h3>Helms (Head)</h3>
+            <div class="sprite-grid" id="helms-grid"></div>
+            <h3>Chest Armor</h3>
+            <div class="sprite-grid" id="chest-grid"></div>
+            <h3>Leg Armor</h3>
+            <div class="sprite-grid" id="legs-grid"></div>
+            <h3>Boots (Feet)</h3>
+            <div class="sprite-grid" id="boots-grid"></div>
+        </div>
+
+        <div class="preview-panel">
+            <h2>Composite Preview</h2>
+            <div id="preview-area">
+                <canvas id="preview-canvas"></canvas>
+                <div class="preview-directions">
+                    <div class="preview-direction">
+                        <canvas id="preview-down" width="64" height="64"></canvas>
+                        <div class="preview-direction-label">Down</div>
+                    </div>
+                    <div class="preview-direction">
+                        <canvas id="preview-up" width="64" height="64"></canvas>
+                        <div class="preview-direction-label">Up</div>
+                    </div>
+                    <div class="preview-direction">
+                        <canvas id="preview-left" width="64" height="64"></canvas>
+                        <div class="preview-direction-label">Left</div>
+                    </div>
+                    <div class="preview-direction">
+                        <canvas id="preview-right" width="64" height="64"></canvas>
+                        <div class="preview-direction-label">Right</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="equipped-list">
+                <h4>Currently Equipped</h4>
+                <div class="equipped-item">
+                    <span class="equipped-slot">HEAD:</span>
+                    <span class="equipped-name" id="eq-HEAD">None</span>
+                </div>
+                <div class="equipped-item">
+                    <span class="equipped-slot">CHEST:</span>
+                    <span class="equipped-name" id="eq-CHEST">None</span>
+                </div>
+                <div class="equipped-item">
+                    <span class="equipped-slot">LEGS:</span>
+                    <span class="equipped-name" id="eq-LEGS">None</span>
+                </div>
+                <div class="equipped-item">
+                    <span class="equipped-slot">FEET:</span>
+                    <span class="equipped-name" id="eq-FEET">None</span>
+                </div>
+                <div class="equipped-item">
+                    <span class="equipped-slot">MAIN:</span>
+                    <span class="equipped-name" id="eq-MAIN">None</span>
+                </div>
+                <div class="equipped-item">
+                    <span class="equipped-slot">OFF:</span>
+                    <span class="equipped-name" id="eq-OFF">None</span>
+                </div>
+                <button class="clear-btn" onclick="clearAllEquipment()">Clear All</button>
+            </div>
+
+            <div class="info-panel">
+                <h3>How Layering Works</h3>
+                <p>
+                    Click on equipment to equip/unequip. Layers render in order:
+                </p>
+                <p style="margin-top: 8px;">
+                    <code>Body → Legs → Feet → Chest → Head → Off-hand → Main-hand</code>
+                </p>
+                <p style="margin-top: 8px;">
+                    Each piece has 4 directional sprites that composite onto the base character.
+                </p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Load sprite system files -->
+    <script src="js/config/player-sprite-config.js"></script>
+    <script src="js/rendering/player-sprites.js"></script>
+    <script src="js/rendering/player-sprite-animations.js"></script>
+    <script src="js/rendering/player-equipment-sprites.js"></script>
+    <script src="js/data/equipment-visuals.js"></script>
+    <script src="js/rendering/player-sprite-renderer.js"></script>
+
+    <script>
+        // State
+        let currentScale = 3;
+        let currentDirection = 'down';
+        let currentBackground = '#111122';
+        let currentAnimation = 'idle';
+        let animationFrame = 0;
+        let lastFrameTime = 0;
+
+        // Mock player state for demo
+        const demoPlayer = {
+            facing: 'down',
+            isMoving: false,
+            isAttacking: false,
+            equipped: {
+                HEAD: null,
+                CHEST: null,
+                LEGS: null,
+                FEET: null,
+                MAIN: null,
+                OFF: null
+            },
+            palette: null  // Use defaults
+        };
+
+        // Equipment categories
+        const equipmentCategories = {
+            swords: ['sword_basic'],
+            maces: ['mace_basic'],
+            axes: ['axe_basic'],
+            staffs: ['staff_basic'],
+            bows: ['bow_basic'],
+            daggers: ['dagger_basic'],
+            polearms: ['polearm_basic'],
+            shields: ['shield_wood'],
+            helms: ['helm_iron'],
+            chest: ['chest_leather'],
+            legs: ['legs_leather'],
+            boots: ['boots_leather']
+        };
+
+        function setScale(scale) {
+            currentScale = scale;
+            document.querySelectorAll('.scale-buttons button').forEach(btn => {
+                btn.classList.remove('active');
+            });
+            event.target.classList.add('active');
+            renderAllSprites();
+            updatePreview();
+        }
+
+        function setDirection(dir) {
+            currentDirection = dir;
+            demoPlayer.facing = dir;
+            document.querySelectorAll('.direction-buttons button').forEach(btn => {
+                btn.classList.remove('active');
+            });
+            event.target.classList.add('active');
+            renderAllSprites();
+            updatePreview();
+        }
+
+        function setBackground(color) {
+            currentBackground = color;
+            renderAllSprites();
+            updatePreview();
+        }
+
+        function toggleAnimation(type) {
+            currentAnimation = type;
+            demoPlayer.isMoving = (type === 'walk');
+            document.querySelectorAll('.animation-controls button').forEach(btn => {
+                btn.classList.remove('active');
+            });
+            document.getElementById('btn-' + type).classList.add('active');
+            PlayerSpriteRenderer.animationState.type = type;
+            PlayerSpriteRenderer.animationState.frameIndex = 0;
+        }
+
+        function renderSprite(spriteData, canvas, scale, direction = 'down') {
+            const width = spriteData.width * scale;
+            const height = spriteData.height * scale;
+            canvas.width = width;
+            canvas.height = height;
+            canvas.style.width = width + 'px';
+            canvas.style.height = height + 'px';
+
+            const ctx = canvas.getContext('2d');
+            ctx.imageSmoothingEnabled = false;
+            ctx.fillStyle = currentBackground;
+            ctx.fillRect(0, 0, width, height);
+
+            // Get directional sprite if available
+            let pixels = spriteData.pixels;
+            let palette = spriteData.palette;
+
+            if (spriteData.directions) {
+                const dirData = spriteData.directions[direction] || spriteData.directions.down;
+                pixels = dirData.pixels;
+            }
+
+            // Draw pixels
+            for (let py = 0; py < pixels.length; py++) {
+                const row = pixels[py];
+                for (let px = 0; px < row.length; px++) {
+                    const char = row[px];
+                    if (char === '.' || char === ' ') continue;
+
+                    const color = palette[char];
+                    if (!color) continue;
+
+                    ctx.fillStyle = color;
+                    ctx.fillRect(px * scale, py * scale, scale, scale);
+                }
+            }
+        }
+
+        function createSpriteCard(spriteName, spriteData, slot = null) {
+            const card = document.createElement('div');
+            card.className = 'sprite-card';
+            card.dataset.spriteName = spriteName;
+            card.dataset.slot = slot || '';
+
+            if (slot) {
+                card.onclick = () => toggleEquipment(spriteName, slot);
+            }
+
+            const canvas = document.createElement('canvas');
+            canvas.className = 'sprite-canvas';
+
+            // Prepare sprite for rendering
+            let renderData;
+            if (spriteData.directions) {
+                const dirData = spriteData.directions[currentDirection] || spriteData.directions.down;
+                renderData = {
+                    width: spriteData.width,
+                    height: spriteData.height,
+                    pixels: dirData.pixels,
+                    palette: spriteData.palette
+                };
+            } else if (spriteName === 'player_base') {
+                const dirData = spriteData.directions[currentDirection] || spriteData.directions.down;
+                renderData = {
+                    width: spriteData.width,
+                    height: spriteData.height,
+                    pixels: dirData.pixels,
+                    palette: spriteData.palette
+                };
+            } else {
+                renderData = spriteData;
+            }
+
+            renderSprite(renderData, canvas, currentScale, currentDirection);
+
+            const name = document.createElement('div');
+            name.className = 'sprite-name';
+            name.textContent = spriteName.replace(/_/g, ' ');
+
+            // Show palette colors
+            const paletteDemo = document.createElement('div');
+            paletteDemo.className = 'palette-demo';
+            for (const color of Object.values(spriteData.palette)) {
+                const swatch = document.createElement('div');
+                swatch.className = 'palette-color';
+                swatch.style.backgroundColor = color;
+                swatch.title = color;
+                paletteDemo.appendChild(swatch);
+            }
+
+            card.appendChild(canvas);
+            card.appendChild(name);
+            card.appendChild(paletteDemo);
+
+            return card;
+        }
+
+        function toggleEquipment(spriteName, slot) {
+            const equipment = EQUIPMENT_SPRITES[spriteName];
+            if (!equipment) return;
+
+            const actualSlot = equipment.slot || slot;
+
+            // Toggle: if already equipped, unequip
+            if (demoPlayer.equipped[actualSlot]?.id === spriteName) {
+                demoPlayer.equipped[actualSlot] = null;
+            } else {
+                demoPlayer.equipped[actualSlot] = {
+                    id: spriteName,
+                    name: spriteName.replace(/_/g, ' '),
+                    rarity: 'common'
+                };
+            }
+
+            PlayerSpriteRenderer.clearCache();
+            updateEquippedList();
+            updatePreview();
+            updateSelectedCards();
+        }
+
+        function clearAllEquipment() {
+            for (const slot of Object.keys(demoPlayer.equipped)) {
+                demoPlayer.equipped[slot] = null;
+            }
+            PlayerSpriteRenderer.clearCache();
+            updateEquippedList();
+            updatePreview();
+            updateSelectedCards();
+        }
+
+        function updateEquippedList() {
+            for (const slot of ['HEAD', 'CHEST', 'LEGS', 'FEET', 'MAIN', 'OFF']) {
+                const el = document.getElementById('eq-' + slot);
+                const equipped = demoPlayer.equipped[slot];
+                if (equipped) {
+                    el.textContent = equipped.name;
+                    el.classList.remove('empty');
+                } else {
+                    el.textContent = 'None';
+                    el.classList.add('empty');
+                }
+            }
+        }
+
+        function updateSelectedCards() {
+            document.querySelectorAll('.sprite-card').forEach(card => {
+                const spriteName = card.dataset.spriteName;
+                const slot = card.dataset.slot;
+                let isSelected = false;
+
+                for (const equipped of Object.values(demoPlayer.equipped)) {
+                    if (equipped?.id === spriteName) {
+                        isSelected = true;
+                        break;
+                    }
+                }
+
+                card.classList.toggle('selected', isSelected);
+            });
+        }
+
+        function updatePreview() {
+            // Main preview
+            const canvas = document.getElementById('preview-canvas');
+            const previewScale = 4;
+            const size = 32 * previewScale;
+            canvas.width = size;
+            canvas.height = size;
+            canvas.style.width = size + 'px';
+            canvas.style.height = size + 'px';
+
+            const ctx = canvas.getContext('2d');
+            ctx.imageSmoothingEnabled = false;
+            ctx.fillStyle = currentBackground;
+            ctx.fillRect(0, 0, size, size);
+
+            // Draw using PlayerSpriteRenderer
+            demoPlayer.facing = currentDirection;
+            PlayerSpriteRenderer.draw(ctx, demoPlayer, 0, 0, size);
+
+            // Mini previews for all directions
+            const miniScale = 2;
+            const miniSize = 32 * miniScale;
+            for (const dir of ['down', 'up', 'left', 'right']) {
+                const miniCanvas = document.getElementById('preview-' + dir);
+                miniCanvas.width = miniSize;
+                miniCanvas.height = miniSize;
+                miniCanvas.style.width = miniSize + 'px';
+                miniCanvas.style.height = miniSize + 'px';
+
+                const miniCtx = miniCanvas.getContext('2d');
+                miniCtx.imageSmoothingEnabled = false;
+                miniCtx.fillStyle = currentBackground;
+                miniCtx.fillRect(0, 0, miniSize, miniSize);
+
+                const tempPlayer = { ...demoPlayer, facing: dir };
+                PlayerSpriteRenderer.draw(miniCtx, tempPlayer, 0, 0, miniSize);
+            }
+        }
+
+        function renderAllSprites() {
+            // Base player
+            const playerGrid = document.getElementById('player-grid');
+            playerGrid.innerHTML = '';
+            if (PLAYER_SPRITES.player_base) {
+                playerGrid.appendChild(createSpriteCard('player_base', PLAYER_SPRITES.player_base));
+            }
+
+            // Equipment by category
+            for (const [category, spriteNames] of Object.entries(equipmentCategories)) {
+                const grid = document.getElementById(category + '-grid');
+                if (!grid) continue;
+                grid.innerHTML = '';
+
+                for (const name of spriteNames) {
+                    const sprite = EQUIPMENT_SPRITES[name];
+                    if (sprite) {
+                        grid.appendChild(createSpriteCard(name, sprite, sprite.slot));
+                    }
+                }
+            }
+        }
+
+        // Animation loop
+        function animate(timestamp) {
+            const deltaTime = timestamp - lastFrameTime;
+            lastFrameTime = timestamp;
+
+            // Update animation
+            PlayerSpriteRenderer.update(deltaTime, demoPlayer);
+
+            // Redraw preview
+            updatePreview();
+
+            requestAnimationFrame(animate);
+        }
+
+        // Initialize
+        renderAllSprites();
+        updateEquippedList();
+        updatePreview();
+        requestAnimationFrame(animate);
+    </script>
+</body>
+</html>

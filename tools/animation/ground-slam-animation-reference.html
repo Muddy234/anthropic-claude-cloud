@@ -1,0 +1,1292 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ground_slam — Animation Implementation Reference</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&family=Space+Grotesk:wght@400;500;600;700&display=swap');
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  :root {
+    --bg: #0a0a0f;
+    --surface: #12121a;
+    --surface2: #1a1a26;
+    --border: #2a2a3a;
+    --text: #e0e0e8;
+    --text-dim: #8888a0;
+    --accent: #ffaa00;
+    --accent2: #ff6b35;
+    --danger: #ff4444;
+    --success: #2ecc71;
+    --blue: #74b9ff;
+    --purple: #a29bfe;
+  }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Space Grotesk', sans-serif;
+    line-height: 1.6;
+    padding: 2rem;
+    max-width: 1400px;
+    margin: 0 auto;
+  }
+
+  h1 {
+    font-size: 2.2rem;
+    font-weight: 700;
+    margin-bottom: 0.25rem;
+    background: linear-gradient(135deg, var(--accent), var(--accent2));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+
+  h1 span {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 1.4rem;
+  }
+
+  .subtitle {
+    color: var(--text-dim);
+    font-size: 1rem;
+    margin-bottom: 2.5rem;
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 1.5rem;
+  }
+
+  h2 {
+    font-size: 1.3rem;
+    font-weight: 600;
+    margin-top: 2.5rem;
+    margin-bottom: 1rem;
+    color: var(--accent);
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+
+  h2 .phase-num {
+    background: var(--accent);
+    color: var(--bg);
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.85rem;
+    font-weight: 700;
+    flex-shrink: 0;
+  }
+
+  h3 {
+    font-size: 1rem;
+    font-weight: 600;
+    margin: 1.5rem 0 0.75rem;
+    color: var(--blue);
+  }
+
+  p, li {
+    color: var(--text);
+    font-size: 0.92rem;
+    margin-bottom: 0.5rem;
+  }
+
+  ul { padding-left: 1.25rem; margin-bottom: 1rem; }
+  li { margin-bottom: 0.35rem; }
+
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 1.5rem;
+    margin: 1rem 0;
+  }
+
+  .callout {
+    background: var(--surface2);
+    border-left: 3px solid var(--accent);
+    padding: 1rem 1.25rem;
+    margin: 1rem 0;
+    border-radius: 0 6px 6px 0;
+    font-size: 0.9rem;
+  }
+
+  .callout.warn {
+    border-left-color: var(--danger);
+  }
+
+  .callout strong {
+    color: var(--accent);
+  }
+
+  .callout.warn strong {
+    color: var(--danger);
+  }
+
+  /* ── CANVAS AREA ── */
+  .demo-area {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 1.5rem;
+    margin: 1.5rem 0;
+  }
+
+  .demo-area canvas {
+    display: block;
+    margin: 0 auto;
+    image-rendering: pixelated;
+    image-rendering: crisp-edges;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    background: #08080c;
+  }
+
+  .demo-controls {
+    display: flex;
+    gap: 0.75rem;
+    justify-content: center;
+    margin-top: 1rem;
+    flex-wrap: wrap;
+  }
+
+  .demo-controls button {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.8rem;
+    padding: 0.5rem 1.25rem;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    background: var(--surface2);
+    color: var(--text);
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+
+  .demo-controls button:hover {
+    border-color: var(--accent);
+    color: var(--accent);
+  }
+
+  .demo-controls button.active {
+    background: var(--accent);
+    color: var(--bg);
+    border-color: var(--accent);
+  }
+
+  .phase-label {
+    text-align: center;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.85rem;
+    color: var(--text-dim);
+    margin-top: 0.5rem;
+    min-height: 1.4em;
+  }
+
+  /* ── CODE BLOCKS ── */
+  pre {
+    background: #0d0d14;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 1.25rem;
+    overflow-x: auto;
+    margin: 1rem 0;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.78rem;
+    line-height: 1.55;
+    color: #c8c8d8;
+  }
+
+  .kw { color: #c792ea; }
+  .str { color: #c3e88d; }
+  .num { color: #f78c6c; }
+  .cm { color: #546e7a; font-style: italic; }
+  .fn { color: #82aaff; }
+  .prop { color: #f07178; }
+  .op { color: #89ddff; }
+
+  /* ── TIMELINE ── */
+  .timeline {
+    display: flex;
+    gap: 0;
+    margin: 1.5rem 0;
+    border-radius: 6px;
+    overflow: hidden;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.75rem;
+  }
+
+  .timeline-seg {
+    padding: 0.75rem 0.5rem;
+    text-align: center;
+    color: var(--bg);
+    font-weight: 600;
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.2rem;
+  }
+
+  .timeline-seg .t-label { font-size: 0.65rem; opacity: 0.7; }
+
+  .t-telegraph { background: var(--accent); flex: 1; }
+  .t-resolve { background: var(--danger); flex: 0.15; }
+  .t-recovery { background: var(--success); flex: 0.8; }
+  .t-idle { background: var(--border); flex: 4.2; color: var(--text-dim); }
+
+  /* ── SPRITE GRID ── */
+  .sprite-grid-container {
+    display: flex;
+    gap: 1.5rem;
+    flex-wrap: wrap;
+    justify-content: center;
+    margin: 1rem 0;
+  }
+
+  .sprite-frame {
+    text-align: center;
+  }
+
+  .sprite-frame canvas {
+    image-rendering: pixelated;
+    image-rendering: crisp-edges;
+    border: 1px solid var(--border);
+    border-radius: 3px;
+    background: #08080c;
+  }
+
+  .sprite-frame .frame-label {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.7rem;
+    color: var(--text-dim);
+    margin-top: 0.3rem;
+  }
+
+  /* ── SPLIT LAYOUT ── */
+  .split {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1.5rem;
+    margin: 1rem 0;
+  }
+
+  @media (max-width: 900px) {
+    .split { grid-template-columns: 1fr; }
+  }
+
+  .tag {
+    display: inline-block;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.7rem;
+    padding: 0.15rem 0.5rem;
+    border-radius: 3px;
+    font-weight: 600;
+  }
+
+  .tag-telegraph { background: rgba(255,170,0,0.2); color: var(--accent); }
+  .tag-resolve { background: rgba(255,68,68,0.2); color: var(--danger); }
+  .tag-recovery { background: rgba(46,204,113,0.2); color: var(--success); }
+  .tag-idle { background: rgba(136,136,160,0.15); color: var(--text-dim); }
+</style>
+</head>
+<body>
+
+<h1>Ability Animation Reference: <span>ground_slam</span></h1>
+<p class="subtitle">
+  Complete implementation guide for one ability — covering design intent, sprite frames, JavaScript code, and system integration.
+  Use this as the template for all 22 abilities.
+</p>
+
+<!-- ════════════════════════════════════════════ -->
+<h2><span class="phase-num">0</span> What is ground_slam?</h2>
+
+<div class="card">
+  <p><strong>Used by:</strong> Stone Guardian (primary), Stone Lurker (primary), Obsidian Golem (primary)</p>
+  <p><strong>Shape:</strong> Circle, radius 3 tiles from enemy center</p>
+  <p><strong>Damage:</strong> 30 base (scaled by tier)</p>
+  <p><strong>Telegraph:</strong> 1000ms (1 second — the player has one full second to react)</p>
+  <p><strong>Recovery:</strong> 800ms (the punish window after the slam lands)</p>
+  <p><strong>Cooldown:</strong> 5000ms</p>
+  <p><strong>Effect:</strong> Screen shake on impact</p>
+  <p style="margin-top:0.75rem; color: var(--accent);"><strong>The player experience:</strong> You see a growing orange circle on the ground. You have one second to walk or dodge out of it. If you don't, you take heavy damage and the screen shakes. After it lands, the enemy is briefly vulnerable — that's your window to hit back.</p>
+</div>
+
+<!-- ════════════════════════════════════════════ -->
+<h2><span class="phase-num">1</span> The Animation Lifecycle</h2>
+
+<p>Every ability in the game follows this exact four-phase lifecycle. The animation system needs to know which phase it's in and what to draw during each one.</p>
+
+<div class="timeline">
+  <div class="timeline-seg t-telegraph">
+    TELEGRAPH<br>
+    <span class="t-label">1000ms</span>
+  </div>
+  <div class="timeline-seg t-resolve">
+    HIT<br>
+    <span class="t-label">instant</span>
+  </div>
+  <div class="timeline-seg t-recovery">
+    RECOVERY<br>
+    <span class="t-label">800ms</span>
+  </div>
+  <div class="timeline-seg t-idle">
+    IDLE (cooldown ticking down)<br>
+    <span class="t-label">~3200ms remaining</span>
+  </div>
+</div>
+
+<div class="split">
+  <div class="card">
+    <h3><span class="tag tag-telegraph">TELEGRAPH</span> What the player sees (1000ms)</h3>
+    <ul>
+      <li>An orange circle appears on the ground, centered on the enemy</li>
+      <li>The circle starts small and <strong>grows to full radius over 1 second</strong></li>
+      <li>The circle's edge pulses to draw attention</li>
+      <li>The enemy plays a "raise arms" windup animation</li>
+      <li>A low rumble sound builds in volume</li>
+    </ul>
+    <p style="color:var(--accent);">This is the warning. The player must decide: dodge out, or commit to staying close for damage.</p>
+  </div>
+  <div class="card">
+    <h3><span class="tag tag-resolve">RESOLVE</span> What happens on impact (instant)</h3>
+    <ul>
+      <li>The growing circle <strong>flashes white</strong> for 1 frame then disappears</li>
+      <li>Concentric <strong>expanding rings</strong> burst outward from center</li>
+      <li>Small <strong>rock debris particles</strong> fly up and fall down</li>
+      <li>The screen <strong>shakes</strong> (4px offset, 200ms duration)</li>
+      <li>A heavy <strong>impact sound</strong> plays</li>
+      <li>Damage is applied to all players within the radius</li>
+    </ul>
+  </div>
+</div>
+<div class="split">
+  <div class="card">
+    <h3><span class="tag tag-recovery">RECOVERY</span> The punish window (800ms)</h3>
+    <ul>
+      <li>The enemy plays a "stagger" animation — slightly hunched, off-balance</li>
+      <li>Faint dust particles linger around impact zone</li>
+      <li>Enemy takes <strong>1.25x damage</strong> during this window</li>
+      <li>Enemy <strong>cannot move</strong> or start another ability</li>
+    </ul>
+    <p style="color:var(--success);">This is the player's reward for dodging. Rush in and deal damage before the enemy recovers.</p>
+  </div>
+  <div class="card">
+    <h3><span class="tag tag-idle">IDLE</span> Cooldown period (~3200ms)</h3>
+    <ul>
+      <li>No animation effect — the enemy is back to normal behavior</li>
+      <li>Enemy repositions (AI takes over)</li>
+      <li>Cooldown ticks down in the background</li>
+      <li>When cooldown reaches 0, the cycle can begin again</li>
+    </ul>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════════ -->
+<h2><span class="phase-num">2</span> Live Animation Preview</h2>
+
+<p>This is a working pixel-art simulation of ground_slam running in JavaScript. Click the buttons to see each phase individually, or play the full cycle. This is <em>exactly</em> what the in-game animation should look like.</p>
+
+<div class="demo-area">
+  <canvas id="demoCanvas" width="280" height="280"></canvas>
+  <div class="phase-label" id="phaseLabel">Click a button to start</div>
+  <div class="demo-controls">
+    <button onclick="playFullCycle()">▶ Full Cycle</button>
+    <button onclick="showPhase('telegraph')">Telegraph Only</button>
+    <button onclick="showPhase('impact')">Impact Only</button>
+    <button onclick="showPhase('recovery')">Recovery Only</button>
+    <button onclick="stopAnim()">⏹ Stop</button>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════════ -->
+<h2><span class="phase-num">3</span> Sprite Frames (What to Draw)</h2>
+
+<p>These are the individual frames the animation system draws. Each frame is a small pixel grid rendered at game scale. For ground_slam, there are three visual components that play at different times:</p>
+
+<h3>A. Telegraph Frames (ground indicator — drawn below all entities)</h3>
+<p>A growing circle on the floor. 4 key frames over 1000ms. The circle starts at 30% radius and grows to 100%.</p>
+<div id="telegraphFrames" class="sprite-grid-container"></div>
+
+<h3>B. Impact Frames (the slam effect — drawn above the enemy)</h3>
+<p>Expanding concentric rings that burst outward. 6 frames, plays once on resolve.</p>
+<div id="impactFrames" class="sprite-grid-container"></div>
+
+<h3>C. Particle Frames (debris — drawn above everything)</h3>
+<p>Small rock chunks that fly upward then fall. Each particle has its own arc trajectory. 8-12 particles, each using a 3x3 or 4x4 pixel sprite.</p>
+<div id="particleFrames" class="sprite-grid-container"></div>
+
+<!-- ════════════════════════════════════════════ -->
+<h2><span class="phase-num">4</span> JavaScript Implementation</h2>
+
+<p>This is the actual code your team writes. It's split into three parts: <strong>the data</strong> (what the animation looks like), <strong>the controller</strong> (manages animation state), and <strong>the renderer</strong> (draws it on screen).</p>
+
+<h3>Part A — The Data: Define what ground_slam looks like</h3>
+<p>This goes in <code>effect-sprites.js</code>. It tells the system the shape, color, and timing of every visual component.</p>
+
+<pre><span class="cm">// ─── effect-sprites.js ───</span>
+<span class="cm">// This defines WHAT the animation looks like.</span>
+<span class="cm">// One entry per ability. Each ability has components</span>
+<span class="cm">// (telegraph, impact, particles) with their own frames.</span>
+
+<span class="kw">const</span> ABILITY_EFFECTS <span class="op">=</span> {
+
+  ground_slam: {
+    <span class="cm">// ── TELEGRAPH: growing circle on the ground ──</span>
+    telegraph: {
+      <span class="prop">type</span>: <span class="str">'circle_grow'</span>,       <span class="cm">// Shape type — the renderer knows how to draw this</span>
+      <span class="prop">color</span>: <span class="str">'#FFAA00'</span>,            <span class="cm">// Orange fill</span>
+      <span class="prop">borderColor</span>: <span class="str">'#FF6B35'</span>,      <span class="cm">// Darker orange border</span>
+      <span class="prop">fillOpacity</span>: <span class="num">0.25</span>,           <span class="cm">// Semi-transparent fill so you can see through it</span>
+      <span class="prop">borderWidth</span>: <span class="num">2</span>,              <span class="cm">// Pixel width of the border ring</span>
+      <span class="prop">startScale</span>: <span class="num">0.3</span>,             <span class="cm">// Starts at 30% of full size</span>
+      <span class="prop">endScale</span>: <span class="num">1.0</span>,               <span class="cm">// Grows to 100% over the telegraph duration</span>
+      <span class="prop">pulseSpeed</span>: <span class="num">6</span>,               <span class="cm">// Border pulses 6 times per second (edge brightens/dims)</span>
+      <span class="prop">radius</span>: <span class="num">3</span>,                   <span class="cm">// 3 tiles — this MUST match the ability's actual hit radius</span>
+    },
+
+    <span class="cm">// ── IMPACT: expanding rings when the slam lands ──</span>
+    impact: {
+      <span class="prop">type</span>: <span class="str">'ring_burst'</span>,
+      <span class="prop">rings</span>: <span class="num">3</span>,                    <span class="cm">// 3 concentric rings expand outward</span>
+      <span class="prop">colors</span>: [<span class="str">'#FFCC00'</span>, <span class="str">'#FFAA00'</span>, <span class="str">'#886644'</span>],  <span class="cm">// Inner ring brightest</span>
+      <span class="prop">startRadius</span>: <span class="num">0</span>,              <span class="cm">// Rings start at center</span>
+      <span class="prop">endRadius</span>: <span class="num">3.5</span>,              <span class="cm">// Expand slightly past the hit radius (visual overshoot)</span>
+      <span class="prop">duration</span>: <span class="num">400</span>,               <span class="cm">// 400ms for rings to fully expand and fade</span>
+      <span class="prop">ringWidth</span>: <span class="num">3</span>,               <span class="cm">// Pixel width of each ring</span>
+      <span class="prop">fadeStart</span>: <span class="num">0.6</span>,              <span class="cm">// Rings start fading at 60% of duration</span>
+      <span class="prop">screenShake</span>: {              <span class="cm">// Camera shake on impact</span>
+        <span class="prop">intensity</span>: <span class="num">4</span>,              <span class="cm">// Max pixel offset</span>
+        <span class="prop">duration</span>: <span class="num">200</span>,             <span class="cm">// 200ms of shaking</span>
+        <span class="prop">decay</span>: <span class="str">'linear'</span>,           <span class="cm">// Shake intensity decreases linearly</span>
+      }
+    },
+
+    <span class="cm">// ── PARTICLES: rock debris flying up ──</span>
+    particles: {
+      <span class="prop">count</span>: <span class="num">10</span>,                   <span class="cm">// 10 rock chunks</span>
+      <span class="prop">sprite</span>: {                    <span class="cm">// What each particle looks like</span>
+        <span class="prop">width</span>: <span class="num">3</span>, <span class="prop">height</span>: <span class="num">3</span>,
+        <span class="prop">pixels</span>: [<span class="str">'.R.'</span>, <span class="str">'RRR'</span>, <span class="str">'.R.'</span>],  <span class="cm">// Diamond shape</span>
+        <span class="prop">palette</span>: { <span class="str">'R'</span>: <span class="str">'#AA8866'</span> }     <span class="cm">// Brown rock color</span>
+      },
+      <span class="prop">spawnRadius</span>: <span class="num">1.5</span>,            <span class="cm">// Particles spawn within 1.5 tiles of center</span>
+      <span class="prop">velocity</span>: {                  <span class="cm">// How particles move</span>
+        <span class="prop">xRange</span>: [<span class="num">-60</span>, <span class="num">60</span>],         <span class="cm">// Random horizontal speed (pixels/sec)</span>
+        <span class="prop">yRange</span>: [<span class="num">-120</span>, <span class="num">-60</span>],       <span class="cm">// Always upward initially</span>
+      },
+      <span class="prop">gravity</span>: <span class="num">300</span>,                <span class="cm">// Pixels/sec² — particles arc up then fall</span>
+      <span class="prop">lifetime</span>: <span class="num">600</span>,               <span class="cm">// Each particle lives 600ms</span>
+      <span class="prop">fadeOut</span>: <span class="num">0.5</span>,                <span class="cm">// Start fading at 50% of lifetime</span>
+    },
+
+    <span class="cm">// ── AUDIO CUES ──</span>
+    audio: {
+      <span class="prop">telegraph</span>: <span class="str">'sfx_rumble_build'</span>,    <span class="cm">// Low rumble that builds during 1s windup</span>
+      <span class="prop">impact</span>: <span class="str">'sfx_heavy_impact'</span>,       <span class="cm">// Loud thud + crack on resolve</span>
+    }
+  }
+};</pre>
+
+<div class="callout">
+  <strong>Why this format matters:</strong> Every field above maps directly to a rendering operation. Your renderer reads <code>type: 'circle_grow'</code> and knows to draw an expanding circle. It reads <code>startScale: 0.3</code> and knows the circle begins at 30% size. The data is separate from the code that draws it — this means designers can tweak values (make the telegraph faster, change the color, add more particles) without touching renderer code.
+</div>
+
+<h3>Part B — The Controller: Manage animation state</h3>
+<p>This goes in <code>effect-animator.js</code>. It tracks which effects are active, what phase they're in, and how far through each phase they are.</p>
+
+<pre><span class="cm">// ─── effect-animator.js ───</span>
+<span class="cm">// This manages the STATE of each active effect.</span>
+<span class="cm">// It answers: "what phase is this effect in, and how far through?"</span>
+
+<span class="kw">const</span> EffectAnimator <span class="op">=</span> {
+  activeEffects: <span class="kw">new</span> <span class="fn">Map</span>(),  <span class="cm">// effectId → effect state</span>
+  nextId: <span class="num">0</span>,
+
+  <span class="cm">/**
+   * Start a new ground effect.
+   * Called by EnemyAbilitySystem.createTelegraph()
+   *
+   * @param abilityId   - 'ground_slam', 'charge', etc.
+   * @param x, y        - World position (center of the effect)
+   * @param telegraphMs - How long the telegraph lasts (1000ms for ground_slam)
+   * @param radius      - Hit radius in tiles
+   * @returns effectId  - Use this to update or remove the effect later
+   */</span>
+  <span class="fn">startEffect</span>(abilityId, x, y, telegraphMs, radius) {
+    <span class="kw">const</span> id <span class="op">=</span> <span class="kw">this</span>.nextId++;
+    <span class="kw">const</span> config <span class="op">=</span> ABILITY_EFFECTS[abilityId];
+
+    <span class="kw">if</span> (!config) {
+      console.<span class="fn">warn</span>(<span class="str">`No effect defined for ability: ${abilityId}`</span>);
+      <span class="kw">return</span> <span class="num">-1</span>;
+    }
+
+    <span class="kw">this</span>.activeEffects.<span class="fn">set</span>(id, {
+      id,
+      abilityId,
+      config,
+      x, y,
+      radius,
+
+      <span class="cm">// ── Phase tracking ──</span>
+      phase: <span class="str">'telegraph'</span>,          <span class="cm">// 'telegraph' | 'impact' | 'done'</span>
+      phaseTimer: <span class="num">0</span>,               <span class="cm">// ms elapsed in current phase</span>
+      telegraphDuration: telegraphMs,
+
+      <span class="cm">// ── Particle state (created on impact) ──</span>
+      particles: [],
+    });
+
+    <span class="kw">return</span> id;
+  },
+
+  <span class="cm">/**
+   * Called every frame by the game loop.
+   * Advances all active effects through their phases.
+   */</span>
+  <span class="fn">update</span>(deltaTime) {
+    <span class="kw">for</span> (<span class="kw">const</span> [id, effect] <span class="kw">of</span> <span class="kw">this</span>.activeEffects) {
+      effect.phaseTimer <span class="op">+=</span> deltaTime;
+
+      <span class="kw">switch</span> (effect.phase) {
+
+        <span class="kw">case</span> <span class="str">'telegraph'</span>:
+          <span class="cm">// Telegraph is done when the timer exceeds the duration.</span>
+          <span class="cm">// NOTE: We don't transition automatically here!</span>
+          <span class="cm">// The ability system calls resolve() when the ability lands.</span>
+          <span class="cm">// This prevents the visual from desyncing from the gameplay.</span>
+          <span class="kw">break</span>;
+
+        <span class="kw">case</span> <span class="str">'impact'</span>:
+          <span class="cm">// Update particles (gravity, fade)</span>
+          <span class="kw">this</span>.<span class="fn">updateParticles</span>(effect, deltaTime);
+
+          <span class="cm">// Impact phase ends when rings have expanded AND particles are dead</span>
+          <span class="kw">const</span> ringsComplete <span class="op">=</span> effect.phaseTimer <span class="op">>=</span> effect.config.impact.duration;
+          <span class="kw">const</span> particlesDead <span class="op">=</span> effect.particles.<span class="fn">every</span>(p <span class="op">=></span> p.life <span class="op"><=</span> <span class="num">0</span>);
+
+          <span class="kw">if</span> (ringsComplete <span class="op">&&</span> particlesDead) {
+            effect.phase <span class="op">=</span> <span class="str">'done'</span>;
+          }
+          <span class="kw">break</span>;
+
+        <span class="kw">case</span> <span class="str">'done'</span>:
+          <span class="kw">this</span>.activeEffects.<span class="fn">delete</span>(id);
+          <span class="kw">break</span>;
+      }
+    }
+  },
+
+  <span class="cm">/**
+   * Called by EnemyAbilitySystem when the ability resolves (damage is dealt).
+   * Transitions the effect from telegraph → impact.
+   */</span>
+  <span class="fn">resolve</span>(effectId) {
+    <span class="kw">const</span> effect <span class="op">=</span> <span class="kw">this</span>.activeEffects.<span class="fn">get</span>(effectId);
+    <span class="kw">if</span> (!effect) <span class="kw">return</span>;
+
+    effect.phase <span class="op">=</span> <span class="str">'impact'</span>;
+    effect.phaseTimer <span class="op">=</span> <span class="num">0</span>;
+
+    <span class="cm">// Spawn particles at the moment of impact</span>
+    <span class="kw">this</span>.<span class="fn">spawnParticles</span>(effect);
+
+    <span class="cm">// Trigger screen shake</span>
+    <span class="kw">if</span> (effect.config.impact.screenShake) {
+      Camera.<span class="fn">shake</span>(
+        effect.config.impact.screenShake.intensity,
+        effect.config.impact.screenShake.duration
+      );
+    }
+
+    <span class="cm">// Play impact sound</span>
+    <span class="kw">if</span> (effect.config.audio?.impact) {
+      AudioManager.<span class="fn">play</span>(effect.config.audio.impact);
+    }
+  },
+
+  <span class="cm">/**
+   * Called by EnemyAbilitySystem if the ability is interrupted
+   * (enemy dies or is stunned during telegraph).
+   * Removes the telegraph visual immediately.
+   */</span>
+  <span class="fn">cancel</span>(effectId) {
+    <span class="kw">this</span>.activeEffects.<span class="fn">delete</span>(effectId);
+  },
+
+  <span class="cm">// ── Particle helpers ──</span>
+
+  <span class="fn">spawnParticles</span>(effect) {
+    <span class="kw">const</span> cfg <span class="op">=</span> effect.config.particles;
+    <span class="kw">if</span> (!cfg) <span class="kw">return</span>;
+
+    <span class="kw">for</span> (<span class="kw">let</span> i <span class="op">=</span> <span class="num">0</span>; i <span class="op"><</span> cfg.count; i<span class="op">++</span>) {
+      <span class="cm">// Random position within spawn radius</span>
+      <span class="kw">const</span> angle <span class="op">=</span> Math.<span class="fn">random</span>() <span class="op">*</span> Math.PI <span class="op">*</span> <span class="num">2</span>;
+      <span class="kw">const</span> dist <span class="op">=</span> Math.<span class="fn">random</span>() <span class="op">*</span> cfg.spawnRadius <span class="op">*</span> TILE_SIZE;
+
+      effect.particles.<span class="fn">push</span>({
+        x: effect.x <span class="op">+</span> Math.<span class="fn">cos</span>(angle) <span class="op">*</span> dist,
+        y: effect.y <span class="op">+</span> Math.<span class="fn">sin</span>(angle) <span class="op">*</span> dist,
+        vx: cfg.velocity.xRange[<span class="num">0</span>] <span class="op">+</span> Math.<span class="fn">random</span>() <span class="op">*</span> (cfg.velocity.xRange[<span class="num">1</span>] <span class="op">-</span> cfg.velocity.xRange[<span class="num">0</span>]),
+        vy: cfg.velocity.yRange[<span class="num">0</span>] <span class="op">+</span> Math.<span class="fn">random</span>() <span class="op">*</span> (cfg.velocity.yRange[<span class="num">1</span>] <span class="op">-</span> cfg.velocity.yRange[<span class="num">0</span>]),
+        life: cfg.lifetime,
+        maxLife: cfg.lifetime,
+        sprite: cfg.sprite,
+      });
+    }
+  },
+
+  <span class="fn">updateParticles</span>(effect, dt) {
+    <span class="kw">const</span> gravity <span class="op">=</span> effect.config.particles?.gravity <span class="op">||</span> <span class="num">300</span>;
+    <span class="kw">for</span> (<span class="kw">const</span> p <span class="kw">of</span> effect.particles) {
+      <span class="kw">if</span> (p.life <span class="op"><=</span> <span class="num">0</span>) <span class="kw">continue</span>;
+      p.x <span class="op">+=</span> p.vx <span class="op">*</span> (dt <span class="op">/</span> <span class="num">1000</span>);
+      p.y <span class="op">+=</span> p.vy <span class="op">*</span> (dt <span class="op">/</span> <span class="num">1000</span>);
+      p.vy <span class="op">+=</span> gravity <span class="op">*</span> (dt <span class="op">/</span> <span class="num">1000</span>);   <span class="cm">// Gravity pulls down</span>
+      p.life <span class="op">-=</span> dt;
+    }
+  },
+};</pre>
+
+<h3>Part C — The Renderer: Draw it on screen</h3>
+<p>This goes in <code>effect-renderer.js</code>. It reads the current state from the controller and draws the correct visual.</p>
+
+<pre><span class="cm">// ─── effect-renderer.js ───</span>
+<span class="cm">// This draws the active effects on the canvas.</span>
+<span class="cm">// Called every frame by the main render loop.</span>
+
+<span class="kw">const</span> EffectRenderer <span class="op">=</span> {
+
+  <span class="cm">/**
+   * Draw all active effects.
+   * Called by the main render loop TWICE per frame:
+   *   1. drawGround() — before entities (telegraphs go under monsters/players)
+   *   2. drawOverlay() — after entities (impacts/particles go on top)
+   */</span>
+
+  <span class="fn">drawGround</span>(ctx, cameraX, cameraY) {
+    <span class="kw">for</span> (<span class="kw">const</span> [id, effect] <span class="kw">of</span> EffectAnimator.activeEffects) {
+      <span class="kw">if</span> (effect.phase <span class="op">===</span> <span class="str">'telegraph'</span>) {
+        <span class="kw">this</span>.<span class="fn">drawTelegraph</span>(ctx, effect, cameraX, cameraY);
+      }
+    }
+  },
+
+  <span class="fn">drawOverlay</span>(ctx, cameraX, cameraY) {
+    <span class="kw">for</span> (<span class="kw">const</span> [id, effect] <span class="kw">of</span> EffectAnimator.activeEffects) {
+      <span class="kw">if</span> (effect.phase <span class="op">===</span> <span class="str">'impact'</span>) {
+        <span class="kw">this</span>.<span class="fn">drawImpact</span>(ctx, effect, cameraX, cameraY);
+        <span class="kw">this</span>.<span class="fn">drawParticles</span>(ctx, effect, cameraX, cameraY);
+      }
+    }
+  },
+
+  <span class="cm">// ── TELEGRAPH: Growing circle ──</span>
+  <span class="fn">drawTelegraph</span>(ctx, effect, camX, camY) {
+    <span class="kw">const</span> cfg <span class="op">=</span> effect.config.telegraph;
+    <span class="kw">if</span> (cfg.type <span class="op">!==</span> <span class="str">'circle_grow'</span>) <span class="kw">return</span>;  <span class="cm">// Other shapes handled elsewhere</span>
+
+    <span class="cm">// How far through the telegraph are we? 0.0 → 1.0</span>
+    <span class="kw">const</span> progress <span class="op">=</span> Math.<span class="fn">min</span>(effect.phaseTimer <span class="op">/</span> effect.telegraphDuration, <span class="num">1.0</span>);
+
+    <span class="cm">// Current radius: lerp from startScale to endScale</span>
+    <span class="kw">const</span> scale <span class="op">=</span> cfg.startScale <span class="op">+</span> (cfg.endScale <span class="op">-</span> cfg.startScale) <span class="op">*</span> progress;
+    <span class="kw">const</span> radiusPx <span class="op">=</span> cfg.radius <span class="op">*</span> TILE_SIZE <span class="op">*</span> scale;
+
+    <span class="cm">// Screen position</span>
+    <span class="kw">const</span> sx <span class="op">=</span> effect.x <span class="op">-</span> camX;
+    <span class="kw">const</span> sy <span class="op">=</span> effect.y <span class="op">-</span> camY;
+
+    <span class="cm">// Pulsing border (sinusoidal brightness)</span>
+    <span class="kw">const</span> pulse <span class="op">=</span> <span class="num">0.5</span> <span class="op">+</span> <span class="num">0.5</span> <span class="op">*</span> Math.<span class="fn">sin</span>(effect.phaseTimer <span class="op">/</span> <span class="num">1000</span> <span class="op">*</span> cfg.pulseSpeed <span class="op">*</span> Math.PI <span class="op">*</span> <span class="num">2</span>);
+    <span class="kw">const</span> borderAlpha <span class="op">=</span> <span class="num">0.5</span> <span class="op">+</span> pulse <span class="op">*</span> <span class="num">0.5</span>;
+
+    <span class="cm">// Draw filled circle</span>
+    ctx.<span class="fn">save</span>();
+    ctx.globalAlpha <span class="op">=</span> cfg.fillOpacity;
+    ctx.fillStyle <span class="op">=</span> cfg.color;
+    ctx.<span class="fn">beginPath</span>();
+    ctx.<span class="fn">arc</span>(sx, sy, radiusPx, <span class="num">0</span>, Math.PI <span class="op">*</span> <span class="num">2</span>);
+    ctx.<span class="fn">fill</span>();
+
+    <span class="cm">// Draw border ring</span>
+    ctx.globalAlpha <span class="op">=</span> borderAlpha;
+    ctx.strokeStyle <span class="op">=</span> cfg.borderColor;
+    ctx.lineWidth <span class="op">=</span> cfg.borderWidth;
+    ctx.<span class="fn">stroke</span>();
+    ctx.<span class="fn">restore</span>();
+  },
+
+  <span class="cm">// ── IMPACT: Expanding rings ──</span>
+  <span class="fn">drawImpact</span>(ctx, effect, camX, camY) {
+    <span class="kw">const</span> cfg <span class="op">=</span> effect.config.impact;
+    <span class="kw">if</span> (cfg.type <span class="op">!==</span> <span class="str">'ring_burst'</span>) <span class="kw">return</span>;
+
+    <span class="kw">const</span> progress <span class="op">=</span> Math.<span class="fn">min</span>(effect.phaseTimer <span class="op">/</span> cfg.duration, <span class="num">1.0</span>);
+    <span class="kw">const</span> sx <span class="op">=</span> effect.x <span class="op">-</span> camX;
+    <span class="kw">const</span> sy <span class="op">=</span> effect.y <span class="op">-</span> camY;
+
+    <span class="cm">// Fade out in the last portion</span>
+    <span class="kw">const</span> alpha <span class="op">=</span> progress <span class="op">></span> cfg.fadeStart
+      <span class="op">?</span> <span class="num">1.0</span> <span class="op">-</span> ((progress <span class="op">-</span> cfg.fadeStart) <span class="op">/</span> (<span class="num">1.0</span> <span class="op">-</span> cfg.fadeStart))
+      <span class="op">:</span> <span class="num">1.0</span>;
+
+    ctx.<span class="fn">save</span>();
+    ctx.globalAlpha <span class="op">=</span> alpha;
+
+    <span class="cm">// Draw each ring at a staggered progress (inner ring leads)</span>
+    <span class="kw">for</span> (<span class="kw">let</span> i <span class="op">=</span> <span class="num">0</span>; i <span class="op"><</span> cfg.rings; i<span class="op">++</span>) {
+      <span class="kw">const</span> ringDelay <span class="op">=</span> i <span class="op">*</span> <span class="num">0.12</span>;  <span class="cm">// Each ring starts slightly later</span>
+      <span class="kw">const</span> ringProgress <span class="op">=</span> Math.<span class="fn">max</span>(<span class="num">0</span>, Math.<span class="fn">min</span>(<span class="num">1</span>, (progress <span class="op">-</span> ringDelay) <span class="op">/</span> (<span class="num">1</span> <span class="op">-</span> ringDelay)));
+
+      <span class="kw">const</span> ringRadius <span class="op">=</span> (cfg.startRadius <span class="op">+</span> (cfg.endRadius <span class="op">-</span> cfg.startRadius) <span class="op">*</span> ringProgress) <span class="op">*</span> TILE_SIZE;
+
+      ctx.strokeStyle <span class="op">=</span> cfg.colors[i] <span class="op">||</span> cfg.colors[<span class="num">0</span>];
+      ctx.lineWidth <span class="op">=</span> cfg.ringWidth <span class="op">*</span> (<span class="num">1</span> <span class="op">-</span> ringProgress <span class="op">*</span> <span class="num">0.5</span>);  <span class="cm">// Rings thin as they expand</span>
+      ctx.<span class="fn">beginPath</span>();
+      ctx.<span class="fn">arc</span>(sx, sy, ringRadius, <span class="num">0</span>, Math.PI <span class="op">*</span> <span class="num">2</span>);
+      ctx.<span class="fn">stroke</span>();
+    }
+
+    ctx.<span class="fn">restore</span>();
+  },
+
+  <span class="cm">// ── PARTICLES: Rock debris ──</span>
+  <span class="fn">drawParticles</span>(ctx, effect, camX, camY) {
+    <span class="kw">for</span> (<span class="kw">const</span> p <span class="kw">of</span> effect.particles) {
+      <span class="kw">if</span> (p.life <span class="op"><=</span> <span class="num">0</span>) <span class="kw">continue</span>;
+
+      <span class="kw">const</span> lifeRatio <span class="op">=</span> p.life <span class="op">/</span> p.maxLife;
+      <span class="kw">const</span> fadeThreshold <span class="op">=</span> effect.config.particles.fadeOut;
+      <span class="kw">const</span> alpha <span class="op">=</span> lifeRatio <span class="op"><</span> fadeThreshold
+        <span class="op">?</span> lifeRatio <span class="op">/</span> fadeThreshold
+        <span class="op">:</span> <span class="num">1.0</span>;
+
+      <span class="kw">const</span> sx <span class="op">=</span> p.x <span class="op">-</span> camX;
+      <span class="kw">const</span> sy <span class="op">=</span> p.y <span class="op">-</span> camY;
+
+      <span class="cm">// Draw the tiny pixel sprite</span>
+      ctx.<span class="fn">save</span>();
+      ctx.globalAlpha <span class="op">=</span> alpha;
+      <span class="kw">this</span>.<span class="fn">drawPixelSprite</span>(ctx, p.sprite, sx, sy, <span class="num">2</span>);  <span class="cm">// scale=2</span>
+      ctx.<span class="fn">restore</span>();
+    }
+  },
+
+  <span class="cm">// ── Helper: draw a small pixel sprite at a position ──</span>
+  <span class="fn">drawPixelSprite</span>(ctx, sprite, x, y, scale) {
+    <span class="kw">const</span> hw <span class="op">=</span> (sprite.width <span class="op">*</span> scale) <span class="op">/</span> <span class="num">2</span>;
+    <span class="kw">const</span> hh <span class="op">=</span> (sprite.height <span class="op">*</span> scale) <span class="op">/</span> <span class="num">2</span>;
+
+    <span class="kw">for</span> (<span class="kw">let</span> row <span class="op">=</span> <span class="num">0</span>; row <span class="op"><</span> sprite.pixels.length; row<span class="op">++</span>) {
+      <span class="kw">for</span> (<span class="kw">let</span> col <span class="op">=</span> <span class="num">0</span>; col <span class="op"><</span> sprite.pixels[row].length; col<span class="op">++</span>) {
+        <span class="kw">const</span> char <span class="op">=</span> sprite.pixels[row][col];
+        <span class="kw">if</span> (char <span class="op">===</span> <span class="str">'.'</span>) <span class="kw">continue</span>;  <span class="cm">// Transparent</span>
+
+        ctx.fillStyle <span class="op">=</span> sprite.palette[char];
+        ctx.<span class="fn">fillRect</span>(
+          x <span class="op">-</span> hw <span class="op">+</span> col <span class="op">*</span> scale,
+          y <span class="op">-</span> hh <span class="op">+</span> row <span class="op">*</span> scale,
+          scale, scale
+        );
+      }
+    }
+  }
+};</pre>
+
+<h3>Part D — The Glue: Connect it to the ability system</h3>
+<p>This is where the animation system hooks into the ability lifecycle from the v2 implementation plan. These are modifications to the existing <code>executeAbility()</code> and <code>resolveAbility()</code> methods.</p>
+
+<pre><span class="cm">// ─── In enemy-ability-system.js ───</span>
+<span class="cm">// Modified executeAbility() — adds effect creation</span>
+
+<span class="fn">executeAbility</span>(enemy, target, ability, abilitySet) {
+  <span class="kw">const</span> telegraphTime <span class="op">=</span> <span class="cm">/* ... existing telegraph calculation ... */</span>;
+  <span class="kw">const</span> recoveryTime <span class="op">=</span> ability.recoveryTime <span class="op">||</span> <span class="num">600</span>;
+
+  <span class="cm">// Set cooldowns (existing)</span>
+  abilitySet.cooldowns[ability.id] <span class="op">=</span> ability.cooldown;
+  abilitySet.globalCooldown <span class="op">=</span> <span class="num">1000</span>;
+
+  <span class="cm">// Lock enemy (existing)</span>
+  enemy.abilityState <span class="op">=</span> <span class="str">'telegraph'</span>;
+  enemy.abilityLockout <span class="op">=</span> <span class="kw">true</span>;
+
+  <span class="cm">// ════ NEW: Start the visual effect ════</span>
+  <span class="kw">const</span> effectId <span class="op">=</span> EffectAnimator.<span class="fn">startEffect</span>(
+    ability.id,                         <span class="cm">// 'ground_slam'</span>
+    enemy.worldX, enemy.worldY,         <span class="cm">// center position</span>
+    telegraphTime,                      <span class="cm">// 1000ms</span>
+    ability.radius <span class="op">||</span> <span class="num">0</span>                  <span class="cm">// 3 tiles</span>
+  );
+
+  <span class="cm">// Store the effectId so we can resolve or cancel it later</span>
+  enemy._currentEffectId <span class="op">=</span> effectId;
+
+  <span class="cm">// Play telegraph audio</span>
+  <span class="kw">const</span> effectConfig <span class="op">=</span> ABILITY_EFFECTS[ability.id];
+  <span class="kw">if</span> (effectConfig?.audio?.telegraph) {
+    AudioManager.<span class="fn">play</span>(effectConfig.audio.telegraph);
+  }
+
+  <span class="cm">// Delayed execution (existing, with safety checks)</span>
+  <span class="kw">const</span> enemyId <span class="op">=</span> enemy.id;
+  <span class="fn">setTimeout</span>(() <span class="op">=></span> {
+    <span class="kw">if</span> (!enemy <span class="op">||</span> enemy.hp <span class="op"><=</span> <span class="num">0</span> <span class="op">||</span> !<span class="kw">this</span>.enemyAbilities.<span class="fn">has</span>(enemyId)) {
+      EffectAnimator.<span class="fn">cancel</span>(effectId);    <span class="cm">// ← cancel the visual too</span>
+      <span class="kw">this</span>.<span class="fn">cleanupAbilityState</span>(enemy);
+      <span class="kw">return</span>;
+    }
+    <span class="kw">if</span> (enemy.isStunned <span class="op">||</span> enemy.isRooted) {
+      EffectAnimator.<span class="fn">cancel</span>(effectId);    <span class="cm">// ← cancel the visual too</span>
+      abilitySet.cooldowns[ability.id] <span class="op">=</span> ability.cooldown <span class="op">*</span> <span class="num">0.5</span>;
+      <span class="kw">this</span>.<span class="fn">enterRecovery</span>(enemy, recoveryTime <span class="op">*</span> <span class="num">0.5</span>, enemyId);
+      <span class="kw">return</span>;
+    }
+
+    <span class="cm">// ════ NEW: Resolve the visual effect (telegraph → impact) ════</span>
+    EffectAnimator.<span class="fn">resolve</span>(effectId);
+
+    <span class="cm">// Apply damage (existing)</span>
+    <span class="kw">this</span>.<span class="fn">resolveAbility</span>(enemy, target, ability);
+
+    <span class="cm">// Enter recovery (existing)</span>
+    <span class="kw">this</span>.<span class="fn">enterRecovery</span>(enemy, recoveryTime, enemyId);
+
+  }, telegraphTime);
+},</pre>
+
+<div class="callout warn">
+  <strong>Critical:</strong> Notice how the visual effect (EffectAnimator) and the gameplay effect (resolveAbility) are triggered by the same setTimeout at the same moment. They must stay synchronized. If the visual resolves at a different time than the damage, the player will see the slam land but take damage early or late — which feels like a bug and destroys trust in the telegraph system.
+</div>
+
+<!-- ════════════════════════════════════════════ -->
+<h2><span class="phase-num">5</span> How the Render Loop Calls It</h2>
+
+<p>Your main game loop needs two new lines — one to update effect state, one to draw effects at the right layer.</p>
+
+<pre><span class="cm">// ─── In your main game loop ───</span>
+
+<span class="fn">update</span>(deltaTime) {
+  <span class="cm">// ... existing game update code ...</span>
+  EnemyAbilitySystem.<span class="fn">update</span>(deltaTime);   <span class="cm">// Updates cooldowns, passives</span>
+  EffectAnimator.<span class="fn">update</span>(deltaTime);        <span class="cm">// ← NEW: Updates effect animations</span>
+}
+
+<span class="fn">render</span>(ctx) {
+  <span class="cm">// 1. Draw floor tiles</span>
+  TileRenderer.<span class="fn">draw</span>(ctx);
+
+  <span class="cm">// 2. Draw telegraphs ON TOP of floor, BELOW entities</span>
+  EffectRenderer.<span class="fn">drawGround</span>(ctx, camera.x, camera.y);  <span class="cm">// ← NEW</span>
+
+  <span class="cm">// 3. Draw entities (monsters, players, items)</span>
+  EntityRenderer.<span class="fn">draw</span>(ctx);
+
+  <span class="cm">// 4. Draw impact effects and particles ON TOP of entities</span>
+  EffectRenderer.<span class="fn">drawOverlay</span>(ctx, camera.x, camera.y);  <span class="cm">// ← NEW</span>
+
+  <span class="cm">// 5. Draw UI (health bars, minimap, etc.)</span>
+  UIRenderer.<span class="fn">draw</span>(ctx);
+}
+</pre>
+
+<div class="callout">
+  <strong>Why two render calls?</strong> Telegraphs are drawn on the ground (under monsters) so they look like floor markings. Impact effects and particles are drawn on top so they feel like explosions happening above the action. This layering is what makes the animation feel grounded in the world rather than floating on top of it.
+</div>
+
+<!-- ════════════════════════════════════════════ -->
+<h2><span class="phase-num">6</span> Adapting This Template for Other Abilities</h2>
+
+<p>Every ability follows the same pattern. The only things that change are the <strong>telegraph shape</strong>, the <strong>impact visual</strong>, and the <strong>particles</strong>. Here's how to adapt this template:</p>
+
+<div class="card">
+  <h3>For other Circle abilities (stomp, heavy_slam, pounce):</h3>
+  <p>Same <code>circle_grow</code> telegraph type. Change radius, color, and speed. stomp is smaller (r2) and faster. heavy_slam adds knockback arrows pointing outward from center.</p>
+</div>
+
+<div class="card">
+  <h3>For Cone abilities (fire_breath, frost_breath, poison_cloud):</h3>
+  <p>New telegraph type: <code>cone_grow</code>. Instead of a circle, draw a pie-slice shape that grows from the enemy outward in a specific direction. Needs a <code>direction</code> parameter (angle toward target) and <code>arcWidth</code> (60° for fire, 75° for frost, 90° for poison). The renderer draws the cone aimed at where the target was when the telegraph started — it does NOT track the target during the telegraph.</p>
+</div>
+
+<div class="card">
+  <h3>For Line abilities (charge, lunge, void_beam):</h3>
+  <p>New telegraph type: <code>line_grow</code>. A rectangle from the enemy toward the target. Needs <code>width</code> (w2 for charge, w1 for lunge) and <code>length</code> (r10 for charge, l3 for lunge). charge's line should pulse red because getting hit by it is devastating.</p>
+</div>
+
+<div class="card">
+  <h3>For Projectile abilities (web_shot, homing_orb, projectile_burst):</h3>
+  <p>No ground telegraph — instead, the enemy plays a windup animation and the projectile itself is the visual. The projectile sprite travels through the world using position interpolation. homing_orb needs a <code>tracking</code> behavior in its update loop. projectile_burst spawns 3 projectiles at different angles.</p>
+</div>
+
+<div class="card">
+  <h3>For Teleport abilities (shadow_step, teleport_strike):</h3>
+  <p>Two-part visual: a "vanish" puff at the enemy's current position, then an "appear" flash at the target position. The telegraph is nearly instant (200-500ms), so the visual emphasis is on the arrival, not the warning. Use purple/dark particles for the shadow theme.</p>
+</div>
+
+<script>
+// ════════════════════════════════════════════
+// LIVE DEMO — ground_slam animation
+// ════════════════════════════════════════════
+
+const canvas = document.getElementById('demoCanvas');
+const ctx = canvas.getContext('2d');
+const SCALE = 2;
+const TILE = 32;
+const CX = canvas.width / 2;
+const CY = canvas.height / 2;
+
+let animState = null;
+let animFrame = null;
+
+const COLORS = {
+  telegraphFill: '#FFAA00',
+  telegraphBorder: '#FF6B35',
+  ring1: '#FFCC00',
+  ring2: '#FFAA00',
+  ring3: '#886644',
+  debris: '#AA8866',
+  debrisLight: '#CCAA88',
+  enemyBody: '#666688',
+  enemyDark: '#444466',
+  ground: '#1a1a22',
+  gridLine: '#222230',
+};
+
+function drawGrid() {
+  ctx.fillStyle = COLORS.ground;
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.strokeStyle = COLORS.gridLine;
+  ctx.lineWidth = 1;
+  for (let x = 0; x < canvas.width; x += TILE) {
+    ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, canvas.height); ctx.stroke();
+  }
+  for (let y = 0; y < canvas.height; y += TILE) {
+    ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(canvas.width, y); ctx.stroke();
+  }
+}
+
+function drawEnemy(shakex, shakey, recovery) {
+  const ex = CX + (shakex || 0);
+  const ey = CY + (shakey || 0);
+  const bodyColor = recovery ? '#558855' : COLORS.enemyBody;
+
+  // Body
+  ctx.fillStyle = bodyColor;
+  ctx.fillRect(ex - 10, ey - 14, 20, 24);
+  // Head
+  ctx.fillStyle = COLORS.enemyDark;
+  ctx.fillRect(ex - 7, ey - 20, 14, 8);
+  // Arms (raised during telegraph)
+  if (animState && animState.phase === 'telegraph') {
+    const armRaise = Math.min(1, animState.timer / animState.telegraphDuration);
+    const armY = ey - 10 - armRaise * 14;
+    ctx.fillStyle = bodyColor;
+    ctx.fillRect(ex - 16, armY, 6, 10);
+    ctx.fillRect(ex + 10, armY, 6, 10);
+  } else {
+    ctx.fillStyle = bodyColor;
+    ctx.fillRect(ex - 16, ey - 6, 6, 14);
+    ctx.fillRect(ex + 10, ey - 6, 6, 14);
+  }
+}
+
+function drawTelegraphCircle(progress) {
+  const scale = 0.3 + 0.7 * progress;
+  const radius = 3 * TILE * scale;
+  const pulse = 0.5 + 0.5 * Math.sin(performance.now() / 1000 * 6 * Math.PI * 2);
+
+  ctx.save();
+  ctx.globalAlpha = 0.25;
+  ctx.fillStyle = COLORS.telegraphFill;
+  ctx.beginPath();
+  ctx.arc(CX, CY, radius, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.globalAlpha = 0.5 + pulse * 0.5;
+  ctx.strokeStyle = COLORS.telegraphBorder;
+  ctx.lineWidth = 2;
+  ctx.stroke();
+  ctx.restore();
+}
+
+function drawImpactRings(progress) {
+  const colors = [COLORS.ring1, COLORS.ring2, COLORS.ring3];
+  const fadeStart = 0.6;
+  const alpha = progress > fadeStart ? 1.0 - ((progress - fadeStart) / (1.0 - fadeStart)) : 1.0;
+
+  ctx.save();
+  ctx.globalAlpha = alpha;
+  for (let i = 0; i < 3; i++) {
+    const ringDelay = i * 0.12;
+    const rp = Math.max(0, Math.min(1, (progress - ringDelay) / (1 - ringDelay)));
+    const radius = 3.5 * TILE * rp;
+    ctx.strokeStyle = colors[i];
+    ctx.lineWidth = 3 * (1 - rp * 0.5);
+    ctx.beginPath();
+    ctx.arc(CX, CY, radius, 0, Math.PI * 2);
+    ctx.stroke();
+  }
+  ctx.restore();
+}
+
+function spawnParticles() {
+  const particles = [];
+  for (let i = 0; i < 12; i++) {
+    const angle = Math.random() * Math.PI * 2;
+    const dist = Math.random() * 1.5 * TILE;
+    particles.push({
+      x: CX + Math.cos(angle) * dist,
+      y: CY + Math.sin(angle) * dist,
+      vx: -60 + Math.random() * 120,
+      vy: -120 + Math.random() * -60,
+      life: 600,
+      maxLife: 600,
+      size: 2 + Math.floor(Math.random() * 3),
+      color: Math.random() > 0.5 ? COLORS.debris : COLORS.debrisLight,
+    });
+  }
+  return particles;
+}
+
+function updateParticles(particles, dt) {
+  for (const p of particles) {
+    if (p.life <= 0) continue;
+    p.x += p.vx * (dt / 1000);
+    p.y += p.vy * (dt / 1000);
+    p.vy += 300 * (dt / 1000);
+    p.life -= dt;
+  }
+}
+
+function drawParticles(particles) {
+  for (const p of particles) {
+    if (p.life <= 0) continue;
+    const lifeRatio = p.life / p.maxLife;
+    const alpha = lifeRatio < 0.5 ? lifeRatio / 0.5 : 1.0;
+    ctx.save();
+    ctx.globalAlpha = alpha;
+    ctx.fillStyle = p.color;
+    ctx.fillRect(p.x - p.size/2, p.y - p.size/2, p.size, p.size);
+    ctx.restore();
+  }
+}
+
+function getScreenShake(timer) {
+  if (timer > 200) return { x: 0, y: 0 };
+  const intensity = 4 * (1 - timer / 200);
+  return {
+    x: (Math.random() - 0.5) * 2 * intensity,
+    y: (Math.random() - 0.5) * 2 * intensity,
+  };
+}
+
+function startAnim(phases) {
+  stopAnim();
+  animState = {
+    phases: phases,
+    phaseIndex: 0,
+    phase: phases[0],
+    timer: 0,
+    telegraphDuration: 1000,
+    impactDuration: 400,
+    recoveryDuration: 800,
+    particles: [],
+    shakeTimer: 999,
+    lastTime: performance.now(),
+  };
+  animFrame = requestAnimationFrame(tick);
+}
+
+function tick(now) {
+  if (!animState) return;
+  const dt = now - animState.lastTime;
+  animState.lastTime = now;
+  animState.timer += dt;
+  animState.shakeTimer += dt;
+
+  // Phase transitions
+  const phase = animState.phase;
+  let advance = false;
+
+  if (phase === 'telegraph' && animState.timer >= animState.telegraphDuration) advance = true;
+  if (phase === 'impact' && animState.timer >= animState.impactDuration &&
+      animState.particles.every(p => p.life <= 0)) advance = true;
+  if (phase === 'recovery' && animState.timer >= animState.recoveryDuration) advance = true;
+
+  if (advance) {
+    animState.phaseIndex++;
+    if (animState.phaseIndex >= animState.phases.length) {
+      stopAnim();
+      drawGrid();
+      drawEnemy(0, 0, false);
+      document.getElementById('phaseLabel').textContent = 'Cycle complete';
+      return;
+    }
+    animState.phase = animState.phases[animState.phaseIndex];
+    animState.timer = 0;
+
+    if (animState.phase === 'impact') {
+      animState.particles = spawnParticles();
+      animState.shakeTimer = 0;
+    }
+  }
+
+  // Update
+  if (animState.phase === 'impact') {
+    updateParticles(animState.particles, dt);
+  }
+
+  // Draw
+  const shake = getScreenShake(animState.shakeTimer);
+
+  ctx.save();
+  ctx.translate(shake.x, shake.y);
+  drawGrid();
+
+  if (animState.phase === 'telegraph') {
+    const progress = Math.min(animState.timer / animState.telegraphDuration, 1.0);
+    drawTelegraphCircle(progress);
+    drawEnemy(0, 0, false);
+    document.getElementById('phaseLabel').textContent =
+      `TELEGRAPH — ${Math.ceil((animState.telegraphDuration - animState.timer))}ms remaining`;
+  }
+  else if (animState.phase === 'impact') {
+    const progress = Math.min(animState.timer / animState.impactDuration, 1.0);
+    drawEnemy(0, 0, false);
+    drawImpactRings(progress);
+    drawParticles(animState.particles);
+    document.getElementById('phaseLabel').textContent = 'IMPACT — damage applied, rings expanding';
+  }
+  else if (animState.phase === 'recovery') {
+    drawEnemy(0, 0, true);
+    const remaining = Math.ceil(animState.recoveryDuration - animState.timer);
+    document.getElementById('phaseLabel').textContent =
+      `RECOVERY — enemy vulnerable (1.25x damage) — ${remaining}ms`;
+  }
+
+  ctx.restore();
+  animFrame = requestAnimationFrame(tick);
+}
+
+function playFullCycle() {
+  startAnim(['telegraph', 'impact', 'recovery']);
+}
+
+function showPhase(phase) {
+  startAnim([phase]);
+}
+
+function stopAnim() {
+  if (animFrame) cancelAnimationFrame(animFrame);
+  animFrame = null;
+  animState = null;
+}
+
+// ── Sprite frame previews ──
+function drawFramePreview(containerId, frames) {
+  const container = document.getElementById(containerId);
+  container.innerHTML = '';
+
+  frames.forEach((frame, i) => {
+    const div = document.createElement('div');
+    div.className = 'sprite-frame';
+    const c = document.createElement('canvas');
+    c.width = frame.size;
+    c.height = frame.size;
+    c.style.width = (frame.size * 2) + 'px';
+    c.style.height = (frame.size * 2) + 'px';
+    const fctx = c.getContext('2d');
+    frame.draw(fctx, frame.size / 2, frame.size / 2);
+    div.appendChild(c);
+    const label = document.createElement('div');
+    label.className = 'frame-label';
+    label.textContent = frame.label;
+    div.appendChild(label);
+    container.appendChild(div);
+  });
+}
+
+// Telegraph frames
+drawFramePreview('telegraphFrames', [
+  { size: 80, label: 'T=0ms (30%)', draw: (c, cx, cy) => {
+    c.globalAlpha = 0.25; c.fillStyle = '#FFAA00'; c.beginPath(); c.arc(cx,cy,10,0,Math.PI*2); c.fill();
+    c.globalAlpha = 0.7; c.strokeStyle = '#FF6B35'; c.lineWidth = 1.5; c.stroke();
+  }},
+  { size: 80, label: 'T=333ms (53%)', draw: (c, cx, cy) => {
+    c.globalAlpha = 0.25; c.fillStyle = '#FFAA00'; c.beginPath(); c.arc(cx,cy,18,0,Math.PI*2); c.fill();
+    c.globalAlpha = 0.85; c.strokeStyle = '#FF6B35'; c.lineWidth = 1.5; c.stroke();
+  }},
+  { size: 80, label: 'T=666ms (77%)', draw: (c, cx, cy) => {
+    c.globalAlpha = 0.25; c.fillStyle = '#FFAA00'; c.beginPath(); c.arc(cx,cy,27,0,Math.PI*2); c.fill();
+    c.globalAlpha = 0.6; c.strokeStyle = '#FF6B35'; c.lineWidth = 1.5; c.stroke();
+  }},
+  { size: 80, label: 'T=1000ms (100%)', draw: (c, cx, cy) => {
+    c.globalAlpha = 0.25; c.fillStyle = '#FFAA00'; c.beginPath(); c.arc(cx,cy,35,0,Math.PI*2); c.fill();
+    c.globalAlpha = 1.0; c.strokeStyle = '#FF6B35'; c.lineWidth = 2; c.stroke();
+  }},
+]);
+
+// Impact frames
+drawFramePreview('impactFrames', [
+  { size: 80, label: 'Flash (0ms)', draw: (c, cx, cy) => {
+    c.globalAlpha = 0.8; c.fillStyle = '#FFFFFF'; c.beginPath(); c.arc(cx,cy,35,0,Math.PI*2); c.fill();
+  }},
+  { size: 80, label: 'Ring 1 (80ms)', draw: (c, cx, cy) => {
+    c.strokeStyle = '#FFCC00'; c.lineWidth = 3; c.beginPath(); c.arc(cx,cy,12,0,Math.PI*2); c.stroke();
+  }},
+  { size: 80, label: 'Ring 2 (160ms)', draw: (c, cx, cy) => {
+    c.strokeStyle = '#FFCC00'; c.lineWidth = 2.5; c.beginPath(); c.arc(cx,cy,22,0,Math.PI*2); c.stroke();
+    c.strokeStyle = '#FFAA00'; c.lineWidth = 2.8; c.beginPath(); c.arc(cx,cy,10,0,Math.PI*2); c.stroke();
+  }},
+  { size: 80, label: 'Ring 3 (240ms)', draw: (c, cx, cy) => {
+    c.strokeStyle = '#FFCC00'; c.lineWidth = 2; c.beginPath(); c.arc(cx,cy,30,0,Math.PI*2); c.stroke();
+    c.strokeStyle = '#FFAA00'; c.lineWidth = 2.2; c.beginPath(); c.arc(cx,cy,20,0,Math.PI*2); c.stroke();
+    c.strokeStyle = '#886644'; c.lineWidth = 2.5; c.beginPath(); c.arc(cx,cy,10,0,Math.PI*2); c.stroke();
+  }},
+  { size: 80, label: 'Fading (320ms)', draw: (c, cx, cy) => {
+    c.globalAlpha = 0.5;
+    c.strokeStyle = '#FFCC00'; c.lineWidth = 1.5; c.beginPath(); c.arc(cx,cy,35,0,Math.PI*2); c.stroke();
+    c.strokeStyle = '#FFAA00'; c.lineWidth = 1.8; c.beginPath(); c.arc(cx,cy,26,0,Math.PI*2); c.stroke();
+    c.strokeStyle = '#886644'; c.lineWidth = 2; c.beginPath(); c.arc(cx,cy,16,0,Math.PI*2); c.stroke();
+  }},
+  { size: 80, label: 'Gone (400ms)', draw: (c, cx, cy) => {
+    c.globalAlpha = 0.1;
+    c.strokeStyle = '#886644'; c.lineWidth = 1; c.beginPath(); c.arc(cx,cy,36,0,Math.PI*2); c.stroke();
+  }},
+]);
+
+// Particle frames
+drawFramePreview('particleFrames', [
+  { size: 50, label: 'Spawn', draw: (c, cx, cy) => {
+    const ps = [[cx-4,cy-2],[cx+6,cy-5],[cx-1,cy+4],[cx+3,cy-8],[cx-7,cy+1]];
+    ps.forEach(([x,y]) => { c.fillStyle = '#AA8866'; c.fillRect(x-1,y-1,3,3); });
+  }},
+  { size: 50, label: 'Rising', draw: (c, cx, cy) => {
+    const ps = [[cx-6,cy-10],[cx+8,cy-14],[cx-2,cy-6],[cx+4,cy-18],[cx-9,cy-8]];
+    ps.forEach(([x,y]) => { c.fillStyle = '#AA8866'; c.fillRect(x-1,y-1,3,3); });
+  }},
+  { size: 50, label: 'Falling', draw: (c, cx, cy) => {
+    c.globalAlpha = 0.7;
+    const ps = [[cx-8,cy-4],[cx+10,cy-6],[cx-3,cy+2],[cx+5,cy-8],[cx-11,cy+3]];
+    ps.forEach(([x,y]) => { c.fillStyle = '#CCAA88'; c.fillRect(x-1,y-1,2,2); });
+  }},
+  { size: 50, label: 'Fading', draw: (c, cx, cy) => {
+    c.globalAlpha = 0.3;
+    const ps = [[cx-9,cy+4],[cx+11,cy+2],[cx-4,cy+8],[cx+6,cy+1],[cx-12,cy+7]];
+    ps.forEach(([x,y]) => { c.fillStyle = '#AA8866'; c.fillRect(x-1,y-1,2,2); });
+  }},
+]);
+
+// Initial render
+drawGrid();
+drawEnemy(0, 0, false);
+</script>
+
+</body>
+</html>

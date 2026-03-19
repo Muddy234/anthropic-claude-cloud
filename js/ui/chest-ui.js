@@ -13,7 +13,11 @@ const ChestUI = {
     currentChest: null,
     contents: [],      // Array of items in the chest
     scrollOffset: 0,
-    maxVisibleItems: 6
+    maxVisibleItems: 6,
+
+    // Keyboard navigation state
+    selectedIndex: 0,        // Currently selected item index
+    focusArea: 'items'       // 'items', 'takeAll', 'close'
 };
 
 // ============================================================================
@@ -38,6 +42,8 @@ function openChestUI(chest, contents) {
     ChestUI.currentChest = chest;
     ChestUI.contents = contents.map(item => ({ ...item, taken: false }));
     ChestUI.scrollOffset = 0;
+    ChestUI.selectedIndex = 0;
+    ChestUI.focusArea = 'items';
 
     // Pause game while UI is open
     game.state = 'chest';
@@ -57,6 +63,8 @@ function closeChestUI() {
     ChestUI.currentChest = null;
     ChestUI.contents = [];
     ChestUI.scrollOffset = 0;
+    ChestUI.selectedIndex = 0;
+    ChestUI.focusArea = 'items';
 
     // Resume game
     game.state = 'playing';
@@ -92,11 +100,47 @@ function takeChestItem(index) {
             ChestUI.currentChest.interactable = false;
             ChestUI.currentChest.type = ChestUI.currentChest.type.replace('chest', 'chest_open');
             if (ChestUI.currentChest.data) {
-                ChestUI.currentChest.data.symbol = '📭';
+                ChestUI.currentChest.data.symbol = String.fromCodePoint(0x1F4ED); // mailbox
                 ChestUI.currentChest.data.glow = false;
             }
         }
         closeChestUI();
+    } else {
+        // Move selection to next available item
+        moveToNextAvailableItem();
+    }
+}
+
+/**
+ * Move selection to next available (not taken) item
+ */
+function moveToNextAvailableItem() {
+    // First try forward from current position
+    for (let i = ChestUI.selectedIndex; i < ChestUI.contents.length; i++) {
+        if (!ChestUI.contents[i].taken) {
+            ChestUI.selectedIndex = i;
+            ensureSelectedVisible();
+            return;
+        }
+    }
+    // Then try backward
+    for (let i = ChestUI.selectedIndex - 1; i >= 0; i--) {
+        if (!ChestUI.contents[i].taken) {
+            ChestUI.selectedIndex = i;
+            ensureSelectedVisible();
+            return;
+        }
+    }
+}
+
+/**
+ * Ensure the selected item is visible (scroll if needed)
+ */
+function ensureSelectedVisible() {
+    if (ChestUI.selectedIndex < ChestUI.scrollOffset) {
+        ChestUI.scrollOffset = ChestUI.selectedIndex;
+    } else if (ChestUI.selectedIndex >= ChestUI.scrollOffset + ChestUI.maxVisibleItems) {
+        ChestUI.scrollOffset = ChestUI.selectedIndex - ChestUI.maxVisibleItems + 1;
     }
 }
 
@@ -146,6 +190,102 @@ function scrollChestUI(delta) {
 }
 
 // ============================================================================
+// KEYBOARD NAVIGATION
+// ============================================================================
+
+/**
+ * Navigate selection up
+ */
+function navigateChestUp() {
+    if (ChestUI.focusArea === 'items') {
+        // Find previous non-taken item
+        for (let i = ChestUI.selectedIndex - 1; i >= 0; i--) {
+            if (!ChestUI.contents[i].taken) {
+                ChestUI.selectedIndex = i;
+                ensureSelectedVisible();
+                return;
+            }
+        }
+    } else {
+        // Move from buttons back to items
+        ChestUI.focusArea = 'items';
+        moveToNextAvailableItem();
+    }
+}
+
+/**
+ * Navigate selection down
+ */
+function navigateChestDown() {
+    if (ChestUI.focusArea === 'items') {
+        // Find next non-taken item
+        for (let i = ChestUI.selectedIndex + 1; i < ChestUI.contents.length; i++) {
+            if (!ChestUI.contents[i].taken) {
+                ChestUI.selectedIndex = i;
+                ensureSelectedVisible();
+                return;
+            }
+        }
+        // If no more items, move to buttons
+        ChestUI.focusArea = 'takeAll';
+    } else if (ChestUI.focusArea === 'takeAll') {
+        ChestUI.focusArea = 'close';
+    }
+}
+
+/**
+ * Navigate selection left/right (for buttons)
+ */
+function navigateChestHorizontal(direction) {
+    if (ChestUI.focusArea === 'takeAll') {
+        ChestUI.focusArea = 'close';
+    } else if (ChestUI.focusArea === 'close') {
+        ChestUI.focusArea = 'takeAll';
+    }
+}
+
+/**
+ * Activate the currently focused element
+ */
+function activateChestSelection() {
+    if (ChestUI.focusArea === 'items') {
+        // Take the selected item
+        if (ChestUI.selectedIndex >= 0 && ChestUI.selectedIndex < ChestUI.contents.length) {
+            if (!ChestUI.contents[ChestUI.selectedIndex].taken) {
+                takeChestItem(ChestUI.selectedIndex);
+            }
+        }
+    } else if (ChestUI.focusArea === 'takeAll') {
+        takeAllChestItems();
+    } else if (ChestUI.focusArea === 'close') {
+        // Mark chest as opened before closing
+        if (ChestUI.currentChest) {
+            ChestUI.currentChest.interactable = false;
+            ChestUI.currentChest.type = ChestUI.currentChest.type.replace('chest', 'chest_open');
+            if (ChestUI.currentChest.data) {
+                ChestUI.currentChest.data.symbol = String.fromCodePoint(0x1F4ED);
+                ChestUI.currentChest.data.glow = false;
+            }
+        }
+        closeChestUI();
+    }
+}
+
+/**
+ * Switch focus between items and buttons
+ */
+function tabChestFocus() {
+    if (ChestUI.focusArea === 'items') {
+        ChestUI.focusArea = 'takeAll';
+    } else if (ChestUI.focusArea === 'takeAll') {
+        ChestUI.focusArea = 'close';
+    } else {
+        ChestUI.focusArea = 'items';
+        moveToNextAvailableItem();
+    }
+}
+
+// ============================================================================
 // RENDERING
 // ============================================================================
 
@@ -187,8 +327,8 @@ function renderChestUI(ctx) {
 
     // Chest icon
     ctx.font = '24px monospace';
-    ctx.fillText('📦', panelX + 30, panelY + 34);
-    ctx.fillText('📦', panelX + panelWidth - 30, panelY + 34);
+    ctx.fillText(String.fromCodePoint(0x1F4E6), panelX + 30, panelY + 34);
+    ctx.fillText(String.fromCodePoint(0x1F4E6), panelX + panelWidth - 30, panelY + 34);
 
     // Item list header
     const listY = panelY + 70;
@@ -197,7 +337,7 @@ function renderChestUI(ctx) {
     ctx.textAlign = 'left';
     ctx.fillText('ITEMS', panelX + 20, listY);
     ctx.textAlign = 'right';
-    ctx.fillText('CLICK TO TAKE', panelX + panelWidth - 20, listY);
+    ctx.fillText('ARROW KEYS / CLICK', panelX + panelWidth - 20, listY);
 
     // Item list
     const itemStartY = listY + 15;
@@ -215,19 +355,27 @@ function renderChestUI(ctx) {
 
         const item = ChestUI.contents[itemIdx];
         const isTaken = item.taken;
+        const isSelected = ChestUI.focusArea === 'items' && itemIdx === ChestUI.selectedIndex;
         const itemY = itemStartY + i * itemHeight;
 
         // Item background
         if (isTaken) {
             ctx.fillStyle = 'rgba(50, 50, 50, 0.5)';
+        } else if (isSelected) {
+            ctx.fillStyle = 'rgba(255, 215, 0, 0.3)';
         } else {
             ctx.fillStyle = 'rgba(255, 215, 0, 0.1)';
         }
         ctx.fillRect(panelX + 15, itemY, panelWidth - 30, itemHeight - 4);
 
-        // Item border
-        ctx.strokeStyle = isTaken ? '#333' : '#FFD700';
-        ctx.lineWidth = 1;
+        // Item border - highlight if selected
+        if (isSelected && !isTaken) {
+            ctx.strokeStyle = '#fff';
+            ctx.lineWidth = 2;
+        } else {
+            ctx.strokeStyle = isTaken ? '#333' : '#FFD700';
+            ctx.lineWidth = 1;
+        }
         ctx.strokeRect(panelX + 15, itemY, panelWidth - 30, itemHeight - 4);
 
         // Item icon (based on type)
@@ -270,7 +418,7 @@ function renderChestUI(ctx) {
             const btnW = 55;
             const btnH = 26;
 
-            ctx.fillStyle = '#FFD700';
+            ctx.fillStyle = isSelected ? '#fff' : '#FFD700';
             ctx.fillRect(btnX, btnY, btnW, btnH);
             ctx.fillStyle = '#1a1a2e';
             ctx.font = 'bold 11px monospace';
@@ -288,12 +436,12 @@ function renderChestUI(ctx) {
         ctx.textAlign = 'center';
 
         if (ChestUI.scrollOffset > 0) {
-            ctx.fillText('▲ Scroll Up', panelX + panelWidth / 2, itemStartY - 5);
+            ctx.fillText(String.fromCharCode(9650) + ' Scroll Up', panelX + panelWidth / 2, itemStartY - 5);
         }
 
         const maxScroll = ChestUI.contents.length - ChestUI.maxVisibleItems;
         if (ChestUI.scrollOffset < maxScroll) {
-            ctx.fillText('▼ Scroll Down', panelX + panelWidth / 2, itemStartY + visibleItems * itemHeight + 15);
+            ctx.fillText(String.fromCharCode(9660) + ' Scroll Down', panelX + panelWidth / 2, itemStartY + visibleItems * itemHeight + 15);
         }
     }
 
@@ -306,8 +454,21 @@ function renderChestUI(ctx) {
     const remainingItems = ChestUI.contents.filter(i => !i.taken).length;
     const takeAllX = panelX + panelWidth / 2 - buttonWidth - 20;
     const canTakeAll = remainingItems > 0;
-    ctx.fillStyle = canTakeAll ? '#2ecc71' : '#444';
+    const takeAllFocused = ChestUI.focusArea === 'takeAll';
+
+    // Button background
+    if (takeAllFocused && canTakeAll) {
+        ctx.fillStyle = '#5dff7d';
+        ctx.strokeStyle = '#fff';
+        ctx.lineWidth = 2;
+    } else {
+        ctx.fillStyle = canTakeAll ? '#2ecc71' : '#444';
+        ctx.strokeStyle = 'transparent';
+    }
     ctx.fillRect(takeAllX, buttonY, buttonWidth, buttonHeight);
+    if (takeAllFocused && canTakeAll) {
+        ctx.strokeRect(takeAllX, buttonY, buttonWidth, buttonHeight);
+    }
     ctx.fillStyle = canTakeAll ? '#fff' : '#888';
     ctx.font = 'bold 14px monospace';
     ctx.textAlign = 'center';
@@ -315,8 +476,20 @@ function renderChestUI(ctx) {
 
     // Close button
     const closeX = panelX + panelWidth / 2 + 20;
-    ctx.fillStyle = '#e74c3c';
+    const closeFocused = ChestUI.focusArea === 'close';
+
+    if (closeFocused) {
+        ctx.fillStyle = '#ff6b6b';
+        ctx.strokeStyle = '#fff';
+        ctx.lineWidth = 2;
+    } else {
+        ctx.fillStyle = '#e74c3c';
+        ctx.strokeStyle = 'transparent';
+    }
     ctx.fillRect(closeX, buttonY, buttonWidth, buttonHeight);
+    if (closeFocused) {
+        ctx.strokeRect(closeX, buttonY, buttonWidth, buttonHeight);
+    }
     ctx.fillStyle = '#fff';
     ctx.fillText('CLOSE', closeX + buttonWidth / 2, buttonY + 26);
 
@@ -324,7 +497,7 @@ function renderChestUI(ctx) {
     ctx.fillStyle = '#666';
     ctx.font = '11px monospace';
     ctx.textAlign = 'center';
-    ctx.fillText('Click TAKE to collect items. Press ESC to close.', panelX + panelWidth / 2, panelY + panelHeight - 15);
+    ctx.fillText(String.fromCharCode(8593) + String.fromCharCode(8595) + ' Navigate | ENTER Take | TAB Switch | ESC Close', panelX + panelWidth / 2, panelY + panelHeight - 15);
 
     // Store button bounds for click detection
     ChestUI._buttonBounds = {
@@ -344,25 +517,25 @@ function renderChestUI(ctx) {
  */
 function getItemIcon(item) {
     // Check for specific item types
-    if (item.id === 'torch' || item.name?.toLowerCase().includes('torch')) return '🔥';
-    if (item.type === 'consumable' || item.name?.toLowerCase().includes('potion')) return '🧪';
+    if (item.id === 'torch' || item.name?.toLowerCase().includes('torch')) return String.fromCodePoint(0x1F525);
+    if (item.type === 'consumable' || item.name?.toLowerCase().includes('potion')) return String.fromCodePoint(0x1F9EA);
 
-    // Weapon types
-    if (item.weaponType === 'sword') return '🗡️';
-    if (item.weaponType === 'mace') return '🔨';
-    if (item.weaponType === 'bow') return '🏹';
-    if (item.weaponType === 'crossbow') return '🎯';
-    if (item.weaponType === 'staff') return '🪄';
-    if (item.weaponType === 'polearm') return '🔱';
-    if (item.weaponType === 'knife') return '🔪';
+    // Weapon types (sword, mace, polearm, bow, dagger, staff)
+    if (item.weaponType === 'sword') return String.fromCodePoint(0x1F5E1);
+    if (item.weaponType === 'mace') return String.fromCodePoint(0x1F528);
+    if (item.weaponType === 'bow') return String.fromCodePoint(0x1F3F9);
+    if (item.weaponType === 'staff') return String.fromCodePoint(0x1FA84);
+    if (item.weaponType === 'polearm') return String.fromCodePoint(0x1F531);
+    if (item.weaponType === 'dagger') return String.fromCodePoint(0x1F52A);
+    // crossbow and throwing weapon types removed from equipment system
 
     // Armor slots
-    if (item.slot === 'HEAD') return '🪖';
-    if (item.slot === 'CHEST') return '🛡️';
-    if (item.slot === 'LEGS') return '👖';
-    if (item.slot === 'FEET') return '👢';
+    if (item.slot === 'HEAD') return String.fromCodePoint(0x1FA96);
+    if (item.slot === 'CHEST') return String.fromCodePoint(0x1F6E1);
+    if (item.slot === 'LEGS') return String.fromCodePoint(0x1F456);
+    if (item.slot === 'FEET') return String.fromCodePoint(0x1F462);
 
-    return '📦';
+    return String.fromCodePoint(0x1F4E6);
 }
 
 /**
@@ -379,6 +552,7 @@ function handleChestClick(x, y) {
     // Check Take All button
     if (x >= bounds.takeAll.x && x <= bounds.takeAll.x + bounds.takeAll.w &&
         y >= bounds.takeAll.y && y <= bounds.takeAll.y + bounds.takeAll.h) {
+        ChestUI.focusArea = 'takeAll';
         takeAllChestItems();
         return true;
     }
@@ -386,12 +560,13 @@ function handleChestClick(x, y) {
     // Check Close button
     if (x >= bounds.close.x && x <= bounds.close.x + bounds.close.w &&
         y >= bounds.close.y && y <= bounds.close.y + bounds.close.h) {
+        ChestUI.focusArea = 'close';
         // Mark chest as opened before closing
         if (ChestUI.currentChest) {
             ChestUI.currentChest.interactable = false;
             ChestUI.currentChest.type = ChestUI.currentChest.type.replace('chest', 'chest_open');
             if (ChestUI.currentChest.data) {
-                ChestUI.currentChest.data.symbol = '📭';
+                ChestUI.currentChest.data.symbol = String.fromCodePoint(0x1F4ED);
                 ChestUI.currentChest.data.glow = false;
             }
         }
@@ -404,6 +579,8 @@ function handleChestClick(x, y) {
         y >= bounds.itemList.y && y <= bounds.itemList.y + bounds.itemList.h) {
         const itemIndex = Math.floor((y - bounds.itemList.y) / bounds.itemHeight) + ChestUI.scrollOffset;
         if (itemIndex < ChestUI.contents.length && !ChestUI.contents[itemIndex].taken) {
+            ChestUI.focusArea = 'items';
+            ChestUI.selectedIndex = itemIndex;
             // Check if click is on the TAKE button (right side of item row)
             const takeButtonX = bounds.panelX + bounds.panelWidth - 85;
             if (x >= takeButtonX) {
@@ -424,13 +601,14 @@ function handleChestClick(x, y) {
 function handleChestKey(key) {
     if (!ChestUI.isOpen) return false;
 
+    // Escape to close
     if (key === 'Escape') {
         // Mark chest as opened before closing
         if (ChestUI.currentChest) {
             ChestUI.currentChest.interactable = false;
             ChestUI.currentChest.type = ChestUI.currentChest.type.replace('chest', 'chest_open');
             if (ChestUI.currentChest.data) {
-                ChestUI.currentChest.data.symbol = '📭';
+                ChestUI.currentChest.data.symbol = String.fromCodePoint(0x1F4ED);
                 ChestUI.currentChest.data.glow = false;
             }
         }
@@ -438,10 +616,51 @@ function handleChestKey(key) {
         return true;
     }
 
-    if (key === 'Enter' || key === ' ') {
-        takeAllChestItems();
+    // Arrow key navigation
+    if (key === 'ArrowUp' || key === 'w' || key === 'W') {
+        navigateChestUp();
         return true;
     }
+
+    if (key === 'ArrowDown' || key === 's' || key === 'S') {
+        navigateChestDown();
+        return true;
+    }
+
+    if (key === 'ArrowLeft' || key === 'a' || key === 'A') {
+        navigateChestHorizontal(-1);
+        return true;
+    }
+
+    if (key === 'ArrowRight' || key === 'd' || key === 'D') {
+        navigateChestHorizontal(1);
+        return true;
+    }
+
+    // Tab to switch focus
+    if (key === 'Tab') {
+        tabChestFocus();
+        return true;
+    }
+
+    // Enter or Space to activate selection
+    if (key === 'Enter' || key === ' ') {
+        activateChestSelection();
+        return true;
+    }
+
+    // Number keys 1-6 for quick take
+    const numKey = parseInt(key);
+    if (numKey >= 1 && numKey <= 6) {
+        const itemIndex = ChestUI.scrollOffset + numKey - 1;
+        if (itemIndex < ChestUI.contents.length && !ChestUI.contents[itemIndex].taken) {
+            takeChestItem(itemIndex);
+        }
+        return true;
+    }
+
+    // 'A' for Take All (when Shift is held)
+    // Note: This is handled separately since lowercase 'a' is for navigation
 
     return false;
 }
@@ -488,4 +707,4 @@ if (document.readyState === 'loading') {
     initChestUIEvents();
 }
 
-console.log('Chest UI system loaded');
+console.log('Chest UI system loaded (with keyboard navigation)');

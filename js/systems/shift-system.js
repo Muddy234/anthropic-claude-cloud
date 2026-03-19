@@ -154,6 +154,21 @@ function triggerShift(shiftId) {
     scenario.init(game);
     addMessage(scenario.name);
     addMessage(scenario.description);
+
+    // Play meltdown sound and switch to shift music
+    if (typeof UIAudio !== 'undefined') {
+        UIAudio.playMeltdown();
+    }
+    if (typeof MusicSystem !== 'undefined') {
+        MusicSystem.crossfadeTo('meltdown', { duration: 1.0 });
+    }
+    if (typeof AmbientSystem !== 'undefined') {
+        AmbientSystem.setZone('shift', { fadeTime: 1.0 });
+    }
+    // Heavy screen shake for meltdown start
+    if (typeof ScreenEffects !== 'undefined' && ScreenEffects.shake) {
+        ScreenEffects.shake(1.5, 1500);
+    }
 }
 // ============================================================================
 // SYSTEM MANAGER REGISTRATION - Add to end of shift-system.js
@@ -162,10 +177,34 @@ function triggerShift(shiftId) {
 const ShiftSystemDef = {
     name: 'shift-system',
 
+    // Track warning stages to prevent repeat sounds
+    _lastWarningStage: 0,
+
     update(dt) {
         // Countdown timer before shift triggers
         if (!game.shiftActive && game.shiftCountdown > 0) {
+            const previousCountdown = game.shiftCountdown;
             game.shiftCountdown -= dt / 1000;
+
+            // Escalating warnings as countdown progresses
+            // Stage 1: 2 minutes remaining (120 seconds)
+            // Stage 2: 1 minute remaining (60 seconds)
+            // Stage 3: 30 seconds remaining
+            const warningThresholds = [120, 60, 30];
+            const warningStages = [1, 2, 3];
+
+            for (let i = 0; i < warningThresholds.length; i++) {
+                const threshold = warningThresholds[i];
+                const stage = warningStages[i];
+
+                // Check if we just crossed this threshold
+                if (previousCountdown > threshold && game.shiftCountdown <= threshold) {
+                    if (this._lastWarningStage < stage) {
+                        this._lastWarningStage = stage;
+                        this._playShiftWarning(stage, threshold);
+                    }
+                }
+            }
 
             // Trigger shift when countdown reaches 0
             if (game.shiftCountdown <= 0) {
@@ -180,12 +219,47 @@ const ShiftSystemDef = {
         }
     },
 
+    /**
+     * Play shift warning sound and show message
+     * @param {number} stage - Warning stage (1, 2, or 3)
+     * @param {number} timeRemaining - Seconds until shift
+     * @private
+     */
+    _playShiftWarning(stage, timeRemaining) {
+        // Play escalating warning sound
+        if (typeof UIAudio !== 'undefined') {
+            UIAudio.playShiftWarning(stage);
+        }
+
+        // Screen shake intensity increases with stage
+        if (typeof ScreenEffects !== 'undefined' && ScreenEffects.shake) {
+            const intensity = 0.3 + (stage * 0.2);
+            const duration = 300 + (stage * 100);
+            ScreenEffects.shake(intensity, duration);
+        }
+
+        // Warning messages
+        const messages = {
+            1: `WARNING: Seismic activity detected! ${Math.floor(timeRemaining / 60)} minutes until MELTDOWN!`,
+            2: `DANGER: Structural integrity failing! ${Math.floor(timeRemaining)} seconds until MELTDOWN!`,
+            3: `CRITICAL: MELTDOWN IMMINENT! ${Math.floor(timeRemaining)} seconds remaining!`
+        };
+
+        if (typeof addMessage === 'function') {
+            const messageType = stage >= 3 ? 'critical' : (stage >= 2 ? 'danger' : 'warning');
+            addMessage(messages[stage], messageType);
+        }
+
+        console.log(`[ShiftSystem] Warning stage ${stage}: ${timeRemaining}s until shift`);
+    },
+
     cleanup() {
         // Reset shift state on floor transition
         game.shiftMeter = 0;
         game.shiftActive = false;
         game.activeShift = null;
         game.shiftCountdown = 600; // Reset to 10 minutes for next floor
+        this._lastWarningStage = 0; // Reset warning tracker
     }
 };
 
@@ -209,8 +283,70 @@ function getCurrentShiftInfo() {
     return shiftScenarios['magma_collapse'];
 }
 
+/**
+ * Get time remaining until shift triggers
+ * Issue #8: Shift Countdown API for UI display
+ * @returns {object} { seconds: number, isImminent: boolean, warningLevel: 'safe'|'yellow'|'orange'|'red' }
+ */
+function getTimeUntilShift() {
+    // If shift is already active, return 0
+    if (game.shiftActive) {
+        return {
+            seconds: 0,
+            isImminent: true,
+            warningLevel: 'red',
+            isActive: true
+        };
+    }
+
+    const seconds = game.shiftCountdown || 0;
+
+    // Determine warning level based on thresholds
+    let warningLevel = 'safe';
+    if (seconds <= 10) {
+        warningLevel = 'red';
+    } else if (seconds <= 30) {
+        warningLevel = 'orange';
+    } else if (seconds <= 60) {
+        warningLevel = 'yellow';
+    }
+
+    return {
+        seconds: Math.max(0, seconds),
+        isImminent: seconds <= 60,
+        warningLevel: warningLevel,
+        isActive: false
+    };
+}
+
+/**
+ * Format shift countdown for display
+ * @returns {string} Formatted time string (e.g., "5:30" or "0:45")
+ */
+function formatShiftCountdown() {
+    const info = getTimeUntilShift();
+    if (info.isActive) return "ACTIVE";
+
+    const minutes = Math.floor(info.seconds / 60);
+    const secs = Math.floor(info.seconds % 60);
+    return `${minutes}:${secs.toString().padStart(2, '0')}`;
+}
+
+/**
+ * Check if shift countdown should be displayed (within warning threshold)
+ * @returns {boolean} True if countdown UI should be shown
+ */
+function shouldShowShiftCountdown() {
+    if (game.shiftActive) return true; // Always show when active
+    const info = getTimeUntilShift();
+    return info.isImminent; // Show when within 60 seconds
+}
+
 // Export for overlay use
 window.getCurrentShiftInfo = getCurrentShiftInfo;
+window.getTimeUntilShift = getTimeUntilShift;
+window.formatShiftCountdown = formatShiftCountdown;
+window.shouldShowShiftCountdown = shouldShowShiftCountdown;
 window.shiftScenarios = shiftScenarios;
 
 console.log('✅ Shift system loaded');

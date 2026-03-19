@@ -1,0 +1,418 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sprite Demo - The Shifting Chasm</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            background: #1a1a2e;
+            color: #eee;
+            font-family: 'Courier New', monospace;
+            padding: 20px;
+            min-height: 100vh;
+        }
+
+        h1 {
+            color: #FF6B35;
+            margin-bottom: 10px;
+        }
+
+        h2 {
+            color: #88CCFF;
+            margin: 20px 0 10px 0;
+            border-bottom: 1px solid #333;
+            padding-bottom: 5px;
+        }
+
+        .subtitle {
+            color: #888;
+            margin-bottom: 30px;
+        }
+
+        .sprite-grid {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+
+        .sprite-card {
+            background: #252540;
+            border: 2px solid #333;
+            border-radius: 8px;
+            padding: 15px;
+            text-align: center;
+            min-width: 120px;
+        }
+
+        .sprite-card:hover {
+            border-color: #FF6B35;
+            background: #2a2a4a;
+        }
+
+        .sprite-canvas {
+            background: #111122;
+            border: 1px solid #444;
+            margin-bottom: 10px;
+            image-rendering: pixelated;
+            image-rendering: crisp-edges;
+        }
+
+        .sprite-name {
+            font-size: 12px;
+            color: #aaa;
+            margin-top: 5px;
+        }
+
+        .sprite-size {
+            font-size: 10px;
+            color: #666;
+        }
+
+        .controls {
+            background: #252540;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+        }
+
+        .controls label {
+            margin-right: 15px;
+        }
+
+        .controls select, .controls input {
+            background: #1a1a2e;
+            color: #eee;
+            border: 1px solid #444;
+            padding: 5px 10px;
+            border-radius: 4px;
+        }
+
+        .scale-buttons {
+            display: flex;
+            gap: 10px;
+            margin-top: 10px;
+        }
+
+        .scale-buttons button {
+            background: #FF6B35;
+            color: #fff;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-family: inherit;
+        }
+
+        .scale-buttons button:hover {
+            background: #FF8855;
+        }
+
+        .scale-buttons button.active {
+            background: #44AA44;
+        }
+
+        #preview-area {
+            background: #111122;
+            border: 2px solid #333;
+            border-radius: 8px;
+            padding: 20px;
+            margin-top: 20px;
+            min-height: 200px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        #preview-canvas {
+            image-rendering: pixelated;
+            image-rendering: crisp-edges;
+        }
+
+        .palette-demo {
+            display: flex;
+            gap: 5px;
+            margin-top: 10px;
+            justify-content: center;
+        }
+
+        .palette-color {
+            width: 20px;
+            height: 20px;
+            border: 1px solid #444;
+            border-radius: 2px;
+        }
+
+        .info-panel {
+            background: #252540;
+            padding: 15px;
+            border-radius: 8px;
+            margin-top: 20px;
+        }
+
+        .info-panel h3 {
+            color: #FF6B35;
+            margin-bottom: 10px;
+        }
+
+        .info-panel p {
+            color: #aaa;
+            line-height: 1.6;
+        }
+
+        code {
+            background: #1a1a2e;
+            padding: 2px 6px;
+            border-radius: 3px;
+            color: #88CCFF;
+        }
+    </style>
+</head>
+<body>
+    <h1>Pixel Art Sprite Demo</h1>
+    <p class="subtitle">Desktop Dungeons-style sprites defined entirely in code</p>
+
+    <div class="controls">
+        <label>
+            Scale:
+            <span class="scale-buttons">
+                <button onclick="setScale(1)">1x</button>
+                <button onclick="setScale(2)" class="active">2x</button>
+                <button onclick="setScale(3)">3x</button>
+                <button onclick="setScale(4)">4x</button>
+            </span>
+        </label>
+        <label style="margin-left: 20px;">
+            Background:
+            <select onchange="setBackground(this.value)">
+                <option value="#111122">Dark Blue</option>
+                <option value="#1a1a1a">Dark Gray</option>
+                <option value="#2d4a3e">Dungeon Green</option>
+                <option value="#3d2a2a">Cave Red</option>
+                <option value="#FFFFFF">White (debug)</option>
+            </select>
+        </label>
+    </div>
+
+    <h2>Slimes</h2>
+    <div class="sprite-grid" id="slimes-grid"></div>
+
+    <h2>Spirits & Elementals</h2>
+    <div class="sprite-grid" id="spirits-grid"></div>
+
+    <h2>Golems</h2>
+    <div class="sprite-grid" id="golems-grid"></div>
+
+    <h2>Humanoids</h2>
+    <div class="sprite-grid" id="humanoids-grid"></div>
+
+    <h2>Beasts</h2>
+    <div class="sprite-grid" id="beasts-grid"></div>
+
+    <h2>Undead</h2>
+    <div class="sprite-grid" id="undead-grid"></div>
+
+    <h2>Player</h2>
+    <div class="sprite-grid" id="player-grid"></div>
+
+    <h2>Large Preview</h2>
+    <div id="preview-area">
+        <canvas id="preview-canvas"></canvas>
+    </div>
+
+    <div class="info-panel">
+        <h3>How This Works</h3>
+        <p>
+            All sprites are <strong>32x32 pixels</strong> defined in JavaScript as arrays of characters,
+            where each character maps to a color in a palette. No external image files needed!
+        </p>
+        <p style="margin-top: 10px;">
+            <strong>Location:</strong> <code>assets/sprites/*-sprite.js</code> (individual files)
+        </p>
+        <p style="margin-top: 10px;">
+            <strong>Example:</strong><br>
+            <code>width: 32, height: 32</code><br>
+            <code>pixels: ["..OOO..", ".OEEOO.", "OOOOOOO", ...]</code> (32 rows of 32 chars)<br>
+            <code>palette: { 'O': '#FF6B35', 'E': '#FFFF00' }</code>
+        </p>
+        <p style="margin-top: 10px;">
+            The <code>SpriteRenderer</code> converts these definitions to Canvas drawings,
+            with support for scaling, palette swapping, flipping, and caching.
+        </p>
+        <p style="margin-top: 10px;">
+            <strong>Adding new sprites:</strong> Use <code>python tools/pixel-to-text-converter.py image.png</code>
+        </p>
+    </div>
+
+    <!-- Sprite Registry (must load first) -->
+    <script src="assets/sprites/sprite-registry.js"></script>
+
+    <!-- Individual sprite definitions (auto-register with SpriteRegistry) -->
+    <script src="assets/sprites/ash_walker-sprite.js"></script>
+    <script src="assets/sprites/bone_golem-sprite.js"></script>
+    <script src="assets/sprites/cave_bat-sprite.js"></script>
+    <script src="assets/sprites/crystal_golem-sprite.js"></script>
+    <script src="assets/sprites/deep_crawler-sprite.js"></script>
+    <script src="assets/sprites/fire_bat-sprite.js"></script>
+    <script src="assets/sprites/frost_elemental-sprite.js"></script>
+    <script src="assets/sprites/frost_slime-sprite.js"></script>
+    <script src="assets/sprites/frozen_husk-sprite.js"></script>
+    <script src="assets/sprites/giant_spider-sprite.js"></script>
+    <script src="assets/sprites/ice_golem-sprite.js"></script>
+    <script src="assets/sprites/magma_slime-sprite.js"></script>
+    <script src="assets/sprites/mushroom_sprite-sprite.js"></script>
+    <script src="assets/sprites/obsidian_golem-sprite.js"></script>
+    <script src="assets/sprites/phantom-sprite.js"></script>
+    <script src="assets/sprites/pyro_cultist-sprite.js"></script>
+    <script src="assets/sprites/salamander-sprite.js"></script>
+    <script src="assets/sprites/shadow_imp-sprite.js"></script>
+    <script src="assets/sprites/shadow_stalker-sprite.js"></script>
+    <script src="assets/sprites/shadow_wisp-sprite.js"></script>
+    <script src="assets/sprites/shield_bearer-sprite.js"></script>
+    <script src="assets/sprites/stone_golem-sprite.js"></script>
+    <script src="assets/sprites/temple_sentinel-sprite.js"></script>
+    <script src="assets/sprites/tide_serpent-sprite.js"></script>
+    <script src="assets/sprites/toxic_slime-sprite.js"></script>
+    <script src="assets/sprites/void_touched-sprite.js"></script>
+
+    <!-- Sprite renderer -->
+    <script src="js/rendering/sprite-renderer.js"></script>
+    <script>
+        let currentScale = 2;
+        let currentBackground = '#111122';
+
+        // Categorize sprites (individual files from assets/sprites/*-sprite.js)
+        const categories = {
+            slimes: ['magma_slime', 'frost_slime', 'toxic_slime'],
+            spirits: ['frost_elemental', 'shadow_wisp'],
+            golems: ['obsidian_golem', 'stone_golem', 'ice_golem', 'bone_golem', 'crystal_golem'],
+            humanoids: ['pyro_cultist', 'shadow_stalker', 'ash_walker', 'temple_sentinel', 'shield_bearer'],
+            beasts: ['cave_bat', 'fire_bat', 'giant_spider', 'salamander', 'mushroom_sprite', 'deep_crawler', 'tide_serpent'],
+            undead: ['phantom', 'frozen_husk', 'void_touched', 'shadow_imp'],
+            player: []
+        };
+
+        function setScale(scale) {
+            currentScale = scale;
+            document.querySelectorAll('.scale-buttons button').forEach(btn => {
+                btn.classList.remove('active');
+            });
+            event.target.classList.add('active');
+            renderAllSprites();
+        }
+
+        function setBackground(color) {
+            currentBackground = color;
+            renderAllSprites();
+        }
+
+        function renderSprite(sprite, canvas, scale) {
+            const width = sprite.width * scale;
+            const height = sprite.height * scale;
+            canvas.width = width;
+            canvas.height = height;
+            canvas.style.width = width + 'px';
+            canvas.style.height = height + 'px';
+
+            const ctx = canvas.getContext('2d');
+            ctx.imageSmoothingEnabled = false;
+            ctx.fillStyle = currentBackground;
+            ctx.fillRect(0, 0, width, height);
+
+            // Draw sprite
+            SpriteRenderer.draw(ctx, sprite, 0, 0, scale);
+        }
+
+        function createSpriteCard(spriteName, sprite) {
+            const card = document.createElement('div');
+            card.className = 'sprite-card';
+            card.onclick = () => showPreview(spriteName, sprite);
+
+            const canvas = document.createElement('canvas');
+            canvas.className = 'sprite-canvas';
+            renderSprite(sprite, canvas, currentScale);
+
+            const name = document.createElement('div');
+            name.className = 'sprite-name';
+            name.textContent = spriteName.replace(/_/g, ' ');
+
+            const size = document.createElement('div');
+            size.className = 'sprite-size';
+            size.textContent = `${sprite.width}x${sprite.height}`;
+
+            // Show palette colors
+            const paletteDemo = document.createElement('div');
+            paletteDemo.className = 'palette-demo';
+            for (const color of Object.values(sprite.palette)) {
+                const swatch = document.createElement('div');
+                swatch.className = 'palette-color';
+                swatch.style.backgroundColor = color;
+                swatch.title = color;
+                paletteDemo.appendChild(swatch);
+            }
+
+            card.appendChild(canvas);
+            card.appendChild(name);
+            card.appendChild(size);
+            card.appendChild(paletteDemo);
+
+            return card;
+        }
+
+        function showPreview(spriteName, sprite) {
+            const canvas = document.getElementById('preview-canvas');
+            const previewScale = 8;  // Large preview
+            renderSprite(sprite, canvas, previewScale);
+        }
+
+        function renderAllSprites() {
+            // Clear cache when scale changes
+            SpriteRenderer.clearCache();
+
+            for (const [category, spriteNames] of Object.entries(categories)) {
+                const grid = document.getElementById(category + '-grid');
+                grid.innerHTML = '';
+
+                for (const name of spriteNames) {
+                    const sprite = MONSTER_SPRITES[name];
+                    if (sprite) {
+                        grid.appendChild(createSpriteCard(name, sprite));
+                    }
+                }
+            }
+
+            // Show first available sprite in preview
+            const firstAvailable = Object.keys(MONSTER_SPRITES)[0];
+            if (firstAvailable && MONSTER_SPRITES[firstAvailable]) {
+                showPreview(firstAvailable, MONSTER_SPRITES[firstAvailable]);
+            }
+        }
+
+        // Wait for sprites to be discovered, then render
+        function initDemo() {
+            // Discover any legacy sprites (window.*_SPRITE pattern)
+            if (window.discoverAndRegisterSprites) {
+                window.discoverAndRegisterSprites();
+            }
+
+            console.log('[SpriteDemo] Found', Object.keys(MONSTER_SPRITES).length, 'sprites');
+            renderAllSprites();
+        }
+
+        // Initialize after DOM is ready
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', initDemo);
+        } else {
+            // DOM already ready, init now
+            initDemo();
+        }
+    </script>
+</body>
+</html>

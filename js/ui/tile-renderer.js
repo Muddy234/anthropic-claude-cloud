@@ -2,6 +2,36 @@
 // REFACTORED: Multi-tileset support with floor-based theme selection
 // Renders rectangular rooms with full 4-sided walls
 // Supports multiple tilesets for different dungeon floors
+// Floors 1-2: Spritesheet-based tiles
+// Floors 3+: Procedural pixel-art tiles (from js/rendering/tile-renderer.js)
+
+// ============================================================================
+// PROCEDURAL TILE CONFIGURATION
+// ============================================================================
+
+// Enable procedural tiles for ALL floors (cohesive dungeon design)
+const USE_PROCEDURAL_TILES = true;
+
+/**
+ * Check if procedural tiles should be used
+ * @returns {boolean}
+ */
+function shouldUseProceduralTiles() {
+    if (!USE_PROCEDURAL_TILES) return false;
+
+    // Check if procedural tile system is loaded
+    return typeof TileRenderer !== 'undefined' &&
+           typeof getTileForTheme === 'function';
+}
+
+/**
+ * Check if procedural tile system is available
+ */
+function isProceduralTileSystemReady() {
+    return typeof TileRenderer !== 'undefined' &&
+           typeof TILE_SPRITES !== 'undefined' &&
+           typeof getTileForTheme === 'function';
+}
 
 // ============================================================================
 // TILESET MANAGEMENT
@@ -205,8 +235,27 @@ function getFloorTileForTheme(theme, x, y) {
 
 /**
  * Draw a floor tile with graphics
+ * Uses procedural tiles for floors 3+ with theme consistency
  */
 function drawFloorTile(ctx, tile, x, y, screenX, screenY, size) {
+    // Check if this is a corridor tile
+    const isCorridor = tile.corridor || tile.type === 'corridor';
+
+    // Use procedural tiles for floors 3+
+    if (shouldUseProceduralTiles()) {
+        if (isCorridor) {
+            // Corridors always use neutral dungeon theme
+            drawCorridorFloorTile(ctx, x, y, screenX, screenY, size);
+        } else {
+            // Room floors use room-specific theme
+            const room = tile.room;
+            const theme = room ? room.theme : 'default';
+            drawThemedFloorTile(ctx, theme, x, y, screenX, screenY, size);
+        }
+        return;
+    }
+
+    // Floors 1-2: Use spritesheet tiles
     const room = tile.room;
     const theme = room ? room.theme : null;
     const floorTile = getFloorTileForTheme(theme, x, y);
@@ -245,6 +294,61 @@ function drawDoorwayTile(ctx, screenX, screenY, size) {
 // ============================================================================
 
 /**
+ * Detect corner type based on position within room
+ * @param {Object} room - Room object with x, y, width, height
+ * @param {number} x - Grid X position
+ * @param {number} y - Grid Y position
+ * @returns {string|null} Corner position: 'nw', 'ne', 'sw', 'se', or null if not a corner
+ */
+function detectCornerType(room, x, y) {
+    if (!room) return null;
+
+    const isLeft = x === room.x;
+    const isRight = x === room.x + room.width - 1;
+    const isTop = y === room.y;
+    const isBottom = y === room.y + room.height - 1;
+
+    if (isTop && isLeft) return 'nw';
+    if (isTop && isRight) return 'ne';
+    if (isBottom && isLeft) return 'sw';
+    if (isBottom && isRight) return 'se';
+
+    return null;
+}
+
+/**
+ * Get room theme for a wall tile
+ * @param {Object} tile - Map tile
+ * @returns {string} Theme name
+ */
+function getWallTheme(tile) {
+    // Check if tile belongs to a room
+    if (tile && tile.room && tile.room.theme) {
+        return tile.room.theme;
+    }
+
+    // Check adjacent tiles for room
+    // Walls often border rooms, so check neighbors
+    return 'default';
+}
+
+/**
+ * Draw a procedural wall tile with theme
+ */
+function drawProceduralWallAtPosition(ctx, room, x, y, screenX, screenY, size) {
+    const theme = room ? room.theme : 'default';
+    const cornerType = detectCornerType(room, x, y);
+
+    if (cornerType) {
+        // Draw corner tile
+        drawThemedCornerTile(ctx, theme, cornerType, screenX, screenY, size);
+    } else {
+        // Draw regular wall tile
+        drawThemedWallTile(ctx, theme, x, y, screenX, screenY, size);
+    }
+}
+
+/**
  * Get the wall tileset for the current floor
  */
 function getWallSet() {
@@ -281,6 +385,15 @@ function getWallSet() {
  * Render all walls for rooms with proper corners, edges, and centers
  */
 function renderAllWalls(ctx, camX, camY, effectiveTileSize, offset) {
+    // Use procedural tiles for floors 3+
+    if (shouldUseProceduralTiles()) {
+        for (const room of game.rooms) {
+            renderProceduralRoomWalls(ctx, room, camX, camY, effectiveTileSize, offset);
+        }
+        return;
+    }
+
+    // Floors 1-2: Use spritesheet tiles
     if (!isTilesetLoaded()) return;
 
     const wallSet = getWallSet();
@@ -289,6 +402,85 @@ function renderAllWalls(ctx, camX, camY, effectiveTileSize, offset) {
     // Render walls for each room
     for (const room of game.rooms) {
         renderRoomWalls(ctx, room, wallSet, camX, camY, effectiveTileSize, offset);
+    }
+}
+
+/**
+ * Render walls for a room using procedural tiles (floors 3+)
+ */
+function renderProceduralRoomWalls(ctx, room, camX, camY, effectiveTileSize, offset) {
+    const roomX = room.x;
+    const roomY = room.y;
+    const roomWidth = room.width;
+    const roomHeight = room.height;
+
+    // Check if room is in view (rough culling)
+    const roomScreenX = (roomX - camX) * effectiveTileSize + offset;
+    const roomScreenY = (roomY - camY) * effectiveTileSize;
+    const canvasWidth = canvas.width;
+    const canvasHeight = canvas.height;
+
+    if (roomScreenX + roomWidth * effectiveTileSize < 0 || roomScreenX > canvasWidth) return;
+    if (roomScreenY + roomHeight * effectiveTileSize < 0 || roomScreenY > canvasHeight) return;
+
+    const theme = room.theme || 'default';
+
+    // Top wall (including corners)
+    for (let x = room.x; x < room.x + room.width; x++) {
+        const tile = game.map[roomY] && game.map[roomY][x];
+        if (tile && tile.type === 'doorway') continue;
+
+        const screenX = (x - camX) * effectiveTileSize + offset;
+        const screenY = (roomY - camY) * effectiveTileSize;
+
+        if (x === room.x) {
+            drawThemedCornerTile(ctx, theme, 'nw', screenX, screenY, effectiveTileSize);
+        } else if (x === room.x + room.width - 1) {
+            drawThemedCornerTile(ctx, theme, 'ne', screenX, screenY, effectiveTileSize);
+        } else {
+            drawThemedWallTile(ctx, theme, x, roomY, screenX, screenY, effectiveTileSize);
+        }
+    }
+
+    // Bottom wall (including corners)
+    const bottomY = room.y + room.height - 1;
+    for (let x = room.x; x < room.x + room.width; x++) {
+        const tile = game.map[bottomY] && game.map[bottomY][x];
+        if (tile && tile.type === 'doorway') continue;
+
+        const screenX = (x - camX) * effectiveTileSize + offset;
+        const screenY = (bottomY - camY) * effectiveTileSize;
+
+        if (x === room.x) {
+            drawThemedCornerTile(ctx, theme, 'sw', screenX, screenY, effectiveTileSize);
+        } else if (x === room.x + room.width - 1) {
+            drawThemedCornerTile(ctx, theme, 'se', screenX, screenY, effectiveTileSize);
+        } else {
+            drawThemedWallTile(ctx, theme, x, bottomY, screenX, screenY, effectiveTileSize);
+        }
+    }
+
+    // Left wall (excluding corners - already drawn)
+    for (let y = room.y + 1; y < room.y + room.height - 1; y++) {
+        const tile = game.map[y] && game.map[y][roomX];
+        if (tile && tile.type === 'doorway') continue;
+
+        const screenX = (roomX - camX) * effectiveTileSize + offset;
+        const screenY = (y - camY) * effectiveTileSize;
+
+        drawThemedWallTile(ctx, theme, roomX, y, screenX, screenY, effectiveTileSize);
+    }
+
+    // Right wall (excluding corners - already drawn)
+    const rightX = room.x + room.width - 1;
+    for (let y = room.y + 1; y < room.y + room.height - 1; y++) {
+        const tile = game.map[y] && game.map[y][rightX];
+        if (tile && tile.type === 'doorway') continue;
+
+        const screenX = (rightX - camX) * effectiveTileSize + offset;
+        const screenY = (y - camY) * effectiveTileSize;
+
+        drawThemedWallTile(ctx, theme, rightX, y, screenX, screenY, effectiveTileSize);
     }
 }
 
@@ -427,11 +619,19 @@ function renderRightWall(ctx, room, wallSet, camX, camY, effectiveTileSize, offs
 }
 
 /**
- * Draw wall tile (for gap fill between rooms)
+ * Draw wall tile (for gap fill between rooms, corridors)
  * @param {number} gridX - Optional grid X coordinate for variation
  * @param {number} gridY - Optional grid Y coordinate for variation
  */
 function drawWallTile(ctx, screenX, screenY, size, gridX, gridY) {
+    // Use procedural tiles for floors 3+
+    if (shouldUseProceduralTiles()) {
+        // For corridor/gap walls, use neutral dungeon theme
+        drawCorridorWallTile(ctx, gridX || 0, gridY || 0, screenX, screenY, size);
+        return;
+    }
+
+    // Floors 1-2: Use spritesheet tiles
     const wallSet = getWallSet();
     const currentFloor = game.currentFloor || 1;
     const useVariation = currentFloor <= 2 && typeof getFloor12WallTile === 'function';
@@ -503,10 +703,17 @@ if (typeof window !== 'undefined') {
     // Props
     window.drawProp = drawProp;
 
+    // Procedural tile support
+    window.shouldUseProceduralTiles = shouldUseProceduralTiles;
+    window.isProceduralTileSystemReady = isProceduralTileSystemReady;
+    window.detectCornerType = detectCornerType;
+    window.renderProceduralRoomWalls = renderProceduralRoomWalls;
+    window.USE_PROCEDURAL_TILES = USE_PROCEDURAL_TILES;
+
     // Tileset state (for debugging)
     window.tilesets = tilesets;
     window.tilesetState = tilesetState;
     window.TILESET_CONFIG = TILESET_CONFIG;  // Adjust spacing/offset at runtime if needed
 }
 
-console.log('[TileRenderer] Multi-tileset renderer loaded');
+console.log('[TileRenderer] Multi-tileset renderer loaded (procedural tiles:', USE_PROCEDURAL_TILES ? 'enabled' : 'disabled', ')');

@@ -1,5 +1,5 @@
 // === js/ui/quest-ui.js ===
-// SURVIVAL EXTRACTION UPDATE: Quest interface
+// Quest interface
 
 // ============================================================================
 // QUEST UI
@@ -221,33 +221,119 @@ const QuestUI = {
     },
 
     /**
-     * Render panel background
+     * Render panel background - CotDG Journal/Tome Style
      * @private
      */
     _renderPanel(ctx, x, y) {
-        // Shadow
-        ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
-        ctx.fillRect(x + 4, y + 4, this.PANEL_WIDTH, this.PANEL_HEIGHT);
+        // Get design system colors
+        const colors = typeof UI_COLORS !== 'undefined' ? UI_COLORS : {};
+        const frameGold = colors.frameGold || '#b8860b';
+        const frameGoldBright = colors.frameGoldBright || '#daa520';
+        const frameGoldDark = colors.frameGoldDark || '#8b6914';
+        const parchment = colors.parchmentLight || '#f5e6c8';
+        const parchmentDark = colors.parchment || '#d4c4a0';
 
-        // Background
-        ctx.fillStyle = '#1a1a2e';
+        ctx.save();
+
+        // Shadow (book weight)
+        ctx.shadowColor = 'rgba(0, 0, 0, 0.6)';
+        ctx.shadowBlur = 15;
+        ctx.shadowOffsetY = 6;
+
+        // Leather book cover background
+        const coverGrad = ctx.createLinearGradient(x, y, x + this.PANEL_WIDTH, y + this.PANEL_HEIGHT);
+        coverGrad.addColorStop(0, '#3a2a1a');
+        coverGrad.addColorStop(0.1, '#4a3a2a');
+        coverGrad.addColorStop(0.9, '#2a1a0a');
+        coverGrad.addColorStop(1, '#1a0a00');
+        ctx.fillStyle = coverGrad;
         ctx.fillRect(x, y, this.PANEL_WIDTH, this.PANEL_HEIGHT);
 
-        // Border
-        ctx.strokeStyle = '#9370DB';
+        ctx.shadowBlur = 0;
+        ctx.shadowOffsetY = 0;
+
+        // Parchment inner page (slightly smaller)
+        const pageMargin = 12;
+        const pageGrad = ctx.createLinearGradient(x, y, x, y + this.PANEL_HEIGHT);
+        pageGrad.addColorStop(0, parchment);
+        pageGrad.addColorStop(0.5, parchmentDark);
+        pageGrad.addColorStop(1, '#c4b490');
+        ctx.fillStyle = pageGrad;
+        ctx.fillRect(x + pageMargin, y + pageMargin, this.PANEL_WIDTH - pageMargin * 2, this.PANEL_HEIGHT - pageMargin * 2);
+
+        // Page edge shadow
+        ctx.strokeStyle = 'rgba(0, 0, 0, 0.2)';
         ctx.lineWidth = 3;
-        ctx.strokeRect(x, y, this.PANEL_WIDTH, this.PANEL_HEIGHT);
+        ctx.strokeRect(x + pageMargin + 1, y + pageMargin + 1, this.PANEL_WIDTH - pageMargin * 2 - 2, this.PANEL_HEIGHT - pageMargin * 2 - 2);
 
-        // Title
-        ctx.font = 'bold 24px Arial';
-        ctx.textAlign = 'center';
-        ctx.fillStyle = '#9370DB';
+        // Aged paper texture (spots/marks)
+        ctx.fillStyle = 'rgba(139, 90, 43, 0.05)';
+        for (let i = 0; i < 30; i++) {
+            const spotX = x + pageMargin + Math.random() * (this.PANEL_WIDTH - pageMargin * 2);
+            const spotY = y + pageMargin + Math.random() * (this.PANEL_HEIGHT - pageMargin * 2);
+            ctx.beginPath();
+            ctx.arc(spotX, spotY, Math.random() * 10 + 2, 0, Math.PI * 2);
+            ctx.fill();
+        }
 
-        let title = 'Quest Log';
+        // Use design system temple frame for outer leather binding
+        if (typeof drawTempleFrame === 'function') {
+            drawTempleFrame(ctx, x, y, this.PANEL_WIDTH, this.PANEL_HEIGHT, {
+                cornerSize: 20, borderWidth: 4, pattern: false
+            });
+        } else {
+            // Leather binding with gold inlay
+            const frameGrad = ctx.createLinearGradient(x, y, x + this.PANEL_WIDTH, y + this.PANEL_HEIGHT);
+            frameGrad.addColorStop(0, frameGoldBright);
+            frameGrad.addColorStop(0.3, frameGold);
+            frameGrad.addColorStop(0.7, frameGoldDark);
+            frameGrad.addColorStop(1, frameGold);
+            ctx.strokeStyle = frameGrad;
+            ctx.lineWidth = 4;
+            ctx.strokeRect(x, y, this.PANEL_WIDTH, this.PANEL_HEIGHT);
+        }
+
+        // Add ornate corners if available
+        if (typeof drawOrnateCorners === 'function') {
+            drawOrnateCorners(ctx, x, y, this.PANEL_WIDTH, this.PANEL_HEIGHT, { size: 18 });
+        }
+
+        // Book spine detail (left edge)
+        ctx.fillStyle = '#2a1a0a';
+        ctx.fillRect(x, y + 30, 8, this.PANEL_HEIGHT - 60);
+        ctx.strokeStyle = frameGoldDark;
+        ctx.lineWidth = 1;
+        ctx.strokeRect(x + 2, y + 35, 4, this.PANEL_HEIGHT - 70);
+
+        // Title header (on parchment)
+        let title = 'Quest Journal';
         if (this.mode === 'npc' && this.currentNPC) {
             title = `${this.currentNPC.name} - Quests`;
         }
-        ctx.fillText(title, x + this.PANEL_WIDTH / 2, y + 30);
+
+        // Decorative header area
+        ctx.fillStyle = 'rgba(139, 90, 43, 0.1)';
+        ctx.fillRect(x + pageMargin + 10, y + pageMargin + 5, this.PANEL_WIDTH - pageMargin * 2 - 20, 35);
+
+        ctx.font = 'bold 22px serif';
+        ctx.textAlign = 'center';
+        ctx.fillStyle = '#3a2a1a';
+        ctx.fillText(title, x + this.PANEL_WIDTH / 2, y + 38);
+
+        // Underline flourish
+        ctx.strokeStyle = frameGold;
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(x + this.PANEL_WIDTH / 2 - 80, y + 44);
+        ctx.lineTo(x + this.PANEL_WIDTH / 2 + 80, y + 44);
+        ctx.stroke();
+        // Center dot
+        ctx.fillStyle = frameGold;
+        ctx.beginPath();
+        ctx.arc(x + this.PANEL_WIDTH / 2, y + 44, 3, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.restore();
     },
 
     /**

@@ -1,0 +1,85 @@
+ID,Name,Type,Category,Damage,Range,AOE Shape,AOE Size,Telegraph (ms),Cooldown (ms),Element,Effect,Effect Details,For Boss,For Enemy,Description
+melee_swing,Melee Swing,Attack,melee,20,2,arc,120° r2,600,2000,,,,,TRUE,TRUE,Standard melee arc attack
+heavy_slam,Heavy Slam,Attack,melee,40,3,circle,r2.5,1200,5000,,knockback,force: 3,TRUE,TRUE,Powerful slam that knocks back
+double_strike,Double Strike,Attack,melee,15,2,arc,90° r2,500,3000,,multi-hit,2 hits @ 300ms,TRUE,TRUE,Two quick strikes in succession
+sweep,Sweeping Attack,Attack,melee,25,3,arc,270° r3,1000,6000,,,,,TRUE,FALSE,Wide sweeping attack (Boss only)
+lunge,Lunge,Attack,melee,18,3,line,w1 l3,400,2500,,dash,distance: 2,TRUE,TRUE,Quick forward lunge attack
+bite,Vicious Bite,Attack,melee,22,1,arc,60° r1,300,1800,,bleed,3 dmg / 3s,TRUE,TRUE,Quick bite that causes bleeding
+claw_swipe,Claw Swipe,Attack,melee,16,2,arc,90° r2,350,1500,,,,,TRUE,TRUE,Fast claw attack
+tail_whip,Tail Whip,Attack,melee,14,2.5,arc,180° r2.5,500,2200,,knockback,force: 2,TRUE,TRUE,Sweeping tail attack with knockback
+charge,Charge,Attack,charge,35,10,line,w2,800,6000,,stun,duration: 1000ms,TRUE,TRUE,Rush forward stunning on hit
+leaping_strike,Leaping Strike,Attack,charge,45,8,circle,r2,1000,8000,,leap,to target,TRUE,TRUE,Leap to target location and slam
+bull_rush,Bull Rush,Attack,charge,30,12,line,w3,1200,10000,,wall_stun,+20 wall dmg,TRUE,FALSE,Powerful rush that stuns if hitting wall (Boss only)
+pounce,Pounce,Attack,charge,20,5,circle,r1,500,4000,,leap,to target,TRUE,TRUE,Quick pounce attack
+projectile_single,Projectile,Attack,ranged,15,12,projectile,speed: 8,400,2000,,,,,TRUE,TRUE,Single ranged projectile
+projectile_burst,Projectile Burst,Attack,ranged,12,10,projectile,3 @ 30° spread,600,4000,,,,,TRUE,TRUE,Burst of three projectiles
+projectile_volley,Projectile Volley,Attack,ranged,10,15,projectile,8 @ 360°,1000,8000,,,,,TRUE,FALSE,Ring of projectiles in all directions (Boss only)
+homing_orb,Homing Orb,Attack,ranged,25,20,projectile,speed: 4 homing,800,6000,,homing,strength: 0.5,TRUE,TRUE,Slow homing projectile
+spit,Acid Spit,Attack,ranged,12,6,projectile,speed: 7,350,2500,poison,poison,2 dmg / 3s,TRUE,TRUE,Poisonous spit attack
+bone_throw,Bone Throw,Attack,ranged,14,7,projectile,speed: 9,400,2200,,,,,TRUE,TRUE,Throw bone projectile
+ground_slam,Ground Slam,Attack,aoe,30,4,circle,r3,1000,5000,,screen_shake,,TRUE,TRUE,Slam the ground damaging all nearby
+shockwave,Shockwave,Attack,aoe,20,,ring,r1-6,800,7000,,knockback,,TRUE,FALSE,Expanding ring of damage (Boss only)
+meteor,Meteor Strike,Attack,aoe,50,,circle,r3,2000,12000,,spawn_fire_pool,,TRUE,FALSE,Delayed meteor at player location (Boss only)
+quake,Quake,Attack,aoe,15,,full_room,,1500,15000,,avoidable,by jumping,TRUE,FALSE,Room-wide ground shake (Boss only)
+stomp,Stomp,Attack,aoe,18,,circle,r2,600,3500,,stun,duration: 500ms,TRUE,TRUE,Ground stomp with brief stun
+fire_breath,Fire Breath,Attack,breath,25,6,cone,60° r6,1000,6000,fire,lingering,3s duration,TRUE,TRUE,Cone of fire with lingering flames
+frost_breath,Frost Breath,Attack,breath,20,5,cone,75° r5,1000,6000,ice,slow,50% / 3s,TRUE,TRUE,Cone of frost that slows
+void_beam,Void Beam,Attack,breath,35,15,line,w1 r15,1500,10000,void,continuous,2s duration,TRUE,FALSE,Sustained beam of void energy (Boss only)
+poison_cloud,Poison Cloud,Attack,breath,8,4,cone,90° r4,700,5000,poison,poison,3 dmg / 4s,TRUE,TRUE,Cone of poisonous gas
+summon_minions,Summon Minions,Attack,summon,0,,,,,12000,,spawn_enemies,3 basic,TRUE,FALSE,Summon allied creatures (Boss only)
+heal_pulse,Healing Pulse,Attack,support,0,,,,,15000,,heal_self,10% max HP,TRUE,TRUE,Heal self for 10% max HP
+shield_barrier,Shield Barrier,Attack,defensive,0,,,,,20000,,create_shield,100 HP / 5s,TRUE,FALSE,Create temporary damage shield (Boss only)
+berserk_roar,Berserk Roar,Attack,buff,0,,circle,r8,,25000,,buff_self,+50% dmg +30% spd / 10s,TRUE,TRUE,Roar that increases damage and speed
+trap_spawn,Deploy Traps,Attack,tactical,0,,,,,10000,,spawn_traps,4 spike traps,TRUE,FALSE,Place traps around the area (Boss only)
+teleport_strike,Teleport Strike,Attack,special,40,,circle,r2,500,8000,,teleport,behind player,TRUE,TRUE,Teleport behind target and strike
+grab_throw,Grab & Throw,Attack,special,30,2,,,800,10000,,grab_throw,distance: 5,TRUE,FALSE,Grab and throw the target (Boss only)
+web_shot,Web Shot,Attack,special,5,6,projectile,speed: 10,300,4000,,root,duration: 2s,TRUE,TRUE,Shoot web that roots target
+shadow_step,Shadow Step,Attack,special,25,6,,,200,5000,,teleport,to shadows,TRUE,TRUE,Vanish and reappear with attack
+life_drain,Life Drain,Attack,special,18,4,,,600,6000,,heal_on_hit,50% of damage,TRUE,TRUE,Drain life from target
+
+ID,Name,Type,Description,Value 1,Value 2,Value 3,For Boss,For Enemy
+regeneration,Regeneration,Passive,Slowly heal when not taking damage,2% HP/sec,3s no-damage window,,TRUE,TRUE
+thorns,Thorns,Passive,Reflect damage when hit,15% reflect,,,TRUE,TRUE
+evasion,Evasion,Passive,Chance to dodge attacks,20% dodge,,,TRUE,TRUE
+armored,Armored,Passive,Increased physical defense,+10 armor,,,TRUE,TRUE
+magic_resist,Magic Resistance,Passive,Reduced magic damage taken,25% reduction,,,TRUE,TRUE
+fire_aura,Fire Aura,Passive,Deal fire damage to nearby enemies,5 dmg/tick,2 range,1s interval,TRUE,TRUE
+frost_aura,Frost Aura,Passive,Slow nearby enemies,30% slow,3 range,,TRUE,TRUE
+vampiric,Vampiric,Passive,Heal on dealing damage,15% lifesteal,,,TRUE,TRUE
+berserk,Berserk,Passive,Deal more damage at low health,+50% dmg,below 30% HP,,TRUE,TRUE
+pack_hunter,Pack Hunter,Passive,Stronger with allies nearby,+10% per ally,max 50%,5 range,FALSE,TRUE
+ambusher,Ambusher,Passive,Bonus damage on first attack,+50% first strike,,,TRUE,TRUE
+undying,Undying,Passive,Chance to survive lethal damage,20% chance,survive at 1 HP,30s cooldown,TRUE,TRUE
+poison_touch,Poison Touch,Passive,Basic attacks apply poison,2 dmg/tick,3s duration,,TRUE,TRUE
+flying,Flying,Passive,Can move over hazards,ignore hazards,,,TRUE,TRUE
+ethereal,Ethereal,Passive,Immune to physical damage periodically,2s immune,5s vulnerable,,TRUE,TRUE
+
+ID,Name,Type,Trigger,Effect,Value 1,Value 2,For Boss,For Enemy
+enrage,Enrage,Mechanic,health_threshold,Damage/speed boost,+50% dmg / +30% spd,below 30% HP,TRUE,TRUE
+split,Split,Mechanic,death,Spawn smaller copies,2 copies,30% HP / 60% size,TRUE,TRUE
+death_explosion,Death Explosion,Mechanic,death,AOE damage on death,25 damage,3 radius,TRUE,TRUE
+summon_on_hit,Summon on Hit,Mechanic,on_damaged,Spawn ally when hit,15% chance,10s cooldown,TRUE,TRUE
+teleport_when_hurt,Teleport When Hurt,Mechanic,on_damaged,Teleport away,25% chance / 4-8 range,5s cooldown,TRUE,TRUE
+adaptive_resistance,Adaptive,Mechanic,on_damaged,Gain resistance to damage type,+10% per hit,max 50%,TRUE,FALSE
+damage_reflection,Damage Reflection,Mechanic,on_damaged,Reflect damage taken,20% reflect,,TRUE,TRUE
+call_for_help,Call for Help,Mechanic,on_combat_start,Alert nearby allies,8 range,,TRUE,TRUE
+immunity_phase,Immunity Phase,Mechanic,health_threshold,Become immune + spawn guardians,below 50% HP,spawn 4,TRUE,FALSE
+minion_shield,Minion Shield,Mechanic,passive,Reduced damage while minions live,50% reduction,,TRUE,FALSE
+
+ID,Name,Type,Preferred Range,Chase Speed,Attack Priority,Special Behavior,For Boss,For Enemy
+aggressive,Aggressive,Behavior,2,1.3x,melee > charge > aoe,No retreat,TRUE,TRUE
+defensive,Defensive,Behavior,8,0.8x,ranged > aoe > defensive,Retreat at range 4,TRUE,TRUE
+hit_and_run,Hit and Run,Behavior,6,1.5x,charge > melee > ranged,Retreat 2s after attack,TRUE,TRUE
+berserker,Berserker,Behavior,2,low HP bonus,melee > charge,+50% spd / +30% dmg at low HP,TRUE,TRUE
+ambusher,Ambusher,Behavior,0 (stealth),n/a,special > melee,Stealth + 1.5x ambush bonus,TRUE,TRUE
+kiter,Kiter,Behavior,6,0.6x,ranged > breath,Flee when close (range 3),TRUE,TRUE
+guardian,Guardian,Behavior,0 (stationary),n/a,aoe > melee > defensive,Guard radius 5,TRUE,TRUE
+swarm,Swarm,Behavior,1,1.2x,melee,Pack bonus damage,FALSE,TRUE
+tactical,Tactical,Behavior,5,n/a,tactical > ranged > aoe,Uses environment,TRUE,FALSE
+
+TIER SCALING,Damage Mult,Cooldown Mult,Telegraph Mult,Range Mult,Notes
+TIER_3 (Fodder),0.4x,1.5x,0.5x,0.7x,Weakest enemies - fast but weak attacks
+TIER_2 (Standard),0.6x,1.2x,0.6x,0.85x,Standard enemy tier
+TIER_1 (Veteran),0.8x,1.0x,0.8x,1.0x,Experienced enemies
+ELITE,1.0x,0.9x,1.0x,1.0x,Baseline values - fast cooldowns
+BOSS,1.2x,0.8x,1.2x,1.2x,Strongest - longer telegraphs for fairness

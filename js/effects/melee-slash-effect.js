@@ -1,14 +1,18 @@
 // ============================================================================
-// MELEE SLASH EFFECT - Code-based sword/weapon slash visualization
+// MELEE SLASH EFFECT - Sword/weapon slash visualization
 // ============================================================================
 // Features:
 // - State machine: WINDUP → SLASH → FADE
+// - Pixel-based rendering (when EffectSprites available) OR code-based fallback
 // - Windup telegraph (expanding circle)
 // - "Cleave" shape: Fixed outer edge, dynamic inner edge (thin→thick→thin)
 // - Particle system for sparks along the blade
 // ============================================================================
 
 const MeleeSlashEffect = {
+    // Whether to use pixel-based rendering (if available)
+    usePixelEffects: true,
+
     // Active effects being rendered
     activeEffects: [],
 
@@ -76,13 +80,63 @@ const MeleeSlashEffect = {
 
             // Particles (positions relative to origin in tile units)
             particles: [],
-            particlesPerFrame: options.particlesPerFrame || this.defaults.particlesPerFrame
+            particlesPerFrame: options.particlesPerFrame || this.defaults.particlesPerFrame,
+
+            // Pixel effect tracking
+            pixelEffectId: null,
+            pixelEffectType: options.pixelEffectType || null
         };
 
-        console.log(`[MeleeSlashEffect] Created effect at (${originX.toFixed(2)}, ${originY.toFixed(2)}) angle=${(facingAngle * 180 / Math.PI).toFixed(0)}°`);
+        // Try to start pixel-based effect if available
+        if (this.usePixelEffects && this._canUsePixelEffects()) {
+            const pixelType = this._getPixelEffectType(options);
+            if (pixelType && window.EffectAnimator) {
+                effect.pixelEffectId = window.EffectAnimator.startMeleeAttack(
+                    pixelType,
+                    originX,
+                    originY,
+                    facingAngle * 180 / Math.PI,
+                    {
+                        element: options.element || null,
+                        scale: options.scale || 1.0,
+                        speed: 1.0
+                    }
+                );
+                effect.pixelEffectType = pixelType;
+            }
+        }
 
         this.activeEffects.push(effect);
         return effect;
+    },
+
+    /**
+     * Check if pixel effects system is available
+     */
+    _canUsePixelEffects() {
+        return window.EffectSprites && window.EffectAnimator && window.EffectRenderer;
+    },
+
+    /**
+     * Get the pixel effect type based on weapon
+     */
+    _getPixelEffectType(options) {
+        const weaponType = options.weaponType || 'sword';
+
+        // Map weapon types to pixel effect names
+        const weaponToEffect = {
+            'sword': 'melee_swing',
+            'knife': 'claw_swipe',
+            'dagger': 'claw_swipe',
+            'mace': 'heavy_slam',
+            'hammer': 'heavy_slam',
+            'axe': 'sweep',
+            'spear': 'lunge',
+            'polearm': 'lunge',
+            'unarmed': 'double_strike'
+        };
+
+        return weaponToEffect[weaponType] || 'melee_swing';
     },
 
     /**
@@ -119,7 +173,9 @@ const MeleeSlashEffect = {
             range: range,
             arcDegrees: 90,
             slashDuration: 8,
-            color: '#FFFFFF'
+            color: '#FFFFFF',
+            weaponType: weaponType,  // Include for pixel effect selection
+            element: element         // Include for element coloring
         };
 
         switch (weaponType) {
@@ -183,11 +239,20 @@ const MeleeSlashEffect = {
      * Update all active effects
      */
     update(dt) {
+        // Update pixel effect animator if available
+        if (window.EffectAnimator) {
+            window.EffectAnimator.update(dt || 16.67); // Default to ~60fps
+        }
+
         for (let i = this.activeEffects.length - 1; i >= 0; i--) {
             const effect = this.activeEffects[i];
             this.updateEffect(effect);
 
             if (effect.isFinished) {
+                // Clean up pixel effect if any
+                if (effect.pixelEffectId && window.EffectAnimator) {
+                    window.EffectAnimator.stopEffect(effect.pixelEffectId);
+                }
                 this.activeEffects.splice(i, 1);
             }
         }
@@ -298,6 +363,38 @@ const MeleeSlashEffect = {
         const screenX = (effect.originX - camX) * tileSize + offsetX;
         const screenY = (effect.originY - camY) * tileSize;
 
+        // Try pixel-based rendering first
+        if (effect.pixelEffectId && this._canUsePixelEffects()) {
+            const frameData = window.EffectAnimator.getCurrentFrame(effect.pixelEffectId);
+            if (frameData) {
+                const pixelScale = Math.max(2, Math.floor(tileSize / 16));
+                const renderX = screenX + (frameData.transforms.horizontalOffset || 0);
+                const renderY = screenY + (frameData.transforms.verticalOffset || 0);
+
+                window.EffectRenderer.draw(
+                    ctx,
+                    frameData.sprite,
+                    renderX,
+                    renderY,
+                    pixelScale,
+                    {
+                        rotation: frameData.transforms.rotation,
+                        alpha: frameData.transforms.alpha,
+                        scaleX: frameData.transforms.scaleX,
+                        scaleY: frameData.transforms.scaleY,
+                        flipX: frameData.transforms.flipX,
+                        paletteMod: frameData.transforms.paletteMod,
+                        glow: effect.glowColor ? true : false,
+                        glowColor: effect.glowColor
+                    }
+                );
+                // Still draw particles for extra flair
+                this.renderParticles(ctx, effect, screenX, screenY, tileSize);
+                return;
+            }
+        }
+
+        // Fallback to code-based rendering
         ctx.fillStyle = effect.slashColor;
 
         switch (effect.state) {
@@ -463,7 +560,7 @@ function createPlayerSlash(target, weapon = null) {
 
 function createEnemySlash(enemy, target) {
     const options = {
-        range: enemy.attackRange || 1,
+        range: enemy.combat?.attackRange || enemy.attackRange || 1,
         arcDegrees: 60,
         color: '#CC4444',
         particleColor: '#FF6666',

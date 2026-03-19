@@ -1,0 +1,15 @@
+# Claude Code SDK (uses subscription instead of API credits)
+claude-code-sdk
+
+# Document processing (optional - for PDF/image handling)
+pdfplumber
+PyMuPDF
+Pillow
+
+# Data analysis (optional - for financial calculations)
+numpy
+pandas
+numpy-financial
+
+# Web search (optional - for research agent)
+duckduckgo-search

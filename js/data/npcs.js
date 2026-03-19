@@ -1,5 +1,5 @@
 // === js/data/npcs.js ===
-// SURVIVAL EXTRACTION UPDATE: NPC definitions and dialogue
+// NPC definitions and dialogue
 // THE BLEEDING EARTH: Expanded NPC system with Elder Council
 
 // ============================================================================
@@ -95,7 +95,15 @@ const NPC_DATA = {
         role: 'banker',
         dialogueTree: 'banker_main',
         services: ['bank', 'deposit', 'withdraw'],
-        initialDialogue: 'banker_intro'
+        initialDialogue: 'banker_intro',
+        barks: [
+            '*counts coins* Business is good when delvers return...',
+            'Every coin accounted for. Every. Single. One.',
+            'The vault stands. As always.',
+            'Interest compounds, friend. Remember that.',
+            { condition: 'high_gold', text: 'Ah, a wealthy delver! The vault awaits.' },
+            { condition: 'low_gold', text: 'Hmph. Empty pockets make poor customers.' }
+        ]
     },
 
     blacksmith: {
@@ -109,7 +117,16 @@ const NPC_DATA = {
         dialogueTree: 'smith_main',
         services: ['shop', 'repair', 'craft'],
         inventory: 'blacksmith_stock',
-        initialDialogue: 'smith_intro'
+        initialDialogue: 'smith_intro',
+        barks: [
+            '*hammer rings* Fine steel, forged strong!',
+            'That blade\'s seen better days. Come see me!',
+            'Nothing beats dwarven steel. Nothing.',
+            '*wipes brow* Honest work for honest pay.',
+            { condition: 'recent_death', text: 'Back from the depths? Need repairs, I wager.' },
+            { condition: 'deep_diver', text: 'A veteran! Your blade must have stories to tell.' },
+            { condition: 'many_runs', text: 'Heard you\'ve been busy down there!' }
+        ]
     },
 
     innkeeper: {
@@ -121,8 +138,17 @@ const NPC_DATA = {
         building: 'tavern',
         role: 'innkeeper',
         dialogueTree: 'innkeeper_main',
-        services: ['rest', 'rumors', 'quests'],
-        initialDialogue: 'innkeeper_intro'
+        services: ['rest', 'rumors', 'quests', 'dice_game'],
+        initialDialogue: 'innkeeper_intro',
+        barks: [
+            '*hums a tune* Ale\'s fresh today!',
+            'Come for the drinks, stay for the stories!',
+            'Heard the latest? Come closer...',
+            '*polishes glass* Slow day, huh?',
+            { condition: 'first_run', text: 'New face! Welcome to the Delver!' },
+            { condition: 'recent_death', text: 'Rough day? A drink might help.' },
+            { condition: 'high_gold', text: 'Looking prosperous! Feeling lucky at dice?' }
+        ]
     },
 
     expedition_master: {
@@ -134,8 +160,18 @@ const NPC_DATA = {
         building: 'expedition_hall',
         role: 'loadout',
         dialogueTree: 'expedition_main',
-        services: ['loadout', 'shortcuts', 'stats'],
-        initialDialogue: 'expedition_intro'
+        services: ['loadout', 'stats'],
+        initialDialogue: 'expedition_intro',
+        barks: [
+            '*checks ledger* Another day, another descent.',
+            'Preparation is everything. Remember that.',
+            'The Chasm waits for no one.',
+            '*adjusts gear* Ready when you are, delver.',
+            { condition: 'deep_diver', text: 'Impressive depth record. Keep pushing.' },
+            { condition: 'first_run', text: 'Nervous? Good. Fear keeps you alive.' },
+            { condition: 'many_runs', text: 'Veteran in the making. Respect.' },
+            { condition: 'bounty_active', text: 'Got contracts to fulfill? Best get moving.' }
+        ]
     },
 
     priestess: {
@@ -148,7 +184,16 @@ const NPC_DATA = {
         role: 'healer',
         dialogueTree: 'priestess_main',
         services: ['heal', 'blessings', 'lore'],
-        initialDialogue: 'priestess_intro'
+        initialDialogue: 'priestess_intro',
+        barks: [
+            '*softly praying* The light guides...',
+            'Peace be upon you, traveler.',
+            'The shrine\'s flame burns eternal.',
+            '*tends candles* Darkness cannot extinguish hope.',
+            { condition: 'low_health', text: 'You are wounded. Let me help.' },
+            { condition: 'recent_death', text: 'You\'ve seen darkness. Find solace here.' },
+            { condition: 'deep_diver', text: 'The deeper you go, the more the light matters.' }
+        ]
     },
 
     // ========================================================================
@@ -165,7 +210,16 @@ const NPC_DATA = {
         role: 'tips',
         dialogueTree: 'patron_main',
         services: ['tips', 'stories'],
-        initialDialogue: 'patron_intro'
+        initialDialogue: 'patron_intro',
+        barks: [
+            '*sips ale* Back in my day...',
+            'The Chasm takes more than it gives.',
+            '*mutters* ...deeper... always deeper...',
+            'Trust your instincts down there.',
+            { condition: 'first_run', text: 'Fresh meat for the Chasm, eh?' },
+            { condition: 'deep_diver', text: '*nods approvingly* You\'ve got the look of a survivor.' },
+            { condition: 'recent_death', text: 'We all kiss the stone eventually. Get back up.' }
+        ]
     },
 
     // ========================================================================
@@ -275,7 +329,7 @@ const NPC_DATA = {
         building: 'expedition_hall',
         role: 'info',
         dialogueTree: 'scout_main',
-        services: ['maps', 'shortcuts'],
+        services: ['maps'],
         unlockCondition: { floor_reached: 3 },
         initialDialogue: 'scout_intro'
     }
@@ -510,6 +564,7 @@ const DIALOGUE_TREES = {
         text: '*smiles warmly* Welcome to The Weary Delver! I\'m Rosie. You look like you could use a drink and some news.',
         responses: [
             { text: 'What\'s the latest news?', next: 'innkeeper_rumors' },
+            { text: 'Care for a game of dice?', next: 'innkeeper_dice_intro' },
             { text: 'I need to rest.', next: 'innkeeper_rest' },
             { text: 'Just passing through.', action: 'close' }
         ]
@@ -520,6 +575,7 @@ const DIALOGUE_TREES = {
         text: '*polishes a glass* Good to see you back! What can I get you?',
         responses: [
             { text: 'Any new rumors?', next: 'innkeeper_rumors' },
+            { text: 'How about a game of dice?', next: 'innkeeper_dice' },
             { text: 'I need rest.', next: 'innkeeper_rest' },
             { text: 'Nothing for now.', action: 'close' }
         ]
@@ -551,6 +607,35 @@ const DIALOGUE_TREES = {
         ]
     },
 
+    innkeeper_dice_intro: {
+        speaker: 'innkeeper',
+        text: '*produces a worn leather cup* Ah, a gambler! The game is Dice of Fortune - we each roll three bones. Highest total wins. But watch out for triples - they beat everything! You in?',
+        responses: [
+            { text: 'Let\'s roll!', action: 'open_dice_game' },
+            { text: 'What are the stakes?', next: 'innkeeper_dice_stakes' },
+            { text: 'Maybe another time.', next: 'innkeeper_main' }
+        ]
+    },
+
+    innkeeper_dice: {
+        speaker: 'innkeeper',
+        text: '*rattles the dice cup* Ready for another round? Lady luck\'s been fickle today...',
+        responses: [
+            { text: 'Deal me in!', action: 'open_dice_game' },
+            { text: 'What are the rules again?', next: 'innkeeper_dice_stakes' },
+            { text: 'I\'ll pass for now.', next: 'innkeeper_main' }
+        ]
+    },
+
+    innkeeper_dice_stakes: {
+        speaker: 'innkeeper',
+        text: 'Standard bets are 10, 25, 50, or 100 gold. Win and you get 1.8 times your bet back. Roll a triple? That pays triple! Ties push - you get your bet back. Fair odds, I promise.',
+        responses: [
+            { text: 'Sounds good. Let\'s play!', action: 'open_dice_game' },
+            { text: 'I\'ll think about it.', next: 'innkeeper_main' }
+        ]
+    },
+
     // ========================================================================
     // EXPEDITION MASTER VALDRIS
     // ========================================================================
@@ -560,7 +645,6 @@ const DIALOGUE_TREES = {
         text: '*stands at attention* Delver. I am Captain Valdris. Before you enter the Chasm, you prepare here. Choose your loadout wisely.',
         responses: [
             { text: 'I\'m ready to dive.', action: 'open_loadout' },
-            { text: 'Tell me about shortcuts.', next: 'expedition_shortcuts' },
             { text: 'What are my stats?', next: 'expedition_stats' },
             { text: 'Not yet.', action: 'close' }
         ]
@@ -571,26 +655,8 @@ const DIALOGUE_TREES = {
         text: 'Ready for another descent?',
         responses: [
             { text: 'Prepare my loadout.', action: 'open_loadout' },
-            { text: 'Shortcut status?', next: 'expedition_shortcuts' },
             { text: 'Show my stats.', next: 'expedition_stats' },
             { text: 'Not now.', action: 'close' }
-        ]
-    },
-
-    expedition_shortcuts: {
-        speaker: 'expedition_master',
-        dynamic: 'shortcut_status',
-        responses: [
-            { text: 'How do I unlock more?', next: 'expedition_unlock' },
-            { text: 'Back to main.', next: 'expedition_main' }
-        ]
-    },
-
-    expedition_unlock: {
-        speaker: 'expedition_master',
-        text: 'Defeat the guardian of each floor to unlock a shortcut. But be warned - using shortcuts means missing loot from upper floors.',
-        responses: [
-            { text: 'Understood.', next: 'expedition_main' }
         ]
     },
 
@@ -721,26 +787,22 @@ const DYNAMIC_DIALOGUE = {
 
     random_rumor: [
         'I heard there\'s a new passage on floor three. Leads to a treasure room... or a death trap.',
-        'Word is the extraction shafts are becoming less stable. Get out faster than before.',
         'Some say there\'s a hidden merchant deep in the Chasm. Sells things you can\'t get here.',
         'The beasts on floor five are getting more aggressive. Something\'s stirring them up.',
         'A delver came back yesterday raving about "living shadows." She hasn\'t spoken since.'
     ],
 
     random_tip: [
-        'Don\'t get greedy. When you hear the rumbling, get to an extraction shaft.',
         'The deeper you go, the better the loot. But the dangers multiply.',
         'Always keep an escape route in mind. The Chasm loves to trap the unwary.',
         'Materials are worth more than gold in the long run. Craft something useful.',
-        'Watch your surroundings. The floor changes when you\'re not looking.',
-        'Mini-bosses guard the shortcuts. Defeat them to skip floors on future runs.'
+        'Watch your surroundings. The floor changes when you\'re not looking.'
     ],
 
     random_story: [
         'Once, I found a room full of gold on floor four. When I turned around, the door was gone. I dug for three days...',
         'My partner Rolf went too deep once. Said he saw something in the Core. Something watching. He never delved again.',
-        'The old maps are useless, you know. The Chasm reshapes itself. Only fools trust paper.',
-        'I was the one who discovered the first shortcut. Nearly died doing it, but it was worth it.'
+        'The old maps are useless, you know. The Chasm reshapes itself. Only fools trust paper.'
     ]
 };
 

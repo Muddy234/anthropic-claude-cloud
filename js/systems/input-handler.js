@@ -106,15 +106,26 @@ window.addEventListener('keydown', e => {
         }
     }
 
-    // Start new game
-    if (e.key === ' ') {
-        if (game.state === 'menu') {
-            startNewGame();
-            return;
-        } else if (game.state === 'gameover') {
-            restartGame();
-            return;
+    // === MAIN MENU INPUT HANDLING ===
+    if (game.state === 'menu') {
+        handleMenuInput(e);
+        return;
+    }
+
+    // Game over - restart
+    if (e.key === ' ' && game.state === 'gameover') {
+        restartGame();
+        return;
+    }
+
+    // Victory - return to village
+    if (e.key === 'Enter' && game.state === 'victory') {
+        if (typeof returnToVillage === 'function') {
+            returnToVillage();
+        } else {
+            game.state = 'menu';
         }
+        return;
     }
 
     // Trigger shift (debug)
@@ -149,8 +160,59 @@ window.addEventListener('keydown', e => {
         return;
     }
 
+    // Pause toggle
+    if (e.key === 'Escape' && game.state === 'playing') {
+        game.state = 'paused';
+        return;
+    }
+    if (e.key === 'Escape' && game.state === 'paused') {
+        game.state = 'playing';
+        return;
+    }
+
+    // Pause menu navigation
+    if (game.state === 'paused') {
+        if (e.key === 'ArrowUp' || e.key === 'w') {
+            window._pauseMenuIndex = Math.max(0, (window._pauseMenuIndex || 0) - 1);
+        }
+        if (e.key === 'ArrowDown' || e.key === 's') {
+            window._pauseMenuIndex = Math.min(2, (window._pauseMenuIndex || 0) + 1);
+        }
+        if (e.key === 'Enter') {
+            const idx = window._pauseMenuIndex || 0;
+            if (idx === 0) { game.state = 'playing'; }
+            else if (idx === 1) { game.state = 'settings'; }
+            else if (idx === 2) {
+                if (typeof SessionManager !== 'undefined') {
+                    SessionManager.playerDeath(game.player?.gridX || 0, game.player?.gridY || 0);
+                }
+                if (typeof returnToVillage === 'function') {
+                    returnToVillage();
+                } else if (typeof restartGame === 'function') {
+                    restartGame();
+                }
+            }
+            window._pauseMenuIndex = 0;
+        }
+        return;
+    }
+
     // Playing state - hotkeys and movement
     if (game.state === 'playing') {
+        // DASH ACTIVATION (Space key) - Always triggers dash via SpellSystem/DodgeSystem
+        if (e.key === ' ') {
+            e.preventDefault();
+            // Prevent key repeat from triggering multiple times
+            if (e.repeat) return;
+            // Use SpellSystem if available, fallback to DodgeSystem
+            if (typeof SpellSystem !== 'undefined' && SpellSystem.initialized) {
+                SpellSystem.tryActivate(game.player);
+            } else if (typeof DodgeSystem !== 'undefined' && DodgeSystem.initialized) {
+                DodgeSystem.tryDodge(game.player);
+            }
+            return;
+        }
+
         // Tab targeting
         if (e.key === 'Tab') {
             e.preventDefault(); // Prevent default tab behavior
@@ -160,22 +222,67 @@ window.addEventListener('keydown', e => {
             return;
         }
 
-        // Action hotkeys (3-4) for consumables
-        // Attacks are triggered by left-click only (uses combo system: 1, 2, special)
-        if (['3', '4'].includes(e.key)) {
+        // SPELL SLOTS (Keys 1-4) - Cast spell from loadout slots
+        if (['1', '2', '3', '4'].includes(e.key)) {
             e.preventDefault();
+            if (e.repeat) return;
             // Clear this key from movement state to prevent conflicts
             keys[e.key] = false;
 
-            const keyNum = parseInt(e.key);
+            const slotIndex = parseInt(e.key) - 1; // 0-3
 
-            // Hotkeys 3-4: Consumables (use existing system)
-            if (typeof handleActiveCombatHotkey === 'function') {
-                handleActiveCombatHotkey(keyNum, game.player);
-            } else if (typeof handleActionHotkey === 'function') {
-                handleActionHotkey(keyNum, game.player);
+            if (typeof SpellSystem !== 'undefined' && SpellSystem.initialized) {
+                SpellSystem.castSlot(slotIndex);
             }
             return;
+        }
+
+        // CONSUMABLE (Key 5) - Use assigned consumable
+        if (e.key === '5') {
+            e.preventDefault();
+            if (e.repeat) return;
+            keys[e.key] = false;
+
+            if (typeof handleActiveCombatHotkey === 'function') {
+                handleActiveCombatHotkey(1, game.player);
+            } else if (typeof handleActionHotkey === 'function') {
+                handleActionHotkey(1, game.player);
+            }
+            return;
+        }
+
+        // WEAPON ACTION - Main hand (Q key)
+        if (e.key === 'q' || e.key === 'Q') {
+            e.preventDefault();
+            if (e.repeat) return;
+
+            if (typeof handleWeaponAction === 'function') {
+                handleWeaponAction(1, game.player);
+            } else if (typeof handleActiveCombatHotkey === 'function') {
+                handleActiveCombatHotkey('Q', game.player);
+            }
+            return;
+        }
+
+        // WEAPON ACTION - Off hand (E key)
+        // Only override E for weapon action when in combat or no interactable nearby
+        if (e.key === 'e' || e.key === 'E') {
+            // Check if player is in combat or there's no interaction target
+            const inCombat = game.player?.inCombat || game.player?.combat?.isInCombat;
+            const hasInteractable = _checkNearbyInteractable();
+
+            if (inCombat || !hasInteractable) {
+                e.preventDefault();
+                if (e.repeat) return;
+
+                if (typeof handleWeaponAction === 'function') {
+                    handleWeaponAction(2, game.player);
+                } else if (typeof handleActiveCombatHotkey === 'function') {
+                    handleActiveCombatHotkey('E', game.player);
+                }
+                return;
+            }
+            // If not in combat and interactable nearby, fall through to default E behavior
         }
 
         // Open inventory (blocked during combat)
@@ -230,22 +337,8 @@ window.addEventListener('keydown', e => {
             }
         }
 
-        // Torch toggle (T key) - Also checks for extraction interaction
+        // Torch toggle (T key)
         if (e.key === 't' || e.key === 'T') {
-            // First check if player is on an extraction point
-            let onExtractionPoint = false;
-
-            if (typeof ExtractionSystem !== 'undefined' && ExtractionSystem.initialized) {
-                const point = ExtractionSystem.getPointAtPlayer();
-                if (point && point.isActive()) {
-                    // Player is on extraction point - extract instead of torch toggle
-                    console.log('[Input] Extraction point found, attempting extract...');
-                    ExtractionSystem.tryExtract(point);
-                    return;
-                }
-            }
-
-            // Not on extraction point - toggle torch
             if (typeof toggleTorch === 'function') {
                 toggleTorch();
             }
@@ -336,6 +429,11 @@ function handleInventoryInput(e) {
                         updateActionHotkeys(game.player);
                     }
 
+                    // Clear sprite cache for equipment change
+                    if (typeof PlayerSpriteRenderer !== 'undefined') {
+                        PlayerSpriteRenderer.clearCache();
+                    }
+
                     addMessage(`Equipped ${selectedItem.name}`);
                 } else if (selectedItem.type === 'consumable') {
                     // Use consumable via useItemByIndex from inventory-system.js
@@ -385,6 +483,11 @@ function handleInventoryInput(e) {
                     updateActionHotkeys(game.player);
                 }
 
+                // Clear sprite cache for equipment change
+                if (typeof PlayerSpriteRenderer !== 'undefined') {
+                    PlayerSpriteRenderer.clearCache();
+                }
+
                 addMessage(`Unequipped ${item.name}`);
             }
         }
@@ -427,6 +530,16 @@ function handleMovementInput(deltaTime) {
     // Use both string and GAME_STATES comparison for safety
     const isPlaying = game.state === 'playing' || game.state === GAME_STATES?.PLAYING;
     if (!isPlaying) return;
+
+    // Update player knockback if active (takes priority over normal movement)
+    if (typeof updatePlayerKnockback === 'function') {
+        updatePlayerKnockback(deltaTime || 16.67);
+    }
+
+    // If player is being knocked back, don't process normal movement input
+    if (typeof isPlayerKnockedBack === 'function' && isPlayerKnockedBack()) {
+        return;
+    }
 
     // Check which directional keys are held
     const up = keys['w'] || keys['W'] || keys['ArrowUp'];
@@ -492,20 +605,6 @@ function checkTileInteractions(player) {
         game.descentPromptShown = false;
     }
 
-    // Extraction point interaction
-    if (typeof ExtractionSystem !== 'undefined' && ExtractionSystem.initialized) {
-        const point = ExtractionSystem.getPointAtPlayer();
-        if (point && point.isActive()) {
-            // Show extraction prompt
-            if (!game.extractionPromptShown) {
-                addMessage("Press [T] to extract to the surface!", 'info');
-                game.extractionPromptShown = true;
-            }
-        } else {
-            game.extractionPromptShown = false;
-        }
-    }
-
     // Merchant interaction
     if (game.merchant) {
         const dx = Math.abs(x - game.merchant.x);
@@ -541,6 +640,15 @@ const setupCanvasHandlers = () => {
 
     // LEFT CLICK - Mouse-driven attack toward cursor
     canvas.addEventListener('click', (e) => {
+        // Handle main menu clicks
+        if (game.state === 'menu') {
+            const rect = canvas.getBoundingClientRect();
+            const clickX = e.clientX - rect.left;
+            const clickY = e.clientY - rect.top;
+            handleMenuClick(clickX, clickY, rect.width, rect.height);
+            return;
+        }
+
         // Handle skills overlay clicks (pentagon radar, tabs)
         if (game.state === 'skills' && typeof handleSkillsOverlayClick === 'function') {
             const rect = canvas.getBoundingClientRect();
@@ -601,6 +709,16 @@ const setupCanvasHandlers = () => {
     // RIGHT CLICK - Context menu handled by right-click-init.js
     // Removed duplicate handler to prevent double rendering
 
+    // MOUSE MOVE - Menu hover effects
+    canvas.addEventListener('mousemove', (e) => {
+        if (game.state !== 'menu') return;
+
+        const rect = canvas.getBoundingClientRect();
+        const mouseX = e.clientX - rect.left;
+        const mouseY = e.clientY - rect.top;
+        handleMenuHover(mouseX, mouseY, rect.width, rect.height);
+    });
+
     console.log('✓ Canvas click handlers initialized');
 };
 
@@ -619,6 +737,339 @@ function onPlayerHit() {
     }
     if (window.contextMenu?.visible) {
         window.contextMenu.visible = false;
+    }
+}
+
+// ============================================================================
+// MAIN MENU INPUT HANDLING
+// ============================================================================
+
+/**
+ * Handle input for the main menu system
+ */
+function handleMenuInput(e) {
+    const menuState = game.menuState;
+    if (!menuState) return;
+
+    // Get option counts for current screen
+    let optionCount = 4; // Main menu: NEW GAME, CONTINUE, SETTINGS, CREDITS
+    if (menuState.currentScreen === 'settings') {
+        optionCount = 3; // Music, SFX, Back
+    } else if (menuState.currentScreen === 'credits') {
+        optionCount = 1; // Just Back
+    }
+
+    // Navigation: Up/Down or W/S
+    if (e.key === 'ArrowUp' || e.key === 'w' || e.key === 'W') {
+        e.preventDefault();
+        menuState.selectedIndex = (menuState.selectedIndex - 1 + optionCount) % optionCount;
+        playMenuSound('navigate');
+        return;
+    }
+
+    if (e.key === 'ArrowDown' || e.key === 's' || e.key === 'S') {
+        e.preventDefault();
+        menuState.selectedIndex = (menuState.selectedIndex + 1) % optionCount;
+        playMenuSound('navigate');
+        return;
+    }
+
+    // Settings screen: Left/Right to adjust sliders
+    if (menuState.currentScreen === 'settings') {
+        if (e.key === 'ArrowLeft' || e.key === 'a' || e.key === 'A') {
+            e.preventDefault();
+            adjustSettingsValue(menuState, -10);
+            return;
+        }
+        if (e.key === 'ArrowRight' || e.key === 'd' || e.key === 'D') {
+            e.preventDefault();
+            adjustSettingsValue(menuState, 10);
+            return;
+        }
+    }
+
+    // ESC - Go back from submenus
+    if (e.key === 'Escape') {
+        if (menuState.currentScreen !== 'main') {
+            menuState.currentScreen = 'main';
+            menuState.selectedIndex = 0;
+            playMenuSound('back');
+        }
+        return;
+    }
+
+    // Enter or Space - Select
+    if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        executeMenuSelection(menuState);
+        return;
+    }
+}
+
+/**
+ * Adjust settings slider value
+ */
+function adjustSettingsValue(menuState, delta) {
+    if (menuState.selectedIndex === 0) {
+        // Music volume
+        menuState.musicVolume = Math.max(0, Math.min(100, (menuState.musicVolume || 70) + delta));
+        applyVolumeSettings(menuState);
+        playMenuSound('adjust');
+    } else if (menuState.selectedIndex === 1) {
+        // SFX volume
+        menuState.sfxVolume = Math.max(0, Math.min(100, (menuState.sfxVolume || 80) + delta));
+        applyVolumeSettings(menuState);
+        playMenuSound('adjust');
+    }
+}
+
+/**
+ * Apply volume settings to audio systems
+ */
+function applyVolumeSettings(menuState) {
+    // Save to localStorage
+    if (typeof localStorage !== 'undefined') {
+        localStorage.setItem('shiftingChasm_settings', JSON.stringify({
+            musicVolume: menuState.musicVolume,
+            sfxVolume: menuState.sfxVolume
+        }));
+    }
+
+    // Apply to audio manager if available
+    if (typeof AudioManager !== 'undefined') {
+        if (typeof AudioManager.setMusicVolume === 'function') {
+            AudioManager.setMusicVolume(menuState.musicVolume / 100);
+        }
+        if (typeof AudioManager.setSfxVolume === 'function') {
+            AudioManager.setSfxVolume(menuState.sfxVolume / 100);
+        }
+    }
+}
+
+/**
+ * Execute the currently selected menu option
+ */
+function executeMenuSelection(menuState) {
+    playMenuSound('select');
+
+    if (menuState.currentScreen === 'main') {
+        switch (menuState.selectedIndex) {
+            case 0: // NEW GAME
+                startNewGame();
+                break;
+            case 1: // CONTINUE
+                if (menuState.hasSaveData) {
+                    loadSavedGame();
+                }
+                break;
+            case 2: // SETTINGS
+                menuState.currentScreen = 'settings';
+                menuState.selectedIndex = 0;
+                break;
+            case 3: // CREDITS
+                menuState.currentScreen = 'credits';
+                menuState.selectedIndex = 0;
+                break;
+        }
+    } else if (menuState.currentScreen === 'settings') {
+        if (menuState.selectedIndex === 2) {
+            // Back
+            menuState.currentScreen = 'main';
+            menuState.selectedIndex = 2; // Return to Settings option
+        }
+    } else if (menuState.currentScreen === 'credits') {
+        // Back
+        menuState.currentScreen = 'main';
+        menuState.selectedIndex = 3; // Return to Credits option
+    }
+}
+
+/**
+ * Load saved game and continue
+ */
+function loadSavedGame() {
+    if (typeof SaveManager !== 'undefined' && typeof SaveManager.loadGame === 'function') {
+        const success = SaveManager.loadGame();
+        if (success) {
+            console.log('[Menu] Loaded saved game');
+            // Start in village with loaded state
+            if (typeof startInVillage === 'function') {
+                startInVillage();
+            }
+        } else {
+            console.warn('[Menu] Failed to load saved game, starting new');
+            startNewGame();
+        }
+    } else {
+        // No SaveManager, try manual load
+        const savedData = localStorage.getItem('shiftingChasm_persistent');
+        if (savedData) {
+            try {
+                const data = JSON.parse(savedData);
+                if (typeof loadPersistentState === 'function') {
+                    loadPersistentState(data);
+                }
+                if (typeof startInVillage === 'function') {
+                    startInVillage();
+                }
+            } catch (e) {
+                console.error('[Menu] Failed to parse saved game:', e);
+                startNewGame();
+            }
+        } else {
+            startNewGame();
+        }
+    }
+}
+
+/**
+ * Handle mouse hover on menu (for selection highlighting)
+ */
+function handleMenuHover(mouseX, mouseY, canvasWidth, canvasHeight) {
+    const menuState = game.menuState;
+    if (!menuState) return;
+
+    let newIndex = -1;
+
+    if (menuState.currentScreen === 'main') {
+        const menuStartY = canvasHeight * 0.5;
+        const menuSpacing = 50;
+        const hitHeight = 40;
+
+        for (let i = 0; i < 4; i++) {
+            const optionY = menuStartY + i * menuSpacing;
+            if (mouseY >= optionY - hitHeight / 2 && mouseY <= optionY + hitHeight / 2) {
+                if (Math.abs(mouseX - canvasWidth / 2) < 120) {
+                    // Don't highlight disabled Continue option
+                    if (i === 1 && !menuState.hasSaveData) continue;
+                    newIndex = i;
+                    break;
+                }
+            }
+        }
+    } else if (menuState.currentScreen === 'settings') {
+        const settingsStartY = canvasHeight * 0.4;
+        const settingsSpacing = 70;
+        const hitHeight = 50;
+
+        for (let i = 0; i < 3; i++) {
+            const optionY = settingsStartY + i * settingsSpacing;
+            if (mouseY >= optionY - hitHeight / 2 && mouseY <= optionY + hitHeight / 2) {
+                newIndex = i;
+                break;
+            }
+        }
+    } else if (menuState.currentScreen === 'credits') {
+        const backY = canvasHeight * 0.85;
+        if (mouseY >= backY - 25 && mouseY <= backY + 25) {
+            if (Math.abs(mouseX - canvasWidth / 2) < 80) {
+                newIndex = 0;
+            }
+        }
+    }
+
+    // Update selection if hovering over a valid option
+    if (newIndex !== -1 && newIndex !== menuState.selectedIndex) {
+        menuState.selectedIndex = newIndex;
+        playMenuSound('navigate');
+    }
+}
+
+/**
+ * Handle mouse clicks on menu
+ */
+function handleMenuClick(clickX, clickY, canvasWidth, canvasHeight) {
+    const menuState = game.menuState;
+    if (!menuState) return;
+
+    if (menuState.currentScreen === 'main') {
+        // Main menu options
+        const menuStartY = canvasHeight * 0.5;
+        const menuSpacing = 50;
+        const hitHeight = 40;
+
+        for (let i = 0; i < 4; i++) {
+            const optionY = menuStartY + i * menuSpacing;
+            if (clickY >= optionY - hitHeight / 2 && clickY <= optionY + hitHeight / 2) {
+                if (Math.abs(clickX - canvasWidth / 2) < 120) {
+                    // Check if Continue is disabled
+                    if (i === 1 && !menuState.hasSaveData) {
+                        return; // Can't click disabled option
+                    }
+                    menuState.selectedIndex = i;
+                    executeMenuSelection(menuState);
+                    return;
+                }
+            }
+        }
+    } else if (menuState.currentScreen === 'settings') {
+        // Settings options
+        const settingsStartY = canvasHeight * 0.4;
+        const settingsSpacing = 70;
+        const hitHeight = 50;
+
+        for (let i = 0; i < 3; i++) {
+            const optionY = settingsStartY + i * settingsSpacing;
+            if (clickY >= optionY - hitHeight / 2 && clickY <= optionY + hitHeight / 2) {
+                if (i < 2) {
+                    // Slider - check if clicking on slider area
+                    const sliderX = canvasWidth / 2 + 20;
+                    const sliderWidth = 200;
+                    if (clickX >= sliderX && clickX <= sliderX + sliderWidth) {
+                        // Set value based on click position
+                        const percent = Math.round(((clickX - sliderX) / sliderWidth) * 100);
+                        if (i === 0) {
+                            menuState.musicVolume = Math.max(0, Math.min(100, percent));
+                        } else {
+                            menuState.sfxVolume = Math.max(0, Math.min(100, percent));
+                        }
+                        menuState.selectedIndex = i;
+                        applyVolumeSettings(menuState);
+                        playMenuSound('adjust');
+                        return;
+                    }
+                } else {
+                    // Back button
+                    if (Math.abs(clickX - canvasWidth / 2) < 80) {
+                        menuState.selectedIndex = i;
+                        executeMenuSelection(menuState);
+                        return;
+                    }
+                }
+            }
+        }
+    } else if (menuState.currentScreen === 'credits') {
+        // Back button
+        const backY = canvasHeight * 0.85;
+        if (clickY >= backY - 25 && clickY <= backY + 25) {
+            if (Math.abs(clickX - canvasWidth / 2) < 80) {
+                executeMenuSelection(menuState);
+                return;
+            }
+        }
+    }
+}
+
+/**
+ * Play menu navigation/selection sounds
+ */
+function playMenuSound(type) {
+    // Only play if sound systems are available
+    if (typeof UIAudio !== 'undefined') {
+        switch (type) {
+            case 'navigate':
+                if (typeof UIAudio.playHover === 'function') UIAudio.playHover();
+                break;
+            case 'select':
+                if (typeof UIAudio.playClick === 'function') UIAudio.playClick();
+                break;
+            case 'back':
+                if (typeof UIAudio.playClose === 'function') UIAudio.playClose();
+                break;
+            case 'adjust':
+                if (typeof UIAudio.playTick === 'function') UIAudio.playTick();
+                break;
+        }
     }
 }
 
@@ -649,6 +1100,35 @@ if (typeof SystemManager !== 'undefined') {
 // ============================================================================
 // EXPORTS
 // ============================================================================
+
+/**
+ * Check if there is an interactable entity near the player (NPC, chest, etc.)
+ * Used to decide whether E key should be weapon action or interaction
+ * @returns {boolean} True if a nearby interactable exists
+ */
+function _checkNearbyInteractable() {
+    if (!game?.player) return false;
+    const px = Math.floor(game.player.gridX);
+    const py = Math.floor(game.player.gridY);
+
+    // Check for NPCs within 1 tile
+    if (game.npcs) {
+        for (const npc of game.npcs) {
+            if (!npc) continue;
+            const dx = Math.abs(Math.floor(npc.gridX || npc.x || 0) - px);
+            const dy = Math.abs(Math.floor(npc.gridY || npc.y || 0) - py);
+            if (dx <= 1 && dy <= 1) return true;
+        }
+    }
+
+    // Check for village buildings / interactable tiles
+    const tile = game.map?.[py]?.[px];
+    if (tile && (tile.type === 'shop' || tile.type === 'npc' || tile.type === 'chest' || tile.type === 'shrine' || tile.interactable)) {
+        return true;
+    }
+
+    return false;
+}
 
 window.onPlayerHit = onPlayerHit;
 // contextMenu and inspectPopup are exported by right-click-init.js

@@ -1,5 +1,5 @@
 // === js/ui/village-renderer.js ===
-// SURVIVAL EXTRACTION UPDATE: Village rendering
+// Village rendering
 
 // ============================================================================
 // VILLAGE RENDERER
@@ -66,6 +66,11 @@ const VillageRenderer = {
         this._renderNPCs(ctx, villageData.npcs);
         this._renderPlayer(ctx, player);
         this._renderBuildingLabels(ctx, buildings);
+
+        // Render NPC speech bubbles (barks)
+        if (typeof BarkSystem !== 'undefined') {
+            BarkSystem.render(ctx, this.tileSize, this.offsetX, this.offsetY);
+        }
     },
 
     /**
@@ -316,6 +321,53 @@ const VillageRenderer = {
                 ctx.strokeStyle = '#4A3000';
                 ctx.lineWidth = 2;
                 ctx.strokeRect(screenX + 6, screenY + 6, 20, 20);
+                break;
+
+            case 'bulletin_board':
+                // Wooden posts
+                ctx.fillStyle = '#4A3000';
+                ctx.fillRect(screenX + 4, screenY + 4, 4, 24);
+                ctx.fillRect(screenX + 24, screenY + 4, 4, 24);
+                // Board backing
+                ctx.fillStyle = '#8B7355';
+                ctx.fillRect(screenX + 6, screenY + 2, 20, 20);
+                // Board frame
+                ctx.strokeStyle = '#4A3000';
+                ctx.lineWidth = 2;
+                ctx.strokeRect(screenX + 6, screenY + 2, 20, 20);
+                // Paper notices (small rectangles)
+                ctx.fillStyle = '#F5F5DC';
+                ctx.fillRect(screenX + 9, screenY + 5, 6, 7);
+                ctx.fillRect(screenX + 17, screenY + 5, 6, 7);
+                ctx.fillStyle = '#FFFACD';
+                ctx.fillRect(screenX + 9, screenY + 13, 6, 6);
+                ctx.fillRect(screenX + 17, screenY + 13, 6, 6);
+                // Red "wanted" notice
+                ctx.fillStyle = '#CD5C5C';
+                ctx.fillRect(screenX + 13, screenY + 9, 6, 8);
+                break;
+
+            case 'training_dummy':
+                // Use TrainingSystem if available, otherwise basic render
+                if (typeof TrainingSystem !== 'undefined') {
+                    // Get dummy data from tile if available
+                    TrainingSystem.renderDummy(ctx, {
+                        type: 'wood',
+                        config: TrainingSystem.DUMMY_TYPES.wood
+                    }, screenX, screenY, this.tileSize);
+                } else {
+                    // Fallback basic dummy
+                    ctx.fillStyle = '#8b6914';
+                    // Head
+                    ctx.beginPath();
+                    ctx.arc(centerX, centerY - 6, 6, 0, Math.PI * 2);
+                    ctx.fill();
+                    // Body
+                    ctx.fillRect(centerX - 6, centerY, 12, 16);
+                    // Pole
+                    ctx.fillStyle = '#4A3000';
+                    ctx.fillRect(centerX - 2, centerY + 12, 4, 12);
+                }
                 break;
         }
     },

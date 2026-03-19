@@ -1,5 +1,5 @@
 // === js/systems/loadout-system.js ===
-// SURVIVAL EXTRACTION UPDATE: Pre-run loadout selection
+// Pre-run loadout selection
 
 // ============================================================================
 // LOADOUT SYSTEM

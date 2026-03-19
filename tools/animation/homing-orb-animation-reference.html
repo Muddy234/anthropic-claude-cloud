@@ -1,0 +1,1794 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>homing_orb — Animation Implementation Reference</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&family=Space+Grotesk:wght@400;500;600;700&display=swap');
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  :root {
+    --bg: #0a0a0f;
+    --surface: #12121a;
+    --surface2: #1a1a26;
+    --border: #2a2a3a;
+    --text: #e0e0e8;
+    --text-dim: #8888a0;
+    --accent: #FFAA00;
+    --accent2: #FF6B35;
+    --core: #FF4400;
+    --danger: #ff4444;
+    --success: #2ecc71;
+    --blue: #74b9ff;
+    --purple: #a29bfe;
+  }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Space Grotesk', sans-serif;
+    line-height: 1.6;
+    padding: 2rem;
+    max-width: 1400px;
+    margin: 0 auto;
+  }
+
+  h1 {
+    font-size: 2.2rem;
+    font-weight: 700;
+    margin-bottom: 0.25rem;
+    background: linear-gradient(135deg, var(--accent), var(--core));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+
+  h1 span {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 1.4rem;
+  }
+
+  .subtitle {
+    color: var(--text-dim);
+    font-size: 1rem;
+    margin-bottom: 2.5rem;
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 1.5rem;
+  }
+
+  h2 {
+    font-size: 1.3rem;
+    font-weight: 600;
+    margin-top: 2.5rem;
+    margin-bottom: 1rem;
+    color: var(--accent);
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+
+  h2 .phase-num {
+    background: var(--accent);
+    color: var(--bg);
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.85rem;
+    font-weight: 700;
+    flex-shrink: 0;
+  }
+
+  h3 {
+    font-size: 1rem;
+    font-weight: 600;
+    margin: 1.5rem 0 0.75rem;
+    color: var(--blue);
+  }
+
+  p, li {
+    color: var(--text);
+    font-size: 0.92rem;
+    margin-bottom: 0.5rem;
+  }
+
+  ul { padding-left: 1.25rem; margin-bottom: 1rem; }
+  li { margin-bottom: 0.35rem; }
+
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 1.5rem;
+    margin: 1rem 0;
+  }
+
+  .callout {
+    background: var(--surface2);
+    border-left: 3px solid var(--accent);
+    padding: 1rem 1.25rem;
+    margin: 1rem 0;
+    border-radius: 0 6px 6px 0;
+    font-size: 0.9rem;
+  }
+
+  .callout.critical {
+    border-left-color: var(--danger);
+  }
+
+  .callout.success {
+    border-left-color: var(--success);
+  }
+
+  .callout strong {
+    color: var(--accent);
+  }
+
+  .callout.critical strong {
+    color: var(--danger);
+  }
+
+  .callout.success strong {
+    color: var(--success);
+  }
+
+  /* ── CANVAS AREA ── */
+  .demo-area {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 1.5rem;
+    margin: 1.5rem 0;
+  }
+
+  .demo-area canvas {
+    display: block;
+    margin: 0 auto;
+    image-rendering: pixelated;
+    image-rendering: crisp-edges;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    background: #08080c;
+  }
+
+  .demo-controls {
+    display: flex;
+    gap: 0.75rem;
+    justify-content: center;
+    margin-top: 1rem;
+    flex-wrap: wrap;
+  }
+
+  .demo-controls button {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.8rem;
+    padding: 0.5rem 1.25rem;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    background: var(--surface2);
+    color: var(--text);
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+
+  .demo-controls button:hover {
+    border-color: var(--accent);
+    color: var(--accent);
+  }
+
+  .phase-label {
+    text-align: center;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.85rem;
+    color: var(--text-dim);
+    margin-top: 0.5rem;
+    min-height: 1.4em;
+  }
+
+  .demo-hint {
+    text-align: center;
+    font-size: 0.8rem;
+    color: var(--text-dim);
+    margin-top: 0.25rem;
+    font-style: italic;
+  }
+
+  /* ── CODE BLOCKS ── */
+  pre {
+    background: #0d0d14;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 1.25rem;
+    overflow-x: auto;
+    margin: 1rem 0;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.78rem;
+    line-height: 1.55;
+    color: #c8c8d8;
+  }
+
+  .kw { color: #c792ea; }
+  .str { color: #c3e88d; }
+  .num { color: #f78c6c; }
+  .cm { color: #546e7a; font-style: italic; }
+  .fn { color: #82aaff; }
+  .prop { color: #f07178; }
+  .op { color: #89ddff; }
+
+  /* ── TIMELINE ── */
+  .timeline {
+    display: flex;
+    gap: 0;
+    margin: 1.5rem 0;
+    border-radius: 6px;
+    overflow: hidden;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.72rem;
+  }
+
+  .timeline-seg {
+    padding: 0.75rem 0.4rem;
+    text-align: center;
+    color: var(--bg);
+    font-weight: 600;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.2rem;
+  }
+
+  .timeline-seg .t-label { font-size: 0.6rem; opacity: 0.7; }
+
+  .t-telegraph { background: var(--accent); flex: 0.8; }
+  .t-spawn { background: var(--accent2); flex: 0.1; color: #fff; }
+  .t-travel { background: var(--blue); flex: 3.5; }
+  .t-impact { background: var(--danger); flex: 0.2; color: #fff; }
+  .t-recovery { background: var(--success); flex: 0.5; }
+  .t-idle { background: var(--border); flex: 3; color: var(--text-dim); }
+
+  /* ── SPLIT LAYOUT ── */
+  .split {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1.5rem;
+    margin: 1rem 0;
+  }
+
+  @media (max-width: 900px) {
+    .split { grid-template-columns: 1fr; }
+  }
+
+  .tag {
+    display: inline-block;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.7rem;
+    padding: 0.15rem 0.5rem;
+    border-radius: 3px;
+    font-weight: 600;
+  }
+
+  .tag-telegraph { background: rgba(255,170,0,0.2); color: var(--accent); }
+  .tag-travel { background: rgba(116,185,255,0.2); color: var(--blue); }
+  .tag-impact { background: rgba(255,68,68,0.2); color: var(--danger); }
+  .tag-recovery { background: rgba(46,204,113,0.2); color: var(--success); }
+
+  /* ── COMPARISON TABLE ── */
+  .compare-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 1rem 0;
+    font-size: 0.85rem;
+  }
+
+  .compare-table th {
+    background: var(--surface2);
+    padding: 0.5rem 0.75rem;
+    text-align: left;
+    color: var(--text-dim);
+    font-weight: 600;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .compare-table td {
+    padding: 0.5rem 0.75rem;
+    border-bottom: 1px solid var(--border);
+    vertical-align: top;
+  }
+
+  .compare-table tr:hover td {
+    background: rgba(255,255,255,0.02);
+  }
+
+  .diff { color: var(--accent); font-weight: 600; }
+
+  /* ── SPRITE FRAMES ── */
+  .sprite-grid-container {
+    display: flex;
+    gap: 1.5rem;
+    flex-wrap: wrap;
+    justify-content: center;
+    margin: 1rem 0;
+  }
+
+  .sprite-frame {
+    text-align: center;
+  }
+
+  .sprite-frame canvas {
+    image-rendering: pixelated;
+    image-rendering: crisp-edges;
+    border: 1px solid var(--border);
+    border-radius: 3px;
+    background: #08080c;
+  }
+
+  .sprite-frame .frame-label {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.7rem;
+    color: var(--text-dim);
+    margin-top: 0.3rem;
+  }
+</style>
+</head>
+<body>
+
+<h1>Ability Animation Reference: <span>homing_orb</span></h1>
+<p class="subtitle">
+  Pyro Cultist signature ability — a slow-tracking projectile that lives independently in the world.
+  This covers mechanics that ground_slam and charge didn't: independent projectile entities, homing behavior,
+  caster-based telegraphs, and projectiles that outlive their caster.
+</p>
+
+<!-- ════════════════════════════════════════════ -->
+<h2><span class="phase-num">0</span> What is homing_orb?</h2>
+
+<div class="card">
+  <p><strong>Used by:</strong> Pyro Cultist (primary)</p>
+  <p><strong>Shape:</strong> Single projectile, approximately 1 tile diameter visual</p>
+  <p><strong>Damage:</strong> 25 base (scaled by tier)</p>
+  <p><strong>Telegraph:</strong> 800ms — the Cultist gathers energy in its hands (visual on the caster, NOT on the ground)</p>
+  <p><strong>Travel speed:</strong> 4 tiles/sec — slower than walking speed (~5 tiles/sec). The player can outrun it.</p>
+  <p><strong>Tracking:</strong> Turns toward the nearest player at ~90°/sec — it curves, it doesn't snap</p>
+  <p><strong>Lifetime:</strong> 10 seconds — the orb despawns if it hasn't hit anything by then</p>
+  <p><strong>Recovery:</strong> 500ms — ranged enemies shouldn't be safe just because they're far away</p>
+  <p><strong>Cooldown:</strong> 8000ms</p>
+  <p><strong>Persists after caster death:</strong> Yes — killing the Cultist does NOT remove orbs already in flight</p>
+  <p style="margin-top:0.75rem; color: var(--accent);"><strong>The player experience:</strong> The Cultist raises its hands and a glowing orb forms — you have 800ms to prepare. Then the orb launches and slowly drifts toward you. You can outrun it, but you can't ignore it. It follows you around corners, forces you to keep moving, and splits your attention between the orb and the enemies in front of you. If you lead it into a wall or another enemy, it dies. It's a slow, persistent threat that constrains your positioning for up to 10 seconds.</p>
+</div>
+
+<div class="callout">
+  <strong>The fundamental difference:</strong> ground_slam and charge are effects — they happen, they resolve, they're gone. Homing orb creates an <em>entity</em>. Once launched, the orb is a fully independent object in the game world with its own position, velocity, collision, and lifetime. It needs its own update loop, its own rendering, and its own cleanup. This is architecturally closer to spawning a new enemy than playing an animation.
+</div>
+
+<!-- ════════════════════════════════════════════ -->
+<h2><span class="phase-num">1</span> The Animation Lifecycle</h2>
+
+<p>Homing orb's timeline is fundamentally different because the <strong>travel phase is variable-length</strong>. It could last 500ms (if the player is right in front of the Cultist) or the full 10 seconds (if the player keeps running). The other abilities have fixed timelines — the animation system knows how long they'll last when they start. Homing orb doesn't.</p>
+
+<div class="timeline">
+  <div class="timeline-seg t-telegraph">
+    TELEGRAPH<br>
+    <span class="t-label">800ms</span>
+  </div>
+  <div class="timeline-seg t-spawn">
+    SPAWN<br>
+    <span class="t-label">instant</span>
+  </div>
+  <div class="timeline-seg t-travel">
+    TRAVEL (independent entity — variable duration)<br>
+    <span class="t-label">500ms to 10,000ms</span>
+  </div>
+  <div class="timeline-seg t-impact">
+    IMPACT<br>
+    <span class="t-label">300ms</span>
+  </div>
+  <div class="timeline-seg t-recovery">
+    RECOVERY<br>
+    <span class="t-label">500ms</span>
+  </div>
+  <div class="timeline-seg t-idle">
+    IDLE (cooldown)<br>
+    <span class="t-label">~remaining</span>
+  </div>
+</div>
+
+<div class="callout critical">
+  <strong>The caster's lifecycle and the orb's lifecycle are SEPARATE.</strong> The Cultist enters telegraph → recovery → idle as a fixed cycle (just like any other enemy). The orb, once spawned, has its own travel → impact lifecycle that runs completely independently. The Cultist could die, and the orb keeps going. The Cultist could fire a second orb (if the first is still alive) after 8 seconds. The animation system must track these as two separate things: an enemy ability state (on the Cultist) and a projectile entity (in the world).
+</div>
+
+<div class="split">
+  <div class="card">
+    <h3><span class="tag tag-telegraph">TELEGRAPH</span> Caster windup (800ms)</h3>
+    <ul>
+      <li>The Cultist <strong>raises both hands</strong> — energy gathers between them</li>
+      <li>A <strong>glowing orb grows</strong> above the Cultist's hands, starting small and reaching full size</li>
+      <li>The orb <strong>pulses and crackles</strong> with orange sparks during formation</li>
+      <li>A <strong>rising hum sound</strong> builds for 800ms</li>
+      <li><strong>No ground telegraph</strong> — the warning is on the caster, not the floor</li>
+      <li>This communicates: "a projectile is coming" not "this area is dangerous"</li>
+    </ul>
+    <p style="color:var(--accent);">The player reads the telegraph and knows an orb is about to launch. They can interrupt the Cultist during this window to cancel the orb (stun/knockback), or they can prepare to dodge the launch direction.</p>
+  </div>
+  <div class="card">
+    <h3><span class="tag tag-travel">TRAVEL</span> Orb in flight (variable)</h3>
+    <ul>
+      <li>The orb <strong>launches from the Cultist</strong> toward the target's current position</li>
+      <li>It moves at <strong>4 tiles/sec</strong> — visibly slower than the player</li>
+      <li>It <strong>turns toward the nearest player</strong> at ~90°/sec — smooth curves, not instant snapping</li>
+      <li>A <strong>trailing particle stream</strong> follows behind (orange embers fading to red)</li>
+      <li>The orb itself <strong>pulses</strong> (scale oscillates between 0.9 and 1.1) and <strong>rotates slowly</strong></li>
+      <li>A quiet <strong>hum/crackle sound</strong> loops while the orb is alive, with volume based on distance to player</li>
+    </ul>
+    <p style="color:var(--blue);">The orb is a persistent pressure tool. It doesn't kill you — it constrains your movement. You're dodging other enemies while also keeping track of a slow orb drifting toward you from behind.</p>
+  </div>
+</div>
+<div class="split">
+  <div class="card">
+    <h3><span class="tag tag-impact">IMPACT</span> Three possible endings</h3>
+    <p><strong>A — Hit player:</strong></p>
+    <ul>
+      <li>25 damage applied</li>
+      <li><strong>Explosion burst</strong> — expanding fire ring (reuses ring_burst renderer)</li>
+      <li>Screen shake (2px, 100ms)</li>
+      <li>Fire <strong>impact sound</strong></li>
+    </ul>
+    <p><strong>B — Hit wall/obstacle:</strong></p>
+    <ul>
+      <li>No damage — the orb just dies</li>
+      <li>Smaller <strong>fizzle burst</strong> — sparks scatter, no ring</li>
+      <li>Quiet <strong>pop sound</strong></li>
+    </ul>
+    <p><strong>C — Timeout (10 seconds):</strong></p>
+    <ul>
+      <li>The orb <strong>flickers rapidly</strong> for the last 500ms of its life</li>
+      <li>Then <strong>fades out</strong> with a small spark shower</li>
+      <li>No damage, quiet <strong>fizzle sound</strong></li>
+    </ul>
+  </div>
+  <div class="card">
+    <h3><span class="tag tag-recovery">RECOVERY</span> On the caster, not the orb (500ms)</h3>
+    <ul>
+      <li>The Cultist's recovery starts <strong>the moment the orb launches</strong></li>
+      <li>It does NOT wait for the orb to hit something</li>
+      <li>Standard recovery: stagger animation, 1.25x damage taken, no movement</li>
+      <li>After recovery, the Cultist resumes kiting behavior</li>
+    </ul>
+    <p style="color:var(--success);">The orb is gone from the Cultist's perspective. The Cultist moves on. The orb is the world's problem now.</p>
+
+    <h3 style="margin-top: 1.5rem;">Key timing detail:</h3>
+    <p>The cooldown (8000ms) starts at telegraph, same as every other ability. Effective idle time: 8000ms - 800ms (telegraph) - 500ms (recovery) = <strong>6700ms</strong> before the next orb. In practice, the first orb is often still alive when the second one launches. Multiple orbs are expected. The system must support it.</p>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════════ -->
+<h2><span class="phase-num">2</span> Key Differences from ground_slam and charge</h2>
+
+<table class="compare-table">
+  <tr><th>Mechanic</th><th>ground_slam / charge</th><th>homing_orb</th><th>What changes</th></tr>
+  <tr>
+    <td>Telegraph visual</td>
+    <td>Ground indicator (circle/line)</td>
+    <td class="diff">Caster-attached visual</td>
+    <td>No <code>drawGround()</code> call. Instead, draw a glowing orb above the caster's sprite during windup. The telegraph renderer reads <code>enemy.abilityState === 'telegraph'</code> and draws at the enemy's position.</td>
+  </tr>
+  <tr>
+    <td>What gets created</td>
+    <td>Temporary visual effect</td>
+    <td class="diff">Independent world entity</td>
+    <td>The orb needs: a position, velocity, facing angle, lifetime counter, collision radius, and its own update/render cycle. This is a <strong>Projectile</strong> object stored in a global projectile list, not an entry in EffectAnimator.</td>
+  </tr>
+  <tr>
+    <td>Duration</td>
+    <td>Fixed (telegraph + recovery)</td>
+    <td class="diff">Variable (up to 10 seconds)</td>
+    <td>No <code>setTimeout</code> for the orb's lifecycle. It runs in the game loop until it hits something, hits a wall, or times out.</td>
+  </tr>
+  <tr>
+    <td>Movement</td>
+    <td>None / linear dash</td>
+    <td class="diff">Homing (curves toward target)</td>
+    <td>Each frame: calculate angle to target, rotate current heading toward that angle by <code>turnRate * dt</code>, move forward at <code>speed * dt</code>. This creates smooth curves, not instant tracking.</td>
+  </tr>
+  <tr>
+    <td>Caster dies</td>
+    <td>Effect cancels</td>
+    <td class="diff">Orb persists</td>
+    <td>The projectile has no reference to the caster after launch. Caster death does NOT trigger <code>cancel()</code>. The orb is fully decoupled.</td>
+  </tr>
+  <tr>
+    <td>Multiple instances</td>
+    <td>One per enemy at a time</td>
+    <td class="diff">Multiple orbs can coexist</td>
+    <td>The global projectile list can hold 2-3 orbs from the same Cultist. Each is independent. The ability system only gates new launches via cooldown — it doesn't track in-flight orbs.</td>
+  </tr>
+  <tr>
+    <td>Rendering layer</td>
+    <td>Ground (telegraph) + overlay (impact)</td>
+    <td class="diff">Entity layer (same as monsters/players)</td>
+    <td>The orb is drawn in the entity pass, Y-sorted with monsters and players so it can appear behind or in front of other entities naturally.</td>
+  </tr>
+  <tr>
+    <td>Collision</td>
+    <td>AoE check at fixed time / per-frame during dash</td>
+    <td class="diff">Circle-vs-circle per frame, continuous</td>
+    <td>Each frame: check orb's collision radius against all players AND all wall tiles. First hit wins. Simple distance check: <code>dist(orb, player) < orb.radius + player.radius</code>.</td>
+  </tr>
+</table>
+
+<!-- ════════════════════════════════════════════ -->
+<h2><span class="phase-num">3</span> Live Animation Preview</h2>
+
+<p>Working simulation with homing behavior. The blue player moves with your mouse. Watch how the orb curves to follow you — it can't snap-turn, so sharp direction changes let you juke it into walls.</p>
+
+<div class="demo-area">
+  <canvas id="demoCanvas" width="520" height="340"></canvas>
+  <div class="phase-label" id="phaseLabel">Click a scenario to start</div>
+  <div class="demo-hint" id="demoHint"></div>
+  <div class="demo-controls">
+    <button onclick="playScenario('track')">▶ Orb Tracks Player</button>
+    <button onclick="playScenario('wall')">▶ Orb Hits Wall</button>
+    <button onclick="playScenario('timeout')">▶ Orb Times Out</button>
+    <button onclick="playScenario('caster_dies')">▶ Caster Dies Mid-Flight</button>
+    <button onclick="stopAnim()">⏹ Stop</button>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════════ -->
+<h2><span class="phase-num">4</span> Visual Frame Breakdowns</h2>
+
+<h3>A. Telegraph Frames (energy gathering on caster — 800ms)</h3>
+<p>No ground indicator. Instead, a glowing orb grows above the Cultist's hands. This is drawn relative to the enemy sprite, not at a world position.</p>
+<div id="telegraphFrames" class="sprite-grid-container"></div>
+
+<h3>B. Orb Travel Frames (pulsing projectile — looping)</h3>
+<p>The orb pulses between 90% and 110% scale while rotating slowly. The trail is separate — it's a stream of particles spawned at the orb's position each frame.</p>
+<div id="travelFrames" class="sprite-grid-container"></div>
+
+<h3>C. Impact / Termination Frames</h3>
+<div id="impactFrames" class="sprite-grid-container"></div>
+
+<!-- ════════════════════════════════════════════ -->
+<h2><span class="phase-num">5</span> JavaScript Implementation</h2>
+
+<h3>Part A — The Data: Define what homing_orb looks like</h3>
+
+<pre><span class="cm">// ─── In effect-sprites.js ───</span>
+
+<span class="kw">const</span> ABILITY_EFFECTS <span class="op">=</span> {
+  ground_slam: { <span class="cm">/* ... */</span> },
+  charge: { <span class="cm">/* ... */</span> },
+
+  homing_orb: {
+    <span class="cm">// ── TELEGRAPH: energy gathers at caster's position ──</span>
+    telegraph: {
+      <span class="prop">type</span>: <span class="str">'caster_charge'</span>,       <span class="cm">// New type — visual is on the enemy, not the ground</span>
+      <span class="prop">growDuration</span>: <span class="num">800</span>,            <span class="cm">// Matches telegraph time</span>
+      <span class="prop">startScale</span>: <span class="num">0.2</span>,             <span class="cm">// Orb starts tiny</span>
+      <span class="prop">endScale</span>: <span class="num">1.0</span>,               <span class="cm">// Grows to full size</span>
+      <span class="prop">color</span>: <span class="str">'#FFAA00'</span>,             <span class="cm">// Core color</span>
+      <span class="prop">glowColor</span>: <span class="str">'#FF6B35'</span>,         <span class="cm">// Outer glow</span>
+      <span class="prop">sparkColor</span>: <span class="str">'#FF4400'</span>,        <span class="cm">// Crackling sparks</span>
+      <span class="prop">sparkRate</span>: <span class="num">8</span>,                <span class="cm">// Sparks per second during formation</span>
+      <span class="prop">offsetY</span>: <span class="num">-24</span>,                <span class="cm">// Pixels above enemy center (above raised hands)</span>
+    },
+
+    <span class="cm">// ── PROJECTILE: the orb itself once launched ──</span>
+    projectile: {
+      <span class="prop">speed</span>: <span class="num">4</span>,                    <span class="cm">// Tiles per second — SLOWER than player walk speed</span>
+      <span class="prop">turnRate</span>: <span class="num">90</span>,                <span class="cm">// Degrees per second — how fast it can curve</span>
+      <span class="prop">collisionRadius</span>: <span class="num">0.4</span>,        <span class="cm">// Tiles — slightly less than half a tile</span>
+      <span class="prop">lifetime</span>: <span class="num">10000</span>,             <span class="cm">// 10 seconds max</span>
+      <span class="prop">flickerStart</span>: <span class="num">9500</span>,          <span class="cm">// Start flickering at 9.5s (warns it's about to die)</span>
+
+      <span class="cm">// Orb sprite — pulsing fire orb</span>
+      <span class="prop">sprite</span>: {
+        <span class="prop">width</span>: <span class="num">12</span>,
+        <span class="prop">height</span>: <span class="num">12</span>,
+        <span class="prop">pixels</span>: [
+          <span class="str">'....GGGG....'</span>,
+          <span class="str">'..GGFFFFGG..'</span>,
+          <span class="str">'.GFFFFFFCG.'</span>,
+          <span class="str">'GFFFFFCCCCG'</span>,
+          <span class="str">'GFFFCCCCCCG'</span>,
+          <span class="str">'GFFFCCCCCCG'</span>,
+          <span class="str">'GFFFFFCCCCG'</span>,
+          <span class="str">'.GFFFFFFCG.'</span>,
+          <span class="str">'..GGFFFFGG..'</span>,
+          <span class="str">'....GGGG....'</span>,
+        ],
+        <span class="prop">palette</span>: {
+          <span class="str">'C'</span>: <span class="str">'#FFCC00'</span>,   <span class="cm">// Bright core</span>
+          <span class="str">'F'</span>: <span class="str">'#FF6B35'</span>,   <span class="cm">// Fire body</span>
+          <span class="str">'G'</span>: <span class="str">'#FF4400'</span>,   <span class="cm">// Outer glow</span>
+        }
+      },
+
+      <span class="cm">// Pulse animation (looping during travel)</span>
+      <span class="prop">pulse</span>: {
+        <span class="prop">scaleMin</span>: <span class="num">0.9</span>,
+        <span class="prop">scaleMax</span>: <span class="num">1.15</span>,
+        <span class="prop">speed</span>: <span class="num">3</span>,                  <span class="cm">// Pulses per second</span>
+      },
+
+      <span class="cm">// Trailing particles (embers behind the orb)</span>
+      <span class="prop">trail</span>: {
+        <span class="prop">spawnRate</span>: <span class="num">30</span>,              <span class="cm">// Particles per second</span>
+        <span class="prop">sprite</span>: {
+          <span class="prop">width</span>: <span class="num">2</span>, <span class="prop">height</span>: <span class="num">2</span>,
+          <span class="prop">pixels</span>: [<span class="str">'EE'</span>, <span class="str">'EE'</span>],
+          <span class="prop">palette</span>: { <span class="str">'E'</span>: <span class="str">'#FF4400'</span> }
+        },
+        <span class="prop">velocity</span>: { <span class="prop">xRange</span>: [<span class="num">-15</span>, <span class="num">15</span>], <span class="prop">yRange</span>: [<span class="num">-15</span>, <span class="num">15</span>] },
+        <span class="prop">lifetime</span>: <span class="num">400</span>,
+        <span class="prop">fadeOut</span>: <span class="num">0.5</span>,
+      },
+    },
+
+    <span class="cm">// ── IMPACT: per-outcome visuals ──</span>
+    impact: {
+      hitPlayer: {
+        <span class="prop">type</span>: <span class="str">'ring_burst'</span>,
+        <span class="prop">rings</span>: <span class="num">2</span>,
+        <span class="prop">colors</span>: [<span class="str">'#FFCC00'</span>, <span class="str">'#FF6B35'</span>],
+        <span class="prop">startRadius</span>: <span class="num">0</span>,
+        <span class="prop">endRadius</span>: <span class="num">1.5</span>,
+        <span class="prop">duration</span>: <span class="num">300</span>,
+        <span class="prop">ringWidth</span>: <span class="num">2</span>,
+        <span class="prop">fadeStart</span>: <span class="num">0.5</span>,
+        <span class="prop">screenShake</span>: { <span class="prop">intensity</span>: <span class="num">2</span>, <span class="prop">duration</span>: <span class="num">100</span>, <span class="prop">decay</span>: <span class="str">'linear'</span> },
+        <span class="prop">particles</span>: {              <span class="cm">// Fire explosion particles</span>
+          <span class="prop">count</span>: <span class="num">8</span>,
+          <span class="prop">sprite</span>: { <span class="prop">width</span>: <span class="num">3</span>, <span class="prop">height</span>: <span class="num">3</span>, <span class="prop">pixels</span>: [<span class="str">'.F.'</span>,<span class="str">'FFF'</span>,<span class="str">'.F.'</span>], <span class="prop">palette</span>: { <span class="str">'F'</span>: <span class="str">'#FF6B35'</span> } },
+          <span class="prop">velocity</span>: { <span class="prop">xRange</span>: [<span class="num">-80</span>, <span class="num">80</span>], <span class="prop">yRange</span>: [<span class="num">-80</span>, <span class="num">80</span>] },
+          <span class="prop">gravity</span>: <span class="num">60</span>,
+          <span class="prop">lifetime</span>: <span class="num">400</span>,
+        }
+      },
+      hitWall: {
+        <span class="prop">type</span>: <span class="str">'spark_fizzle'</span>,        <span class="cm">// Small scattered sparks — no ring</span>
+        <span class="prop">duration</span>: <span class="num">200</span>,
+        <span class="prop">particles</span>: {
+          <span class="prop">count</span>: <span class="num">5</span>,
+          <span class="prop">sprite</span>: { <span class="prop">width</span>: <span class="num">2</span>, <span class="prop">height</span>: <span class="num">2</span>, <span class="prop">pixels</span>: [<span class="str">'SS'</span>,<span class="str">'SS'</span>], <span class="prop">palette</span>: { <span class="str">'S'</span>: <span class="str">'#FFAA00'</span> } },
+          <span class="prop">velocity</span>: { <span class="prop">xRange</span>: [<span class="num">-50</span>, <span class="num">50</span>], <span class="prop">yRange</span>: [<span class="num">-50</span>, <span class="num">50</span>] },
+          <span class="prop">gravity</span>: <span class="num">100</span>,
+          <span class="prop">lifetime</span>: <span class="num">300</span>,
+        }
+      },
+      timeout: {
+        <span class="prop">type</span>: <span class="str">'fade_fizzle'</span>,         <span class="cm">// Orb shrinks and vanishes</span>
+        <span class="prop">duration</span>: <span class="num">300</span>,
+        <span class="prop">particles</span>: {
+          <span class="prop">count</span>: <span class="num">3</span>,
+          <span class="prop">sprite</span>: { <span class="prop">width</span>: <span class="num">2</span>, <span class="prop">height</span>: <span class="num">2</span>, <span class="prop">pixels</span>: [<span class="str">'SS'</span>,<span class="str">'SS'</span>], <span class="prop">palette</span>: { <span class="str">'S'</span>: <span class="str">'#FF6B35'</span> } },
+          <span class="prop">velocity</span>: { <span class="prop">xRange</span>: [<span class="num">-20</span>, <span class="num">20</span>], <span class="prop">yRange</span>: [<span class="num">-30</span>, <span class="num">-10</span>] },
+          <span class="prop">gravity</span>: <span class="num">40</span>,
+          <span class="prop">lifetime</span>: <span class="num">400</span>,
+        }
+      },
+    },
+
+    <span class="cm">// ── AUDIO ──</span>
+    audio: {
+      <span class="prop">telegraph</span>: <span class="str">'sfx_orb_charge'</span>,         <span class="cm">// Rising hum as orb forms</span>
+      <span class="prop">launch</span>: <span class="str">'sfx_orb_launch'</span>,            <span class="cm">// Whoosh + fire crackle on release</span>
+      <span class="prop">travel</span>: <span class="str">'sfx_orb_hum_loop'</span>,          <span class="cm">// Looping hum, volume by proximity to player</span>
+      <span class="prop">impactPlayer</span>: <span class="str">'sfx_orb_explode'</span>,      <span class="cm">// Fire explosion</span>
+      <span class="prop">impactWall</span>: <span class="str">'sfx_orb_fizzle'</span>,         <span class="cm">// Quiet pop</span>
+      <span class="prop">timeout</span>: <span class="str">'sfx_orb_fade'</span>,              <span class="cm">// Fading hum</span>
+    }
+  }
+};</pre>
+
+<h3>Part B — The Projectile System: A new system, not part of EffectAnimator</h3>
+
+<div class="callout critical">
+  <strong>This is the key architectural decision.</strong> Homing orb does NOT go into EffectAnimator. The telegraph does (it's a temporary visual on the caster). But the orb itself goes into a new <code>ProjectileSystem</code> that manages all in-flight projectiles. This system also handles web_shot, projectile_burst, projectile_single, and projectile_volley — every ability that creates a traveling object. If you try to jam projectiles into EffectAnimator, you'll end up fighting its fixed-timeline assumptions.
+</div>
+
+<pre><span class="cm">// ─── NEW FILE: js/systems/projectile-system.js ───</span>
+<span class="cm">// Manages ALL in-flight projectiles as independent entities.</span>
+
+<span class="kw">const</span> ProjectileSystem <span class="op">=</span> {
+  projectiles: [],   <span class="cm">// Active projectile entities</span>
+  nextId: <span class="num">0</span>,
+
+  <span class="cm">/**
+   * Spawn a new projectile into the world.
+   * Called when an ability with a projectile resolves (after telegraph).
+   *
+   * @param config     - The projectile config from ABILITY_EFFECTS
+   * @param x, y       - World position where the projectile spawns
+   * @param targetX, Y - Initial target position (for launch direction)
+   * @param damage     - How much damage on hit
+   * @param effects    - Status effects to apply on hit (optional)
+   * @returns projectile id
+   */</span>
+  <span class="fn">spawn</span>(config, x, y, targetX, targetY, damage, effects) {
+    <span class="kw">const</span> angle <span class="op">=</span> Math.<span class="fn">atan2</span>(targetY <span class="op">-</span> y, targetX <span class="op">-</span> x);
+
+    <span class="kw">const</span> proj <span class="op">=</span> {
+      id: <span class="kw">this</span>.nextId++,
+      config,
+      damage,
+      effects: effects <span class="op">||</span> [],
+
+      <span class="cm">// ── Position & movement ──</span>
+      x, y,
+      angle,                             <span class="cm">// Current heading (radians)</span>
+      speed: config.speed <span class="op">*</span> TILE_SIZE,    <span class="cm">// Convert tiles/sec to pixels/sec</span>
+      turnRate: (config.turnRate <span class="op">||</span> <span class="num">0</span>) <span class="op">*</span> (Math.PI <span class="op">/</span> <span class="num">180</span>),  <span class="cm">// Convert deg/sec to rad/sec</span>
+
+      <span class="cm">// ── Collision ──</span>
+      collisionRadius: (config.collisionRadius <span class="op">||</span> <span class="num">0.4</span>) <span class="op">*</span> TILE_SIZE,
+
+      <span class="cm">// ── Lifecycle ──</span>
+      age: <span class="num">0</span>,
+      lifetime: config.lifetime <span class="op">||</span> <span class="num">10000</span>,
+      alive: <span class="kw">true</span>,
+
+      <span class="cm">// ── Visual state ──</span>
+      trailParticles: [],
+      trailSpawnAccumulator: <span class="num">0</span>,
+
+      <span class="cm">// ── Audio ──</span>
+      travelSoundId: <span class="kw">null</span>,
+    };
+
+    <span class="kw">this</span>.projectiles.<span class="fn">push</span>(proj);
+    <span class="kw">return</span> proj.id;
+  },
+
+  <span class="cm">/**
+   * Called every frame by the game loop.
+   * Updates ALL in-flight projectiles.
+   */</span>
+  <span class="fn">update</span>(deltaTime, players, walls) {
+    <span class="kw">for</span> (<span class="kw">const</span> proj <span class="kw">of</span> <span class="kw">this</span>.projectiles) {
+      <span class="kw">if</span> (!proj.alive) <span class="kw">continue</span>;
+
+      proj.age <span class="op">+=</span> deltaTime;
+
+      <span class="cm">// ── HOMING: curve toward nearest player ──</span>
+      <span class="kw">if</span> (proj.turnRate <span class="op">></span> <span class="num">0</span>) {
+        <span class="kw">const</span> target <span class="op">=</span> <span class="kw">this</span>.<span class="fn">findNearestPlayer</span>(proj, players);
+        <span class="kw">if</span> (target) {
+          <span class="kw">const</span> desiredAngle <span class="op">=</span> Math.<span class="fn">atan2</span>(
+            target.worldY <span class="op">-</span> proj.y,
+            target.worldX <span class="op">-</span> proj.x
+          );
+
+          <span class="cm">// Rotate toward target at limited turn rate</span>
+          <span class="kw">let</span> angleDiff <span class="op">=</span> desiredAngle <span class="op">-</span> proj.angle;
+
+          <span class="cm">// Normalize to [-PI, PI] so it takes the shorter turn</span>
+          <span class="kw">while</span> (angleDiff <span class="op">></span> Math.PI) angleDiff <span class="op">-=</span> Math.PI <span class="op">*</span> <span class="num">2</span>;
+          <span class="kw">while</span> (angleDiff <span class="op"><</span> <span class="op">-</span>Math.PI) angleDiff <span class="op">+=</span> Math.PI <span class="op">*</span> <span class="num">2</span>;
+
+          <span class="kw">const</span> maxTurn <span class="op">=</span> proj.turnRate <span class="op">*</span> (deltaTime <span class="op">/</span> <span class="num">1000</span>);
+          proj.angle <span class="op">+=</span> Math.<span class="fn">sign</span>(angleDiff) <span class="op">*</span> Math.<span class="fn">min</span>(Math.<span class="fn">abs</span>(angleDiff), maxTurn);
+        }
+      }
+
+      <span class="cm">// ── MOVE: advance along current heading ──</span>
+      proj.x <span class="op">+=</span> Math.<span class="fn">cos</span>(proj.angle) <span class="op">*</span> proj.speed <span class="op">*</span> (deltaTime <span class="op">/</span> <span class="num">1000</span>);
+      proj.y <span class="op">+=</span> Math.<span class="fn">sin</span>(proj.angle) <span class="op">*</span> proj.speed <span class="op">*</span> (deltaTime <span class="op">/</span> <span class="num">1000</span>);
+
+      <span class="cm">// ── COLLISION: check players ──</span>
+      <span class="kw">for</span> (<span class="kw">const</span> player <span class="kw">of</span> players) {
+        <span class="kw">const</span> dist <span class="op">=</span> Math.<span class="fn">hypot</span>(proj.x <span class="op">-</span> player.worldX, proj.y <span class="op">-</span> player.worldY);
+        <span class="kw">if</span> (dist <span class="op"><</span> proj.collisionRadius <span class="op">+</span> player.collisionRadius) {
+          <span class="kw">this</span>.<span class="fn">resolveHit</span>(proj, <span class="str">'hitPlayer'</span>, player);
+          <span class="kw">return</span>;  <span class="cm">// Orb is consumed</span>
+        }
+      }
+
+      <span class="cm">// ── COLLISION: check walls ──</span>
+      <span class="kw">if</span> (<span class="kw">this</span>.<span class="fn">isInWall</span>(proj.x, proj.y, walls)) {
+        <span class="kw">this</span>.<span class="fn">resolveHit</span>(proj, <span class="str">'hitWall'</span>, <span class="kw">null</span>);
+        <span class="kw">return</span>;
+      }
+
+      <span class="cm">// ── TIMEOUT ──</span>
+      <span class="kw">if</span> (proj.age <span class="op">>=</span> proj.lifetime) {
+        <span class="kw">this</span>.<span class="fn">resolveHit</span>(proj, <span class="str">'timeout'</span>, <span class="kw">null</span>);
+        <span class="kw">return</span>;
+      }
+
+      <span class="cm">// ── TRAIL PARTICLES ──</span>
+      <span class="kw">this</span>.<span class="fn">updateTrail</span>(proj, deltaTime);
+    }
+
+    <span class="cm">// Remove dead projectiles</span>
+    <span class="kw">this</span>.projectiles <span class="op">=</span> <span class="kw">this</span>.projectiles.<span class="fn">filter</span>(p <span class="op">=></span> p.alive);
+  },
+
+  <span class="cm">/**
+   * Projectile hit something (or timed out).
+   * Apply damage, spawn impact effect, kill the projectile.
+   */</span>
+  <span class="fn">resolveHit</span>(proj, outcome, target) {
+    proj.alive <span class="op">=</span> <span class="kw">false</span>;
+
+    <span class="cm">// Apply damage if hitting a player</span>
+    <span class="kw">if</span> (outcome <span class="op">===</span> <span class="str">'hitPlayer'</span> <span class="op">&&</span> target) {
+      EnemyAbilitySystem.<span class="fn">applyDamage</span>(target, proj.damage, <span class="str">'fire'</span>);
+      <span class="kw">for</span> (<span class="kw">const</span> effect <span class="kw">of</span> proj.effects) {
+        EnemyAbilitySystem.<span class="fn">applyStatusEffect</span>(target, effect);
+      }
+    }
+
+    <span class="cm">// Spawn impact visual (using EffectAnimator — impacts ARE temporary effects)</span>
+    <span class="kw">const</span> impactConfig <span class="op">=</span> ABILITY_EFFECTS.homing_orb.impact[outcome];
+    <span class="kw">if</span> (impactConfig) {
+      EffectAnimator.<span class="fn">startImpactEffect</span>(impactConfig, proj.x, proj.y);
+    }
+
+    <span class="cm">// Play impact audio</span>
+    <span class="kw">const</span> audioKey <span class="op">=</span> outcome <span class="op">===</span> <span class="str">'hitPlayer'</span> <span class="op">?</span> <span class="str">'impactPlayer'</span>
+      <span class="op">:</span> outcome <span class="op">===</span> <span class="str">'hitWall'</span> <span class="op">?</span> <span class="str">'impactWall'</span> <span class="op">:</span> <span class="str">'timeout'</span>;
+    AudioManager.<span class="fn">play</span>(ABILITY_EFFECTS.homing_orb.audio[audioKey]);
+
+    <span class="cm">// Stop travel sound</span>
+    <span class="kw">if</span> (proj.travelSoundId) {
+      AudioManager.<span class="fn">stop</span>(proj.travelSoundId);
+    }
+  },
+
+  <span class="cm">// ── Trail particle management ──</span>
+
+  <span class="fn">updateTrail</span>(proj, deltaTime) {
+    <span class="kw">const</span> trailCfg <span class="op">=</span> proj.config.trail;
+    <span class="kw">if</span> (!trailCfg) <span class="kw">return</span>;
+
+    <span class="cm">// Spawn new trail particles at the configured rate</span>
+    proj.trailSpawnAccumulator <span class="op">+=</span> deltaTime;
+    <span class="kw">const</span> spawnInterval <span class="op">=</span> <span class="num">1000</span> <span class="op">/</span> trailCfg.spawnRate;
+
+    <span class="kw">while</span> (proj.trailSpawnAccumulator <span class="op">>=</span> spawnInterval) {
+      proj.trailSpawnAccumulator <span class="op">-=</span> spawnInterval;
+      proj.trailParticles.<span class="fn">push</span>({
+        x: proj.x,
+        y: proj.y,
+        vx: trailCfg.velocity.xRange[<span class="num">0</span>] <span class="op">+</span> Math.<span class="fn">random</span>() <span class="op">*</span> (trailCfg.velocity.xRange[<span class="num">1</span>] <span class="op">-</span> trailCfg.velocity.xRange[<span class="num">0</span>]),
+        vy: trailCfg.velocity.yRange[<span class="num">0</span>] <span class="op">+</span> Math.<span class="fn">random</span>() <span class="op">*</span> (trailCfg.velocity.yRange[<span class="num">1</span>] <span class="op">-</span> trailCfg.velocity.yRange[<span class="num">0</span>]),
+        life: trailCfg.lifetime,
+        maxLife: trailCfg.lifetime,
+      });
+    }
+
+    <span class="cm">// Update existing trail particles</span>
+    <span class="kw">for</span> (<span class="kw">const</span> p <span class="kw">of</span> proj.trailParticles) {
+      p.x <span class="op">+=</span> p.vx <span class="op">*</span> (deltaTime <span class="op">/</span> <span class="num">1000</span>);
+      p.y <span class="op">+=</span> p.vy <span class="op">*</span> (deltaTime <span class="op">/</span> <span class="num">1000</span>);
+      p.life <span class="op">-=</span> deltaTime;
+    }
+    proj.trailParticles <span class="op">=</span> proj.trailParticles.<span class="fn">filter</span>(p <span class="op">=></span> p.life <span class="op">></span> <span class="num">0</span>);
+  },
+
+  <span class="fn">findNearestPlayer</span>(proj, players) {
+    <span class="kw">let</span> nearest <span class="op">=</span> <span class="kw">null</span>, nearestDist <span class="op">=</span> Infinity;
+    <span class="kw">for</span> (<span class="kw">const</span> p <span class="kw">of</span> players) {
+      <span class="kw">if</span> (p.hp <span class="op"><=</span> <span class="num">0</span>) <span class="kw">continue</span>;
+      <span class="kw">const</span> d <span class="op">=</span> Math.<span class="fn">hypot</span>(proj.x <span class="op">-</span> p.worldX, proj.y <span class="op">-</span> p.worldY);
+      <span class="kw">if</span> (d <span class="op"><</span> nearestDist) { nearest <span class="op">=</span> p; nearestDist <span class="op">=</span> d; }
+    }
+    <span class="kw">return</span> nearest;
+  },
+};</pre>
+
+<h3>Part C — The Renderer: Drawing the orb and trail</h3>
+
+<pre><span class="cm">// ─── In effect-renderer.js OR a new projectile-renderer.js ───</span>
+<span class="cm">// Projectiles render in the ENTITY layer (Y-sorted with monsters and players)</span>
+
+<span class="kw">const</span> ProjectileRenderer <span class="op">=</span> {
+
+  <span class="fn">drawAll</span>(ctx, camX, camY) {
+    <span class="kw">for</span> (<span class="kw">const</span> proj <span class="kw">of</span> ProjectileSystem.projectiles) {
+      <span class="kw">if</span> (!proj.alive) <span class="kw">continue</span>;
+      <span class="kw">this</span>.<span class="fn">drawTrail</span>(ctx, proj, camX, camY);
+      <span class="kw">this</span>.<span class="fn">drawOrb</span>(ctx, proj, camX, camY);
+    }
+  },
+
+  <span class="fn">drawOrb</span>(ctx, proj, camX, camY) {
+    <span class="kw">const</span> sx <span class="op">=</span> proj.x <span class="op">-</span> camX;
+    <span class="kw">const</span> sy <span class="op">=</span> proj.y <span class="op">-</span> camY;
+    <span class="kw">const</span> cfg <span class="op">=</span> proj.config;
+
+    <span class="cm">// Pulse scale</span>
+    <span class="kw">const</span> pulseT <span class="op">=</span> Math.<span class="fn">sin</span>(proj.age <span class="op">/</span> <span class="num">1000</span> <span class="op">*</span> cfg.pulse.speed <span class="op">*</span> Math.PI <span class="op">*</span> <span class="num">2</span>);
+    <span class="kw">const</span> scale <span class="op">=</span> cfg.pulse.scaleMin <span class="op">+</span> (cfg.pulse.scaleMax <span class="op">-</span> cfg.pulse.scaleMin) <span class="op">*</span> (pulseT <span class="op">*</span> <span class="num">0.5</span> <span class="op">+</span> <span class="num">0.5</span>);
+
+    <span class="cm">// Flicker when near timeout</span>
+    <span class="kw">let</span> alpha <span class="op">=</span> <span class="num">1.0</span>;
+    <span class="kw">if</span> (proj.age <span class="op">></span> cfg.flickerStart) {
+      alpha <span class="op">=</span> Math.<span class="fn">sin</span>(proj.age <span class="op">/</span> <span class="num">40</span>) <span class="op">*</span> <span class="num">0.5</span> <span class="op">+</span> <span class="num">0.5</span>;  <span class="cm">// Rapid flicker</span>
+    }
+
+    ctx.<span class="fn">save</span>();
+    ctx.globalAlpha <span class="op">=</span> alpha;
+
+    <span class="cm">// Outer glow (additive-style circle behind the sprite)</span>
+    <span class="kw">const</span> glowRadius <span class="op">=</span> <span class="num">10</span> <span class="op">*</span> scale;
+    <span class="kw">const</span> gradient <span class="op">=</span> ctx.<span class="fn">createRadialGradient</span>(sx, sy, <span class="num">0</span>, sx, sy, glowRadius);
+    gradient.<span class="fn">addColorStop</span>(<span class="num">0</span>, <span class="str">'rgba(255, 170, 0, 0.4)'</span>);
+    gradient.<span class="fn">addColorStop</span>(<span class="num">1</span>, <span class="str">'rgba(255, 107, 53, 0)'</span>);
+    ctx.fillStyle <span class="op">=</span> gradient;
+    ctx.<span class="fn">beginPath</span>();
+    ctx.<span class="fn">arc</span>(sx, sy, glowRadius, <span class="num">0</span>, Math.PI <span class="op">*</span> <span class="num">2</span>);
+    ctx.<span class="fn">fill</span>();
+
+    <span class="cm">// Draw the pixel sprite (scaled and centered)</span>
+    EffectRenderer.<span class="fn">drawPixelSprite</span>(ctx, cfg.sprite, sx, sy, <span class="num">2</span> <span class="op">*</span> scale);
+
+    ctx.<span class="fn">restore</span>();
+  },
+
+  <span class="fn">drawTrail</span>(ctx, proj, camX, camY) {
+    <span class="kw">const</span> trailCfg <span class="op">=</span> proj.config.trail;
+    <span class="kw">if</span> (!trailCfg) <span class="kw">return</span>;
+
+    <span class="kw">for</span> (<span class="kw">const</span> p <span class="kw">of</span> proj.trailParticles) {
+      <span class="kw">const</span> lifeRatio <span class="op">=</span> p.life <span class="op">/</span> p.maxLife;
+      <span class="kw">const</span> alpha <span class="op">=</span> lifeRatio <span class="op"><</span> trailCfg.fadeOut
+        <span class="op">?</span> lifeRatio <span class="op">/</span> trailCfg.fadeOut
+        <span class="op">:</span> <span class="num">1.0</span>;
+      ctx.<span class="fn">save</span>();
+      ctx.globalAlpha <span class="op">=</span> alpha <span class="op">*</span> <span class="num">0.7</span>;
+      ctx.fillStyle <span class="op">=</span> trailCfg.sprite.palette[<span class="str">'E'</span>];
+      ctx.<span class="fn">fillRect</span>(p.x <span class="op">-</span> camX <span class="op">-</span> <span class="num">1</span>, p.y <span class="op">-</span> camY <span class="op">-</span> <span class="num">1</span>, <span class="num">3</span>, <span class="num">3</span>);
+      ctx.<span class="fn">restore</span>();
+    }
+  },
+};</pre>
+
+<h3>Part D — The Glue: Connecting to the ability system</h3>
+
+<pre><span class="cm">// ─── In enemy-ability-system.js ───</span>
+<span class="cm">// For projectile abilities, the telegraph works the same.</span>
+<span class="cm">// On resolve, spawn a projectile instead of dealing direct damage.</span>
+
+<span class="fn">executeAbility</span>(enemy, target, ability, abilitySet) {
+  <span class="kw">const</span> telegraphTime <span class="op">=</span> <span class="cm">/* ... existing ... */</span>;
+  <span class="kw">const</span> recoveryTime <span class="op">=</span> ability.recoveryTime <span class="op">||</span> <span class="num">600</span>;
+
+  abilitySet.cooldowns[ability.id] <span class="op">=</span> ability.cooldown;
+  abilitySet.globalCooldown <span class="op">=</span> <span class="num">1000</span>;
+  enemy.abilityState <span class="op">=</span> <span class="str">'telegraph'</span>;
+  enemy.abilityLockout <span class="op">=</span> <span class="kw">true</span>;
+
+  <span class="cm">// Telegraph — use caster_charge type (visual on enemy, not ground)</span>
+  <span class="kw">const</span> effectId <span class="op">=</span> EffectAnimator.<span class="fn">startCasterEffect</span>(ability.id, enemy, telegraphTime);
+  enemy._currentEffectId <span class="op">=</span> effectId;
+
+  <span class="kw">const</span> enemyId <span class="op">=</span> enemy.id;
+  <span class="fn">setTimeout</span>(() <span class="op">=></span> {
+    <span class="kw">if</span> (!enemy <span class="op">||</span> enemy.hp <span class="op"><=</span> <span class="num">0</span>) {
+      EffectAnimator.<span class="fn">cancel</span>(effectId);
+      <span class="kw">this</span>.<span class="fn">cleanupAbilityState</span>(enemy);
+      <span class="kw">return</span>;
+    }
+    <span class="kw">if</span> (enemy.isStunned <span class="op">||</span> enemy.isRooted) {
+      EffectAnimator.<span class="fn">cancel</span>(effectId);  <span class="cm">// Telegraph vanishes — no orb spawns</span>
+      abilitySet.cooldowns[ability.id] <span class="op">=</span> ability.cooldown <span class="op">*</span> <span class="num">0.5</span>;
+      <span class="kw">this</span>.<span class="fn">enterRecovery</span>(enemy, recoveryTime <span class="op">*</span> <span class="num">0.5</span>, enemyId);
+      <span class="kw">return</span>;
+    }
+
+    <span class="cm">// ════ SPAWN PROJECTILE ════</span>
+    <span class="cm">// The orb becomes an independent entity in the world.</span>
+    <span class="cm">// From this point, the Cultist and the orb are DECOUPLED.</span>
+    EffectAnimator.<span class="fn">cancel</span>(effectId);  <span class="cm">// Remove caster telegraph visual</span>
+
+    <span class="kw">const</span> projConfig <span class="op">=</span> ABILITY_EFFECTS[ability.id].projectile;
+    ProjectileSystem.<span class="fn">spawn</span>(
+      projConfig,
+      enemy.worldX,
+      enemy.worldY <span class="op">+</span> ABILITY_EFFECTS[ability.id].telegraph.offsetY,  <span class="cm">// Launch from above hands</span>
+      target.worldX,
+      target.worldY,
+      ability.damage,
+      ability.effects <span class="op">||</span> []
+    );
+
+    AudioManager.<span class="fn">play</span>(ABILITY_EFFECTS[ability.id].audio.launch);
+
+    <span class="cm">// Caster enters recovery immediately — doesn't wait for orb</span>
+    <span class="kw">this</span>.<span class="fn">enterRecovery</span>(enemy, recoveryTime, enemyId);
+
+  }, telegraphTime);
+},</pre>
+
+<div class="callout success">
+  <strong>Notice the clean separation.</strong> The ability system handles: telegraph timing, interrupts, cooldowns, recovery. The ProjectileSystem handles: movement, homing, collision, lifetime. The EffectAnimator handles: temporary visuals (telegraph glow, impact rings). Each system does one job. The orb doesn't know who launched it. The Cultist doesn't know where the orb is. They communicate through events, not shared state.
+</div>
+
+<!-- ════════════════════════════════════════════ -->
+<h2><span class="phase-num">6</span> Render Loop Integration</h2>
+
+<pre><span class="cm">// ─── In your main game loop ───</span>
+
+<span class="fn">update</span>(deltaTime) {
+  EnemyAbilitySystem.<span class="fn">update</span>(deltaTime);
+  EffectAnimator.<span class="fn">update</span>(deltaTime);
+  ProjectileSystem.<span class="fn">update</span>(deltaTime, players, wallMap);  <span class="cm">// ← NEW</span>
+}
+
+<span class="fn">render</span>(ctx) {
+  TileRenderer.<span class="fn">draw</span>(ctx);                                  <span class="cm">// 1. Floor</span>
+  EffectRenderer.<span class="fn">drawGround</span>(ctx, camera.x, camera.y);       <span class="cm">// 2. Telegraphs (ground_slam, charge)</span>
+
+  <span class="cm">// 3. Entities — Y-sorted: monsters, players, AND projectiles</span>
+  <span class="cm">// Projectiles are part of the entity sort so they render at</span>
+  <span class="cm">// the correct depth relative to players and monsters.</span>
+  EntityRenderer.<span class="fn">draw</span>(ctx);
+  ProjectileRenderer.<span class="fn">drawAll</span>(ctx, camera.x, camera.y);     <span class="cm">// ← NEW</span>
+
+  EffectRenderer.<span class="fn">drawOverlay</span>(ctx, camera.x, camera.y);      <span class="cm">// 4. Impact bursts, particles</span>
+  UIRenderer.<span class="fn">draw</span>(ctx);                                     <span class="cm">// 5. HUD</span>
+}
+</pre>
+
+<!-- ════════════════════════════════════════════ -->
+<h2><span class="phase-num">7</span> Adapting This for Other Projectile Abilities</h2>
+
+<div class="card">
+  <h3>web_shot (Crystal Spider)</h3>
+  <p>Same spawn pattern, but: <strong>no homing</strong> (<code>turnRate: 0</code> — travels in a straight line), faster speed (8 tiles/sec), shorter lifetime (3s), and applies <strong>root</strong> instead of damage on hit. The projectile sprite is white/gray web ball. Impact visual is a web net expanding at the hit point. Straight-line projectiles are just homing orbs with <code>turnRate: 0</code>.</p>
+</div>
+
+<div class="card">
+  <h3>projectile_burst (Cinder Wisp)</h3>
+  <p><strong>Three projectiles spawned simultaneously</strong> at different angles: -15°, 0°, +15° from the target direction. Each is an independent projectile with <code>turnRate: 0</code>. Call <code>ProjectileSystem.spawn()</code> three times with different <code>targetX/targetY</code> offsets. The system handles the rest — three separate collision checks, three separate impacts.</p>
+</div>
+
+<div class="card">
+  <h3>projectile_volley (Pyro Cultist secondary — if dual abilities are adopted)</h3>
+  <p><strong>Eight projectiles in a 360° ring</strong>, all non-homing. Spawn 8 projectiles at 45° intervals. Pure "get away from me" panic ability. Same ProjectileSystem, just <code>spawn()</code> in a loop.</p>
+</div>
+
+<div class="card">
+  <h3>projectile_single (Blizzard Spirit)</h3>
+  <p>The simplest case: one straight-line projectile, no homing, fast speed (8 tiles/sec), short lifetime. This is a web_shot with different damage and no root effect. Literally change the sprite palette and damage value.</p>
+</div>
+
+<script>
+// ════════════════════════════════════════════
+// LIVE DEMO — homing_orb animation
+// ════════════════════════════════════════════
+
+const canvas = document.getElementById('demoCanvas');
+const ctx = canvas.getContext('2d');
+const W = canvas.width;
+const H = canvas.height;
+const TILE = 32;
+
+let anim = null;
+let frameId = null;
+let mouseX = W * 0.75;
+let mouseY = H * 0.5;
+let mouseActive = false;
+
+canvas.addEventListener('mousemove', (e) => {
+  const rect = canvas.getBoundingClientRect();
+  const scaleX = W / rect.width;
+  const scaleY = H / rect.height;
+  mouseX = (e.clientX - rect.left) * scaleX;
+  mouseY = (e.clientY - rect.top) * scaleY;
+  mouseActive = true;
+});
+
+canvas.addEventListener('mouseleave', () => { mouseActive = false; });
+
+const C = {
+  ground: '#1a1a22',
+  grid: '#222230',
+  cultist: '#8844AA',
+  cultistDark: '#663388',
+  cultistRobe: '#AA66CC',
+  player: '#4488CC',
+  playerDark: '#336699',
+  wall: '#555566',
+  wallLight: '#666677',
+  orbCore: '#FFCC00',
+  orbBody: '#FF6B35',
+  orbGlow: '#FF4400',
+  trail: '#FF4400',
+  ring1: '#FFCC00',
+  ring2: '#FF6B35',
+};
+
+function drawScene() {
+  ctx.fillStyle = C.ground;
+  ctx.fillRect(0, 0, W, H);
+  ctx.strokeStyle = C.grid;
+  ctx.lineWidth = 1;
+  for (let x = 0; x < W; x += TILE) {
+    ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, H); ctx.stroke();
+  }
+  for (let y = 0; y < H; y += TILE) {
+    ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke();
+  }
+
+  // Walls around edges for wall-hit demo
+  if (anim && anim.walls) {
+    ctx.fillStyle = C.wall;
+    for (const w of anim.walls) {
+      ctx.fillRect(w.x, w.y, w.w, w.h);
+    }
+  }
+}
+
+function drawCultist(x, y, telegraphProgress, recovery) {
+  const bodyC = recovery ? '#558855' : C.cultist;
+  ctx.fillStyle = bodyC;
+  ctx.fillRect(x - 8, y - 12, 16, 22);
+  ctx.fillStyle = C.cultistDark;
+  ctx.fillRect(x - 6, y - 17, 12, 7);
+  // Robe hem
+  ctx.fillStyle = C.cultistRobe;
+  ctx.fillRect(x - 10, y + 6, 20, 4);
+
+  if (telegraphProgress !== null && telegraphProgress >= 0) {
+    // Arms raised
+    const raise = telegraphProgress * 10;
+    ctx.fillStyle = bodyC;
+    ctx.fillRect(x - 14, y - 6 - raise, 5, 10);
+    ctx.fillRect(x + 9, y - 6 - raise, 5, 10);
+
+    // Growing orb above hands
+    const orbScale = 0.2 + telegraphProgress * 0.8;
+    const orbR = 6 * orbScale;
+    const orbY = y - 18 - raise;
+    const gradient = ctx.createRadialGradient(x, orbY, 0, x, orbY, orbR * 1.5);
+    gradient.addColorStop(0, `rgba(255, 204, 0, ${0.6 * orbScale})`);
+    gradient.addColorStop(0.5, `rgba(255, 107, 53, ${0.4 * orbScale})`);
+    gradient.addColorStop(1, 'rgba(255, 68, 0, 0)');
+    ctx.fillStyle = gradient;
+    ctx.beginPath();
+    ctx.arc(x, orbY, orbR * 1.5, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.fillStyle = C.orbCore;
+    ctx.beginPath();
+    ctx.arc(x, orbY, orbR * 0.5, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.fillStyle = C.orbBody;
+    ctx.globalAlpha = 0.7;
+    ctx.beginPath();
+    ctx.arc(x, orbY, orbR, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.globalAlpha = 1.0;
+
+    // Sparks
+    if (Math.random() < telegraphProgress * 0.6) {
+      const sa = Math.random() * Math.PI * 2;
+      const sr = orbR + Math.random() * 4;
+      ctx.fillStyle = C.orbGlow;
+      ctx.fillRect(x + Math.cos(sa) * sr - 1, orbY + Math.sin(sa) * sr - 1, 2, 2);
+    }
+  } else {
+    ctx.fillStyle = bodyC;
+    ctx.fillRect(x - 14, y - 4, 5, 12);
+    ctx.fillRect(x + 9, y - 4, 5, 12);
+  }
+}
+
+function drawPlayer(x, y) {
+  ctx.fillStyle = C.player;
+  ctx.fillRect(x - 7, y - 11, 14, 18);
+  ctx.fillStyle = C.playerDark;
+  ctx.fillRect(x - 5, y - 16, 10, 7);
+}
+
+function drawOrb(orb) {
+  if (!orb.alive) return;
+
+  const pulseT = Math.sin(orb.age / 1000 * 3 * Math.PI * 2);
+  const scale = 0.9 + (1.15 - 0.9) * (pulseT * 0.5 + 0.5);
+
+  let alpha = 1.0;
+  if (orb.age > 9500) {
+    alpha = Math.sin(orb.age / 40) * 0.5 + 0.5;
+  }
+
+  ctx.save();
+  ctx.globalAlpha = alpha;
+
+  // Glow
+  const glowR = 12 * scale;
+  const gradient = ctx.createRadialGradient(orb.x, orb.y, 0, orb.x, orb.y, glowR);
+  gradient.addColorStop(0, 'rgba(255, 170, 0, 0.5)');
+  gradient.addColorStop(0.6, 'rgba(255, 107, 53, 0.2)');
+  gradient.addColorStop(1, 'rgba(255, 68, 0, 0)');
+  ctx.fillStyle = gradient;
+  ctx.beginPath();
+  ctx.arc(orb.x, orb.y, glowR, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Core
+  const coreR = 4 * scale;
+  ctx.fillStyle = C.orbCore;
+  ctx.beginPath();
+  ctx.arc(orb.x, orb.y, coreR, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Body
+  ctx.globalAlpha = alpha * 0.7;
+  ctx.fillStyle = C.orbBody;
+  ctx.beginPath();
+  ctx.arc(orb.x, orb.y, coreR * 1.6, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.restore();
+}
+
+let particles = [];
+
+function spawnTrailParticle(x, y) {
+  particles.push({
+    x, y,
+    vx: (Math.random() - 0.5) * 30,
+    vy: (Math.random() - 0.5) * 30,
+    life: 400,
+    maxLife: 400,
+    color: C.trail,
+  });
+}
+
+function spawnImpactParticles(x, y, count, color, spread) {
+  for (let i = 0; i < count; i++) {
+    particles.push({
+      x, y,
+      vx: (Math.random() - 0.5) * spread * 2,
+      vy: (Math.random() - 0.5) * spread * 2,
+      life: 400,
+      maxLife: 400,
+      color,
+      size: count > 5 ? 3 : 2,
+    });
+  }
+}
+
+function updateParticles(dt) {
+  for (const p of particles) {
+    p.x += p.vx * (dt / 1000);
+    p.y += p.vy * (dt / 1000);
+    p.vy += 60 * (dt / 1000);
+    p.life -= dt;
+  }
+  particles = particles.filter(p => p.life > 0);
+}
+
+function renderParticles() {
+  for (const p of particles) {
+    const alpha = Math.max(0, (p.life / p.maxLife));
+    ctx.save();
+    ctx.globalAlpha = alpha * 0.7;
+    ctx.fillStyle = p.color;
+    const s = p.size || 2;
+    ctx.fillRect(p.x - s/2, p.y - s/2, s, s);
+    ctx.restore();
+  }
+}
+
+function drawImpactRing(x, y, progress) {
+  if (progress > 1) return;
+  const fadeStart = 0.5;
+  const alpha = progress > fadeStart ? 1.0 - ((progress - fadeStart) / (1.0 - fadeStart)) : 1.0;
+  ctx.save();
+  ctx.globalAlpha = alpha;
+  const colors = [C.ring1, C.ring2];
+  for (let i = 0; i < 2; i++) {
+    const d = i * 0.15;
+    const rp = Math.max(0, Math.min(1, (progress - d) / (1 - d)));
+    ctx.strokeStyle = colors[i];
+    ctx.lineWidth = 2 * (1 - rp * 0.5);
+    ctx.beginPath();
+    ctx.arc(x, y, 1.5 * TILE * rp, 0, Math.PI * 2);
+    ctx.stroke();
+  }
+  ctx.restore();
+}
+
+// ── Scenarios ──
+function playScenario(scenario) {
+  stopAnim();
+  particles = [];
+
+  const cultistPos = { x: 80, y: H / 2 };
+  let walls = [];
+
+  if (scenario === 'wall') {
+    walls = [
+      { x: W - TILE, y: 0, w: TILE, h: H },
+      { x: 0, y: 0, w: TILE, h: H },
+      { x: 0, y: 0, w: W, h: TILE },
+      { x: 0, y: H - TILE, w: W, h: TILE },
+    ];
+  }
+
+  anim = {
+    scenario,
+    phase: 'telegraph',
+    timer: 0,
+    lastTime: performance.now(),
+    cultistPos: { ...cultistPos },
+    playerPos: { x: W * 0.75, y: H * 0.5 },
+    walls,
+    telegraphDuration: 800,
+    recoveryDuration: 500,
+    orb: null,
+    orbTrailAccum: 0,
+    impactRing: null,
+    shakeTimer: 9999,
+    cultistRecovery: false,
+    casterDead: false,
+    casterDeadTimer: 0,
+  };
+
+  // Set auto player paths per scenario
+  if (scenario === 'track') {
+    anim.playerPath = [
+      { x: W * 0.75, y: H * 0.3, t: 0 },
+      { x: W * 0.6, y: H * 0.7, t: 2000 },
+      { x: W * 0.8, y: H * 0.5, t: 4000 },
+      { x: W * 0.5, y: H * 0.2, t: 5500 },
+      { x: W * 0.7, y: H * 0.6, t: 7000 },
+    ];
+  } else if (scenario === 'wall') {
+    anim.playerPath = [
+      { x: W * 0.75, y: H * 0.3, t: 0 },
+      { x: W * 0.85, y: H * 0.5, t: 1500 },
+      { x: W * 0.5, y: H * 0.7, t: 3000 },
+    ];
+  } else if (scenario === 'timeout') {
+    anim.playerPath = [
+      { x: W * 0.8, y: H * 0.2, t: 0 },
+      { x: W * 0.2, y: H * 0.8, t: 3000 },
+      { x: W * 0.8, y: H * 0.2, t: 6000 },
+      { x: W * 0.2, y: H * 0.8, t: 9000 },
+    ];
+  } else if (scenario === 'caster_dies') {
+    anim.playerPath = [
+      { x: W * 0.75, y: H * 0.3, t: 0 },
+      { x: W * 0.5, y: H * 0.6, t: 2000 },
+      { x: W * 0.7, y: H * 0.4, t: 4000 },
+    ];
+    anim.casterDiesAt = 1500;
+  }
+
+  frameId = requestAnimationFrame(tick);
+}
+
+function getPathPos(path, t) {
+  if (!path || path.length === 0) return null;
+  if (t <= path[0].t) return { x: path[0].x, y: path[0].y };
+  for (let i = 1; i < path.length; i++) {
+    if (t <= path[i].t) {
+      const seg = (t - path[i-1].t) / (path[i].t - path[i-1].t);
+      return {
+        x: path[i-1].x + (path[i].x - path[i-1].x) * seg,
+        y: path[i-1].y + (path[i].y - path[i-1].y) * seg,
+      };
+    }
+  }
+  return { x: path[path.length-1].x, y: path[path.length-1].y };
+}
+
+function tick(now) {
+  if (!anim) return;
+  const dt = Math.min(now - anim.lastTime, 32);
+  anim.lastTime = now;
+  anim.timer += dt;
+
+  // Elapsed since orb was spawned
+  const orbElapsed = anim.orb ? anim.orb.age : 0;
+  const totalElapsed = anim.timer;
+
+  // Player position from auto path
+  const pathTime = totalElapsed - anim.telegraphDuration - 100;
+  if (anim.playerPath && pathTime >= 0) {
+    const pos = getPathPos(anim.playerPath, pathTime);
+    if (pos) {
+      anim.playerPos.x = pos.x;
+      anim.playerPos.y = pos.y;
+    }
+  }
+
+  // Caster dies scenario
+  if (anim.scenario === 'caster_dies' && anim.casterDiesAt && !anim.casterDead) {
+    if (anim.orb && anim.orb.age > anim.casterDiesAt) {
+      anim.casterDead = true;
+      anim.casterDeadTimer = 0;
+    }
+  }
+  if (anim.casterDead) anim.casterDeadTimer += dt;
+
+  // ── Phase transitions ──
+  if (anim.phase === 'telegraph' && anim.timer >= anim.telegraphDuration) {
+    anim.phase = 'travel';
+    anim.timer = 0;
+    anim.cultistRecovery = true;
+
+    // Spawn orb
+    const angle = Math.atan2(
+      anim.playerPos.y - anim.cultistPos.y,
+      anim.playerPos.x - anim.cultistPos.x
+    );
+    anim.orb = {
+      x: anim.cultistPos.x,
+      y: anim.cultistPos.y - 24,
+      angle,
+      speed: 4 * TILE,
+      turnRate: 90 * (Math.PI / 180),
+      age: 0,
+      alive: true,
+      collisionRadius: 0.4 * TILE,
+    };
+  }
+
+  // Update orb
+  if (anim.orb && anim.orb.alive) {
+    anim.orb.age += dt;
+
+    // Homing
+    const desiredAngle = Math.atan2(
+      anim.playerPos.y - anim.orb.y,
+      anim.playerPos.x - anim.orb.x
+    );
+    let angleDiff = desiredAngle - anim.orb.angle;
+    while (angleDiff > Math.PI) angleDiff -= Math.PI * 2;
+    while (angleDiff < -Math.PI) angleDiff += Math.PI * 2;
+    const maxTurn = anim.orb.turnRate * (dt / 1000);
+    anim.orb.angle += Math.sign(angleDiff) * Math.min(Math.abs(angleDiff), maxTurn);
+
+    // Move
+    anim.orb.x += Math.cos(anim.orb.angle) * anim.orb.speed * (dt / 1000);
+    anim.orb.y += Math.sin(anim.orb.angle) * anim.orb.speed * (dt / 1000);
+
+    // Trail particles
+    anim.orbTrailAccum += dt;
+    while (anim.orbTrailAccum >= 33) {
+      anim.orbTrailAccum -= 33;
+      spawnTrailParticle(anim.orb.x, anim.orb.y);
+    }
+
+    // Collision with player
+    const distToPlayer = Math.hypot(anim.orb.x - anim.playerPos.x, anim.orb.y - anim.playerPos.y);
+    if (anim.scenario === 'track' && distToPlayer < anim.orb.collisionRadius + 10) {
+      anim.orb.alive = false;
+      anim.impactRing = { x: anim.orb.x, y: anim.orb.y, timer: 0, duration: 300 };
+      anim.shakeTimer = 0;
+      spawnImpactParticles(anim.orb.x, anim.orb.y, 8, C.orbBody, 80);
+      anim.outcome = 'hitPlayer';
+    }
+
+    // Collision with walls
+    if (anim.walls.length > 0) {
+      for (const wall of anim.walls) {
+        if (anim.orb.x > wall.x && anim.orb.x < wall.x + wall.w &&
+            anim.orb.y > wall.y && anim.orb.y < wall.y + wall.h) {
+          anim.orb.alive = false;
+          spawnImpactParticles(anim.orb.x, anim.orb.y, 5, C.orbCore, 50);
+          anim.outcome = 'hitWall';
+          break;
+        }
+      }
+    }
+
+    // Timeout
+    if (anim.orb.age >= 10000) {
+      anim.orb.alive = false;
+      spawnImpactParticles(anim.orb.x, anim.orb.y, 3, C.orbBody, 20);
+      anim.outcome = 'timeout';
+    }
+
+    // Caster dies scenario — orb keeps going
+    if (anim.scenario === 'caster_dies' && anim.orb.age > 5000 && anim.orb.alive) {
+      // Eventually hits player
+      if (distToPlayer < anim.orb.collisionRadius + 10) {
+        anim.orb.alive = false;
+        anim.impactRing = { x: anim.orb.x, y: anim.orb.y, timer: 0, duration: 300 };
+        anim.shakeTimer = 0;
+        spawnImpactParticles(anim.orb.x, anim.orb.y, 8, C.orbBody, 80);
+        anim.outcome = 'hitPlayer';
+      }
+    }
+  }
+
+  // Done check
+  if (anim.orb && !anim.orb.alive && anim.outcome) {
+    if (!anim.doneTimer) anim.doneTimer = 0;
+    anim.doneTimer += dt;
+    if (anim.doneTimer > 1500) {
+      const msg = anim.outcome === 'hitPlayer' ? '25 damage to player'
+        : anim.outcome === 'hitWall' ? 'Orb fizzled on wall — no damage'
+        : 'Orb timed out after 10 seconds';
+      document.getElementById('phaseLabel').textContent = `Complete — ${msg}`;
+      if (anim.casterDead) {
+        document.getElementById('phaseLabel').textContent += ' (caster was already dead!)';
+      }
+      anim = null;
+      frameId = null;
+      return;
+    }
+  }
+
+  // Impact ring
+  if (anim.impactRing) {
+    anim.impactRing.timer += dt;
+    if (anim.impactRing.timer > anim.impactRing.duration) anim.impactRing = null;
+  }
+  anim.shakeTimer += dt;
+
+  updateParticles(dt);
+
+  // ── RENDER ──
+  const shakeI = anim.shakeTimer < 100 ? 2 * (1 - anim.shakeTimer / 100) : 0;
+  const sx = (Math.random() - 0.5) * 2 * shakeI;
+  const sy = (Math.random() - 0.5) * 2 * shakeI;
+
+  ctx.save();
+  ctx.translate(sx, sy);
+
+  drawScene();
+
+  // Cultist
+  if (!anim.casterDead) {
+    const telegraphP = anim.phase === 'telegraph'
+      ? Math.min(anim.timer / anim.telegraphDuration, 1.0) : -1;
+    drawCultist(anim.cultistPos.x, anim.cultistPos.y, telegraphP,
+      anim.cultistRecovery && anim.timer < anim.recoveryDuration && anim.phase === 'travel');
+  } else {
+    // Dead cultist — X marks the spot
+    ctx.save();
+    ctx.globalAlpha = 0.3;
+    ctx.fillStyle = '#666666';
+    ctx.fillRect(anim.cultistPos.x - 8, anim.cultistPos.y - 4, 16, 10);
+    ctx.restore();
+    ctx.fillStyle = '#FF4444';
+    ctx.font = '10px JetBrains Mono';
+    ctx.textAlign = 'center';
+    ctx.fillText('dead', anim.cultistPos.x, anim.cultistPos.y - 12);
+  }
+
+  // Player
+  drawPlayer(anim.playerPos.x, anim.playerPos.y);
+
+  // Trail particles (behind orb)
+  renderParticles();
+
+  // Orb
+  if (anim.orb) drawOrb(anim.orb);
+
+  // Impact ring
+  if (anim.impactRing) {
+    drawImpactRing(anim.impactRing.x, anim.impactRing.y,
+      anim.impactRing.timer / anim.impactRing.duration);
+  }
+
+  ctx.restore();
+
+  // Phase label
+  if (anim.phase === 'telegraph') {
+    const remaining = Math.ceil(anim.telegraphDuration - anim.timer);
+    document.getElementById('phaseLabel').textContent = `TELEGRAPH — Cultist charging orb, ${remaining}ms — stun now to cancel`;
+    document.getElementById('demoHint').textContent = '';
+  } else if (anim.orb && anim.orb.alive) {
+    const age = (anim.orb.age / 1000).toFixed(1);
+    const ttl = ((10000 - anim.orb.age) / 1000).toFixed(1);
+    let extra = '';
+    if (anim.casterDead) extra = ' — CASTER IS DEAD but orb persists!';
+    document.getElementById('phaseLabel').textContent = `TRAVEL — orb alive ${age}s, ${ttl}s until timeout${extra}`;
+    document.getElementById('demoHint').textContent = 'Watch the orb curve toward the player';
+  } else if (anim.outcome) {
+    document.getElementById('phaseLabel').textContent = `IMPACT — ${anim.outcome}`;
+    document.getElementById('demoHint').textContent = '';
+  }
+
+  frameId = requestAnimationFrame(tick);
+}
+
+function stopAnim() {
+  if (frameId) cancelAnimationFrame(frameId);
+  frameId = null;
+  anim = null;
+  particles = [];
+  ctx.fillStyle = '#1a1a22';
+  ctx.fillRect(0, 0, W, H);
+  document.getElementById('phaseLabel').textContent = 'Click a scenario to start';
+  document.getElementById('demoHint').textContent = '';
+}
+
+// ── Frame previews ──
+function drawFramePreview(containerId, frames) {
+  const container = document.getElementById(containerId);
+  container.innerHTML = '';
+  frames.forEach((frame) => {
+    const div = document.createElement('div');
+    div.className = 'sprite-frame';
+    const c = document.createElement('canvas');
+    c.width = frame.w;
+    c.height = frame.h;
+    c.style.width = (frame.w * 2) + 'px';
+    c.style.height = (frame.h * 2) + 'px';
+    const fctx = c.getContext('2d');
+    fctx.fillStyle = '#08080c';
+    fctx.fillRect(0, 0, frame.w, frame.h);
+    frame.draw(fctx);
+    div.appendChild(c);
+    const label = document.createElement('div');
+    label.className = 'frame-label';
+    label.textContent = frame.label;
+    div.appendChild(label);
+    container.appendChild(div);
+  });
+}
+
+// Telegraph frames
+drawFramePreview('telegraphFrames', [
+  { w: 60, h: 70, label: 'T=0ms (tiny)', draw: (c) => {
+    const cx = 30, cy = 50;
+    c.fillStyle = '#8844AA'; c.fillRect(cx-8, cy-12, 16, 22);
+    c.fillStyle = '#663388'; c.fillRect(cx-6, cy-17, 12, 7);
+    c.fillStyle = '#8844AA'; c.fillRect(cx-14, cy-10, 5, 10); c.fillRect(cx+9, cy-10, 5, 10);
+    c.fillStyle = '#FF6B35'; c.globalAlpha = 0.3;
+    c.beginPath(); c.arc(cx, cy-22, 3, 0, Math.PI*2); c.fill();
+    c.globalAlpha = 1;
+  }},
+  { w: 60, h: 70, label: 'T=300ms', draw: (c) => {
+    const cx = 30, cy = 50;
+    c.fillStyle = '#8844AA'; c.fillRect(cx-8, cy-12, 16, 22);
+    c.fillStyle = '#663388'; c.fillRect(cx-6, cy-17, 12, 7);
+    c.fillStyle = '#8844AA'; c.fillRect(cx-14, cy-14, 5, 10); c.fillRect(cx+9, cy-14, 5, 10);
+    const gradient = c.createRadialGradient(cx, cy-28, 0, cx, cy-28, 6);
+    gradient.addColorStop(0, 'rgba(255,204,0,0.6)');
+    gradient.addColorStop(1, 'rgba(255,107,53,0)');
+    c.fillStyle = gradient;
+    c.beginPath(); c.arc(cx, cy-28, 6, 0, Math.PI*2); c.fill();
+    c.fillStyle = '#FFCC00';
+    c.beginPath(); c.arc(cx, cy-28, 2, 0, Math.PI*2); c.fill();
+  }},
+  { w: 60, h: 70, label: 'T=600ms', draw: (c) => {
+    const cx = 30, cy = 50;
+    c.fillStyle = '#8844AA'; c.fillRect(cx-8, cy-12, 16, 22);
+    c.fillStyle = '#663388'; c.fillRect(cx-6, cy-17, 12, 7);
+    c.fillStyle = '#8844AA'; c.fillRect(cx-14, cy-18, 5, 10); c.fillRect(cx+9, cy-18, 5, 10);
+    const gradient = c.createRadialGradient(cx, cy-32, 0, cx, cy-32, 10);
+    gradient.addColorStop(0, 'rgba(255,204,0,0.8)');
+    gradient.addColorStop(0.5, 'rgba(255,107,53,0.4)');
+    gradient.addColorStop(1, 'rgba(255,68,0,0)');
+    c.fillStyle = gradient;
+    c.beginPath(); c.arc(cx, cy-32, 10, 0, Math.PI*2); c.fill();
+    c.fillStyle = '#FFCC00';
+    c.beginPath(); c.arc(cx, cy-32, 3, 0, Math.PI*2); c.fill();
+    c.fillStyle = '#FF6B35'; c.globalAlpha = 0.7;
+    c.beginPath(); c.arc(cx, cy-32, 5, 0, Math.PI*2); c.fill();
+    c.globalAlpha = 1;
+    c.fillStyle = '#FF4400';
+    c.fillRect(cx+6, cy-35, 2, 2);
+    c.fillRect(cx-8, cy-30, 2, 2);
+  }},
+  { w: 60, h: 70, label: 'T=800ms (launch)', draw: (c) => {
+    const cx = 30, cy = 50;
+    c.fillStyle = '#8844AA'; c.fillRect(cx-8, cy-12, 16, 22);
+    c.fillStyle = '#663388'; c.fillRect(cx-6, cy-17, 12, 7);
+    c.fillStyle = '#8844AA'; c.fillRect(cx-14, cy-20, 5, 10); c.fillRect(cx+9, cy-20, 5, 10);
+    const gradient = c.createRadialGradient(cx, cy-34, 0, cx, cy-34, 12);
+    gradient.addColorStop(0, 'rgba(255,204,0,1)');
+    gradient.addColorStop(0.4, 'rgba(255,107,53,0.6)');
+    gradient.addColorStop(1, 'rgba(255,68,0,0)');
+    c.fillStyle = gradient;
+    c.beginPath(); c.arc(cx, cy-34, 12, 0, Math.PI*2); c.fill();
+    c.fillStyle = '#FFCC00';
+    c.beginPath(); c.arc(cx, cy-34, 4, 0, Math.PI*2); c.fill();
+    c.fillStyle = '#FF6B35'; c.globalAlpha = 0.8;
+    c.beginPath(); c.arc(cx, cy-34, 6, 0, Math.PI*2); c.fill();
+    c.globalAlpha = 1;
+    c.fillStyle = '#FF4400';
+    c.fillRect(cx+8, cy-37, 2, 2); c.fillRect(cx-10, cy-31, 2, 2);
+    c.fillRect(cx+5, cy-26, 2, 2); c.fillRect(cx-7, cy-38, 2, 2);
+  }},
+]);
+
+// Travel frames
+drawFramePreview('travelFrames', [
+  { w: 50, h: 50, label: 'Pulse min (90%)', draw: (c) => {
+    const cx = 25, cy = 25;
+    const gradient = c.createRadialGradient(cx, cy, 0, cx, cy, 9);
+    gradient.addColorStop(0, 'rgba(255,170,0,0.5)');
+    gradient.addColorStop(1, 'rgba(255,68,0,0)');
+    c.fillStyle = gradient; c.beginPath(); c.arc(cx, cy, 9, 0, Math.PI*2); c.fill();
+    c.fillStyle = '#FFCC00'; c.beginPath(); c.arc(cx, cy, 3, 0, Math.PI*2); c.fill();
+    c.fillStyle = '#FF6B35'; c.globalAlpha = 0.7;
+    c.beginPath(); c.arc(cx, cy, 5, 0, Math.PI*2); c.fill(); c.globalAlpha = 1;
+    c.fillStyle = '#FF4400'; c.fillRect(cx-12, cy-1, 2, 2); c.fillRect(cx-10, cy+3, 2, 2);
+  }},
+  { w: 50, h: 50, label: 'Pulse mid', draw: (c) => {
+    const cx = 25, cy = 25;
+    const gradient = c.createRadialGradient(cx, cy, 0, cx, cy, 11);
+    gradient.addColorStop(0, 'rgba(255,170,0,0.5)');
+    gradient.addColorStop(1, 'rgba(255,68,0,0)');
+    c.fillStyle = gradient; c.beginPath(); c.arc(cx, cy, 11, 0, Math.PI*2); c.fill();
+    c.fillStyle = '#FFCC00'; c.beginPath(); c.arc(cx, cy, 3.5, 0, Math.PI*2); c.fill();
+    c.fillStyle = '#FF6B35'; c.globalAlpha = 0.7;
+    c.beginPath(); c.arc(cx, cy, 6, 0, Math.PI*2); c.fill(); c.globalAlpha = 1;
+    c.fillStyle = '#FF4400'; c.fillRect(cx-14, cy, 2, 2); c.fillRect(cx-11, cy+4, 2, 2);
+  }},
+  { w: 50, h: 50, label: 'Pulse max (115%)', draw: (c) => {
+    const cx = 25, cy = 25;
+    const gradient = c.createRadialGradient(cx, cy, 0, cx, cy, 13);
+    gradient.addColorStop(0, 'rgba(255,170,0,0.6)');
+    gradient.addColorStop(1, 'rgba(255,68,0,0)');
+    c.fillStyle = gradient; c.beginPath(); c.arc(cx, cy, 13, 0, Math.PI*2); c.fill();
+    c.fillStyle = '#FFCC00'; c.beginPath(); c.arc(cx, cy, 4, 0, Math.PI*2); c.fill();
+    c.fillStyle = '#FF6B35'; c.globalAlpha = 0.7;
+    c.beginPath(); c.arc(cx, cy, 7, 0, Math.PI*2); c.fill(); c.globalAlpha = 1;
+    c.fillStyle = '#FF4400'; c.fillRect(cx-16, cy-1, 2, 2); c.fillRect(cx-13, cy+4, 2, 2);
+    c.fillRect(cx-14, cy-4, 2, 2);
+  }},
+  { w: 50, h: 50, label: 'Flickering (9.5s+)', draw: (c) => {
+    const cx = 25, cy = 25;
+    c.globalAlpha = 0.4;
+    const gradient = c.createRadialGradient(cx, cy, 0, cx, cy, 10);
+    gradient.addColorStop(0, 'rgba(255,170,0,0.3)');
+    gradient.addColorStop(1, 'rgba(255,68,0,0)');
+    c.fillStyle = gradient; c.beginPath(); c.arc(cx, cy, 10, 0, Math.PI*2); c.fill();
+    c.fillStyle = '#FFCC00'; c.beginPath(); c.arc(cx, cy, 3, 0, Math.PI*2); c.fill();
+    c.fillStyle = '#FF6B35'; c.globalAlpha = 0.3;
+    c.beginPath(); c.arc(cx, cy, 5, 0, Math.PI*2); c.fill();
+    c.globalAlpha = 1;
+    c.fillStyle = '#FF4400';
+    c.fillRect(cx+5, cy-6, 2, 2); c.fillRect(cx-7, cy+4, 2, 2);
+  }},
+]);
+
+// Impact frames
+drawFramePreview('impactFrames', [
+  { w: 60, h: 60, label: 'Hit Player', draw: (c) => {
+    const cx = 30, cy = 30;
+    c.strokeStyle = '#FFCC00'; c.lineWidth = 2;
+    c.beginPath(); c.arc(cx, cy, 14, 0, Math.PI*2); c.stroke();
+    c.strokeStyle = '#FF6B35'; c.lineWidth = 1.5;
+    c.beginPath(); c.arc(cx, cy, 7, 0, Math.PI*2); c.stroke();
+    c.fillStyle = '#FF6B35';
+    for (let i = 0; i < 6; i++) {
+      const a = i * Math.PI / 3 + 0.3;
+      c.fillRect(cx + Math.cos(a)*18 - 1.5, cy + Math.sin(a)*18 - 1.5, 3, 3);
+    }
+  }},
+  { w: 60, h: 60, label: 'Hit Wall', draw: (c) => {
+    const cx = 30, cy = 30;
+    c.fillStyle = '#FFAA00';
+    for (let i = 0; i < 5; i++) {
+      const a = Math.random() * Math.PI * 2;
+      const r = 6 + Math.random() * 10;
+      c.fillRect(cx + Math.cos(a)*r - 1, cy + Math.sin(a)*r - 1, 2, 2);
+    }
+  }},
+  { w: 60, h: 60, label: 'Timeout', draw: (c) => {
+    const cx = 30, cy = 30;
+    c.globalAlpha = 0.3;
+    c.fillStyle = '#FF6B35';
+    c.beginPath(); c.arc(cx, cy, 4, 0, Math.PI*2); c.fill();
+    c.globalAlpha = 1;
+    c.fillStyle = '#FF6B35';
+    c.fillRect(cx-2, cy-10, 2, 2); c.fillRect(cx+4, cy-6, 2, 2);
+    c.fillRect(cx-5, cy-4, 2, 2);
+  }},
+]);
+
+// Initial
+ctx.fillStyle = '#1a1a22';
+ctx.fillRect(0, 0, W, H);
+</script>
+
+</body>
+</html>

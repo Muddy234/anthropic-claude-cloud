@@ -7,7 +7,7 @@
 
 /**
  * World states representing the narrative progression of Oakhaven's decline
- * State changes are ONE-WAY and triggered by extraction milestones
+ * State changes are ONE-WAY and triggered by floor descent milestones
  */
 const WORLD_STATE = {
     NORMAL: 1,    // Lush green, peaceful village
@@ -29,11 +29,11 @@ const WORLD_STATE_NAMES = {
 // ============================================================================
 
 const WORLD_STATE_CONFIG = {
-    // Floor extraction thresholds that trigger state changes
+    // Floor descent thresholds that trigger state changes
     progressionTriggers: {
-        [WORLD_STATE.ASH]: 3,      // Extract from Floor 3 -> ASH
-        [WORLD_STATE.BURNING]: 6,  // Extract from Floor 6 -> BURNING
-        [WORLD_STATE.ENDGAME]: 10  // Enter Floor 10 -> ENDGAME (special trigger)
+        [WORLD_STATE.ASH]: 3,      // Descend to Floor 3 -> ASH
+        [WORLD_STATE.BURNING]: 6,  // Descend to Floor 6 -> BURNING
+        [WORLD_STATE.ENDGAME]: 10  // Descend to Floor 10 -> ENDGAME
     },
 
     // NPC presence by state (which NPCs are present in each state)
@@ -185,34 +185,21 @@ const WorldStateSystem = {
     // ========================================================================
 
     /**
-     * Check if extraction from a floor should trigger state progression
-     * Called from survival-integration.js onExtraction()
-     * @param {number} floor - Floor extracted from
+     * Check if descending to a floor should trigger state progression
+     * Called when player descends to a new floor (advanceToNextFloor)
+     * @param {number} floor - Floor descended to
      */
-    checkExtractionProgression(floor) {
+    checkFloorDescentProgression(floor) {
         const currentState = this.getState();
         const triggers = WORLD_STATE_CONFIG.progressionTriggers;
 
         // Check each possible state transition
         if (currentState < WORLD_STATE.ASH && floor >= triggers[WORLD_STATE.ASH]) {
-            this._transitionTo(WORLD_STATE.ASH, `extraction_floor_${floor}`);
+            this._transitionTo(WORLD_STATE.ASH, `descended_to_floor_${floor}`);
         } else if (currentState < WORLD_STATE.BURNING && floor >= triggers[WORLD_STATE.BURNING]) {
-            this._transitionTo(WORLD_STATE.BURNING, `extraction_floor_${floor}`);
-        }
-    },
-
-    /**
-     * Check if entering a floor should trigger state progression
-     * Called when player enters Floor 10
-     * @param {number} floor - Floor being entered
-     */
-    checkFloorEntryProgression(floor) {
-        const currentState = this.getState();
-        const triggers = WORLD_STATE_CONFIG.progressionTriggers;
-
-        // Floor 10 entry triggers ENDGAME
-        if (currentState < WORLD_STATE.ENDGAME && floor >= triggers[WORLD_STATE.ENDGAME]) {
-            this._transitionTo(WORLD_STATE.ENDGAME, `entered_floor_${floor}`);
+            this._transitionTo(WORLD_STATE.BURNING, `descended_to_floor_${floor}`);
+        } else if (currentState < WORLD_STATE.ENDGAME && floor >= triggers[WORLD_STATE.ENDGAME]) {
+            this._transitionTo(WORLD_STATE.ENDGAME, `descended_to_floor_${floor}`);
         }
     },
 
