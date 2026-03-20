@@ -43,16 +43,21 @@ const DECORATION_ATLAS_MAP: Dictionary = {
 # =========================================================================
 #  Village tile atlas mapping — TileType -> atlas coord in village TileSet
 # =========================================================================
-const TILE_ATLAS_MAP: Dictionary = {
-	ConstantsDef.TileType.GRASS:        Vector2i(0, 0),
-	ConstantsDef.TileType.PATH:         Vector2i(1, 0),
-	ConstantsDef.TileType.COBBLESTONE:  Vector2i(2, 0),
-	ConstantsDef.TileType.STONE_BORDER: Vector2i(3, 0),
-	ConstantsDef.TileType.WALL:         Vector2i(4, 0),
-	ConstantsDef.TileType.FLOOR:        Vector2i(5, 0),
-	ConstantsDef.TileType.DOOR:         Vector2i(6, 0),
-	ConstantsDef.TileType.FENCE:        Vector2i(7, 0),
-	ConstantsDef.TileType.WATER:        Vector2i(8, 0),
+var TILE_ATLAS_MAP: Dictionary = {}
+
+const TILE_SIZE: int = 16
+
+## Color palette for placeholder village tiles.
+const VILLAGE_TILE_COLORS: Dictionary = {
+	7:  Color(0.30, 0.55, 0.20),  # GRASS - green
+	8:  Color(0.55, 0.45, 0.30),  # PATH - dirt brown
+	9:  Color(0.50, 0.48, 0.45),  # COBBLESTONE - gray
+	10: Color(0.40, 0.38, 0.35),  # STONE_BORDER - dark gray
+	1:  Color(0.35, 0.30, 0.25),  # WALL - dark brown
+	0:  Color(0.45, 0.40, 0.33),  # FLOOR - wood
+	2:  Color(0.55, 0.35, 0.15),  # DOOR - brown
+	11: Color(0.50, 0.42, 0.28),  # FENCE - tan
+	5:  Color(0.15, 0.35, 0.65),  # WATER - blue
 }
 
 # =========================================================================
@@ -68,6 +73,33 @@ const TILE_ATLAS_MAP: Dictionary = {
 var _map_width: int  = 0
 var _map_height: int = 0
 
+
+# =========================================================================
+#  Initialization — build placeholder TileSet at runtime
+# =========================================================================
+
+func _ready() -> void:
+	terrain_layer.tile_set = _create_placeholder_tileset()
+
+func _create_placeholder_tileset() -> TileSet:
+	var ts := TileSet.new()
+	ts.tile_size = Vector2i(TILE_SIZE, TILE_SIZE)
+	var atlas := TileSetAtlasSource.new()
+	var cols: int = VILLAGE_TILE_COLORS.size()
+	var img := Image.create(cols * TILE_SIZE, TILE_SIZE, false, Image.FORMAT_RGBA8)
+	var col_index: int = 0
+	for tile_type: int in VILLAGE_TILE_COLORS:
+		var color: Color = VILLAGE_TILE_COLORS[tile_type]
+		img.fill_rect(Rect2i(col_index * TILE_SIZE, 0, TILE_SIZE, TILE_SIZE), color)
+		TILE_ATLAS_MAP[tile_type] = Vector2i(col_index, 0)
+		col_index += 1
+	var tex := ImageTexture.create_from_image(img)
+	atlas.texture = tex
+	atlas.texture_region_size = Vector2i(TILE_SIZE, TILE_SIZE)
+	for i in range(cols):
+		atlas.create_tile(Vector2i(i, 0))
+	ts.add_source(atlas, ATLAS_SOURCE_ID)
+	return ts
 
 # =========================================================================
 #  Public API
