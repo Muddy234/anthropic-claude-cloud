@@ -180,6 +180,100 @@ const ABILITIES: Dictionary = {
 	},
 }
 
+# ---------------------------------------------------------------------------
+# Ability Visual Effects -- per-ability rendering configuration
+# ---------------------------------------------------------------------------
+# Maps ability name -> visual effect config used by the rendering / UI layer.
+#   telegraph_type  : "circle" | "cone" | "line" | "none"
+#   telegraph_color : Color shown for the telegraph indicator
+#   impact_visual   : "slash" | "burst" | "beam" | "none"
+#   particles       : { "type": ParticleLibrary type, "count": int }
+#   camera_shake    : { "intensity": float, "duration": float }
+#   hitstop_frames  : int -- engine frames to freeze on impact (0 = none)
+
+const ABILITY_EFFECTS: Dictionary = {
+	"fireball": {
+		"telegraph_type": "circle",
+		"telegraph_color": Color(1.0, 0.4, 0.1, 0.35),
+		"impact_visual": "burst",
+		"particles": {"type": "fire_trail", "count": 24},
+		"camera_shake": {"intensity": 4.0, "duration": 0.25},
+		"hitstop_frames": 3,
+	},
+	"ice_lance": {
+		"telegraph_type": "line",
+		"telegraph_color": Color(0.4, 0.8, 1.0, 0.35),
+		"impact_visual": "burst",
+		"particles": {"type": "magic_sparks", "count": 16},
+		"camera_shake": {"intensity": 3.0, "duration": 0.2},
+		"hitstop_frames": 4,
+	},
+	"earthquake": {
+		"telegraph_type": "circle",
+		"telegraph_color": Color(0.6, 0.45, 0.2, 0.4),
+		"impact_visual": "burst",
+		"particles": {"type": "death_poof", "count": 30},
+		"camera_shake": {"intensity": 8.0, "duration": 0.5},
+		"hitstop_frames": 6,
+	},
+	"heal": {
+		"telegraph_type": "circle",
+		"telegraph_color": Color(0.3, 0.9, 0.6, 0.3),
+		"impact_visual": "none",
+		"particles": {"type": "heal_glow", "count": 15},
+		"camera_shake": {"intensity": 0.0, "duration": 0.0},
+		"hitstop_frames": 0,
+	},
+	"shadow_bolt": {
+		"telegraph_type": "line",
+		"telegraph_color": Color(0.35, 0.1, 0.5, 0.35),
+		"impact_visual": "burst",
+		"particles": {"type": "magic_sparks", "count": 18},
+		"camera_shake": {"intensity": 3.5, "duration": 0.2},
+		"hitstop_frames": 3,
+	},
+	"holy_smite": {
+		"telegraph_type": "circle",
+		"telegraph_color": Color(1.0, 0.95, 0.6, 0.4),
+		"impact_visual": "burst",
+		"particles": {"type": "magic_sparks", "count": 20},
+		"camera_shake": {"intensity": 5.0, "duration": 0.3},
+		"hitstop_frames": 4,
+	},
+	"poison_cloud": {
+		"telegraph_type": "circle",
+		"telegraph_color": Color(0.4, 0.8, 0.1, 0.3),
+		"impact_visual": "none",
+		"particles": {"type": "magic_sparks", "count": 20},
+		"camera_shake": {"intensity": 1.0, "duration": 0.15},
+		"hitstop_frames": 0,
+	},
+	"lightning_strike": {
+		"telegraph_type": "circle",
+		"telegraph_color": Color(1.0, 1.0, 0.3, 0.4),
+		"impact_visual": "beam",
+		"particles": {"type": "magic_sparks", "count": 22},
+		"camera_shake": {"intensity": 6.0, "duration": 0.3},
+		"hitstop_frames": 5,
+	},
+	"shield_bash": {
+		"telegraph_type": "cone",
+		"telegraph_color": Color(0.9, 0.9, 0.9, 0.3),
+		"impact_visual": "slash",
+		"particles": {"type": "magic_sparks", "count": 10},
+		"camera_shake": {"intensity": 4.0, "duration": 0.2},
+		"hitstop_frames": 5,
+	},
+	"whirlwind": {
+		"telegraph_type": "circle",
+		"telegraph_color": Color(0.8, 0.85, 0.9, 0.3),
+		"impact_visual": "slash",
+		"particles": {"type": "magic_sparks", "count": 24},
+		"camera_shake": {"intensity": 3.0, "duration": 0.35},
+		"hitstop_frames": 2,
+	},
+}
+
 
 # --- Static Access Methods ---
 
@@ -202,3 +296,9 @@ static func get_abilities_by_type(ability_type: String) -> Array:
 		if ability.get("type", "") == ability_type:
 			result.append(ability_id)
 	return result
+
+
+## Look up the visual effect configuration for a named ability.
+## Returns an empty Dictionary if the ability has no effect entry.
+static func get_effect(ability_name: String) -> Dictionary:
+	return ABILITY_EFFECTS.get(ability_name, {})
