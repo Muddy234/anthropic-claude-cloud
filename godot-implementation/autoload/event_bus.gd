@@ -28,6 +28,7 @@ signal synergy_deactivated(ancestor: String, tier: int)
 
 # --- Enemy Events ---
 signal enemy_death(enemy: Node, killer: Node, overkill: float)
+signal enemy_alerted(enemy: Node, target: Node, alert_type: String)
 
 # --- Encirclement Events ---
 signal encirclement_changed(player: Node, enemy_count: int)

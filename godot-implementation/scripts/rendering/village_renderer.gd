@@ -20,7 +20,7 @@ const ATLAS_SOURCE_ID: int = 0
 # =========================================================================
 #  NPC marker scene — instanced for each NPC placed in the village
 # =========================================================================
-const NPC_SCENE_PATH := "res://scenes/entities/npc.tscn"
+const NPC_SCENE_PATH := "res://scenes/entities/npc/npc.tscn"
 
 # =========================================================================
 #  Decoration atlas mapping — decoration type string -> atlas coord
