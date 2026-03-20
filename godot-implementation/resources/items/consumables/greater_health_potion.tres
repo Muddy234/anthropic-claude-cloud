@@ -1,0 +1,22 @@
+[gd_resource type="Resource" script_class="ItemData" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://resources/data_classes/item_data.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "greater_health_potion"
+display_name = "Greater Health Potion"
+description = "A potent healing draught that restores 150 hit points."
+item_type = 0
+subtype = 0
+rarity = 1
+stackable = true
+max_stack = 5
+effect_type = 0
+effect_value = 150.0
+effect_stat = ""
+effect_duration = 0.0
+effect_is_percent = false
+gold_value = 120
+quest_id = ""
+unique = false

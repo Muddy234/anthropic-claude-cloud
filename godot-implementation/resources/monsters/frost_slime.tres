@@ -1,0 +1,50 @@
+[gd_resource type="Resource" script_class="MonsterData" load_steps=5 format=3]
+
+[ext_resource type="Script" path="res://resources/data_classes/monster_data.gd" id="1"]
+[ext_resource type="Script" path="res://resources/data_classes/loot_entry_data.gd" id="2"]
+
+[sub_resource type="Resource" id="loot_1"]
+script = ExtResource("2")
+item_name = "Frost Shard"
+drop_chance = 0.04
+rarity = 2
+favor_value = 40
+
+[sub_resource type="Resource" id="loot_2"]
+script = ExtResource("2")
+item_name = "Frozen Gel"
+drop_chance = 0.2
+rarity = 0
+favor_value = 4
+
+[sub_resource type="Resource" id="loot_3"]
+script = ExtResource("2")
+item_name = "Ice Crystal"
+drop_chance = 0.15
+rarity = 1
+favor_value = 10
+
+[resource]
+script = ExtResource("1")
+id = "frost_slime"
+display_name = "Frost Slime"
+description = "A chilling mass of frozen ooze. Its touch slows the unwary."
+hp = 35
+str_stat = 5
+agi = 4
+int_stat = 10
+p_def = 12
+m_def = 15
+xp = 18
+element = 2
+attack_name = "Freeze Touch"
+attack_type = 1
+damage_type = 3
+attack_range = 1.0
+attack_speed = 2.8
+armor_type = 0
+elite = false
+move_interval = 3.5
+aggression = 2
+spawn_weight = 25
+loot = [SubResource("loot_1"), SubResource("loot_2"), SubResource("loot_3")]

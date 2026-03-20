@@ -1,0 +1,19 @@
+[gd_resource type="Resource" script_class="ArmorTypeData" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://resources/data_classes/armor_type_data.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "hide"
+display_name = "Hide"
+description = "Medium leather armor offering balanced protection. Weak to blades but resists blunt force."
+armor_type = 2
+weak_to = Array[int]([0])
+resistant_to = Array[int]([1])
+player_wearable = true
+monster_only = false
+defensive_role = "rogue"
+defense_modifier = 0.5
+hp_tier_modifier = 0.4
+primary_stat = "agi"
+secondary_stat = "str"

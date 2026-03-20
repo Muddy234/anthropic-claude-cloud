@@ -1,0 +1,29 @@
+[gd_resource type="Resource" script_class="NpcData" load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://resources/data_classes/npc_data.gd" id="1"]
+[ext_resource type="Script" path="res://resources/data_classes/npc_narrative_data.gd" id="2"]
+
+[sub_resource type="Resource" id="narrative_1"]
+script = ExtResource("2")
+personality = "Wise and weathered, speaks in measured tones with occasional cryptic warnings."
+secret = "Knows the true nature of the Shifting Chasm but fears what lies at its core."
+confrontation = "When pressed, reveals fragments of ancient knowledge about the void."
+
+[resource]
+script = ExtResource("1")
+id = "elder"
+display_name = "Elder Mirren"
+title = "Village Elder"
+description = "The aged leader of the village, keeper of old stories and forgotten lore."
+color = Color(0.8, 0.7, 0.5, 1.0)
+building = "town_square"
+role = 6
+dialogue_tree = "elder_main"
+initial_dialogue = "Welcome, adventurer. The chasm grows restless..."
+barks = PackedStringArray("The depths stir again...", "Be wary of the dark below.", "Another tremor... it grows worse.")
+services = PackedStringArray("quest", "lore")
+shop_inventory = PackedStringArray()
+buy_multiplier = 1.0
+sell_multiplier = 0.5
+narrative = SubResource("narrative_1")
+alias_of = ""

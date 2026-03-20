@@ -1,0 +1,44 @@
+[gd_resource type="Resource" script_class="AbilityData" load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://resources/data_classes/ability_data.gd" id="1"]
+[ext_resource type="Script" path="res://resources/data_classes/aoe_shape_data.gd" id="2"]
+
+[sub_resource type="Resource" id="aoe_1"]
+script = ExtResource("2")
+shape = 2
+angle = 0.0
+radius = 3.0
+length = 0.0
+width = 0.0
+
+[resource]
+script = ExtResource("1")
+id = "ground_slam"
+display_name = "Ground Slam"
+description = "Slams the ground, creating a shockwave that stuns nearby enemies."
+category = 3
+damage = 22.0
+range_tiles = 3.0
+hit_count = 1
+hit_delay = 0.0
+aoe = SubResource("aoe_1")
+telegraph_time = 0.7
+cooldown = 5.0
+recovery_time = 1.0
+charge_distance = 0.0
+charge_speed = 0.0
+effect = "stun"
+knockback_force = 1.5
+stun_duration = 1.0
+dot_damage = 0.0
+dot_duration = 0.0
+slow_amount = 0.0
+slow_duration = 0.0
+projectile_speed = 0.0
+projectile_count = 0
+for_boss = false
+for_enemy = true
+allowed_enemies = PackedStringArray()
+summon_type = ""
+summon_count = 0
+summon_duration = 0.0

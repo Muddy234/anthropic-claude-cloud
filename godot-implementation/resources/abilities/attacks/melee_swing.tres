@@ -1,0 +1,44 @@
+[gd_resource type="Resource" script_class="AbilityData" load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://resources/data_classes/ability_data.gd" id="1"]
+[ext_resource type="Script" path="res://resources/data_classes/aoe_shape_data.gd" id="2"]
+
+[sub_resource type="Resource" id="aoe_1"]
+script = ExtResource("2")
+shape = 1
+angle = 120.0
+radius = 2.0
+length = 0.0
+width = 0.0
+
+[resource]
+script = ExtResource("1")
+id = "melee_swing"
+display_name = "Melee Swing"
+description = "A wide sweeping melee attack in an arc."
+category = 0
+damage = 10.0
+range_tiles = 2.0
+hit_count = 1
+hit_delay = 0.0
+aoe = SubResource("aoe_1")
+telegraph_time = 0.6
+cooldown = 1.6
+recovery_time = 0.6
+charge_distance = 0.0
+charge_speed = 0.0
+effect = ""
+knockback_force = 0.0
+stun_duration = 0.0
+dot_damage = 0.0
+dot_duration = 0.0
+slow_amount = 0.0
+slow_duration = 0.0
+projectile_speed = 0.0
+projectile_count = 0
+for_boss = false
+for_enemy = false
+allowed_enemies = PackedStringArray()
+summon_type = ""
+summon_count = 0
+summon_duration = 0.0

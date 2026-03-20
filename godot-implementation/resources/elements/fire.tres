@@ -1,0 +1,15 @@
+[gd_resource type="Resource" script_class="ElementData" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://resources/data_classes/element_data.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "fire"
+display_name = "Fire"
+element = 1
+color = Color(1.0, 0.3, 0.1, 1.0)
+theme = "volcanic"
+status_effect = "burn"
+strong_against = Array[int]([2, 5])
+weak_against = Array[int]([3])
+complementary = 4

@@ -1,0 +1,19 @@
+[gd_resource type="Resource" script_class="ArmorTypeData" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://resources/data_classes/armor_type_data.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "armored"
+display_name = "Armored"
+description = "Heavy plate armor providing excellent physical defense. Weak to blunt impacts and magic."
+armor_type = 4
+weak_to = Array[int]([1, 3])
+resistant_to = Array[int]([0, 2])
+player_wearable = true
+monster_only = false
+defensive_role = "tank"
+defense_modifier = 1.0
+hp_tier_modifier = 0.8
+primary_stat = "str"
+secondary_stat = "str"

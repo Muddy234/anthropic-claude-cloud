@@ -1,0 +1,22 @@
+[gd_resource type="Resource" script_class="NpcData" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://resources/data_classes/npc_data.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "banker"
+display_name = "Aldric"
+title = "Banker"
+description = "A meticulous man who manages the village treasury and personal vaults."
+color = Color(0.9, 0.85, 0.3, 1.0)
+building = "bank"
+role = 2
+dialogue_tree = "banker_main"
+initial_dialogue = "Your gold is safe with me. What do you need?"
+barks = PackedStringArray("Interest rates are quite favorable today.", "A wise adventurer saves for rainy days.", "Gold doesn't grow on trees, you know.")
+services = PackedStringArray("bank", "deposit", "withdraw")
+shop_inventory = PackedStringArray()
+buy_multiplier = 1.0
+sell_multiplier = 0.5
+narrative = null
+alias_of = ""
