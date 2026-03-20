@@ -4,6 +4,11 @@ extends Node
 # --- Game State ---
 signal game_state_changed(old_state: int, new_state: int)
 
+# --- Game Flow ---
+signal player_death(player: Node)
+signal dungeon_complete(floor_reached: int)
+signal village_entered()
+
 # --- Floor Events ---
 signal floor_advanced(new_floor: int, previous_floor: int)
 
