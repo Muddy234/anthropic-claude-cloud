@@ -1,0 +1,35 @@
+[gd_resource type="Resource" script_class="WeaponData" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://resources/data_classes/weapon_data.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "hunting_bow"
+display_name = "Hunting Bow"
+weapon_type = 3
+damage_type = 2
+rarity = 0
+slot = 0
+damage = 8
+speed = 0.9
+range_tiles = 5.0
+str_bonus = 0
+agi_bonus = 2
+int_bonus = 0
+p_def_bonus = 0
+m_def_bonus = 0
+crit_bonus = 0.0
+execute_bonus = 0.0
+life_steal = 0.0
+armor_pen = 0.0
+stagger = 0.0
+bleed = 0.0
+reach = 0
+noise_reduction = 0.0
+double_strike = 0.0
+silent = false
+spell_echo = 0.0
+magic_pen = 0.0
+mana_regen = 0.0
+crit_dmg = 0.0
+gold_value = 30

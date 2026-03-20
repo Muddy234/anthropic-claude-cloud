@@ -1,0 +1,43 @@
+[gd_resource type="Resource" script_class="MonsterData" load_steps=4 format=3]
+
+[ext_resource type="Script" path="res://resources/data_classes/monster_data.gd" id="1"]
+[ext_resource type="Script" path="res://resources/data_classes/loot_entry_data.gd" id="2"]
+
+[sub_resource type="Resource" id="loot_1"]
+script = ExtResource("2")
+item_name = "Bat Fang"
+drop_chance = 0.3
+rarity = 0
+favor_value = 2
+
+[sub_resource type="Resource" id="loot_2"]
+script = ExtResource("2")
+item_name = "Leathery Wing"
+drop_chance = 0.15
+rarity = 0
+favor_value = 3
+
+[resource]
+script = ExtResource("1")
+id = "cave_bat"
+display_name = "Cave Bat"
+description = "A quick, darting nuisance found in dark places. Weak but fast."
+hp = 20
+str_stat = 4
+agi = 12
+int_stat = 2
+p_def = 5
+m_def = 3
+xp = 8
+element = 10
+attack_name = "Bite"
+attack_type = 0
+damage_type = 2
+attack_range = 1.0
+attack_speed = 1.5
+armor_type = 0
+elite = false
+move_interval = 1.0
+aggression = 3
+spawn_weight = 40
+loot = [SubResource("loot_1"), SubResource("loot_2")]

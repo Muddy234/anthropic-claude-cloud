@@ -1,0 +1,50 @@
+[gd_resource type="Resource" script_class="MonsterData" load_steps=5 format=3]
+
+[ext_resource type="Script" path="res://resources/data_classes/monster_data.gd" id="1"]
+[ext_resource type="Script" path="res://resources/data_classes/loot_entry_data.gd" id="2"]
+
+[sub_resource type="Resource" id="loot_1"]
+script = ExtResource("2")
+item_name = "Golem Core"
+drop_chance = 0.08
+rarity = 2
+favor_value = 60
+
+[sub_resource type="Resource" id="loot_2"]
+script = ExtResource("2")
+item_name = "Bone Plate"
+drop_chance = 0.2
+rarity = 1
+favor_value = 12
+
+[sub_resource type="Resource" id="loot_3"]
+script = ExtResource("2")
+item_name = "Ancient Bone"
+drop_chance = 0.3
+rarity = 0
+favor_value = 6
+
+[resource]
+script = ExtResource("1")
+id = "bone_golem"
+display_name = "Bone Golem"
+description = "A towering construct of fused bone. Slow but devastatingly powerful."
+hp = 180
+str_stat = 20
+agi = 3
+int_stat = 5
+p_def = 30
+m_def = 10
+xp = 65
+element = 4
+attack_name = "Crush"
+attack_type = 0
+damage_type = 1
+attack_range = 1.5
+attack_speed = 3.5
+armor_type = 6
+elite = false
+move_interval = 4.0
+aggression = 4
+spawn_weight = 5
+loot = [SubResource("loot_1"), SubResource("loot_2"), SubResource("loot_3")]

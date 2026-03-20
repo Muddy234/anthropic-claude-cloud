@@ -1,0 +1,117 @@
+[gd_scene load_steps=10 format=3 uid="uid://boss_scene"]
+
+[ext_resource type="Script" path="res://scripts/entities/boss.gd" id="1_boss"]
+[ext_resource type="Script" path="res://scripts/ai/enemy_ai.gd" id="2_enemy_ai"]
+[ext_resource type="Script" path="res://scripts/ai/enemy_ability.gd" id="3_enemy_ability"]
+
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_body"]
+size = Vector2(32, 32)
+
+[sub_resource type="SpriteFrames" id="SpriteFrames_boss"]
+animations = [{
+"frames": [],
+"loop": true,
+"name": &"idle_down",
+"speed": 4.0
+}, {
+"frames": [],
+"loop": true,
+"name": &"idle_up",
+"speed": 4.0
+}, {
+"frames": [],
+"loop": true,
+"name": &"run_down",
+"speed": 6.0
+}, {
+"frames": [],
+"loop": true,
+"name": &"run_up",
+"speed": 6.0
+}, {
+"frames": [],
+"loop": false,
+"name": &"attack",
+"speed": 8.0
+}, {
+"frames": [],
+"loop": false,
+"name": &"telegraph",
+"speed": 4.0
+}, {
+"frames": [],
+"loop": false,
+"name": &"phase_transition",
+"speed": 6.0
+}, {
+"frames": [],
+"loop": false,
+"name": &"death",
+"speed": 4.0
+}, {
+"frames": [],
+"loop": true,
+"name": &"enraged",
+"speed": 10.0
+}]
+
+[sub_resource type="CircleShape2D" id="CircleShape2D_detection"]
+radius = 192.0
+
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_hitbox"]
+size = Vector2(32, 32)
+
+[sub_resource type="CircleShape2D" id="CircleShape2D_aura"]
+radius = 48.0
+
+[sub_resource type="CanvasItemMaterial" id="CanvasItemMaterial_aura"]
+blend_mode = 1
+
+[node name="Boss" type="CharacterBody2D"]
+collision_layer = 4
+collision_mask = 1
+script = ExtResource("1_boss")
+
+[node name="AnimatedSprite2D" type="AnimatedSprite2D" parent="."]
+scale = Vector2(2, 2)
+sprite_frames = SubResource("SpriteFrames_boss")
+animation = &"idle_down"
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="."]
+shape = SubResource("RectangleShape2D_body")
+
+[node name="DetectionArea" type="Area2D" parent="."]
+collision_layer = 0
+collision_mask = 2
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="DetectionArea"]
+shape = SubResource("CircleShape2D_detection")
+
+[node name="HitboxArea" type="Area2D" parent="."]
+collision_layer = 4
+collision_mask = 2
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="HitboxArea"]
+shape = SubResource("RectangleShape2D_hitbox")
+
+[node name="EnemyAI" type="Node" parent="."]
+script = ExtResource("2_enemy_ai")
+
+[node name="EnemyAbility" type="Node" parent="."]
+script = ExtResource("3_enemy_ability")
+
+[node name="TelegraphDisplay" type="Node2D" parent="."]
+
+[node name="BossAura" type="Node2D" parent="."]
+material = SubResource("CanvasItemMaterial_aura")
+
+[node name="AuraShape" type="Area2D" parent="BossAura"]
+collision_layer = 0
+collision_mask = 2
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="BossAura/AuraShape"]
+shape = SubResource("CircleShape2D_aura")
+
+[node name="NavigationAgent2D" type="NavigationAgent2D" parent="."]
+path_desired_distance = 8.0
+target_desired_distance = 8.0

@@ -1,0 +1,22 @@
+[gd_resource type="Resource" script_class="NpcData" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://resources/data_classes/npc_data.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "blacksmith"
+display_name = "Forge"
+title = "Blacksmith"
+description = "A burly smith who crafts and repairs weapons and armor from materials found in the chasm."
+color = Color(0.85, 0.4, 0.2, 1.0)
+building = "smithy"
+role = 3
+dialogue_tree = "blacksmith_main"
+initial_dialogue = "Need something forged? Bring me the materials."
+barks = PackedStringArray("The forge burns hot today!", "Bring me ore from the deep and I'll make you something special.", "A dull blade is a death sentence down there.")
+services = PackedStringArray("craft", "repair", "upgrade")
+shop_inventory = PackedStringArray("rusty_sword", "iron_mace", "hunting_bow")
+buy_multiplier = 1.0
+sell_multiplier = 0.6
+narrative = null
+alias_of = ""

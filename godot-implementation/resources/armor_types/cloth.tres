@@ -1,0 +1,19 @@
+[gd_resource type="Resource" script_class="ArmorTypeData" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://resources/data_classes/armor_type_data.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "cloth"
+display_name = "Cloth"
+description = "Light cloth armor favored by mages. Weak to physical attacks but offers magical resistance."
+armor_type = 1
+weak_to = Array[int]([0, 2])
+resistant_to = Array[int]([3])
+player_wearable = true
+monster_only = false
+defensive_role = "mage"
+defense_modifier = 0.3
+hp_tier_modifier = 0.2
+primary_stat = "int"
+secondary_stat = "agi"

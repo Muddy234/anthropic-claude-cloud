@@ -1,0 +1,82 @@
+[gd_scene load_steps=6 format=3 uid="uid://npc_scene"]
+
+[ext_resource type="Script" path="res://scripts/entities/npc.gd" id="1_npc"]
+
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_body"]
+size = Vector2(12, 14)
+
+[sub_resource type="SpriteFrames" id="SpriteFrames_npc"]
+animations = [{
+"frames": [],
+"loop": true,
+"name": &"idle_down",
+"speed": 4.0
+}, {
+"frames": [],
+"loop": true,
+"name": &"idle_up",
+"speed": 4.0
+}, {
+"frames": [],
+"loop": true,
+"name": &"idle_left",
+"speed": 4.0
+}, {
+"frames": [],
+"loop": true,
+"name": &"idle_right",
+"speed": 4.0
+}, {
+"frames": [],
+"loop": true,
+"name": &"walk_down",
+"speed": 6.0
+}, {
+"frames": [],
+"loop": true,
+"name": &"walk_up",
+"speed": 6.0
+}, {
+"frames": [],
+"loop": true,
+"name": &"talk",
+"speed": 4.0
+}]
+
+[sub_resource type="CircleShape2D" id="CircleShape2D_interact"]
+radius = 32.0
+
+[sub_resource type="LabelSettings" id="LabelSettings_bark"]
+font_size = 8
+font_color = Color(1, 1, 1, 1)
+outline_size = 2
+outline_color = Color(0, 0, 0, 1)
+
+[node name="NPC" type="CharacterBody2D"]
+collision_layer = 8
+collision_mask = 1
+script = ExtResource("1_npc")
+
+[node name="AnimatedSprite2D" type="AnimatedSprite2D" parent="."]
+sprite_frames = SubResource("SpriteFrames_npc")
+animation = &"idle_down"
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="."]
+shape = SubResource("RectangleShape2D_body")
+
+[node name="InteractArea" type="Area2D" parent="."]
+collision_layer = 0
+collision_mask = 2
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="InteractArea"]
+shape = SubResource("CircleShape2D_interact")
+
+[node name="BarkLabel" type="Label" parent="."]
+offset_left = -40.0
+offset_top = -24.0
+offset_right = 40.0
+offset_bottom = -10.0
+horizontal_alignment = 1
+label_settings = SubResource("LabelSettings_bark")
+text = ""
+visible = false

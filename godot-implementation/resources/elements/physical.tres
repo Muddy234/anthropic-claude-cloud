@@ -1,0 +1,15 @@
+[gd_resource type="Resource" script_class="ElementData" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://resources/data_classes/element_data.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "physical"
+display_name = "Physical"
+element = 10
+color = Color(0.8, 0.8, 0.8, 1.0)
+theme = "neutral"
+status_effect = ""
+strong_against = Array[int]([])
+weak_against = Array[int]([])
+complementary = 0

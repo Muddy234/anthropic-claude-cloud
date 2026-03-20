@@ -1,0 +1,22 @@
+[gd_resource type="Resource" script_class="ItemData" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://resources/data_classes/item_data.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "health_potion"
+display_name = "Health Potion"
+description = "A basic healing draught that restores 60 hit points."
+item_type = 0
+subtype = 0
+rarity = 0
+stackable = true
+max_stack = 10
+effect_type = 0
+effect_value = 60.0
+effect_stat = ""
+effect_duration = 0.0
+effect_is_percent = false
+gold_value = 50
+quest_id = ""
+unique = false

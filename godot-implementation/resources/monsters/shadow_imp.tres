@@ -1,0 +1,50 @@
+[gd_resource type="Resource" script_class="MonsterData" load_steps=5 format=3]
+
+[ext_resource type="Script" path="res://resources/data_classes/monster_data.gd" id="1"]
+[ext_resource type="Script" path="res://resources/data_classes/loot_entry_data.gd" id="2"]
+
+[sub_resource type="Resource" id="loot_1"]
+script = ExtResource("2")
+item_name = "Shadow Essence"
+drop_chance = 0.05
+rarity = 2
+favor_value = 50
+
+[sub_resource type="Resource" id="loot_2"]
+script = ExtResource("2")
+item_name = "Imp Wing"
+drop_chance = 0.2
+rarity = 0
+favor_value = 5
+
+[sub_resource type="Resource" id="loot_3"]
+script = ExtResource("2")
+item_name = "Dark Fragment"
+drop_chance = 0.1
+rarity = 1
+favor_value = 15
+
+[resource]
+script = ExtResource("1")
+id = "shadow_imp"
+display_name = "Shadow Imp"
+description = "A cunning dark creature that attacks from range with bolts of shadow energy."
+hp = 55
+str_stat = 8
+agi = 14
+int_stat = 12
+p_def = 8
+m_def = 18
+xp = 35
+element = 8
+attack_name = "Shadow Bolt"
+attack_type = 1
+damage_type = 3
+attack_range = 4.0
+attack_speed = 2.0
+armor_type = 0
+elite = false
+move_interval = 1.5
+aggression = 3
+spawn_weight = 15
+loot = [SubResource("loot_1"), SubResource("loot_2"), SubResource("loot_3")]

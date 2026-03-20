@@ -1,0 +1,107 @@
+[gd_scene load_steps=8 format=3 uid="uid://enemy_scene"]
+
+[ext_resource type="Script" path="res://scripts/entities/enemy.gd" id="1_enemy"]
+[ext_resource type="Script" path="res://scripts/ai/enemy_ai.gd" id="2_enemy_ai"]
+[ext_resource type="Script" path="res://scripts/ai/enemy_ability.gd" id="3_enemy_ability"]
+
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_body"]
+size = Vector2(12, 14)
+
+[sub_resource type="SpriteFrames" id="SpriteFrames_enemy"]
+animations = [{
+"frames": [],
+"loop": true,
+"name": &"idle_down",
+"speed": 5.0
+}, {
+"frames": [],
+"loop": true,
+"name": &"idle_up",
+"speed": 5.0
+}, {
+"frames": [],
+"loop": true,
+"name": &"run_down",
+"speed": 8.0
+}, {
+"frames": [],
+"loop": true,
+"name": &"run_up",
+"speed": 8.0
+}, {
+"frames": [],
+"loop": true,
+"name": &"run_left",
+"speed": 8.0
+}, {
+"frames": [],
+"loop": true,
+"name": &"run_right",
+"speed": 8.0
+}, {
+"frames": [],
+"loop": false,
+"name": &"attack_down",
+"speed": 10.0
+}, {
+"frames": [],
+"loop": false,
+"name": &"attack_up",
+"speed": 10.0
+}, {
+"frames": [],
+"loop": false,
+"name": &"hurt",
+"speed": 8.0
+}, {
+"frames": [],
+"loop": false,
+"name": &"death",
+"speed": 6.0
+}]
+
+[sub_resource type="CircleShape2D" id="CircleShape2D_detection"]
+radius = 96.0
+
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_hitbox"]
+size = Vector2(12, 14)
+
+[node name="Enemy" type="CharacterBody2D"]
+collision_layer = 4
+collision_mask = 1
+script = ExtResource("1_enemy")
+
+[node name="AnimatedSprite2D" type="AnimatedSprite2D" parent="."]
+sprite_frames = SubResource("SpriteFrames_enemy")
+animation = &"idle_down"
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="."]
+shape = SubResource("RectangleShape2D_body")
+
+[node name="DetectionArea" type="Area2D" parent="."]
+collision_layer = 0
+collision_mask = 2
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="DetectionArea"]
+shape = SubResource("CircleShape2D_detection")
+
+[node name="HitboxArea" type="Area2D" parent="."]
+collision_layer = 4
+collision_mask = 2
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="HitboxArea"]
+shape = SubResource("RectangleShape2D_hitbox")
+
+[node name="EnemyAI" type="Node" parent="."]
+script = ExtResource("2_enemy_ai")
+
+[node name="EnemyAbility" type="Node" parent="."]
+script = ExtResource("3_enemy_ability")
+
+[node name="TelegraphSprite" type="Sprite2D" parent="."]
+visible = false
+modulate = Color(1, 0, 0, 0.3)
+
+[node name="NavigationAgent2D" type="NavigationAgent2D" parent="."]
+path_desired_distance = 4.0
+target_desired_distance = 4.0

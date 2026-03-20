@@ -1,0 +1,35 @@
+[gd_resource type="Resource" script_class="WeaponData" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://resources/data_classes/weapon_data.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "flame_blade"
+display_name = "Flame Blade"
+weapon_type = 0
+damage_type = 0
+rarity = 2
+slot = 0
+damage = 18
+speed = 1.0
+range_tiles = 1.25
+str_bonus = 4
+agi_bonus = 0
+int_bonus = 2
+p_def_bonus = 0
+m_def_bonus = 0
+crit_bonus = 0.08
+execute_bonus = 0.0
+life_steal = 0.0
+armor_pen = 0.0
+stagger = 0.0
+bleed = 0.0
+reach = 0
+noise_reduction = 0.0
+double_strike = 0.0
+silent = false
+spell_echo = 0.0
+magic_pen = 0.0
+mana_regen = 0.0
+crit_dmg = 0.0
+gold_value = 280
