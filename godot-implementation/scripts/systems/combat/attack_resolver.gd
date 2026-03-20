@@ -120,6 +120,10 @@ func cleanup() -> void:
 	is_swinging = false
 	combo_count = 1
 	hit_enemies.clear()
+	is_lunging = false
+	lunge_entity = null
+	buffered_attack = false
+	is_hitstop = false
 
 
 # --- Public API ---
@@ -139,14 +143,14 @@ func perform_attack(player: Node, direction: Vector2) -> bool:
 	if cooldown > 0.0:
 		return false
 
-	# Determine stamina cost – combo finisher (step 3) uses heavy cost
+	# Determine stamina cost -- combo finisher (step 3) uses heavy cost
 	var stamina_cost: float = STAMINA_COST_HEAVY if combo_count == 3 else STAMINA_COST_LIGHT
 	if player.stamina < stamina_cost:
 		return false
 	player.stamina -= stamina_cost
 
 	# Resolve weapon info
-	var weapon_data = _get_weapon_data(player)
+	var weapon_data: Dictionary = _get_weapon_data(player)
 	var weapon_type: StringName = weapon_data.get("type", &"fist") as StringName
 	var arc_info: Dictionary = WEAPON_ARCS.get(weapon_type, WEAPON_ARCS[&"fist"])
 
@@ -164,13 +168,13 @@ func perform_attack(player: Node, direction: Vector2) -> bool:
 
 	attack_started.emit(player, swing_direction, combo_count)
 
-	# Advance combo
+	# Advance combo: 1 -> 2 -> 3 -> 1
 	var previous_step: int = combo_count
 	combo_count = (combo_count % 3) + 1
 	combo_reset_timer = combo_decay_duration
 
 	if combo_count != previous_step + 1:
-		# Wrapped around
+		# Wrapped around from 3 -> 1
 		combo_reset.emit()
 	else:
 		combo_advanced.emit(combo_count)
@@ -207,10 +211,11 @@ func check_melee_hits(player: Node, enemies: Array) -> Array:
 		var in_arc: bool = false
 		match slash_style:
 			&"thrust", &"jab":
-				# Narrow perpendicular check
+				# Narrow perpendicular check -- dot product against swing direction
 				var dot: float = to_enemy.normalized().dot(swing_direction)
 				in_arc = dot >= cos(deg_to_rad(swing_arc_angle * 0.5))
 			&"sweep", &"chop", &"slam", &"alternate":
+				# Angular arc check
 				var angle: float = abs(rad_to_deg(swing_direction.angle_to(to_enemy)))
 				in_arc = angle <= swing_arc_angle * 0.5
 
@@ -245,14 +250,10 @@ func apply_melee_damage(attacker: Node, defender: Node) -> void:
 		})
 		return
 
-	# Apply via CombatMaster if available, otherwise directly
-	if has_node("/root/GameManager") and Engine.get_main_loop().root.has_node("CombatMaster"):
-		# Defer to CombatMaster.apply_damage
-		pass
-	else:
-		defender.take_damage(result.final_damage, result.element, attacker)
+	# Apply damage through the defender
+	defender.take_damage(result.final_damage, result.element, attacker)
 
-	# Dramatic hitstop on critical
+	# Dramatic hitstop on critical hit
 	if result.is_critical:
 		_trigger_hitstop(0.08)
 
@@ -302,8 +303,6 @@ func _process_input_buffer(delta: float) -> void:
 	# If swing just ended, replay the buffered input
 	if not is_swinging and cooldown <= 0.0:
 		buffered_attack = false
-		# Caller should invoke perform_attack with the buffered direction
-		# We emit via EventBus so the input layer can pick it up
 		EventBus.emit_signal("attack_buffered", buffered_direction)
 
 
