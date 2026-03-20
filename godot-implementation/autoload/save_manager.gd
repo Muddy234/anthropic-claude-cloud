@@ -7,6 +7,8 @@ const AUTO_SAVE_INTERVAL: float = 30.0
 var _auto_save_timer: float = 0.0
 
 func _process(delta: float) -> void:
+	if not is_instance_valid(GameManager) or GameManager.persistent_state == null:
+		return
 	if GameManager.current_state == Constants.GameState.PLAYING:
 		_auto_save_timer += delta
 		if _auto_save_timer >= AUTO_SAVE_INTERVAL:
