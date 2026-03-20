@@ -35,7 +35,7 @@ const CombatMasterScript = preload("res://scripts/systems/combat/combat_master.g
 const StatusEffectManagerScript = preload("res://scripts/systems/combat/status_effect_manager.gd")
 const SpellSystemScript = preload("res://scripts/systems/spell_system.gd")
 const ProjectileSystemScript = preload("res://scripts/systems/combat/projectile_system.gd")
-const KillStreakSystemScript = preload("res://scripts/systems/kill_streak_system.gd")
+const KillStreakSystemScript = preload("res://scripts/systems/combat/kill_streak_system.gd")
 const InventorySystemScript = preload("res://scripts/systems/inventory_system.gd")
 const QuestSystemScript = preload("res://scripts/systems/quest_system.gd")
 const BoonSystemScript = preload("res://scripts/systems/boon_system.gd")
@@ -118,10 +118,10 @@ func _on_floor_advanced(new_floor: int, _previous_floor: int) -> void:
 	_clear_world()
 	_setup_dungeon_floor(new_floor)
 
-func _on_player_death() -> void:
+func _on_player_death(_player: Node) -> void:
 	end_dungeon_run(false)
 
-func _on_dungeon_complete() -> void:
+func _on_dungeon_complete(_floor_reached: int) -> void:
 	end_dungeon_run(true)
 
 func _on_village_entered() -> void:
