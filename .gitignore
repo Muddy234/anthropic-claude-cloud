@@ -9,8 +9,6 @@ nul
 # Large media files
 *.mp4
 
-# Godot editor cache
-.godot/
 
 # OS files
 Thumbs.db
